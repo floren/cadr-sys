@@ -1,18 +1,18 @@
 ;-*- Mode:LISP; Package:CHAOS; Base:8 -*-
 
-;This file implements EFTP on the Lisp machine,
-;with the cooperation of CHSNCP, using the Chaosnet foreign-protocol protocol.
+;;; This file implements EFTP on the Lisp machine,
+;;; with the cooperation of CHSNCP, using the Chaosnet foreign-protocol protocol.
 
 (DEFCONST PUP-NON-DATA-BYTES 22.)	;10. words of header and a checksum
 (DEFCONST MAX-PUP-DATA-BYTES (- MAX-DATA-BYTES-PER-PKT PUP-NON-DATA-BYTES))
 (DEFCONST PUP-PROTOCOL-ID 100001)
 
-;Structure of a PUP in a Chaosnet packet
-;Cannot use (:INCLUDE PKT) because PKT defstruct has some garbage at the end
+;;; Structure of a PUP in a Chaosnet packet
+;; Cannot use (:INCLUDE PKT) because PKT defstruct has some garbage at the end
 (DEFSTRUCT (PUP :ARRAY (:CONSTRUCTOR NIL) (:ALTERANT NIL)
 		(:INITIAL-OFFSET #.FIRST-DATA-WORD-IN-PKT) (:SIZE-SYMBOL PUP-FIRST-DATA-WORD))
   (PUP-OVERALL-LENGTH)
-  ((PUP-TYPE 0010) (PUP-TRANSPORT 1010))
+  ((PUP-TYPE #o0010) (PUP-TRANSPORT #o1010))
   (PUP-ID-HIGH)
   (PUP-ID-LOW)
   (PUP-DEST-HOST)
@@ -22,7 +22,7 @@
   (PUP-SOURCE-PORT-HIGH)
   (PUP-SOURCE-PORT-LOW))	;Data follow, then checksum
 
-;Get a PUP buffer which can be filled in then transmitted via TRANSMIT-PUP
+;;; Get a PUP buffer which can be filled in then transmitted via TRANSMIT-PUP
 (DEFUN GET-PUP (CONN PUP-TYPE PUP-ID
 		&AUX (PKT (GET-PKT)))
   (COPY-ARRAY-PORTION PKT 0 0 PKT 0 (ARRAY-LENGTH PKT))	;Clear to zero
@@ -36,24 +36,25 @@
   (SETF (PUP-SOURCE-PORT-LOW PKT) (LOCAL-INDEX-NUM CONN))
   PKT)
 
-;The header of a PUP is words and the data portion is bytes.
-;The bytes are already in Lisp machine order, but the header needs to be fixed.
+;;; The header of a PUP is words and the data portion is bytes.
+;;; The bytes are already in Lisp machine order, but the header needs to be fixed.
 (DEFUN SWAB-PUP (PUP)
   (LOOP FOR I FROM FIRST-DATA-WORD-IN-PKT BELOW PUP-FIRST-DATA-WORD
 	AS WD = (AREF PUP I)
 	DO (ASET (DPB WD 1010 (LDB 1010 WD)) PUP I))
   PUP)
 
-;Accessor for binary data in a PUP
+;;; Accessor for binary data in a PUP
 (DEFUN PUP-WORD (PUP I)
   (LET ((WD (AREF PUP (+ PUP-FIRST-DATA-WORD I))))
     (DPB WD 1010 (LDB 1010 WD))))
 
-(DEFPROP PUP-WORD ((PUP-WORD PUP I) . (PUP-STORE-WORD PUP I SI:VAL)) SETF)
+(defsetf pup-word pup-store-word)
+;(DEFPROP PUP-WORD ((PUP-WORD PUP I) . (PUP-STORE-WORD PUP I SI:VAL)) SETF)
 (DEFUN PUP-STORE-WORD (PUP I WD)
   (ASET (DPB WD 1010 (LDB 1010 WD)) PUP (+ PUP-FIRST-DATA-WORD I)))
 
-;Compute the checksum of a PUP
+;;; Compute the checksum of a PUP
 (DEFUN CHECKSUM-PUP (PKT)
   (DO ((I -10. (1+ I))
        (CK 0)
@@ -65,7 +66,7 @@
     (AND (BIT-TEST 200000 CK) (SETQ CK (LDB 0020 (1+ CK))))
     (SETQ CK (DPB CK 0117 (LDB 1701 CK)))))	;16-bit left rotate
 
-;Fire off a PUP previously gotten from GET-PUP
+;;; Fire off a PUP previously gotten from GET-PUP
 (DEFUN TRANSMIT-PUP (CONN PKT N-BYTES)
   (SETF (PKT-NBYTES PKT) (+ PUP-NON-DATA-BYTES N-BYTES))
   (SETF (PUP-OVERALL-LENGTH PKT) (+ PUP-NON-DATA-BYTES N-BYTES))
@@ -76,8 +77,8 @@
   (SEND-UNC-PKT CONN PKT)
   (SWAB-PUP PKT))	;Put back in case caller retransmits it
 
-;Internal routine to get back a PUP on a specified port, with timeout
-;Returns PKT or NIL.
+;;; Internal routine to get back a PUP on a specified port, with timeout
+;;; Returns PKT or NIL.
 (DEFUN RECEIVE-PUP (CONN &OPTIONAL (TIMEOUT 60.))
   (LOOP WITH START-TIME = (TIME)
 	AS PUP = (GET-NEXT-PKT CONN T)
