@@ -1,0 +1,34 @@
+L-ENVIRONMENT :UNBOUND
+  "Intended lexical variable environment of the function being compiled.
+For a top-level function in a file, it is NIL.
+In general it is a list of VARS lists, to be scanned in the order listed.
+Each element corresponds to one environment level,
+and the position of a variable home within the element
+is its index within that level.
+The level number and the index within the level are the two quantities
+that are passed to %LOCATE-IN-HIGHER-CONTEXT.")
+
+(DEFVAR COMPILER-LEXICAL-FUNCTIONS :UNBOUND
+  "Used to initialize LOCAL-FUNCTIONS for compilation of one function.")
+
+(DEFVAR COMPILER-LEXICAL-PROGDESCS :UNBOUND
+  "Used to initialize PROGDESCS for compilation of one function.")
+
+(DEFVAR COMPILER-LEXICAL-RETPROGDESC :UNBOUND
+  "Used to initialize RETPROGDESC for compilation of one function.")
+
+(DEFVAR COMPILER-LEXICAL-GOTAGS :UNBOUND
+  "Used to initialize GOTAGS for compilation of one function.")
+
+(DEFVAR COMPILER-LEXICAL-MACROS :UNBOUND
+  "Used to initialize LOCAL-MACROS for compilation of one function.")
+
+(DEFVAR LOCAL-FUNCTIONS :UNBOUND
+  "Alist of elements (local-function-name vars-entry function-definition)
+It records, for each local function name (defined by FLET or LABELS)
+the local variable in which the function definition actually lives.")
+
+(DEFVAR LOCAL-MACROS :UNBOUND
+  "Alternating list describing local macro definitions.
+Each pair of elements is a macro name function cell location
+and a macro definition (MACRO . expander-function).")

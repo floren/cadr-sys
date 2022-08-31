@@ -1,0 +1,233 @@
+;;; -*- Mode:Lisp;Package:FS;Base:8;Fonts:CPTFONT-*-
+;;; Robert P. Krajewski (RpK), 9 September 1983. (c) 1984 Lisp Machine Incorporated.
+;;; To do: selection via versions, extension of predicate (args)
+;;;
+;;; Changes:
+;;;   9/29/83 13:51:32  RpK, LMI-East		() doesn't mean root anymore.
+;;;  12/16/83 08:50:45  RpK, LMI-East		Made part of magtape system
+;;;  12/21/83 20:05:29  RpK, LMI-East		SET-LAST-DUMP-TIME -> SET-FAKE-...
+;;;   1/05/84 19:24:18  RpK, LMI-East		BYTE-SIZE passed along too for dump server
+;;;   1/09/84 21:53:44  RpK, LMI-East		FILE-AUTHOR/CREATION-DATE-INTERNAL used for 
+;;;						 Local-File 48.  The file FDUMP-FILE-CDATE-I
+;;;						 will define the two functions for older code.
+
+;;; This macro really ought be in GLOBAL
+;;; This will probably have to be changed for full Common Lisp
+(DEFMACRO PRINTING-CLEARLY (&BODY BODY)
+  "Binds the appropriate variables to minimise LISP io screws."
+  `(PKG-BIND ""
+     (LET ((BASE 10.) (IBASE 10.) (*NOPOINT ())
+	   (READTABLE SI:INITIAL-READTABLE)
+	   (PRINLEVEL ()) (PRINLENGTH ()) (SI:PRINT-READABLY T))
+       ,@BODY)))
+
+(DEFRESOURCE FILE-ITERATOR ()
+  :CONSTRUCTOR (MAKE-STACK-GROUP "File Walker"))
+
+(DEFUN DIRECTORY-WALKER (DIRECTORIES PREDICATE &OPTIONAL (INFERIORS-P T)
+			 &AUX PENDING-DIRECTORIES (MESSAGE ':NEXT) STARTING-AGAIN)
+  "This function is meant to be used at the top level of a stack group.  It returns file
+and directory objects in an order suitable for dumping.  After you get it preset, you
+can resume it with the following symbols:
+   :NEXT   get me the next file
+   :RESET  please start from the beginning of the directory you were working on (useful
+           for end-of-tape situations)
+If the iterator returns (), you have walked through all the files.
+Each element in DIRECTORIES is either a directory object or the directory component of
+pathname (a string or list of strings suitable for FS:LOOKUP-DIRECTORY).
+PREDICATE is applied to each file object to see if should be yielded.  A predicate of NIL
+allows all files to be yielded.
+For compatibility, DIRECTORIES can be a single directory (string or object), or it can
+be a list of (), which means the root directory."
+  (IF DIRECTORIES (OR (LISTP DIRECTORIES) (SETQ DIRECTORIES (NCONS DIRECTORIES))))
+  (DOLIST (DIRECTORY DIRECTORIES)
+    (SETQ PENDING-DIRECTORIES () MESSAGE ':NEXT STARTING-AGAIN ())
+    (IF (NOT (TYPEP DIRECTORY 'FILE)) (SETQ DIRECTORY (FS:LOOKUP-DIRECTORY DIRECTORY)))
+    (READ-DIRECTORY-FILES DIRECTORY)
+    (SETQ MESSAGE (STACK-GROUP-RETURN DIRECTORY)) ; for consistency
+    (DO ((FF (DIRECTORY-FILES DIRECTORY)
+	     (SELECTQ MESSAGE
+	       (:NEXT (IF STARTING-AGAIN (PROGN (SETQ STARTING-AGAIN ()) FF) (CDR FF)))
+	       (:RESET
+		(SETQ PENDING-DIRECTORIES ()
+		      STARTING-AGAIN T) ; doesn't matter what STARTING-AGAIN is
+		(DIRECTORY-FILES DIRECTORY))))
+	 (F))
+	((NULL FF) ())
+      (SETQ F (CAR FF))
+      (IF STARTING-AGAIN (SETQ MESSAGE (STACK-GROUP-RETURN DIRECTORY))
+	(IF (AND INFERIORS-P (DIRECTORY? F)) (PUSH F PENDING-DIRECTORIES)
+	  (WHEN (OR (NOT PREDICATE) (FUNCALL PREDICATE F))
+	    (SETQ MESSAGE (STACK-GROUP-RETURN F))))))
+    (DIRECTORY-WALKER (REVERSE PENDING-DIRECTORIES) PREDICATE INFERIORS-P)))
+
+(DEFMACRO ACCESSING-FILES-LOCALLY
+	  ((FILE TOP-LEVEL-DIRECTORY PREDICATE . ARGS) &BODY BODY)
+  (LET ((!SG! (GENSYM)))
+    `(USING-RESOURCE (,!SG! FILE-ITERATOR)
+       (STACK-GROUP-PRESET ,!SG! 'DIRECTORY-WALKER ,TOP-LEVEL-DIRECTORY ,PREDICATE ,@ARGS)
+       (DO ((,FILE (FUNCALL ,!SG! ':NEXT) (FUNCALL ,!SG! ':NEXT)))
+	   ((NULL ,FILE))
+	 ,@BODY))))
+
+(DEFUN PRINT-FILES-NEWER-THAN (DIR WHEN)
+  (IF (NOT (INTEGERP WHEN)) (SETQ WHEN (TIME:PARSE-UNIVERSAL-TIME WHEN)))
+  (ACCESSING-FILES-LOCALLY (F DIR ())
+    (AND (NOT (DIRECTORY? F))
+	 (> (FILE-CREation-date-internal f) when)
+	 (SEND TERMINAL-IO ':LINE-OUT (SEND (FILE-TRUENAME F) ':STRING-FOR-PRINTING)))))
+
+(DEFUN LIST-ALL-FILES (predicate &OPTIONAL (DIR (DC-ROOT-DIRECTORY)))
+  (ACCESSING-FILES-LOCALLY (F DIR (get predicate 'include-file-function))
+    (if (directory? f) (format t "~%Looking in ~A" f)
+      (format t "~% ~A" f))))
+
+(DEFUN assure-files-dumped (when &OPTIONAL (DIR (DC-ROOT-DIRECTORY)))
+  (if (stringp when) (setq when (time:parse-universal-time when)))
+  (ACCESSING-FILES-LOCALLY (F DIR
+			      #'(LAMBDA (F) (NOT (OR (FILE-ATTribute f ':deleted)
+						     (file-attribute f ':dumped)))))
+    (if (directory? f) (format t "~%Looking in ~A" f)
+      (when (< (FILE-CREation-date-internal f) when)
+	(format t "~%Marking ~A dumped" f)
+	(set-file-attribute f t ':dumped)
+	(send terminal-io ':tyo #/.))))
+  (save-directory-tree))
+
+(DEFVAR *DIRECTORIES-NOT-TO-SAVE* '( ("TIGER-QUEUE") () ) ; Tiger queue and root
+  "A list of directories NOT to dump.
+The directories are in ``internal format,'' and even single-level directories should 
+appear as (singleton) list.  User-written INCLUDE-FILE-FUNCTIONs should call
+FILE-OK-TO-SAVE-P with a FILE structure as the argument unless they're doing something
+strange.")
+
+(DEFSUBST FILE-OK-TO-SAVE-P (FILE)
+  (NOT (MEMBER (DIRECTORY-FULL-NAME (FILE-DIRECTORY FILE)) *DIRECTORIES-NOT-TO-SAVE*)))
+
+(DEFUN (:PROPERTY :FULL INCLUDE-FILE-FUNCTION) (FILE)
+  (AND (FILE-OK-TO-SAVE-P FILE)
+       (NOT (FILE-ATTRIBUTE FILE ':DELETED))))
+
+(DEFUN (:PROPERTY :INCREMENTAL INCLUDE-FILE-FUNCTION) (FILE)
+  (AND (FILE-OK-TO-SAVE-P FILE)
+       (NOT (OR (FILE-ATTribute FILE ':deleted)
+		(file-attribute fILE ':dumped)))))
+
+(DEFVAR *FAKE-LAST-DUMP-TIME* :UNBOUND "Whatta kludge (for the losing v3 file system)")
+(DEFUN SET-FAKE-LAST-DUMP-TIME (U)
+  (SETQ *FAKE-LAST-DUMP-TIME* (IF (INTEGERP U) U (TIME:PARSE-UNIVERSAL-TIME U))))
+
+(DEFPROP :INCREMENTAL-KLUDGE :INCREMENTAL DUMP-TYPE)
+(DEFUN (:PROPERTY :INCREMENTAL-KLUDGE INCLUDE-FILE-FUNCTION) (FILE)
+  (AND (FILE-OK-TO-SAVE-P FILE)
+       (> (FILE-CREATION-DATE-INTERNAL FILE) *FAKE-LAST-DUMP-TIME*)
+       (NOT (OR (FILE-ATTribute FILE ':deleted)
+		(file-attribute fILE ':dumped)))))
+
+(DEFUN REAL-DUMP-TYPE (TYPE) (OR (GET TYPE 'DUMP-TYPE) TYPE))
+
+(DEFUN DIRECTORY-FULL-NAME-KLUDGE (D)
+  (IF (EQ D (DC-ROOT-DIRECTORY)) '("Root-Directory") (DIRECTORY-FULL-NAME D)))
+
+;;; Very simple protocol -- simply passes DIR-P FILENAME<nl><BYTE-SIZE>AUTHOR<NL>
+;;; until end, looking at input to be either :RESET or :NEXT,
+;;; then passes +()<NL><0><NL> (at end) over net, then marks files
+;;; as dumped if input is :OK.  Contact name arg can be FULL or INCREMENTAL.
+;;; DIR-P is a single character, either + or -
+;;; If DIR-P is "+" FILENAME is a directory name (like ("foo") or ("foo" "bar")).
+;;; The user end also passes a list of dirs to dump, where () means all, before the first
+;;; command.  The byte size is contained in a single character, mind you.
+
+(add-initialization "HKDUMP" '(process-run-function "Hack Dump Server" 'hack-dump-server)
+		    () 'chaos:server-alist)
+
+(defun hack-dump-server (&aux conn predicate cn)
+  (setq conn (chaos:listen "HKDUMP"))
+  (setq predicate
+	(GET (INTERN (setq cn chaos:(substring (pkt-string (read-pkts fs:conn)) 7)) "")
+	     'INCLUDE-FILE-FUNCTION))
+  (IF (NOT PREDICATE)
+      (CHAOS:REJECT CONN (FORMAT () "Unknown contact name arguments for HKDUMP - ~A" cn))
+    (CATCH-ERROR
+      (UNWIND-PROTECT
+	(PROGN
+	  (SEND TV:WHO-LINE-FILE-STATE-SHEET ':ADD-SERVER CONN "HKDUMP")
+	  (CHAOS:ACCEPT CONN)
+	  (WITH-OPEN-STREAM (C (CHAOS:MAKE-STREAM CONN))
+	    (LET ((D (READ C)))
+	      (HACK-DUMP-SERVE-REALLY C PREDICATE (IF D D (DC-ROOT-DIRECTORY)))))
+	(SEND TV:WHO-LINE-FILE-STATE-SHEET ':DELETE-SERVER CONN)))
+      ())))
+
+(DEFUN HACK-DUMP-SERVE-REALLY (S PREDICATE DIRECTORIES
+			       &AUX (FILES (NCONS ':MARKER)) (LAST-FILE-LIST FILES) FINAL
+			       (ROOT (DC-ROOT-DIRECTORY)))
+  (USING-RESOURCE (SG FILE-ITERATOR)
+    (STACK-GROUP-PRESET SG 'DIRECTORY-WALKER DIRECTORIES PREDICATE T)
+    (LET ((PRINLEVEL ()) (PRINLENGTH ()) (BASE 10.) (IBASE 10.) (SI:PRINT-READABLY T))
+      (PKG-BIND ""
+	(DO ((INPUT (READ S) (READ S))
+	     (RESULT))
+	    ((AND (NEQ INPUT ':NEXT) (NEQ INPUT ':RESET)) (SETQ FINAL INPUT))
+	  (SETQ RESULT (FUNCALL SG INPUT))
+	  (COND ((NULL RESULT)
+		 (SEND S ':LINE-OUT "+() ")
+		 (SEND S ':TYO 0) ; byte size
+		 (send s ':tyo #\return))
+		((directory? result)
+		 (send s ':tyo #/+)
+		 (prin1 (if (eq root result) '("Root-Directory") (directory-full-name result))
+			s)
+		 (send s ':tyo #\space)
+		 (send s ':tyo #\return)
+		 (SEND S ':TYO 0) ; byte size
+		 (send s ':tyo #\return))
+		(t
+		 ; Don't worry about duplication for now...
+		 (setq last-file-list (setf (cdr last-file-list) (ncons result)))
+		 (send s ':tyo #/-)
+		 (send s ':line-out (send (file-truename result) ':string-for-printing))
+		 (SEND S ':TYO (FILE-DEFAULT-BYTE-SIZE RESULT))
+		 (send s ':line-out (file-author-internal result))))
+	  (send s ':force-output))
+	;; We sent our last record, so they sent us something that wasn't :NEXT or :RESET
+	(when (eq final ':ok)
+	  (dolist (file (cdr files))
+	    (set-file-attribute file t ':dumped))
+	  (save-directory-tree ':find-all))))))
+
+(defun print-all-files (host &optional (mode "FULL") dirs &aux dir-p (file t))
+  (let ((c (chaos:open-stream host (string-append "HKDUMP " mode))))
+    (unwind-protect
+      (progn
+	(printing-clearly (prin1 dirs c))
+	(send c ':tyo #\Space)
+	(do () ((not file))
+	  (send c ':string-out ":NEXT ")
+	  (send c ':force-output)
+	  (setq dir-p (= #/+ (send c ':tyi)))
+	  (setq file (if dir-p (prog1 (read c) (send c ':line-in) (send c ':line-in))
+		       (fs:parse-pathname (send c ':line-in))))
+	  (when file
+	    (if dir-p
+		(format t "~&Working on directory ~A" file)
+	      (format t "~& ~A should be dumped (byte size ~D, written by ~A)"
+		      file (SEND C ':TYI) (send c ':line-in)))))
+	(send c ':string-out " :DONT-SET ")
+	(send c ':force-output))
+      (send c ':close ':raw))))
+
+;;; Server that doesn't cons as much.  Server sends info
+;;; [filename, author, creation date, binaryp, byte size]
+;;; plus file itself over ``data connection.''
+;;; Commands                   Response format:
+;;; :RESET                     file-info
+;;; :NEXT                      file-info
+;;; :SEND-FILE                 :OK
+;;; :DATA-CONN <contact-name>  :OK
+;;; :SET-DUMPED                :OK
+;;; :DONE                      :OK
+;;; file-info looks like 
+;;;    <DIRECTORY-P><BINARY-P>FILENAME<NL>CREATION-DATE<NL>AUTHOR<NL>BYTE-SIZE<NL>
+;;; -P means: + is T, - is ().  Filename is truename, creation date is decimal, as is
+;;; byte size.  If directory-p is T then FILENAME is a list.

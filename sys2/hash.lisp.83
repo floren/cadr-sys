@@ -1,0 +1,381 @@
+; -*- Mode:Lisp; Package:System-Internals; Base:8 -*-
+
+;;;A hash table that the user sees is a flavor instance.
+;;;The guts of it is a named-structure array defined below.
+
+;;;The contents of the array is divided into n-word blocks.
+;;;Each block corresponds to one hash key.  The first word of the block is the key.
+;;;The remaining words are associated data.  Normally there is only one of them.
+;;;Each key and its associated data words form a cdr-next list.
+;;;The third value of GETHASH points to this list.
+;;;Extra args to PUTHASH can be used to set data words past the first.
+
+;;;A DTP-NULL is used in the table in the key position to mark an empty slot.
+;;;DTP-NULL with nonzero pointer means a slot that was "deleted" and
+;;;which search must continue past.
+
+;;;A flavor's method hash table is actually the array, not the flavor instance.
+;;;The array points to the flavor instance it belongs to, so that the
+;;;flavor code can find the instance to send messages to it.
+;;;This also enables flavors to be bootstrapped.
+
+;;;This file defines only the low-level hash arrays.
+;;;The file HASHFL, loaded after flavors are loaded,
+;;;defines the hash table flavors and the user-level functions that work on them.
+
+;;; This page deals with defining and creating the hash arrays.
+
+(DEFSUBST HASH-TABLE-FUNCALLABLE-P (HASH-TABLE)
+  (AND (ARRAY-HAS-LEADER-P HASH-TABLE)
+       (NOT (ZEROP (%P-LDB-OFFSET %%ARRAY-LEADER-FUNCALL-AS-HASH-TABLE HASH-TABLE -1)))))
+
+;;;Note: the microcode knows the index of HASH-TABLE-MODULUS
+;;;as well as the organization of the entries and how to hash them,
+;;;in the special case that the modulus is a power of 2.
+;;;See label CALL-INSTANCE-ARRAY in the microcode.
+(DEFSTRUCT (HASH-ARRAY :NAMED :ARRAY-LEADER (:CONSTRUCTOR MAKE-HASH-ARRAY-INTERNAL))
+    (HASH-TABLE-REHASH-FUNCTION 'HASH-TABLE-REHASH)
+	;A function when rehash is required.  First argument is the hash-table,
+	;second is NIL to just rehash or the rehash-size to grow it first.
+	;The function must return the hash-table (which may have been moved
+	;by adjust-array-size)
+    (HASH-TABLE-REHASH-SIZE 1.3)
+	;How much to grow by when the time comes.  A flonum is the ratio to
+	;increase by, a fixnum is the number of entries to add.
+	;These will get rounded up to the next appropriate size.
+    (HASH-TABLE-GC-GENERATION-NUMBER %GC-GENERATION-NUMBER)
+	;Used to decide when rehash required because the GC may have moved
+	;some objects, changing their %POINTER and hence their hash code.
+    HASH-TABLE-MODULUS
+	;The number of blocks.  Used for remainder to get hash code.
+    (HASH-TABLE-FULLNESS 0)
+	;The number of valid entries currently in the array.
+    (HASH-TABLE-BLOCK-LENGTH 2)
+    (HASH-TABLE-REHASH-THRESHOLD .7S0)
+	;Rehash if we get more than this fraction full.
+    (HASH-TABLE-NUMBER-OF-DELETED-ENTRIES 0)
+	;Number of "deleted" entries (entries no longer valid
+    	;but which you must keep searching past).
+	;Used together with the FULLNESS to make sure there is always one
+	;slot that has never been used.
+    (HASH-TABLE-LOCK NIL)
+	;This function computes a numeric key from an object.  NIL means use the object.
+    HASH-TABLE-HASH-FUNCTION
+	;This function compares an object key with a key in the table.
+    (HASH-TABLE-COMPARE-FUNCTION 'EQ)
+	;This is the instance whose HASH-ARRAY we are.
+    HASH-TABLE-INSTANCE
+    )
+
+(DEFUN MAKE-HASH-ARRAY (&KEY &OPTIONAL (SIZE 100) AREA
+			((:REHASH-FUNCTION RHF) 'HASH-TABLE-REHASH)
+			((:REHASH-SIZE RHS) 1.3) GROWTH-FACTOR
+			(NUMBER-OF-VALUES 1)
+			ACTUAL-SIZE
+			(REHASH-THRESHOLD 0.7S0)
+			FUNCALLABLE-P
+			HASH-FUNCTION
+			(COMPARE-FUNCTION 'EQ)
+			TEST
+			INSTANCE
+			&AUX HT BLEN)
+  (COND (FUNCALLABLE-P
+	 ;; Funcallable hash tables are looked at by the microcode
+	 ;; and require that the modulus be a power of 2.
+	 (SETQ RHF 'HASH-TABLE-DOUBLE-SIZE-REHASH)
+	 (SETQ SIZE (OR ACTUAL-SIZE (LSH 1 (HAULONG SIZE))))
+	 (SETQ HASH-FUNCTION NIL)
+	 (SETQ COMPARE-FUNCTION 'EQ)
+	 (SETQ NUMBER-OF-VALUES 2))
+	(T
+	 (SETQ SIZE (OR ACTUAL-SIZE
+			(HASH-TABLE-GOOD-SIZE SIZE)))))
+  (WHEN TEST
+    (SETQ COMPARE-FUNCTION TEST)
+    (SETQ HASH-FUNCTION
+	  (SELECT TEST
+	    (('EQ #'EQ) NIL)
+	    (('EQUAL #'EQUAL) 'EQUAL-HASH)
+	    (('EQL #'EQL) 'EQL-HASH)
+	    (T (FERROR NIL "Argument TEST is not EQ, EQL or EQUAL.")))))
+  (IF (INTEGERP REHASH-THRESHOLD)
+      (SETQ REHASH-THRESHOLD
+	    (// (FLOAT REHASH-THRESHOLD) ACTUAL-SIZE)))
+  (SETQ BLEN (+ 1 NUMBER-OF-VALUES (IF HASH-FUNCTION 1 0)))
+  (SETQ HT (MAKE-HASH-ARRAY-INTERNAL
+	     :MAKE-ARRAY (:LENGTH (* SIZE BLEN) :AREA AREA :TYPE ART-Q-LIST)
+	     HASH-TABLE-MODULUS SIZE
+	     HASH-TABLE-BLOCK-LENGTH BLEN
+	     HASH-TABLE-REHASH-THRESHOLD REHASH-THRESHOLD
+	     HASH-TABLE-REHASH-FUNCTION RHF
+	     HASH-TABLE-REHASH-SIZE (OR GROWTH-FACTOR RHS)
+	     HASH-TABLE-HASH-FUNCTION HASH-FUNCTION
+	     HASH-TABLE-COMPARE-FUNCTION COMPARE-FUNCTION
+	     HASH-TABLE-INSTANCE INSTANCE))
+  (%P-DPB-OFFSET (IF FUNCALLABLE-P 1 0) %%ARRAY-LEADER-FUNCALL-AS-HASH-TABLE
+		 HT -1)
+  (CLEAR-HASH-ARRAY HT)
+  HT)
+
+;;;Convert SIZE (a number of array elements) to a more-or-less prime.
+(DEFUN HASH-TABLE-GOOD-SIZE (SIZE)
+  (OR (ODDP SIZE) (SETQ SIZE (1+ SIZE)))	;Find next higher more-or-less prime
+  (DO () ((AND (NOT (ZEROP (\ SIZE 3)))
+	       (NOT (ZEROP (\ SIZE 5)))
+	       (NOT (ZEROP (\ SIZE 7)))))
+    (SETQ SIZE (+ SIZE 2)))
+  SIZE)
+
+;;; This is a separate function from the :CLEAR-HASH operation
+;;; for the sake of bootstrapping flavors.
+(DEFUN CLEAR-HASH-ARRAY (HASH-ARRAY)
+  "Clear out a hash array; leave it with no entries."
+  (WITH-LOCK ((HASH-TABLE-LOCK HASH-ARRAY))
+    ;; Set all of hash table to NIL with cdr-next.
+    (SETF (AREF HASH-ARRAY 0) NIL)
+    (%P-STORE-CDR-CODE (ALOC HASH-ARRAY 0) CDR-NEXT)
+    (%BLT-TYPED (ALOC HASH-ARRAY 0) (ALOC HASH-ARRAY 1) (1- (ARRAY-LENGTH HASH-ARRAY)) 1)
+    ;; Set first word of each group to DTP-NULL, 0.
+    (LET ((ELT-0 (ALOC HASH-ARRAY 0))
+	  (BLEN (HASH-TABLE-BLOCK-LENGTH HASH-ARRAY)))
+      (%P-STORE-POINTER ELT-0 0)
+      (%P-STORE-DATA-TYPE ELT-0 DTP-NULL)
+      (%BLT-TYPED ELT-0 (%MAKE-POINTER-OFFSET DTP-LOCATIVE ELT-0 BLEN)
+		  (1- (TRUNCATE (ARRAY-LENGTH HASH-ARRAY) BLEN))
+		  BLEN)
+      ;; Set last word of each group to CDR-NIL.
+      (%P-STORE-CDR-CODE (ALOC HASH-ARRAY (+ BLEN -1)) CDR-NIL)
+      (%BLT-TYPED (ALOC HASH-ARRAY (+ BLEN -1)) (ALOC HASH-ARRAY (+ BLEN BLEN -1))
+		  (1- (TRUNCATE (ARRAY-LENGTH HASH-ARRAY) BLEN))
+		  BLEN))
+    (SETF (HASH-TABLE-FULLNESS HASH-ARRAY) 0)
+    (SETF (HASH-TABLE-NUMBER-OF-DELETED-ENTRIES HASH-ARRAY) 0)
+    (SETF (HASH-TABLE-GC-GENERATION-NUMBER HASH-ARRAY) %GC-GENERATION-NUMBER)
+    HASH-ARRAY))
+
+(defselect ((:property hash-array named-structure-invoke))
+  (:FASLOAD-FIXUP (self)
+    ;; Force rehash as if due to gc, because hash codes are all wrong now.
+    ;; Also fix up cdr codes.
+    (SETF (HASH-TABLE-GC-GENERATION-NUMBER SELF) -1)
+    (DO ((I 0 (+ I BLEN))
+	 (BLEN (HASH-TABLE-BLOCK-LENGTH SELF))
+	 (LENGTH (ARRAY-LENGTH SELF)))
+	(( I LENGTH))
+      (%P-STORE-CDR-CODE (ALOC SELF (+ I BLEN -1)) CDR-NIL)))
+  (:PRINT-SELF (SELF STREAM &OPTIONAL IGNORE)
+    (PRINTING-RANDOM-OBJECT (SELF STREAM)
+      (FORMAT STREAM "~S-~A"
+	      (HASH-TABLE-COMPARE-FUNCTION SELF)
+	      (IF (HASH-TABLE-FUNCALLABLE-P SELF)
+		  "HASH-ARRAY (Funcallable)"
+		"HASH-ARRAY")))))
+
+;;;; Rehashing of hash arrays.
+
+;;;Add a new entry to a hash table being constructed for rehashing an old one.
+;;;CONTENTS is a pointer to the first word of the entry in the old hash table,
+;;;so its CAR is the hash code.
+;;;There is no need to lock the hash table since nobody else knows about it yet.
+(DEFUN REHASH-PUT (HASH-TABLE CONTENTS &OPTIONAL FOR-GC
+		   &AUX (HASH-CODE
+			  ;; Use the same hash code as before, to avoid swapping,
+			  ;; unless this is rehashing due to GC.
+			  (IF (AND FOR-GC (HASH-TABLE-HASH-FUNCTION HASH-TABLE))
+			      (FUNCALL (HASH-TABLE-HASH-FUNCTION HASH-TABLE)
+				       (%P-CONTENTS-OFFSET CONTENTS 1))
+			    (CAR CONTENTS))))
+  (DO ((P (HASH-BLOCK-POINTER HASH-TABLE HASH-CODE)
+	  (%MAKE-POINTER-OFFSET DTP-LOCATIVE P BLEN))
+       (BLEN (HASH-TABLE-BLOCK-LENGTH HASH-TABLE)))
+      (())
+    ;; Make P wrap around at end of table.
+    ;; > is used because the pointer-difference, when time to wrap,
+    ;; is actually 1 or 2 more than the array length (because it includes the header);
+    ;; if BLEN is 2, we could wrap too soon if >= were used.
+    (IF (> (%POINTER-DIFFERENCE P HASH-TABLE)
+	   (ARRAY-LENGTH HASH-TABLE))
+	(SETQ P (%MAKE-POINTER-OFFSET DTP-LOCATIVE P (- (ARRAY-LENGTH HASH-TABLE)))))
+    ;; Install this key in the first empty slot.
+    ;; We know the key cannot already be present, and there are no deleted slots,
+    ;; and we don't need to rehash because that's what we are doing.
+    (COND ((= (%P-DATA-TYPE P) DTP-NULL)
+	   (%BLT-TYPED CONTENTS P BLEN 1)
+	   (SETF (CAR P) HASH-CODE)
+	   (RETURN)))))
+
+;;; Standard rehash function.  Returns new hash array (possibly the same one).
+;;; GROW is either the hash table's rehash-size or NIL meaning use same size array.
+;;; ACTUAL-SIZE is so that this can be used as a subroutine of another
+;;; rehash function which differs only in how to compute the new size.
+(DEFUN HASH-TABLE-REHASH (HASH-TABLE GROW &OPTIONAL ACTUAL-SIZE)
+  (SETQ HASH-TABLE (FOLLOW-STRUCTURE-FORWARDING HASH-TABLE))
+  (LET* ((NEW-SIZE (IF (NULL GROW)
+		       (HASH-TABLE-MODULUS HASH-TABLE)
+		     (HASH-TABLE-GOOD-SIZE
+		       (IF (FLOATP GROW)
+			   (FIX (* (HASH-TABLE-MODULUS HASH-TABLE) GROW))
+			 (+ (HASH-TABLE-MODULUS HASH-TABLE) GROW)))))
+	 (NEW-HASH-TABLE (MAKE-HASH-ARRAY
+			   ':SIZE NEW-SIZE
+			   ':AREA (IF GROW
+				      (SYS:%AREA-NUMBER HASH-TABLE)
+				    BACKGROUND-CONS-AREA)
+			   ':REHASH-FUNCTION (HASH-TABLE-REHASH-FUNCTION HASH-TABLE)
+			   ':REHASH-SIZE (HASH-TABLE-REHASH-SIZE HASH-TABLE)
+			   ':HASH-FUNCTION (HASH-TABLE-HASH-FUNCTION HASH-TABLE)
+			   ':COMPARE-FUNCTION (HASH-TABLE-COMPARE-FUNCTION HASH-TABLE)
+			   ':FUNCALLABLE-P (HASH-TABLE-FUNCALLABLE-P HASH-TABLE)
+			   ':ACTUAL-SIZE (IF GROW ACTUAL-SIZE
+					   (HASH-TABLE-MODULUS HASH-TABLE))
+			   ':NUMBER-OF-VALUES (- (HASH-TABLE-BLOCK-LENGTH HASH-TABLE)
+						 1
+						 (IF (HASH-TABLE-HASH-FUNCTION HASH-TABLE)
+						     1 0))
+			   ':REHASH-THRESHOLD (HASH-TABLE-REHASH-THRESHOLD HASH-TABLE))))
+    (declare (special new-hash-table))		;why is this special?
+    ;; Scan the old hash table and find all nonempty entries.
+    (DO ((P (%MAKE-POINTER-OFFSET DTP-LOCATIVE HASH-TABLE
+				  (1+ (%P-LDB %%ARRAY-LONG-LENGTH-FLAG HASH-TABLE)))
+	    (%MAKE-POINTER-OFFSET DTP-LOCATIVE P BLEN))
+	 (BLEN (HASH-TABLE-BLOCK-LENGTH HASH-TABLE))
+	 (I 0 (+ I BLEN))
+	 (N (ARRAY-LENGTH HASH-TABLE)))
+	(( I N))
+      (COND (( (%P-DATA-TYPE P) DTP-NULL)
+	     ;; And store each one in the new hash table.
+	     (REHASH-PUT NEW-HASH-TABLE P (NULL GROW)))))
+    (SETF (HASH-TABLE-FULLNESS NEW-HASH-TABLE)
+	  (HASH-TABLE-FULLNESS HASH-TABLE))
+    (SETF (HASH-TABLE-INSTANCE NEW-HASH-TABLE)
+	  (HASH-TABLE-INSTANCE HASH-TABLE))
+    (COND ((NULL GROW)
+	   (SETQ HASH-TABLE (FOLLOW-STRUCTURE-FORWARDING HASH-TABLE))
+	   (SETF (HASH-TABLE-LOCK NEW-HASH-TABLE)
+		 (HASH-TABLE-LOCK HASH-TABLE))
+	   (%BLT-TYPED (%FIND-STRUCTURE-LEADER NEW-HASH-TABLE)
+		       (%FIND-STRUCTURE-LEADER HASH-TABLE)
+		       (%STRUCTURE-TOTAL-SIZE HASH-TABLE)
+		       1)
+	   (RETURN-ARRAY NEW-HASH-TABLE)
+	   HASH-TABLE)
+	  (T
+	   NEW-HASH-TABLE))))
+
+;;;Rehash a hash table to be exactly double the size.
+;;;Use this as a rehash function for a hash table.
+;;;It ignores the :REHASH-SIZE parameter.
+(DEFUN HASH-TABLE-DOUBLE-SIZE-REHASH (HASH-TABLE GROW)
+  (HASH-TABLE-REHASH HASH-TABLE GROW (* 2 (HASH-TABLE-MODULUS HASH-TABLE))))
+
+;;; The flavor system needs to be able to do PUTHASH before hash table flavors can be used.
+
+;;;Subroutine of hashing.
+;;;Given a hash-table and a key, return a locative to the start
+;;;of the block in the array which may contain an association from that key.
+;;;Cannot use ALOC because it gets an error if there is a DTP-NULL in the array.
+(DEFUN HASH-BLOCK-POINTER (HASH-TABLE KEY)
+  (%MAKE-POINTER-OFFSET DTP-LOCATIVE HASH-TABLE
+			(+ (* (\ (LDB 0023
+				      (ROT (%POINTER KEY)
+					   (IF (HASH-TABLE-FUNCALLABLE-P HASH-TABLE) 0 3)))
+				 (HASH-TABLE-MODULUS HASH-TABLE))
+			      (HASH-TABLE-BLOCK-LENGTH HASH-TABLE))
+			   (%P-LDB %%ARRAY-LONG-LENGTH-FLAG HASH-TABLE)
+			   1)))
+
+(DEFSUBST %P-CONTENTS-EQ (P X)
+  (AND (NEQ (%P-DATA-TYPE P) DTP-NULL)
+       (EQ (CAR P) X)))
+
+
+(DEFUN PUTHASH-BOOTSTRAP (KEY VALUE HASH-TABLE &REST ADDITIONAL-VALUES
+			  &AUX
+			  (VALUES-LEFT (CONS VALUE ADDITIONAL-VALUES))
+			  (HASH-FUNCTION (HASH-TABLE-HASH-FUNCTION HASH-TABLE))
+			  (COMPARE-FUNCTION (HASH-TABLE-COMPARE-FUNCTION HASH-TABLE))
+			  (HASH-CODE (IF HASH-FUNCTION (FUNCALL HASH-FUNCTION KEY) KEY)))
+  (DECLARE (RETURN-LIST VALUE OLD-VALUE KEY-FOUND-FLAG ENTRY-POINTER))
+  (WITH-LOCK ((HASH-TABLE-LOCK HASH-TABLE))
+    (SETQ HASH-TABLE (FOLLOW-STRUCTURE-FORWARDING HASH-TABLE))
+    (DO ((P (HASH-BLOCK-POINTER HASH-TABLE HASH-CODE)
+	    (%MAKE-POINTER-OFFSET DTP-LOCATIVE P BLEN))
+	 (BLEN (HASH-TABLE-BLOCK-LENGTH HASH-TABLE))
+	 (OLD-VALUE)
+	 (EMPTYP NIL))
+	(())
+      ;; Make P wrap around at end of table.
+      ;; > is used because the pointer-difference, when time to wrap,
+      ;; is actually 1 or 2 more than the array length (because it includes the header);
+      ;; if BLEN is 2, we could wrap too soon if >= were used.
+      (IF (> (%POINTER-DIFFERENCE P HASH-TABLE)
+	     (ARRAY-LENGTH HASH-TABLE))
+	  (SETQ P (%MAKE-POINTER-OFFSET DTP-LOCATIVE P (- (ARRAY-LENGTH HASH-TABLE)))))
+      (COND ((AND (%P-CONTENTS-EQ P HASH-CODE)		;Found existing entry
+		  (OR (NULL HASH-FUNCTION)
+		      (FUNCALL COMPARE-FUNCTION (%P-CONTENTS-OFFSET P 1) KEY)))
+	     (LET ((VALUE-INDEX (IF HASH-FUNCTION 2 1)))
+	       (SETQ OLD-VALUE (%P-CONTENTS-OFFSET P VALUE-INDEX))
+	       (DO ((I VALUE-INDEX (1+ I))) ((= I BLEN))
+		 (%P-STORE-CONTENTS-OFFSET (POP VALUES-LEFT) P I))
+	       (RETURN VALUE OLD-VALUE T (%MAKE-POINTER-OFFSET DTP-LIST P (1- VALUE-INDEX)))))
+	    ((= (%P-DATA-TYPE P) DTP-NULL)
+	     (OR EMPTYP (SETQ EMPTYP P))
+	     (WHEN (ZEROP (%P-POINTER P))
+	       ;; Hash tables are not supposed to need rehash before HASHFL is loaded.
+	       ;; It wouldn't work, since the hash table instance is not there
+	       ;; for FLAVOR to use to find the new hash array.
+	       (COND (( (HASH-TABLE-GC-GENERATION-NUMBER HASH-TABLE) %GC-GENERATION-NUMBER)
+		      (FERROR NIL "~S claims to need rehash due to gc." HASH-TABLE))
+		     ((>= (+ (HASH-TABLE-FULLNESS HASH-TABLE)
+			     (HASH-TABLE-NUMBER-OF-DELETED-ENTRIES HASH-TABLE))
+			  (FIX (* (IF (FLOATP (HASH-TABLE-REHASH-THRESHOLD HASH-TABLE))
+				      (HASH-TABLE-REHASH-THRESHOLD HASH-TABLE)
+				    0.7S0)
+				  (- (HASH-TABLE-MODULUS HASH-TABLE) 2))))
+		      (FERROR NIL "~S is too full." HASH-TABLE))
+		     (T			;Add to table using empty slot found
+		      (%P-STORE-CONTENTS EMPTYP HASH-CODE)
+		      (COND (HASH-FUNCTION
+			     (%P-STORE-CONTENTS-OFFSET KEY EMPTYP 1)
+			     (DO ((I 2 (1+ I))) ((= I BLEN))
+			       (%P-STORE-CONTENTS-OFFSET (POP VALUES-LEFT) EMPTYP I)))
+			    (T
+			     (DO ((I 1 (1+ I))) ((= I BLEN))
+			       (%P-STORE-CONTENTS-OFFSET (POP VALUES-LEFT) EMPTYP I))))
+		      (INCF (HASH-TABLE-FULLNESS HASH-TABLE))
+		      ;; If reusing a deleted slot, decrement number of them slots.
+		      (OR (EQ EMPTYP P)
+			  (DECF (HASH-TABLE-NUMBER-OF-DELETED-ENTRIES HASH-TABLE)))
+		      (RETURN VALUE)))))))))
+
+(UNLESS (FBOUNDP 'PUTHASH-ARRAY)
+  (FSET 'PUTHASH-ARRAY 'PUTHASH-BOOTSTRAP))
+
+(UNLESS (FBOUNDP 'MAKE-FLAVOR-HASH-ARRAY)
+  (FSET 'MAKE-FLAVOR-HASH-ARRAY 'MAKE-FLAVOR-HASH-ARRAY-BOOTSTRAP))
+
+(DEFUN MAKE-FLAVOR-HASH-ARRAY-BOOTSTRAP (AREA SIZE)
+  (MAKE-HASH-ARRAY ':AREA AREA ':SIZE SIZE
+		   ':FUNCALLABLE-P T
+		   ':REHASH-THRESHOLD 0.8S0
+		   ':NUMBER-OF-VALUES 2))
+
+;;; Like MAPHASH but wants a hash-array rather than a hash table instance.
+;;; So it can be used before HASHFL has been fully loaded and installed
+;;; (such as, for composing the hash table flavors).
+(DEFUN MAPHASH-ARRAY (FUNCTION HASH-TABLE &REST EXTRA-ARGS)
+  (WITH-LOCK ((HASH-TABLE-LOCK HASH-TABLE))
+    (DO ((BLEN (HASH-TABLE-BLOCK-LENGTH HASH-TABLE))
+	 (BLOCK-OFFSET (IF (HASH-TABLE-HASH-FUNCTION HASH-TABLE) 1 0))
+	 (I 0 (+ I BLEN))
+	 (N (ARRAY-LENGTH HASH-TABLE)))
+	(( I N))
+      (COND (( (%P-DATA-TYPE (ALOC HASH-TABLE I)) DTP-NULL)
+	     (%OPEN-CALL-BLOCK FUNCTION 0 0)
+	     (DOLIST (I (%MAKE-POINTER-OFFSET DTP-LIST (ALOC HASH-TABLE I) BLOCK-OFFSET))
+	       (%PUSH I))
+	     (DOLIST (I EXTRA-ARGS)
+	       (%PUSH I))
+	     (%ACTIVATE-OPEN-CALL-BLOCK))))
+    HASH-TABLE))

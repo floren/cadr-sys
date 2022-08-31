@@ -1,0 +1,378 @@
+;;; -*- Mode:LISP; Package:TV; Base:8; Readtable:T -*-
+;;;	** (c) Copyright 1980 Massachusetts Institute of Technology **
+
+(DEFFLAVOR TEXT-SCROLL-WINDOW
+       ((ITEMS NIL)				;An array of all items
+	(TOP-ITEM 0)				;The index of the topmost displayed item
+	(ITEM-GENERATOR NIL)
+	)
+       ()
+  (:REQUIRED-FLAVORS BASIC-SCROLL-BAR)
+  :GETTABLE-INSTANCE-VARIABLES
+  (:DEFAULT-INIT-PLIST :BLINKER-P NIL)
+  (:DOCUMENTATION "Scrolling of lines all of one type"))
+
+;;;; The item-generator feature:
+
+;;; If the ITEM-GENERATOR variable is non-nil, then it replaces the array ITEMS
+;;; in remembering what items we are displaying.  It should be a function which
+;;; understands these operations:
+;;;  :NUMBER-OF-ITEMS              returns the number of items being displayed.
+;;;  :NUMBER-OF-ITEM item-value    returns the item-number of that item-value.
+;;;  :ITEM-OF-NUMBER item-number   returns the item-value at that item number.
+;;; The next two are optional, needed only if you want to use the :INSERT-ITEM,
+;;;  :DELETE-ITEM and :APPEND-ITEM operations on the window, which many applications
+;;;  for item generators will not need to do:
+;;;  :INSERT-ITEM item-number item-value   inserts the item-value at that item number.
+;;;  :DELETE-ITEM item-number              deletes the item at that item number.
+
+;;; If ITEM-GENERATOR is nil, the variable ITEMS contains an array (with fill pointer)
+;;; containing all the items.
+
+(DEFMETHOD (TEXT-SCROLL-WINDOW :BEFORE :INIT) (PLIST)
+  PLIST
+  (TYPECASE ITEMS
+    (ARRAY)
+    (CONS
+     (SETQ ITEMS
+	   (LET ((ARRAY (MAKE-ARRAY (LENGTH ITEMS) :FILL-POINTER (LENGTH ITEMS))))
+	     (FILLARRAY ARRAY ITEMS)
+	     ARRAY)))
+    (T
+     (SETQ ITEMS (MAKE-ARRAY (OR ITEMS 100.) :FILL-POINTER 0)))))
+
+(DEFMETHOD (TEXT-SCROLL-WINDOW :MORE-EXCEPTION) ()
+  (SETF (SHEET-MORE-FLAG) 0))
+
+(DEFMETHOD (TEXT-SCROLL-WINDOW :SET-ITEMS) (NEW-ITEMS &OPTIONAL NO-DISPLAY)
+  (SETQ ITEM-GENERATOR NIL)
+  (SETQ ITEMS NEW-ITEMS)
+  (TYPECASE ITEMS
+    (ARRAY)
+    (CONS
+     (SETQ ITEMS
+	   (LET ((ARRAY (MAKE-ARRAY (LENGTH ITEMS) :FILL-POINTER (LENGTH ITEMS))))
+	     (FILLARRAY ARRAY ITEMS)
+	     ARRAY)))
+    (T
+     (SETQ ITEMS (MAKE-ARRAY (OR ITEMS 100.) :FILL-POINTER 0))))
+  (UNLESS NO-DISPLAY
+    (SHEET-FORCE-ACCESS (SELF T)
+      (SEND SELF :CLEAR-WINDOW)
+      (SEND SELF :REDISPLAY 0 (SHEET-NUMBER-OF-INSIDE-LINES)))))
+
+(DEFMETHOD (TEXT-SCROLL-WINDOW :SET-ITEM-GENERATOR) (NEW-ITEM-GENERATOR)
+  (SETQ ITEM-GENERATOR NEW-ITEM-GENERATOR)
+  (SHEET-FORCE-ACCESS (SELF T)
+    (SEND SELF :CLEAR-WINDOW)
+    (SEND SELF :REDISPLAY 0 (SHEET-NUMBER-OF-INSIDE-LINES))))
+
+(DEFMETHOD (TEXT-SCROLL-WINDOW :LAST-ITEM) ()
+  (LET ((NITEMS (SEND SELF :NUMBER-OF-ITEMS)))
+    (IF (PLUSP NITEMS)
+	(SEND SELF :ITEM-OF-NUMBER (1- NITEMS)))))
+
+(DEFMETHOD (TEXT-SCROLL-WINDOW :NUMBER-OF-ITEMS) ()
+  (IF ITEM-GENERATOR (SEND ITEM-GENERATOR :NUMBER-OF-ITEMS)
+    (ARRAY-ACTIVE-LENGTH ITEMS)))
+
+(DEFMETHOD (TEXT-SCROLL-WINDOW :NUMBER-OF-ITEM) (ITEM)
+  (IF ITEM-GENERATOR (SEND ITEM-GENERATOR :NUMBER-OF-ITEM ITEM)
+    (DOTIMES (I (ARRAY-ACTIVE-LENGTH ITEMS))
+      (AND (EQ (AREF ITEMS I) ITEM) (RETURN I)))))
+
+(DEFMETHOD (TEXT-SCROLL-WINDOW :ITEM-OF-NUMBER) (NUMBER)
+  (IF ITEM-GENERATOR (SEND ITEM-GENERATOR :ITEM-OF-NUMBER NUMBER)
+    (AREF ITEMS NUMBER)))
+
+(DEFMETHOD (TEXT-SCROLL-WINDOW :PUT-LAST-ITEM-IN-WINDOW) ()
+  (OR ( (SEND SELF :NUMBER-OF-ITEMS)
+	 (+ TOP-ITEM (SHEET-NUMBER-OF-INSIDE-LINES) -1))
+      ;; Last item not on screen -- put it on bottom line
+      (SEND SELF :SCROLL-TO (- (SEND SELF :NUMBER-OF-ITEMS) (SHEET-NUMBER-OF-INSIDE-LINES))
+			    :ABSOLUTE)))
+
+(DEFMETHOD (TEXT-SCROLL-WINDOW :PUT-ITEM-IN-WINDOW) (ITEM)
+  ;; If item not visible, put it in the window; if off the top, bring it to the
+  ;; top.  If off the bottom, bring it to the bottom.
+  (LET ((ITEM-NO (SEND SELF :NUMBER-OF-ITEM ITEM))
+	(BOTTOM-ITEM (+ TOP-ITEM (SHEET-NUMBER-OF-INSIDE-LINES) -1)))
+    (COND ((NULL ITEM-NO))
+	  ((< ITEM-NO TOP-ITEM)
+	   (SEND SELF :SCROLL-TO ITEM-NO :ABSOLUTE))
+	  ((> ITEM-NO BOTTOM-ITEM)
+	   (SEND SELF :SCROLL-TO (- ITEM-NO (- BOTTOM-ITEM TOP-ITEM)) :ABSOLUTE)))))
+
+(DEFMETHOD (TEXT-SCROLL-WINDOW :APPEND-ITEM) (NEW-ITEM)
+  (SEND SELF :INSERT-ITEM (SEND SELF :NUMBER-OF-ITEMS) NEW-ITEM))
+
+(DEFMETHOD (TEXT-SCROLL-WINDOW :DELETE-ITEM) (ITEM-NO &AUX I)
+  (IF ITEM-GENERATOR (SEND ITEM-GENERATOR :DELETE-ITEM ITEM-NO)   ;Probably gets an error.
+    (DECF (FILL-POINTER ITEMS))
+    (DO ((I ITEM-NO (1+ I)))
+	(( I (ARRAY-ACTIVE-LENGTH ITEMS)))
+      (ASET (AREF ITEMS (1+ I)) ITEMS I))
+    (COND ((< ITEM-NO TOP-ITEM)
+	   (SETQ TOP-ITEM (1- TOP-ITEM))
+	   (SEND SELF :NEW-SCROLL-POSITION))
+	  ((< ITEM-NO (+ TOP-ITEM (SHEET-NUMBER-OF-INSIDE-LINES)))
+	   ;; Old item was on the screen -- flush it
+	   (SHEET-FORCE-ACCESS (SELF :NO-PREPARE)
+	     (SHEET-SET-CURSORPOS SELF 0 (* LINE-HEIGHT (- ITEM-NO TOP-ITEM)))
+	     (SEND SELF :DELETE-LINE 1)
+	     (SEND SELF :REDISPLAY (SETQ I (1- (SHEET-NUMBER-OF-INSIDE-LINES))) (1+ I))))
+	  (T (SEND SELF :NEW-SCROLL-POSITION))))
+  ITEM-NO)
+
+(DEFMETHOD (TEXT-SCROLL-WINDOW :INSERT-ITEM) (ITEM-NO NEW-ITEM)
+  "Inserts an item before ITEM-NO"
+  (IF ITEM-GENERATOR (SEND ITEM-GENERATOR :INSERT-ITEM ITEM-NO NEW-ITEM)
+    (LET ((NO-ITEMS (ARRAY-LEADER ITEMS 0)))
+      (SETQ ITEM-NO (MIN (MAX ITEM-NO 0) NO-ITEMS))
+      (ARRAY-PUSH-EXTEND ITEMS NIL)
+      (DOTIMES (I (- NO-ITEMS ITEM-NO))
+	;; Bubble items up
+	(ASET (AREF ITEMS (- NO-ITEMS I 1)) ITEMS (- NO-ITEMS I)))
+      (ASET NEW-ITEM ITEMS ITEM-NO)
+      (COND ((< ITEM-NO TOP-ITEM)
+	     (SETQ TOP-ITEM (1+ TOP-ITEM))
+	     (SEND SELF :NEW-SCROLL-POSITION))
+	    ((< ITEM-NO (+ TOP-ITEM (SHEET-NUMBER-OF-INSIDE-LINES)))
+	     ;; New item is on screen, insert a line then redisplay it
+	     (SHEET-FORCE-ACCESS (SELF :NO-PREPARE)
+	       (SHEET-SET-CURSORPOS SELF
+				    0 (* LINE-HEIGHT (SETQ ITEM-NO (- ITEM-NO TOP-ITEM))))
+	       (SEND SELF :INSERT-LINE 1)
+	       (SEND SELF :REDISPLAY ITEM-NO (1+ ITEM-NO))))
+	    (T (SEND SELF :NEW-SCROLL-POSITION)))))
+  ITEM-NO)
+
+;;; When exposed, draw in the items
+(DEFMETHOD (TEXT-SCROLL-WINDOW :AFTER :REFRESH) (&OPTIONAL TYPE)
+  (AND (OR (NOT RESTORED-BITS-P) (EQ TYPE :SIZE-CHANGED))
+       (SEND SELF :REDISPLAY 0 (SHEET-NUMBER-OF-INSIDE-LINES))))
+
+;;; Arguments are screen line indices -- assumes screen area already erased
+(DEFMETHOD (TEXT-SCROLL-WINDOW :REDISPLAY) (START END)
+  (DO ((I START (1+ I))
+       (J (+ START TOP-ITEM) (1+ J))
+       (LIM (SEND SELF :NUMBER-OF-ITEMS)))
+      ((OR ( I END)
+	   (AND ( J LIM)
+		;; Displaying some items can create more,
+		;; so recheck how many items there are.
+		( J (SETQ LIM (SEND SELF :NUMBER-OF-ITEMS))))))
+    (SHEET-SET-CURSORPOS SELF 0 (* LINE-HEIGHT I))
+    (SEND SELF :PRINT-ITEM (SEND SELF :ITEM-OF-NUMBER J) I J))
+  (SEND SELF :NEW-SCROLL-POSITION))
+
+;;; Each item is allowed only one line
+(DEFWRAPPER (TEXT-SCROLL-WINDOW :PRINT-ITEM) (IGNORE . BODY)
+  `(CATCH 'LINE-OVERFLOW . ,BODY))
+
+(DEFMETHOD (TEXT-SCROLL-WINDOW :END-OF-LINE-EXCEPTION) ()
+  (THROW 'LINE-OVERFLOW T))
+
+;;; Simplest printer, you want to redefine this probably
+(DEFMETHOD (TEXT-SCROLL-WINDOW :PRINT-ITEM) (ITEM LINE-NO ITEM-NO)
+  LINE-NO ITEM-NO				;Ignore these
+  (PRIN1 ITEM SELF))
+
+;;; Scrolling
+(DEFMETHOD (TEXT-SCROLL-WINDOW :SCROLL-BAR-P) ()
+  (OR (PLUSP TOP-ITEM)
+      (> (SEND SELF :NUMBER-OF-ITEMS) (SHEET-NUMBER-OF-INSIDE-LINES))))
+
+(DEFMETHOD (TEXT-SCROLL-WINDOW :SCROLL-POSITION) ()
+  (VALUES TOP-ITEM (SEND SELF :NUMBER-OF-ITEMS) LINE-HEIGHT))
+
+(DEFMETHOD (TEXT-SCROLL-WINDOW :SCROLL-TO) (NEW-TOP TYPE &AUX DELTA)
+  (AND (EQ TYPE :RELATIVE) (SETQ NEW-TOP (+ TOP-ITEM NEW-TOP)))
+  (SETQ NEW-TOP (MAX (MIN NEW-TOP (1- (SEND SELF :NUMBER-OF-ITEMS))) 0))
+  (SETQ DELTA (- NEW-TOP TOP-ITEM))
+  (OR (= DELTA 0)				;Nothing to change
+      (SEND SELF :SCROLL-REDISPLAY NEW-TOP DELTA))
+  (SEND SELF :NEW-SCROLL-POSITION))
+
+(DEFMETHOD (TEXT-SCROLL-WINDOW :AFTER :NEW-SCROLL-POSITION) (&REST IGNORE)
+  (MOUSE-WAKEUP))
+
+;;; This is a message so it can have daemons
+(DEFMETHOD (TEXT-SCROLL-WINDOW :SCROLL-REDISPLAY) (NEW-TOP DELTA &AUX NLINES)
+  (SHEET-HOME SELF)
+  (SETQ NLINES (SHEET-NUMBER-OF-INSIDE-LINES))
+  (COND	((> DELTA 0)				;Scrolling forward
+	 (SETQ DELTA (MIN DELTA NLINES))
+	 (WITHOUT-INTERRUPTS
+	   (SEND SELF :DELETE-LINE DELTA)
+	   (SETQ TOP-ITEM NEW-TOP))
+	 (SEND SELF :REDISPLAY (- NLINES DELTA) NLINES))
+	((< DELTA 0)				;Scrolling backward
+	 (SETQ DELTA (MIN (- DELTA) NLINES))
+	 (WITHOUT-INTERRUPTS
+	   (SEND SELF :INSERT-LINE DELTA)
+	   (SETQ TOP-ITEM NEW-TOP))
+	 (SEND SELF :REDISPLAY 0 DELTA)))
+  (SEND SELF :NEW-SCROLL-POSITION))
+
+(DEFFLAVOR FUNCTION-TEXT-SCROLL-WINDOW
+       (PRINT-FUNCTION				;Function called to print the item
+	(PRINT-FUNCTION-ARG NIL)		;Fixed argument for above
+	)
+       (TEXT-SCROLL-WINDOW)
+  (:SETTABLE-INSTANCE-VARIABLES PRINT-FUNCTION PRINT-FUNCTION-ARG)
+  (:DOCUMENTATION "Text scroll windows that print lines by calling a set function"))
+
+;;;LIST is (print-function print-function-arg (items...) top-item-number label item-generator)
+;;; Either the list of items or the item-generator will usually be nil.
+(DEFMETHOD (FUNCTION-TEXT-SCROLL-WINDOW :SETUP) (LIST)
+  ;; Label changing should be first -- this may cause redisplay so flush current items too
+  (AND ITEMS (STORE-ARRAY-LEADER 0 ITEMS 0))
+  (AND ( (LENGTH LIST) 5) (SEND SELF :SET-LABEL (FIFTH LIST)))
+  (SEND SELF :SET-PRINT-FUNCTION (FIRST LIST))
+  (SEND SELF :SET-PRINT-FUNCTION-ARG (SECOND LIST))
+  (SETQ TOP-ITEM (OR (FOURTH LIST) 0))
+  (IF (SIXTH LIST)
+      (SEND SELF :SET-ITEM-GENERATOR (SIXTH LIST))
+    (LET ((ARRAY (OR ITEMS (MAKE-ARRAY (LENGTH (THIRD LIST)) :FILL-POINTER 0))))
+      (DOLIST (L LIST) (VECTOR-PUSH-EXTEND L ARRAY))
+      (SEND SELF :SET-ITEMS ARRAY)))
+  LIST)
+
+(DEFMETHOD (FUNCTION-TEXT-SCROLL-WINDOW :PRINT-ITEM) (ITEM IGNORE ITEM-NO)
+  (CONDITION-BIND (((SYS:CELL-CONTENTS-ERROR)
+		    #'(LAMBDA (COND)
+			(VALUES :NEW-VALUE
+				(FORMAT NIL "#<~S ~O>"
+					(Q-DATA-TYPES (SEND COND :DATA-TYPE))
+					(%POINTER (SEND COND :ADDRESS)))))))
+    (FUNCALL PRINT-FUNCTION ITEM PRINT-FUNCTION-ARG SELF ITEM-NO)))
+
+
+(DEFFLAVOR TEXT-SCROLL-WINDOW-TYPEOUT-MIXIN () (WINDOW-WITH-TYPEOUT-MIXIN)
+  (:REQUIRED-FLAVORS TEXT-SCROLL-WINDOW)
+  (:DOCUMENTATION "Makes a TEXT-SCROLL-WINDOW have a typeout window"))
+
+(DEFUN TEXT-SCROLL-WINDOW-FLUSH-TYPEOUT ()
+  "If the typeout window is active, deexpose it, and make sure the redisplayer knows how many lines were clobbered."
+  (DECLARE (:SELF-FLAVOR TEXT-SCROLL-WINDOW-TYPEOUT-MIXIN))
+  (WHEN (SEND TYPEOUT-WINDOW :ACTIVE-P)
+    (LET ((BR (MIN (1- (SHEET-NUMBER-OF-INSIDE-LINES))
+		   (1+ (TRUNCATE (SEND TYPEOUT-WINDOW :BOTTOM-REACHED)
+				 LINE-HEIGHT)))))
+      (SEND TYPEOUT-WINDOW :DEACTIVATE)
+      (SEND SELF :DRAW-RECTANGLE
+	    (SHEET-INSIDE-WIDTH) (* BR LINE-HEIGHT)
+	    0 0
+	    ALU-ANDCA)
+      BR)))
+
+(DEFWRAPPER (TEXT-SCROLL-WINDOW-TYPEOUT-MIXIN :REDISPLAY) (ARGS . BODY)
+  `(LET ((TO (TEXT-SCROLL-WINDOW-FLUSH-TYPEOUT)))
+     (WHEN TO
+       (SETF (FIRST ARGS) 0)
+       (SETF (SECOND ARGS) (MAX TO (SECOND ARGS))))
+     . ,BODY))
+
+(DEFMETHOD (TEXT-SCROLL-WINDOW-TYPEOUT-MIXIN :FLUSH-TYPEOUT) ()
+  (LET ((TO (TEXT-SCROLL-WINDOW-FLUSH-TYPEOUT)))
+    (WHEN TO (SEND SELF :REDISPLAY 0 TO))))
+
+(DEFFLAVOR DISPLAYED-ITEMS-TEXT-SCROLL-WINDOW
+	(DISPLAYED-ITEMS				;An array of mouse sensitive items
+	  )
+	(TEXT-SCROLL-WINDOW)
+  (:DOCUMENTATION "Keep track of displayed items on the screen.
+We take care of everything in maintaining DISPLAYED-ITEMS except one:
+the :PRINT-ITEM operation you define is responsible for storing the desired
+data into the element of DISPLAYED-ITEMS for the line displayed."))
+
+(DEFMETHOD (DISPLAYED-ITEMS-TEXT-SCROLL-WINDOW :AFTER :INIT) (IGNORE)
+  (SETQ DISPLAYED-ITEMS (MAKE-ARRAY (SHEET-NUMBER-OF-INSIDE-LINES))))
+
+(DEFMETHOD (DISPLAYED-ITEMS-TEXT-SCROLL-WINDOW :AFTER :CHANGE-OF-SIZE-OR-MARGINS)
+	   (&REST IGNORE)
+  (LET ((NLINES (SHEET-NUMBER-OF-INSIDE-LINES)))
+    (AND (< (ARRAY-LENGTH DISPLAYED-ITEMS) NLINES)
+	 (ADJUST-ARRAY-SIZE DISPLAYED-ITEMS NLINES))))
+
+(DEFMETHOD (DISPLAYED-ITEMS-TEXT-SCROLL-WINDOW :AFTER :CHANGE-OF-DEFAULT-FONT)
+	   (&REST IGNORE)
+  (LET ((NLINES (SHEET-NUMBER-OF-INSIDE-LINES)))
+    (AND (< (ARRAY-LENGTH DISPLAYED-ITEMS) NLINES)
+	 (ADJUST-ARRAY-SIZE DISPLAYED-ITEMS NLINES))))
+
+(DEFMETHOD (DISPLAYED-ITEMS-TEXT-SCROLL-WINDOW :BEFORE :DELETE-ITEM) (ITEM-NO &AUX AL)
+  "Deleting an item -- if on the screen, update the displayed items appropriately"
+  (SETQ ITEM-NO (- ITEM-NO TOP-ITEM)
+	AL (SHEET-NUMBER-OF-INSIDE-LINES))
+  (WHEN (AND ( ITEMc; @P  P   P`@k	t()DHQ(  U  P
+`60HA;`8iR 1X-@2[HR 3Z.F@2Y0p@!Sq(>qp0 p 0@  @  @K	t()DH)0"`"SEU8"Q
+E'*D'R*4p@  @;	D8!iD@ @  @@ Ake)P%T`'Tj%("Phbh&%T('*H"U)h@@  8@  @
+40A;h"Rhbh)P)t`"*h*)d@&P0(@  @  @@X@;
+U*p(@$x@  @@0@$x@  @@0@  @`@;	8"Jtx@  @@0@;
+5 )iDx@  @@0@+	`(p   P P0    P `"THD U	D@0   P `@   P 
+` PHU@@ @@  @@ @K %Pht@0   P `+@  (`  @	@[T #H`'UF%@  @@0AhU *
+2h)iDxS	8"Jtx@  @@0@  @  @0jDH&Q0@ ip@   P'UU *)T(@P   P*)T(#K)d()*D)p 0   P P 0   P P     P   P "`"TJU)(D(#(`'UJ5A h$TeT!Tiu&"h)0   P :`"QjE !(T`$K*4p U4pQ(0$TH$"S@  @  @@ AT  QIE(U	dH**h$S
+E@  @@ @[	D'(TXTP @@H@  @  @@ @{	t *PhTh*JD'R0p@  @@ @;	h$VpB57\MF`7$83mB 7.6(0HF`7H07d(<]W @   p   P `"S) "p P   P `*)T(@p 0@2` H    X@!@ p@@ @@ P 0   @@ 00     00   8    @ @0(  P   P p6`&Jd)jbh)*2h&%T0"TET0'(T @(  P P(  P P  ( @  @  `  @@@@K
+$Qhh@   0   0#R)tp"TP   p *QH4p$U	dx(*$'0 @@0@PhT #H`'UP  @8  x $p H@   p 0 P   P `'UU *)T(@PX    p0 P 00 @ @@	0 00   @!@     @!@ `  @@0  @  @@ @  @@0@  @@0@@X    P   P "P   0   0 "p   p #p P $  B`  @`
+0@@	0@0@@  @@H@@0@  @@ @{
+DH&Q(rh'*$(**$x@PX    p0 P 00 @ @@
+H 00   @!@     @!@ `  @@0  @  @@ @  @@0@  @@0@@p    P   P "P   0   0 "p   p #p P $  B`  @`H@@
+H@0@@   @@H@@0@  @@ @;T'QHU@  @@ @+	dH*0 0@2` ` `@!@ p@  @@x 0 /@ @@ 00     00   8   @ @@@0   P p&`$Tjh"S	Rh%P%T()(@ @0j$U 0$QID`)(@ 	@  @  @  @@ Ah)j4x"K*@'(T @  $QID`()x*J$(@ hU#'Pj4p@,UU  PhU@  @@P@  @  `  @@@k	rp"T$U	dx@P   0&
+4H@   X   P 
+`'SSh@   P 0   0)(@  "c7X 0P w @8-5@H"@PkP@8-5 "Pt HTbhTkp_x @8L /F "(P b@zt >  "P`8B`  @`x@@p@0@@  @@H@@0@  @@ @{	th"THRh!V
+($U	dx@PX    p0 P 00   @@ 00   @!@     @!@ `  @@0  @  @@ @  @@0@  @@0@0iD0#P0    P   P 2P   P $hT(U	th"THbh S8@@`@  @@P@  @  @@  @ >0(@8-3^`8B@Px =0 8PH@   p 0 P   P `"TeU *)T(@p 0@2`@  @!@ p@  @@( 0 >  @@ 00     00   @  "Thd` $0 @ @@0 " , @@0 4P 1` @@@ 4P0 !@ @pi"Q%U "QeU 'S	4 4P0   @  @@ @k	D Q%U!ThU'  @  @@ @[U$Q
+ SH 0@  @@ @  @@0@  @@0@0hT@#R*D@0@  @@ @  @@0@  @@0A iu Th#TIdH)K+$H@ , @0(  P !(  P P(  P P$'PJE &SiRh))8SI"V@, @0(  P !(  P P(  P P$STp$)($p 0$$hT(UU"S
+4Q)t`%P`	@  @  @@P@  pA i"Q%U ')"Q	h$Q)8@8$hT(U
+Tp!*$('K%T0')"Q	Bh'*4(@`jT0!SIDSU#"ThDpAi"Q%U !ThU'(h)K@`i"Q%U &Ht@p,$hT(U
+Tx(
+E($)DxQ	D0#P0'S	4)K(T@*0$$hT(U	t0!TET(!P(T)Tp'(T`)Tp 2p 3 30 3P   P "P   p   0 4P   0"SEU8*)T(@p   0'SHBh)R)E ,P0   P 60   p 0   0 6P   0$'KHD`'KJE(*Te 'RD`@@ ;Xk#7X,`@H\( P"+- "hP b@zt "+- PT {P  `"P8@H"P# X H@HL /F "hP b@zt >  "P`H`G B@@h"AC2x"@  pbOP"L	0-3>t"D @x"AC2x"@(@0> P"L	0-3D0-P@xb4@hA> A)j! "#3 bh@0"POP"L	0-3D0Mk0P  X@0Mk   @`(@@@@0@@  @@H@@0@  @@ AUU
+DH&Q(rh'*$(**$x@PX  P 0 P@ 00 @ @@@ 00  @ @!@     @!@    @@x $0 @ @@00   @@ 4P0   @@  0 A@ @@X0 D , @@(0 F@, @@X $P   p   P 2P  P G G0 GP Gp 3 H H0 HP Hp I   P "P   P   0 4P   0$"SEU8*)T(#K)d()*D)p   P 60   0   0 L  "`>`@"(P0KhP X@0>@(@00%K,h{P@0  "hP0KhP"O@ >@(@00%K,peK4 x@`-PPx"/@ "J x)AL_x"HT >@(@00%K,peS:hB@ bS:h@``@@@@0@@  @@H@@0@  @@ @[`*ih"Uh@PX @ 0 P0 P  00   @@x 00   @!@     @!@ `  @@0     P "`*SH$h))rhQJDH&Q0 0   P `*)T('K%T0*SH$h)  @  @  @@P@  @@p@@x@  @@P@  @  @@@  @@H@  @  @0ip"U
+4h  4 x@8kP.`+4@h@@"P-0B@x Y SpH@   p 0 P Up 0@2` X  `@!@ p@@ @@ p 0 Y  @@ 00     00   8    @ @@0 U` @@@    P   P 2P   0 Gp   P "P   0   0 4@ g @x@@"36P@`@@(@0@@  @@H@@0@  @@ @{
+Tp!*$('K%T0*)T(@PX ` X 00 P0 00 @ @@( 00  @ @!@     @!@ `@ @@0   ,`, @@  0 " ( @  @  @@P@  @0j5 *0@@it $UTh@p Gp   P "P   P   0 4P   0*)T(@  @@H@  @  @pH@@H   @8 p 8"X> @H-Z^t{P 8"(T -RNX 0T jPT *P+0B@x bP ]0H@   p 0 P V0 0@2` X  @!@ p@@ @@ x 0 b` @@ 00     00   8    @ @@0 V  @@@    P   P 2P   0 Gp   P "P   P   0 4P   0*SH$h)  g @h@@b`(@H"`34P@`P@@X@0@@  @@H@@0@  @@ AK
+U U`*ih"UTh'*rh')t @p 0@2`  @`@!@ p@  @@p 0 g  @@ 00     00   8    @ @@8 0 ( , @@X0 D , @@(0 F@, @  @@ @[5'TID`*0x 0   P `!)u*SU      P   P 2P   G G0 GP Gp   P "P   0   0 4@ -PHxbh@@"* P)h@`L?xC+0P-8S h-PPx"+4 x@8"* P)h@`L
+?xbP_x@`p@@h@0@@  @@H@@0@  @@ A
+U U
+DH&Q)hSI8"Jtx@PX   P0 P  00 ` @@ 00  @ @!@     @!@ `@ @@0   ]  @@
+ 0 B`, @@ 0 E , @@P0 i  @@8     p   P 2P   G G0 GP Gp   P "P   P   0 4P   0 `0   P 60   P   0*)T('0x@  @`it*	Tx$K(U @  -PHx"xX"@H)J X"3 f0h{P:t -8S "P
+@@+4@h@h"P@p"PT4@h@h"PT)
+?xbPP B`  @`(@@@0@@  @@H@@0@  @@ @k
+"TDp$K(U @0 0@2` P  @!@ p@  @@ p 0 r  @@ 00     00   8    @ @  @@ @k	dH"TjE$K(U @  @@8     P   P 2P   P GP Gp   P "P   P   0 4P   0"SEU8*)T(  4@h@8-PHxbX  x v0 rH@   p 0 P   P `"QT`"U	h"Uh@PX `8 "00 P0 00 @ @@` 00  @ @!@     @!@ @` @@x 40$'SST &j$*)tH)S@A@hU#bh S	u0THT &j$*)tH@@	@@0   ,`, @@X 0 " , @@
+ 0 B`, @@ 0 E , @@P00 '  @@ 4P0 $  A i"Q%U "TeU *Pj5)iu @`@  @@ @kT "SU &)dH@  @@0 0 F`@  @@ A+TpUh5'TID`(*4x*)tH@@ @  @  @@P@  h@@`@@ @@@@@@@@ @@`@@h@@p@@`@@X@ hT #p Gp   P "P   P   0 4P   0 oP   P 60   p   0 a0   0 a0   0 L  G   H@Xb`0X"@`0-0PX{P# @"T-5+4P"TS:T"P(@`-ZJ_x,|hX*' z#P"`(@h"J x)AL?x*g "HP0KhP x@0>@(@00%K,h{PH@0 `"P0KhP"O@ >@(@00%K,pe@("O@ "(X).?xbk4 hA0b@k4`hA8"J x)AL-0kPT m5(@0"POP"L	0-3D0-k# "@_x @0k0X-P@xb0X@`H@@`@0@@  @@H@@0@@ @PX @` $P0 P  00 @ @@P 00 0` @!@     @!@   @@x $0 @ @@0 t  @@@0$)(V*U $hRh*	d(@ @@
+ 0 B`, @@ 0 E , @@P00 )  @@ 4P0 &  @@8 4P   P `'(U*IBh'0( 0 A@ @@X 4P z` @   @  @@P@  `@@`@@ @@@@@@@@ @@`@@h@@p@@`@@h@@x@  @@P@  @  @@@  @@p@  @@ @  @@H@   @  @@itp$K(U )S0   0 a0 0   0 L   P p>`7,W:D7- 2]h2XMv02\I "UTh'S@  ( @H"`8XB`(@P0t "`/@ -\HT -\~x h@Pb@@ "P
+8{P^tH@P"P
+4-5K4P"HT )P#4hjP(T*PK"`H@P"`#4h"`*@` Z@`(X"@h)J x"3 j_xhA"AC2x"@ bOP"L	0-3>t"D 	hA"AC2x"@(@0> P"L	0-3D0 @0> A "`* `k`.?xbk4 hA(b@k4`hA0"`(Xm5(@0"PoP"L	0-3D0-k# "@_x x@0k0X-P@xbX@`!0@@P@0@@   @@H@@0@  @@ @;d"U@  @@ @KU)J4(@ 0@2` x  @!@ p@@ @@@ 0` @@ 00     00   8    @ @0(  P !(  P P(  P P "TJE)hD(!*DHTp 0   P `$ThUP!K(@#SHD( 0 A@ @@X0 D , @@(0 F@( @  @  @@P@   @@p@@`@@h@@x@  @@P@  @  @@@  @ k "T  "k.L hX"9X<K4@h@H> @P)j `"#3 bp_x@`#@@!X@0@@  @@H@@0@@0@PX  0 0 P  00 	@ @@# 00 0` @!@     @!@  ` @@x $0 @ @@
+ 0 U` @@8 4P F@, @  @@ @[
+% '%U *)T( 0 V  @@X     p   P 2P   p _ GP Gp   P "P   p   0 4P   0*j$@   0'0 @  @@H@  @  @@(@  @pP@  @ i`@  "`(X4 x@H{P^t{P H@0> @X9P_x-P@x"4 h@hbP(T bP:T jP(T *`G P"P*T,z(T-PHxb:t*k-PPxb@  @`$`@@#@0@@   @@H@@0@  @@ @K
+%8((U @PP 0@2` X  X@!@ p @ @@ 0` @@ 00     00   0     P p2` S*$ShU'T
+E K(uTj$('TP 4P$S
+E@
+@@0h2P*) 0   P P$STp'K(U0#It`@` @  (@  @  @@ @k()
+2h$
+4@0 J
+h@  @@P@  `  @@@k
+%@!%U$S
+E@
+P   P "P   P   8   P p`&JH4'TJ$p   8   P p&`&JH4'TId($UIu&SId(   P 60   P   0 "p   0'PK `  @@j$&j4H@ "p  "`- *A   HX > 8P %`t &`t@h@@"8T`  @0hh)px@@' @`'0@@$x@0@@  @@H@@0@  @@ A;	d(Qdx&)dHQ+("PjE 'R0p@PX    00 P 00 ` @@'H 00   @!@     @!@ `  @@0  @ @  @  @@P@  @  @@  @8"@#3@  x!0H@   p 0 PP 0@2` P  @ p@!@ p@  @@ ` 0!  @@  00     00   @    ?`	@@0  )	dH@ 	@  @  @@P@   @  @@@  @@@  @@i`"SIbh@p   0 o@ @Xb@  @`)(@@((@0@@  @@H@@0@  @@ @k5'TID`!*$(0 0@2` p ``@!@ p@  @@( 0&  @@ 00     00   8    @ @@
+ 0 U` @@X0 D , @@(0 F@( @  @  @@P@   @@`@@h@@p@@x@  @@P@  @  @@  @8-; H-PHxb@H)J X"3 MBP_x  x)0&H@   p 0 P   P "`!Tiu&
+h)SjDH'R0p@PX `  00 P0 00 @ @@*@ 00   @!@     @!@ `  @@0   ( , @@8 0 F@( @  @  @@P@  @@p@@x@  @@P@  @  @@  @8-PHxb@H@0x-0*H@   p 0 P i0 0@2` x @X@!@ p@@ @@h 0-@ @@ 00     00   H   x`@@  $0 @ @  @@ @KU S	 "U@ @@
+ 0 U` @  @@ A5'TID`)(D()R)E ,P  @@X     p   P 2P   P GP Gp   P "P   p   0 4P   0"SEU8'U @  @@"`@  @@H@  @  @0hT *  X:' "F8{`(X-PHxbk-0-\o@ -\Zx)Zt 6+ (-P@x"XbP4@x@h  x3P-PH@   0 P zp 0@2` H    X@!@ p@@ @@ P 03` @!@    @!@     @!@ `  @@0  'S*5(Q(8"Rj( $P   P   P "P   0   0 4P   P 60   0   0 "` A`  @`-p@@,x@0@@  @@H@@0@@, @PX @` P0 P` 00 @ @@-x 00 0` @!@     @!@ `  A@idH$R	U5"R
+T $Stp#(`@`@@x 40 x`@@  $0 @ @Pi"Q%U 'RTh 4P B`, @@ 0 E , @@P0 z  @@
+ 0 A@ @@ ( 0 z` @  @  @@P@  (@@p@@xAi8$
+TxU	dH"U
+%(*5 @@`@@h@  @@P@  @  @@@  @@, @  @@,H@  @@H@  @  @0iDp'*4(    Xbh@`)* p"c3 {PX; "`HT -\~x"@*`0-P@x"X"`>a 4 hA"P
+8bP0"`C.hhX-;hT -\~x"@*`0-P@x"xX"`>a 4 hA> X-PPxbx=07pH@0  0 0   P P8*QH4p$U	dx*+(U5'TID`+K)dH'Q8@  @@0@  @pj% '%U *QH4p$U	dx@  Aj% '%U *QH4p$U	dx K(u@@H@  @@0@  @@0@  @@0@  @  @  @@ AkU*$"S	h)SH !SET( UI!(T`@p>>0   p p 0~`2UG@9H&6d`4]lFp;[d4F8:MB 7.6(1H0XmF`7$8,WV01[M 7p@@  @@H@@/0@  @@ A
+% '%U *QH4p$U	dx K(u@PX    p0 P 00 @ @@0P 00   @!@     @!@ `  @@/0  @  @@ @  @@0@  @@/0@@/H    P   P "P   0   0 "p   p #p=P $  B`  @`1P@@0P@0@@  @@H@@/0@  @@ @{
+% '%U *QH4p$U	dx@PX    p0 P 00 @ @@1h 00   @!@     @!@ `  @@/0  @  @@ @  @@0@  @@/0@@/@    P   P "P   0   0 "p   p #p=P $  B`  @`2h@@1h@0@@  @@H@@/0@  @@ AUU
+% '%U *QH4p$U	dx@PX    00 P 00 ` @@3  00  @ @!@     @!@ `  @@/0  I`( @  @  @@P@  @  @@X@  `  @@@[	bp+Q(0*Sd(@  @@x@@/0@@	   Xkp_x  xOpLH@  0 0=P   P 
+` PhU@  @@ @+U@G 0@2` H  @ h@!@ p@@ @@ X 0Q  @@ 00     00   8   =@ @@28    P   P "P   p   0 "p   0 "p   0N0   p #p=P $  "`Z`8B`  @`5@@4 @0@@  @@H@@/0@  @@ A;UU
+% '%U *QH4p$U	dx K(u@PX    00 P 00 ` @@5( 00  @ @!@     @!@ `  @@/0  E ( @  @  @@P@  @  @@X@  @@3H@  @@x@@/0@@	   Xkp_x  xXPU0H@  0 0=PP0PpB0 0@2` H  @ h@!@ p@@ @@ X 0X` @@ 00     00   8   =@ @@1     P   P "P   p   0 "p   0 "p   0N0   p #p=P $  "`Z`8B`  @`7@@6@0@@  @@H@@/0@  @@ @;U*U @PX `x 00 P0 00 @ @@7  00  @ @!@     @!@ `@ @@/0  @  @@ @  @@0@  @@/0@@@0   P `"TeU  ST@  @@2x 0U  @0(  P !(  P P(  P=P `, @@8 0 S(TX K*%,P @  @@ @kT`"*$(&*4H@  @  @@ @@  4P =` @  @  @@P@  H@@`@0i )0 @0i*@@0it0)) @0hU'PhDp@0i0)TP @@p@0i0*P@@@x@  @@P@  @  @@@  @ i`*p   P 60   P   0 6P   0@  g > @8X-5
+P8,+4 h@@$`;+8-P@x"8x-P@x"Y8"`++8L /@ {iX-g 0-P@x"	Xm-pX"s 0 (X-*k- "X@x{P@ "P% "`+*X{P' ( T cP2T,~k4 hAbPX@`9h@@7 @0@@  @@H@@/0@@#P@PX `  00 P0 00 @ @@9p 00 A  @!@     @!@    @@x $0=@ @@280E ( @  @  @@P@  @@x@  @@P@   @  @@@  @@@  @@X@  @@p   @"`(@H"XX  xkPgPH@0  0 0   P P@"U
+E@)K*$&eT`$UhDp+SjBh()t(*)Rh,)dH@  @@0@@H@  @@0@  APi8"Jtx+K*DHR "T
+TxU	h$Vp@  @@0@  @  @@ @@0@  @@x@@Ch2Zd(U *
+2h)iDxS	8"Jtx4f$<]W :[d 4]lFp;[p@B hU *
+2h)iDxS	8"Jtx#*T`$jBh()t(*0 0@2`(  (@!@ p@
+@ @@( 0o  @@ @!@     @!@    @PiDU)d!Q $0k` @0(  P !(  P P(  Pkp,UU *SeU $UhDp+S`, @  @@ @K4$UU0(  @0(  P !(  P P(  Pkp A`, @0(  P !(  P P(  Pkp C , @0(  P !(  P P(  Pkp D , @0(  P !(  P P(  Pkp E@, @  @@ @{	t*	Tx)(($hD( 0   P `"Q4$U0"U  @  @@ @{
+$ +P*"h!Q( #SHT` 0@  @@ @  @@0@  @@:x@0i8*@0@  @@ @  @@0@  @@:xA hT`*IRh))8SI"V@, @0(  P !(  P P(  Pkp$$TI8Uh#TIdH)K+$H@ ( @  @  @@P@  0@@pAi"Q%U ')"Q
+rh") @@`@@h@@x@ i8'0   P 60   0   0)P   P qb`3.B 2ZB 8-v(:.r 7-v n6H0HF;%F(2V(86x.FHfh2Zn2 9$(4(2\M 8l`2^$7nvxmv@lh<[MB 7.6(;H&(-F1lV2\Ef    @b/X"J X)@hL-0 @p"33 -5+7{P  @bk4 hA "*!)hT 9/@ > @0BP_x  x~poH@   0kpP AP 0@2`   
