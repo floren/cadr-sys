@@ -455,7 +455,7 @@ used for everything, rather than the default."
 	INITIATE-TRANSFER-REGISTER (+ BASE-ADDRESS (LSH %CHAOS-START-TRANSMIT-OFFSET 1)))
 
   (SETQ SI:%CHAOS-CSR-ADDRESS
-	(SI:MAKE-24-BIT-UNSIGNED (+ 77400000 (LSH ADDR -1))))  ; SET THE A MEMORY LOCATION
+	(SI::%MAKE-POINTER-UNSIGNED (+ 77400000 (LSH ADDR -1))))  ; SET THE A MEMORY LOCATION
   (INITIALIZE-NCP-SYSTEM)
   (%u-write OLD-CSR 20010)			;avoid interrupt hang screw
   (%u-write CONTROL-STATUS-REGISTER 20010)
@@ -478,8 +478,7 @@ used for everything, rather than the default."
       (CADR:DBG-WRITE ADR DATA)
       (%UNIBUS-WRITE ADR DATA)))
 
-(AND (= PROCESSOR-TYPE-CODE SI:CADR-TYPE-CODE)
-     (SET-BASE-ADDRESS))
+(IF-IN-CADR (SET-BASE-ADDRESS))
 
 (defun chatst-continuous-test (&optional (file)
 					 (record-errors-this-many-packets (* 10. 60. 5))
