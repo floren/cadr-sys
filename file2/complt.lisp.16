@@ -1,0 +1,167 @@
+
+;;; -*-Mode: Lisp; Package: FILE-SYSTEM; Base: 8; Lowercase:T -*-
+
+;This file handles completion of filenames for SNODEs.
+
+;Returns: NIL NIL if the name has no completions.
+;	  completion NIL if it completes partially to <completion>.
+;	  completion T if it completes to <completion>, which is complete.
+;	  completion /? if it completes to <completion>, which is
+;		a name in the directory, but also an initial segment
+;		of other names also in the directory.
+;If the completion is not NIL, it is a string which includes quote characters.
+
+;We consider only the latest version of each node;
+;this makes a difference only for multiple versions of a subnode which is a directory,
+;when the different versions have different subnodes.
+(defmethod (name-and-version-dir-node :complete-subnode-name)
+  (pathstep-to-complete
+   &optional accept-deleted-nodes subpathlist
+   &aux maximum-completion
+   minimum-completion
+   version-to-complete-with
+   previous-entry-name
+   (temp-reason (gen-temp-reason))
+   length-of-string)
+  (declare (special string-to-complete length-of-string version-to-complete
+		    previous-entry-name
+		    accept-deleted-nodes subpathlist temp-reason
+		    maximum-completion minimum-completion))
+  (setq pathstep-to-complete
+	(funcall-self 'validate-pathstep pathstep-to-complete))
+  (cond ((consp pathstep-to-complete)
+	 (cond ((eq (car pathstep-to-complete) ':version)
+		(setq version-to-complete-with (caddr pathstep-to-complete))
+		(if (memq version-to-complete-with '(> 0))
+		    (setq version-to-complete-with nil))
+		(setq string-to-complete (cadr pathstep-to-complete)))
+	       ((eq (car pathstep-to-complete) ':subnode-property)
+		(setq version-to-complete-with (cadddr pathstep-to-complete))
+		(if (memq version-to-complete-with '(> 0))
+		    (setq version-to-complete-with nil))
+		(setq string-to-complete
+		      (string-append (cadadr pathstep-to-complete)
+				     " "
+				     (remove-quote-chars
+				       (caddr pathstep-to-complete)))))
+	       (t (ferror nil "Pathstep ~S should not get here" pathstep-to-complete))))
+	(t (setq string-to-complete pathstep-to-complete)))
+  (if (consp string-to-complete)
+      (if (eq (car string-to-complete) ':name)
+	  (setq string-to-complete (cadr string-to-complete))
+	(ferror nil "Impossible pathstep ~S" string-to-complete)))
+  (setq length-of-string (string-length string-to-complete))
+  (funcall-self 'loop-over-directory
+	   #'(lambda (entry)
+	       (let ((this-entry-name (cadr (cadr (dir-entry-full-pathstep entry)))))
+		 (or (and previous-entry-name
+			  (string-equal previous-entry-name this-entry-name))
+		     (and (not accept-deleted-nodes)
+			  (dir-entry-deleted entry))
+		     (not (string-equal this-entry-name string-to-complete 0 0
+					length-of-string length-of-string))
+		     (and subpathlist
+			  (not (entry-matches-pathlist entry temp-reason subpathlist)))
+		     (progn
+		       (and (or (null minimum-completion)
+				(string-lessp this-entry-name minimum-completion))
+			    (setq minimum-completion this-entry-name))
+		       (and (or (null maximum-completion)
+				(string-lessp maximum-completion this-entry-name))
+			    (setq maximum-completion this-entry-name)))))))
+  ;; Depending on what we found in the directory
+  ;; (the name strings minimum-completion and maximum-completion,
+  ;; and the version numbers minimum-version and maximum-version),
+  ;; decide what to return.
+  (prog (completion-length completed-string)
+    (cond ((null minimum-completion) (return nil)))
+    ;; See how many characters we can determine until
+    ;; there is a character with more than one alternative
+    ;; or we run into the completion stop character.
+    (do ((i 0 (1+ i))
+	 (max (min (string-length maximum-completion)
+		   (string-length minimum-completion))))
+	((= i max) (setq completion-length i))
+      (and (not (char-equal (aref minimum-completion i)
+			    (aref maximum-completion i)))
+	   (return (setq completion-length i))))
+    (setq completed-string
+	  (format:output nil
+	    (princ-with-quoting 
+	      (if ( completion-length (string-length minimum-completion))
+		  (substring minimum-completion 0 completion-length)
+		  minimum-completion)
+	      '(#/# #/|))))
+    (if version-to-complete-with
+	(setq completed-string `(:version ,completed-string ,version-to-complete-with)))
+    (cond (( completion-length (string-length minimum-completion))
+	   (return completed-string))
+	  ((string-equal minimum-completion maximum-completion)
+	   ;; Fully complete.  Return flag T, and include version number if known.
+	   (return completed-string t))
+	  (t
+	   ;; Completes to a legitimate name, but other
+	   ;; longer names would also be ok.
+	   (return completed-string '/?)))))
+
+
+;Return T if any subnode of this directory matches the specified pathlist.
+;Matching means that the name of the subnode matches the first pathstep,
+;and either the pathlist ends after the first pathstep, or
+;the subnode has at least one subnode which match the rest of the pathlist.
+;Whether a subnode name matches a pathstep is decided by
+;the loop-over-matching-entries method of the directory.
+(defmethod (dir-node :any-subnode-matches-p) (pathlist &optional accept-deleted-nodes)
+  (*catch 'match
+    (let ((temp-reason (gen-temp-reason)))
+      (funcall-self 'loop-over-matching-entries
+		    (list (car pathlist)) accept-deleted-nodes
+		    #'(lambda (entry reason pathlist)
+			(cond ((entry-matches-pathlist entry reason pathlist)
+			       (*throw 'match t))))
+		    temp-reason
+		    (cdr pathlist)))))
+
+;Return T if the entry's node has a subnode that matches the specified pathlist.
+;Uses the specified reason temporarily for opening the entry's node, if nec.
+(defun entry-matches-pathlist (entry reason pathlist)
+  (or (null pathlist)
+      (and ; (dir-entry-dir-p entry)	;Loses on links pointing to dirs!
+	   (not (dir-entry-deleted entry))
+	   (let ((subnode (funcall-self ':open-subnode reason
+					(dir-entry-full-pathstep entry))))
+	     (unwind-protect
+	       (and subnode (funcall subnode ':any-subnode-matches-p pathlist))
+	       (and subnode (funcall subnode ':remove-reason reason)))))))
+
+;Complete a pathlist starting at this node.
+;Returns a new pathlist in which some of the names have been made longer.
+;Returns a second value just like :complete-subnode-name:
+;T means complete and unique,
+;/? means complete but not unique ("FOO", when both "FOO" and "FOOBAR" exist),
+;NIL means not complete.
+(defmethod (dir-node :complete-pathlist) (pathlist &optional accept-deleted-nodes)
+  (multiple-value-bind (completion flag)
+      (cond ((symbolp (car pathlist))
+	     (values (car pathlist) t))
+	    (t
+	     (funcall-self ':complete-subnode-name (car pathlist)
+			   accept-deleted-nodes
+			   (cdr pathlist))))
+    (cond ((null completion)
+	   (values pathlist nil))
+	  ((not (memq flag '(t /?)))
+	   (values (cons completion (cdr pathlist))
+		   flag))
+	  ((null (cdr pathlist))
+	   (values (list completion) flag))
+	  (t (values (cons completion
+			   (let ((temp-reason (gen-temp-reason)))
+			     (let ((subnode (funcall-self ':open-pathstep
+							  temp-reason completion)))
+			       (unwind-protect
+				 (setf (values nil flag)
+				       (funcall subnode ':complete-pathlist
+						(cdr pathlist) accept-deleted-nodes))
+				 (funcall subnode ':remove-reason temp-reason)))))
+		     flag)))))
