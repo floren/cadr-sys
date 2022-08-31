@@ -1,0 +1,46 @@
+;;; -*- Mode: Lisp; Package: User; Base: 10.; Common-Lisp: NIL; Patch-File: T -*-
+;;; Patch directory for ZMail version 53
+;;; Written 10/14/84 05:56:04 by MLY,
+;;; while running on Lisp Machine Sixteen from band 5
+;;; with System 98.75, CADR 3.10, ZMail 53.18, MIT-Specific 22.5, microcode 309, gc@36.
+
+(:RELEASED
+ ((0 "ZMail Loaded" "RMS" NIL)
+  (1 "Bug in Sort command after getting new mail.
+Flush duplications in menu of mail files.
+Handle % as delimiter in addresses.
+Compare subjects when checking for duplicate messages.
+Don't leave stream open if abort creating a mail file buffer.
+Bugs in C-X M within mailing.  Avoid extra blank line in headers.
+Editing current message doesn't clobber point.
+Reduce summary glitching while reading in mail file." "RMS" NIL)
+  (2 "Print correct year in Date fields." "RMS" NIL)
+  (3 "Logical pathnames for mail files.
+Profile mode bug.  Prepare for Y-OR-N-P change." "RMS" NIL)
+  (5 "Undigestify bug.  Mail sending via dead hosts bug.
+Recover if login host down when looking for init file." "RMS" NIL)
+  (6 "/"Compile init file/" is willing to recompile instead.
+Defaulting non-ITS pathname from FOO BABYL bug.
+Mail files remembered in init file menu duplications fixed.
+Bug in editing remembered universes list." "RMS" NIL)
+  (7 "Change the crock that shadowed the standard format op ~." "RMS" NIL)
+  (8 "Mouse blips in zmail." "Mly" NIL)
+  (9 "Subjects prompted for should really appear in the messages sent." "RMS" NIL)
+  (10 "s-Abort really aborts sending message (i.e., it will not be a candidate for
+ the Continue command)" "RpK" NIL)
+  (11 "Survey bug (~ again)" "Mly" NIL)
+  (12 "Mousing zmacs windows in profile or filter creation bug" "Mly" NIL)
+  (13 "Profile editing of remembered mail files bug." "Mly" NIL)
+  (14 "Pathname default for O command bug.
+Editing init-file remembered mail files bug." "RMS" NIL)
+  (15 "random mouse button lossage
+universe expansion degenerate cases
+try to stamp out the dreaded base-tick unbound bug..." "Mly" NIL)
+  (16 "Usual mail file directory user option." "RpK" NIL)
+  (17 "Bugswith invalid headers in draft messages.
+Bug in replying to multiple messages.
+Point-pdl robustness." "RMS" NIL)
+  (18 "When CHOOSE-MAIL-MODE means :MAIL, it returns :MAIL.
+(This caused templates not to get run.)" "RpK" NIL)
+  (19 NIL "MLY" NIL)
+  ))

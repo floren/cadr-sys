@@ -1,0 +1,112 @@
+;-*- Mode:LISP; Package:ZWEI; Base:8; Readtable:T -*-
+;;; Written in 1982 by RMS -- feel free to use it,
+;;; provided you return all improvements for redistribution.
+
+;;; This file deals with manipulating lists of "possibilities" -- things to look at or go to.
+;;; Possibilities are used for recording functions to visit for List Callers, etc.
+;;; and also for recording places to find definitions in Edit Definition.
+;;; The list is recorded in a ZWEI buffer; each possibility is attached to one line
+;;; of the buffer, and you can go to that line and type a command
+;;; to go to that possibility.
+
+;;; A possibility is a line whose plist contains properties :POSSIBILITY and :LEVEL.
+;;; When one possibility generates others, it gives those others lower :LEVELs.
+
+;;; Executing a possibility can call make-buffer-current, so you cannot
+;;; in general use possibilities except in ZMACS.
+;;; Also, the possibilities themselves live in ZMACS buffers.
+;;; But you can use possibilities outside ZMACS as long as you know
+;;; that you are using a possibilities buffer which cannot contain
+;;; any possibilities that might try to switch buffers when executed.
+
+;;; Going to a possibility can insert more possibilities, as new lines,
+;;; following that line.
+
+(DEFVAR POSSIBILITY-BUFFER NIL
+  "While hacking possibility buffers, this is the buffer being hacked.
+If this is non-NIL, it is a buffer whose point should be relocated
+when possibilities are taken from it.")
+
+(DEFMACRO POSSIBILITY-MOVE-BP ((BP) &BODY BODY)
+  "Execute BODY, and afterwards move POSSIBILITY-BUFFER's point to BP's new value.
+All possibility-functions that can alter the BP passed to them
+should use this macro around the code which can do so."
+  `(UNWIND-PROTECT
+     (PROGN . ,BODY)
+     (IF POSSIBILITY-BUFFER (MOVE-BP (BUFFER-POINT POSSIBILITY-BUFFER) ,BP))))
+
+(DEFUN POSSIBILITY-LEVEL (BP)
+  "Return the level of the possibility on BP's line, or NIL if none."
+  (GETF (LINE-PLIST (BP-LINE BP)) ':LEVEL))
+
+(DEFUN EXECUTE-POSSIBILITY (BP POSS)
+  "Execute the possibility POSS and pass it BP."
+  (APPLY (CAR POSS) BP (CDR POSS)))
+
+(DEFUN GO-TO-POSSIBILITY (BP)
+  "Execute the possibility on the line BP points to."
+  (LET ((POSSIBILITY (GETF (LINE-PLIST (BP-LINE BP)) ':POSSIBILITY)))
+    (IF POSSIBILITY
+	(EXECUTE-POSSIBILITY BP POSSIBILITY)
+      (BARF))))
+
+(DEFUN GO-TO-NEXT-POSSIBILITY (BP)
+  "Execute the next possibility after BP and move BP past it.
+If BP is not at the beginning of a line, scanning starts on the next line.
+BP is left at the end of the line on which the possibility is found."
+  (POSSIBILITY-MOVE-BP (BP)
+    (LET* ((*INTERVAL* (BP-TOP-LEVEL-NODE BP)))
+      ;; Advance to the end of the next line that has a :possibility property.
+      ;; Don't count the line we start on unless we start at column 0.
+      (DO ()
+	  ((AND (ZEROP (BP-INDEX BP))
+		(GETF (LINE-PLIST (BP-LINE BP)) ':POSSIBILITY)))
+	(LET ((NEXT (FORWARD-LINE BP 1)))
+	  (OR NEXT (BARF))
+	  ;; Now advance to the end of that line,
+	  ;; so we don't go to it again if we call this function again.
+	  (MOVE-BP BP NEXT))))
+    (MOVE-BP BP (END-OF-LINE (BP-LINE BP))))
+  ;; Now go to the possibility we have reached,
+  ;; with *interval* not bound.
+  (GO-TO-POSSIBILITY BP))
+
+(DEFUN GO-TO-NEXT-LEVEL-0-POSSIBILITY (BP)
+  "Execute the next level-zero possibility after BP and move BP past it.
+If BP is not at the beginning of a line, scanning starts on the next line.
+BP is left at the end of the line on which the possibility is found."
+  (POSSIBILITY-MOVE-BP (BP)
+    (LET* ((*INTERVAL* (BP-TOP-LEVEL-NODE BP)))
+      ;; Advance to the end of the next line that has a :possibility property.
+      ;; Don't count the line we start on unless we start at column 0.
+      (DO ()
+	  ((AND (ZEROP (BP-INDEX BP))
+		(GETF (LINE-PLIST (BP-LINE BP)) ':POSSIBILITY)
+		(ZEROP (GETF (LINE-PLIST (BP-LINE BP)) ':LEVEL))))
+	(LET ((NEXT (FORWARD-LINE BP 1)))
+	  (OR NEXT (BARF))
+	  ;; Now advance to the end of that line,
+	  ;; so we don't go to it again if we call this function again.
+	  (MOVE-BP BP NEXT))))
+    (MOVE-BP BP (END-OF-LINE (BP-LINE BP))))
+  ;; Now go to the possibility we have reached,
+  ;; with *interval* not bound.
+  (GO-TO-POSSIBILITY BP))
+
+(DEFUN INSERT-POSSIBILITY-AFTER (BP LEVEL FORMAT-STRING POSSIBILITY)
+  "Insert a new possibility after the one BP points at.
+The text of the line is made from FORMAT-STRING and the cdr of POSSIBILITY.
+The :POSSIBILITY property is just POSSIBILITY and its level is LEVEL.
+The value is a BP to the inserted line."
+  (LET* ((*INTERVAL* (BP-TOP-LEVEL-NODE BP))
+	 (NEXT (FORWARD-LINE BP 1)))
+    (OR NEXT (FERROR NIL "BP is on the last line of its node"))
+    (INSERT NEXT #/NEWLINE)
+    (SETQ NEXT (FORWARD-LINE BP 1))
+    (INSERT NEXT (APPLY #'FORMAT NIL FORMAT-STRING (CDR POSSIBILITY)))
+    (INSERT-CHARS NEXT #/SPACE (- LEVEL))
+    (SETF (BP-INDEX NEXT) 0)
+    (SETF (GETF (LINE-PLIST (BP-LINE NEXT)) ':LEVEL) LEVEL)
+    (SETF (GETF (LINE-PLIST (BP-LINE NEXT)) ':POSSIBILITY) POSSIBILITY)
+    NEXT))
+

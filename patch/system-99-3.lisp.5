@@ -1,0 +1,362 @@
+;;; -*- Mode:Lisp; Readtable:T; Package:User; Base:8.; Patch-File:T -*-
+;;; Private patches made by RMS
+;;; Reason: Terminal 1 F bug (chaos:finger-lispms).
+;;; Bug writing header comments of patch files.
+;;; INIT-FILE-PATHNAME ref'd in package SI.
+;;; FS:ALL-DIRECTORIES problems.  Translation of wild logical directories.
+;;; FS:MAKE-PATHNAME-DEFAULTS.  DESCRIBE-SYSTEM.
+;;; Defaulting of explicitly specified object file name in DEFSYSTEM.
+;;; Explicit object file in DEFSYSTEM defaults to the source file.
+;;; Written 9/12/84 17:42:10 by RMS,
+;;; while running on Lisp Machine Twenty-four from band 4
+;;; with Experimental System 99.2, CADR 4.0, Experimental ZMail 54.0, MIT-Specific 23.0, microcode 320, GC@2.
+
+
+
+; From file CHSAUX.LISP OZ:<L.NETWORK.CHAOS> OZ:
+#8R CHAOS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "CHAOS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: NETWORK; CHAOS; CHSAUX  "
+
+
+(DEFSUBST FCL-HOST (ELEM) (CAR ELEM))
+(DEFSUBST FCL-CONN1 (ELEM) (CDADR ELEM))	; First CHAOS CONN in an element
+
+))
+
+; From file CHSAUX.LISP OZ:<L.NETWORK.CHAOS> OZ:
+#8R CHAOS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "CHAOS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: NETWORK; CHAOS; CHSAUX  "
+
+(DEFUN FINGER-LISPMS (&OPTIONAL
+		      (STREAM *STANDARD-OUTPUT*) HOSTS (PRINT-FREE T) RETURN-FREE
+		      (PRINT-INUSE T) (PRINT-DOWN T)
+		      &AUX FREE DOWN ELEMS HOST)
+  "Print brief information about who is logged in to each Lisp machine.
+STREAM is where to print it.
+PRINT-FREE not NIL says print also lists of free and nonresponding Lisp machines.
+RETURN-FREE not NIL says return information about free and nonresponding machines;
+ in this case, the first value is a list of host objects of free machines
+ and the second a list of host objects of nonresponding ones.
+HOSTS is the list of hosts to check, defaulting to all known Lisp machines.
+HOSTS should be a list of already parsed hosts, or NIL."
+  (IF (NULL HOSTS)
+      (SETQ HOSTS (ALL-LOCAL-LISPMS)))
+  (SETQ ELEMS (MAKE-FAST-CONNECTION-LIST HOSTS "FINGER" 1))
+  (UNWIND-PROTECT
+      ;; If number of machines gets large enough,
+      ;; put in a hack like HOSTAT's, to go around later and try again
+      ;; to connect to machines which we couldn't get the first time
+      ;; due to connection table full.
+      (DO ((OLD-TIME (TIME)))
+	  (NIL)
+	(DOLIST (ELEM ELEMS)
+	  (LET* ((CONN (FCL-CONN1 ELEM))
+		 (STATE (AND CONN (STATE CONN))))
+	    (UNLESS (EQ STATE 'RFC-SENT-STATE)
+	      ;; Got some reply for this one.
+	      (WHEN (EQ STATE 'ANSWERED-STATE)	;Got something meaningful
+		(LET* ((PKT (GET-NEXT-PKT CONN))
+		       (STR (PKT-STRING PKT))
+		       (HOST-NAME (GET-SHORT-LM-NAME (FCL-HOST ELEM)))
+		       (IDX))
+		  (UNWIND-PROTECT
+		      (COND ((NOT (MEMQ (CHAR STR 0) '(#/CR #/SP #/TAB)))	;Logged in
+			     (WHEN PRINT-INUSE
+			       (LET (USER (GROUP "") (NAME "") (IDLE "") (LOCATION ""))
+				 (SETQ USER
+				       (NSUBSTRING STR 0
+						   (SETQ IDX (STRING-SEARCH-CHAR #/CR STR))))
+				 (WHEN IDX
+				   (SETQ LOCATION
+					 (NSUBSTRING STR (1+ IDX)
+						     (SETQ IDX (STRING-SEARCH-CHAR #/CR STR (1+ IDX))))))
+				 
+				 (WHEN IDX
+				   (SETQ IDLE
+					 (NSUBSTRING STR (1+ IDX)
+						     (SETQ IDX (STRING-SEARCH-CHAR #/CR STR (1+ IDX))))))
+				 (WHEN IDX
+				   (SETQ NAME
+					 (NSUBSTRING STR (1+ IDX)
+						     (SETQ IDX (STRING-SEARCH-CHAR #/CR STR (1+ IDX))))))
+				 (SETQ GROUP
+				       (IF IDX (AREF STR (1+ IDX)) #/SP))
+				 (FORMAT STREAM
+					 "~&~10A ~C ~22A ~7A ~4@A    ~A~%"
+					 USER GROUP NAME HOST-NAME IDLE LOCATION))))
+			    ((OR PRINT-FREE RETURN-FREE)	;person CANNOT be logged in.
+			     (PUSH (LIST HOST-NAME
+					 (SUBSTRING STR 1	;Please don't search for the space!
+						    (STRING-SEARCH-SET '(#/CR) STR 1)))
+				   FREE)))
+		    (RETURN-PKT PKT)))
+		(SETQ ELEMS (DELQ ELEM ELEMS))
+		(CLOSE-CONN CONN))
+	      (AND CONN (REMOVE-CONN CONN)))))
+	(OR ELEMS (RETURN NIL))
+	(AND (> (TIME-DIFFERENCE (TIME) OLD-TIME) 240.)	;Allow 5 secs for this all
+	     (RETURN NIL))			; someone can't tell time
+	(PROCESS-WAIT "Finger Lispms"
+		      #'(LAMBDA (OLD-TIME ELEMS)
+			  (OR (> (TIME-DIFFERENCE (TIME) OLD-TIME) 240.)
+			      (DO ((ELEMS ELEMS (CDR ELEMS)))
+				  ((NULL ELEMS) NIL)
+				(LET ((CONN (FCL-CONN1 (CAR ELEMS))))
+				  (AND CONN (EQ (STATE CONN) 'RFC-SENT-STATE)
+				       (RETURN T))))))
+		      OLD-TIME ELEMS))
+    ;; Flush all outstanding connections
+    (SETQ DOWN (MAPCAR #'FCL-HOST ELEMS))
+    (DOLIST (ELEM ELEMS)
+      (LET ((CONN (FCL-CONN1 ELEM)))
+	(AND CONN (REMOVE-CONN (FCL-CONN1 ELEM))))))
+  ;; Print which machines responded that they are free.
+  (AND PRINT-FREE
+       (COND ((NULL FREE)
+	      (FORMAT STREAM "~18@T ~2&No Free Lisp machines.~%"))
+	     (T
+	      (FORMAT STREAM "~18@T ~2&Free Lisp machines: ~2%")
+	      (DOLIST (ENTRY FREE)
+		(FORMAT:OSTRING (CAR ENTRY) 18.)
+		(FORMAT STREAM "~A~&" (CADR ENTRY))))))
+  ;; Print which machines did not respond.
+  (AND PRINT-DOWN
+       (COND ((NOT (NULL DOWN))
+	      (FORMAT STREAM "~18@T ~2&Lisp machines not responding: ~2%")
+	      (DOLIST (ENTRY DOWN)
+		(SETQ HOST (THIRD (SEND ENTRY :HOST-NAMES)))	;winning name
+		(IF (NULL HOST) (SETQ HOST (SEND ENTRY :SHORT-NAME)))
+		(FORMAT:OSTRING HOST 18.)
+		(FORMAT STREAM "~A~&" (LISPM-FINGER-INFO HOST))))))
+  (AND RETURN-FREE
+       (VALUES (MAPCAR 'CAR FREE) DOWN)))
+
+))
+
+; From file PATED.LISP OZ:<L.ZWEI> OZ:
+#8R ZWEI#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "ZWEI")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: ZWEI; PATED  "
+
+(DEFUN INITIALIZE-PATCH-BUFFER (BUFFER PATCH-STRUCTURE)
+  ;; If buffer is empty, initialize it.
+  (IF (BP-= (INTERVAL-FIRST-BP BUFFER) (INTERVAL-LAST-BP BUFFER))
+      (LET ((STREAM (INTERVAL-STREAM BUFFER)))
+	(FORMAT STREAM
+		";;; -*- Mode:Lisp; Readtable:T; Package:~A; Base:~D.; Patch-File:T -*-~%"
+		(OR (AND PATCH-STRUCTURE
+			 (SI:SYSTEM-PACKAGE-DEFAULT
+			   (SI:FIND-SYSTEM-NAMED
+			     (SI:PATCH-NAME PATCH-STRUCTURE))))
+		    "User")
+		(OR (SEND *INTERVAL* ':GET-ATTRIBUTE ':BASE) *READ-BASE*))
+	(IF (NOT PATCH-STRUCTURE)
+	    (FORMAT STREAM ";;; Private patches made by ~A" USER-ID)
+	  (FORMAT STREAM ";;; Patch file for ~A version ~D.~D"
+		  (SI:PATCH-NAME PATCH-STRUCTURE) (SI:PATCH-VERSION PATCH-STRUCTURE)
+		  *PATCH-NUMBER*))
+	(SI:WRITE-RESPONSIBILITY-COMMENT STREAM)
+	(TERPRI STREAM)))
+  (REPARSE-BUFFER-MODE-LINE BUFFER))
+
+))
+
+(deff si:init-file-pathname 'fs:init-file-pathname)
+
+; From file OPEN.LISP OZ:<L.IO.FILE> OZ:
+#8R FILE-SYSTEM#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "FILE-SYSTEM")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: IO; FILE; OPEN  "
+
+(DEFUN ALL-DIRECTORIES (&OPTIONAL (PATHNAME USER-LOGIN-MACHINE) &REST OPTIONS &AUX TEM)
+  "Return a list of pathnames describing all directories on a specified host.
+The argument is either a host, a hostname, or a pathname or namestring
+whose host is used.  The only option is :NOERROR."
+  (FORCE-USER-TO-LOGIN)
+  (IF (AND (TYPEP PATHNAME '(OR STRING SI:HOST))
+	   (SETQ TEM (GET-PATHNAME-HOST PATHNAME T)))
+      (SETQ PATHNAME (SEND (SAMPLE-PATHNAME TEM) ':NEW-PATHNAME
+			   ':DEVICE ':WILD ':DIRECTORY ':WILD))
+    (SETQ PATHNAME (MERGE-PATHNAME-DEFAULTS PATHNAME)))
+  (SEND PATHNAME ':ALL-DIRECTORIES OPTIONS))
+
+))
+
+; From file PATHST.LISP OZ:<L.IO.FILE> OZ:
+#8R FILE-SYSTEM#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "FILE-SYSTEM")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: IO; FILE; PATHST  "
+
+(DEFMETHOD (LOGICAL-PATHNAME :ALL-DIRECTORIES) LOGICAL-PATHNAME-PASS-ON)
+
+))
+
+; From file PATHNM.LISP OZ:<L.IO.FILE> OZ:
+#8R FILE-SYSTEM#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "FILE-SYSTEM")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: IO; FILE; PATHNM  "
+
+(DEFUN PATHNAME-TRANSLATE-WILD-COMPONENT
+       (TARGET-PATTERN DATA SPECS WILD-ANY WILD-ONE &OPTIONAL REVERSIBLE-P)
+  (COND ((EQ TARGET-PATTERN :WILD)
+	 (IF REVERSIBLE-P
+	     (CAR SPECS)
+	   DATA))
+	((OR (NUMBERP TARGET-PATTERN)
+	     (SYMBOLP TARGET-PATTERN)
+	     (EQ SPECS T))
+	 TARGET-PATTERN)
+	((CONSP TARGET-PATTERN)
+	 (LOOP FOR ELT IN TARGET-PATTERN
+	       COLLECT
+	       (IF (EQ ELT :WILD)
+		   (POP SPECS)
+		 (MULTIPLE-VALUE-BIND (NEW-ELT SPECS-LEFT)
+		     (PATHNAME-TRANSLATE-COMPONENT-FROM-SPECS
+		       ELT SPECS WILD-ANY WILD-ONE)
+		   (SETQ SPECS SPECS-LEFT)
+		   NEW-ELT))))
+	(T (PATHNAME-TRANSLATE-COMPONENT-FROM-SPECS
+	     TARGET-PATTERN SPECS WILD-ANY WILD-ONE))))
+
+))
+
+; From file PATHNM.LISP OZ:<L.IO.FILE> OZ:
+#8R FILE-SYSTEM#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "FILE-SYSTEM")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: IO; FILE; PATHNM  "
+
+(DEFUN MAKE-PATHNAME-DEFAULTS (&AUX LIST HOSTS)
+  "Create an empty defaults-list for use with MERGE-PATHNAME-DEFAULTS."
+  (SETQ HOSTS (APPEND *LOGICAL-PATHNAME-HOST-LIST* *PATHNAME-HOST-LIST*))
+  (SETQ LIST (MAKE-LIST (1+ (LENGTH HOSTS))))
+  (DO ((L2 LIST (CDR L2))
+       (L1 HOSTS (CDR L1)))
+      ((NULL L2))
+    (SETF (CAR L2) (NCONS (CAR L1))))
+  LIST)
+
+))
+
+; From file MAKSYS.LISP OZ:<L.SYS2> OZ:
+#8R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: SYS2; MAKSYS  "
+
+(DEFUN DESCRIBE-SYSTEM (SYSTEM-NAME &KEY (SHOW-FILES T) (SHOW-TRANSFORMATIONS T) &AUX SYSTEM)
+  "Print all about the system named SYSTEM-NAME.
+SHOW-FILES is T to give the history of each file in the system, NIL not to,
+ or :ASK meaning query the user whether to.
+SHOW-TRANSFORMATIONS is similar, for whether to show the transformations
+ which MAKE-SYSTEM would execute.
+Note that calling DESCRIBE on a system-object prints somewhat lower level information."
+  (IF (NULL (SETQ SYSTEM (FIND-SYSTEM-NAMED SYSTEM-NAME)))
+      (FORMAT T "~&There is no system named ~A.~%" SYSTEM-NAME)
+    (SETQ SYSTEM-NAME (SYSTEM-NAME SYSTEM))
+    (LET* ((SYSTEM-SOURCE-FILE
+	     (GET-SOURCE-FILE-NAME (SYSTEM-SYMBOLIC-NAME SYSTEM) 'DEFSYSTEM))
+	   (*FORCE-PACKAGE*
+	     (PKG-FIND-PACKAGE (OR (AND SYSTEM-SOURCE-FILE (GET SYSTEM-SOURCE-FILE :PACKAGE))
+				   "USER"))))
+      (WHEN SYSTEM-SOURCE-FILE
+	(FORMAT T "~&System ~A~@[ is defined in file ~A~]~%"
+		SYSTEM-NAME SYSTEM-SOURCE-FILE)
+	(DESCRIBE-FILE-TRANSFORMATION-COMPILED-FILE SYSTEM-SOURCE-FILE)
+	(DESCRIBE-FILE-TRANSFORMATION-LOADED-FILE SYSTEM-SOURCE-FILE)))
+    (COND ((SYSTEM-PATCHABLE-P SYSTEM)
+	   (FORMAT T "~&~%~A is patchable" SYSTEM-NAME)
+	   (MULTIPLE-VALUE-BIND (MAJOR MINOR STATUS)
+	       (GET-SYSTEM-VERSION SYSTEM)
+	     (LET ((STATUS-NAME (OR (SECOND (ASSQ STATUS SYSTEM-STATUS-ALIST)) STATUS)))
+	       (OR (EQUAL STATUS-NAME "")
+		   (FORMAT T ", ~A" STATUS-NAME)))
+	     (IF MAJOR (FORMAT T ", ~D.~D is loaded" MAJOR MINOR))
+	     (FORMAT T ";~%  a typical patch file is ~A~%"
+		     (PATCH-SYSTEM-PATHNAME SYSTEM-NAME ':PATCH-FILE (OR MAJOR 1) (OR MINOR 0)
+					    ':LISP))
+	     (AND MAJOR
+		  (FQUERY NIL "Do you want to see the patches for ~A? " SYSTEM-NAME)
+		  (PRINT-PATCHES SYSTEM)))))
+    (IF (SYSTEM-PACKAGE-DEFAULT SYSTEM)
+	(FORMAT T "~& Files in ~A are forcibly read in package ~A.~%"
+		SYSTEM-NAME (SYSTEM-PACKAGE-DEFAULT SYSTEM)))
+    (WHEN SHOW-FILES
+      (FORMAT T "~%Compilation and loading of files in this system:~2%")
+      (MAKE-SYSTEM SYSTEM-NAME ':COMPILE ':RELOAD ':DO-NOT-DO-COMPONENTS
+		   ':DESCRIBE ':NO-INCREMENT-PATCH ':NO-RELOAD-SYSTEM-DECLARATION))
+    (WHEN SHOW-TRANSFORMATIONS
+      (FORMAT T "~%Transformations required to MAKE-SYSTEM now:~2%")
+      (MAKE-SYSTEM SYSTEM-NAME ':COMPILE ':DO-NOT-DO-COMPONENTS ':PRINT-ONLY
+		   ':NO-RELOAD-SYSTEM-DECLARATION))
+    (LET ((COMPONENTS (SYSTEM-COMPONENT-SYSTEMS SYSTEM)))
+      (COND (COMPONENTS
+	     (FORMAT T "~2&~A is made up of component system~P "
+		     SYSTEM-NAME (LENGTH COMPONENTS))
+	     (FORMAT:PRINT-LIST T "~A" COMPONENTS)
+	     (WHEN (Y-OR-N-P "Describe the component system~P?" (LENGTH COMPONENTS))
+	       (DOLIST (COMPONENT COMPONENTS)
+		 (FORMAT T "~2&")
+		 (DESCRIBE-SYSTEM COMPONENT ':SHOW-FILES SHOW-FILES
+				  ':SHOW-TRANSFORMATIONS SHOW-TRANSFORMATIONS)))))))
+  SYSTEM-NAME)
+
+))
+
+; From file MAKSYS.LISP OZ:<L.SYS2> OZ:
+#8R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: SYS2; MAKSYS  "
+
+(DEFUN PARSE-MODULE-COMPONENTS (COMPONENTS SYSTEM)
+  (COND ((PATHNAME-P COMPONENTS)
+	 ;;Single pathname
+	 (LIST (LIST (CANONICALIZE-PATHNAME COMPONENTS))))
+	((SYMBOLP COMPONENTS)
+	 (LIST (FIND-MODULE-NAMED COMPONENTS SYSTEM)))	;Single other module
+	((NLISTP COMPONENTS)
+	 (FERROR NIL "~S is not a recognized module component specification"
+		 COMPONENTS))
+	((AND (SYMBOLP (CAR COMPONENTS))
+	      (NOT (FIND-MODULE-NAMED (CAR COMPONENTS) SYSTEM T)))
+	 (DOLIST (NAME (CDR COMPONENTS))		;External modules
+	   (OR (SYMBOLP NAME)
+	       (FERROR NIL
+		       "~S is not a recognized external module component specification in ~S"
+		       NAME COMPONENTS)))
+	 (LIST COMPONENTS))
+	(T
+	 (LOOP FOR COMPONENT IN COMPONENTS
+	       WITH TEM
+	       WITH DEFAULTS = *SYSTEM-PATHNAME-DEFAULT*
+	       COLLECT (COND ((PATHNAME-P COMPONENT)
+			      (SETQ DEFAULTS
+				    (LET ((FS:*ALWAYS-MERGE-TYPE-AND-VERSION* NIL))
+				      (FS:MERGE-PATHNAME-DEFAULTS
+					COMPONENT DEFAULTS NIL)))
+			      (LIST DEFAULTS))
+			     ((SYMBOLP COMPONENT)
+			      (FIND-MODULE-NAMED COMPONENT SYSTEM))
+			     ((NLISTP COMPONENT)
+			      (FERROR NIL
+				      "~S is not a recognized module component specification"
+				      COMPONENT))
+			     ((SYMBOLP (SETQ TEM (CAR COMPONENT)))
+			      (DOLIST (NAME (CDR COMPONENT))
+				(OR (SYMBOLP NAME)
+				    (FERROR NIL
+			"~S is not a recognized external module component specification in ~S"
+					    NAME COMPONENT)))
+			      COMPONENT)
+			     ((PATHNAME-P TEM)
+			      (LOOP FOR PATHNAME IN COMPONENT
+				    AND DEFAULT = *SYSTEM-PATHNAME-DEFAULT* THEN PATHNAME
+				    COLLECT (SETQ PATHNAME (CANONICALIZE-PATHNAME PATHNAME
+										  DEFAULT))))
+			     (T
+			      (FERROR NIL
+				      "~S is not a recognized module component specification"
+				      COMPONENT)))))))
+
+))

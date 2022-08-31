@@ -1,0 +1,1284 @@
+;-*- Mode:LISP; Package:SI; Base:8; Cold-load:T; Lowercase:T -*-
+
+;;; Each defined type keyword can have any of these three properties:
+;;; TYPE-PREDICATE - value is a function to test an object for membership in the type.
+;;;   It gets the object as first arg, and any elements of the type specifier
+;;;   except for the keyword itself as additional args.
+;;; TYPE-OPTIMIZER - value is an optimizer function for compiling calls to TYPEP.
+;;;   Its first argument is the expression which calls TYPEP.
+;;;   Its remaining args are the elements of the type specifier, except the first.
+;;;   It can return the original call to TYPEP if it has nothing better to optimize to.
+;;; TYPE-EXPANDER - value is an expander function to compute a new type specifier.
+;;;   It gets one argument, the type specifier, and returns a new type specifier.
+
+;;; Interpreted calls to TYPEP use TYPE-PREDICATE and TYPE-EXPANDER props.
+;;; Compilation uses TYPE-OPTIMIZER and TYPE-EXPANDER props.
+;;; Compilation can also use the TYPE-PREDICATE prop--
+;;;  compiling a call to that function rather than to TYPEP,
+;;;  but only if the property is a symbol.
+
+;;; > CAUTION: you cannot simply define any new type with a TYPE-PREDICATE
+;;; > because it needs to be wired into the SUBTYPEP data structures.
+;;; > Defining types with TYPE-EXPANDERs (ie, use of DEFTYPE) is ok
+;;; > because they will get expanded by SUBTYPEP, so they don't really
+;;; > pose a new problem.
+
+;;; These properties are also used:
+;;; TYPE-NAME - value is a string, including an article, which
+;;;  is used as the name of this type when it appears as an atom.
+;;; TYPE-NAME-FUNCTION - value is a function to compute the name
+;;;  of types which are lists starting with this symbol.
+
+(defmacro deftype (name arglist &body body)
+  "Defines NAME as a data type name for use in TYPEP, etc.
+A list starting with NAME, used as a type specifier,
+expands by binding the args in ARGLIST and then evaluating the BODY.
+The value of BODY should be another type specifier.
+Any optional arguments in ARGLIST which do not have default values specified
+will be bound to * by default, rather than NIL."
+  (let ((argcopy (copy-list arglist))
+	optionalf)
+    (do ((tail argcopy (cdr tail))) ((null tail))
+      (cond ((eq (car tail) '&optional)
+	     (setq optionalf t))
+	    ((memq (car tail) '(&key &rest &aux))
+	     (return))
+	    ((and optionalf
+		  (atom (car tail))
+		  (not (memq (car tail) lambda-list-keywords)))
+	     (setf (car tail)
+		   (list (car tail) ''*)))))
+    `(progn
+       (defun (:property ,name type-expander) ,argcopy
+	 . ,body)
+       ',name)))
+
+;;Microcoded in 99
+;(defun member-eql (item list &optional key)
+;  ;; Use MEMQ whenever that will work, since it is microcoded.
+;  (if (or (not (numberp item)) (fixnump item))
+;      (memq item list)
+;    (do ((tail list (cdr tail)))
+;	((null tail))
+;      (if (eql item (if key (funcall key (car tail)) (car tail)))
+;	  (return tail)))))
+
+(defun commonp (object)
+  "T if OBJECT is a kind of object which Common Lisp defines.
+This is everything except locatives, stack groups, selects,
+closures, entities, compiled and microcode functions,
+and flavor instances (except for a few flavors which implement Common Lisp types)."
+  (if (instancep object)
+      (or (pathnamep object) (streamp object) (hash-table-p object))
+    (if (typep object 'compiled-function)
+	(streamp object)
+      (not (memq (%data-type object)
+		 '(#.dtp-locative #.dtp-stack-group #.dtp-select-method
+		   #.dtp-closure #.dtp-entity #.dtp-fef-pointer #.dtp-u-entry))))))
+
+(defsubst subrp (object)
+  "T if OBJECT is a compiled or built-in function."
+  (memq (%data-type object) '(#.dtp-u-entry #.dtp-fef-pointer)))
+
+;;;; TYPE-OF
+
+(defconst type-of-alist
+	  '((#.dtp-symbol . symbol)
+	    (#.dtp-character . character)
+	    (#.dtp-character . cli:character)
+	    (#.dtp-list . cons)
+	    (#.dtp-fix . fixnum)
+	    (#.dtp-locative . locative)
+	    (#.dtp-fef-pointer . compiled-function)
+	    (#.dtp-closure . closure)
+	    (#.dtp-entity . entity)
+	    (#.dtp-instance . instance)
+	    (#.dtp-u-entry . microcode-function)
+	    (#.dtp-select-method . select)
+	    (#.dtp-small-flonum . short-float)
+	    (#.dtp-stack-group . stack-group)))
+
+(defun type-of (object &aux (dtp (%data-type object)))
+  "Returns a type-specifier describing the type OBJECT belongs to.
+For example, (TYPE-OF 5) is FIXNUM"
+  (cond ((= dtp dtp-instance)
+	 (%p-contents-offset
+	   (instance-flavor object)
+	   %instance-descriptor-typename))
+	((= dtp dtp-array-pointer)
+	 (cond ((named-structure-p object))
+	       ((stringp object) 'string)
+	       (t 'array)))
+	((= dtp dtp-entity)
+	 (class-symbol object))
+	((= dtp dtp-extended-number) 
+	 (selectq (%p-ldb-offset %%header-type-field object 0)
+	   (#.%header-type-flonum 'single-float)
+	   (#.%header-type-bignum 'bignum)
+	   (#.%header-type-rational 'ratio)
+	   (#.%header-type-complex 'complex)
+	   (otherwise 'random)))
+	((cdr (assq dtp type-of-alist)))
+	(t 'random)))
+
+(defconst typep-one-arg-alist
+	  '((#.dtp-symbol . :symbol)
+	    (#.dtp-character . :character)
+	    (#.dtp-list . :cons)
+	    (#.dtp-fix . :fixnum)
+	    (#.dtp-locative . :locative)
+	    (#.dtp-fef-pointer . :compiled-function)
+	    (#.dtp-closure . :closure)
+	    (#.dtp-entity . :entity)
+	    (#.dtp-instance . :instance)
+	    (#.dtp-u-entry . :microcode-function)
+	    (#.dtp-select-method . :select)
+	    (#.dtp-small-flonum . :small-flonum)
+	    (#.dtp-stack-group . :stack-group)))
+
+(defun typep (object &optional (type nil type-specified-p))
+  "T if OBJECT fits the data type specifier TYPE.
+An obsolete mode of use is with one argument;
+then the value is a type specifier describing OBJECT."
+  (declare (arglist object type))
+  (let (predicate expander structure-desc (type type) dtp)
+    (cond ((not type-specified-p)
+	   (setq dtp (%data-type object))
+	   ;; Cannot use TYPE-OF, since we must
+	   ;; for back-compatibility return keywords.
+	   (cond ((= dtp dtp-instance)
+		  (%p-contents-offset
+		    (instance-flavor object)
+		    %instance-descriptor-typename))
+		 ((= dtp dtp-array-pointer)
+		  (cond ((named-structure-p object))
+			((stringp object) ':string)
+			(t ':array)))
+		 ((= dtp dtp-entity)
+		  (class-symbol object))
+		 ((= dtp dtp-extended-number) 
+		  (select (%p-ldb-offset %%header-type-field object 0)
+		    (%header-type-flonum ':flonum)
+		    (%header-type-bignum ':bignum)
+		    (%header-type-rational ':rational)
+		    (%header-type-complex ':complex)
+		    (otherwise ':random)))
+		 ((cdr (assq dtp typep-one-arg-alist)))
+		 (t ':random)))
+	  ((setq predicate (get (if (atom type) type (car type)) 'type-predicate))
+	   (if (atom type)
+	       (funcall predicate object)
+	     (apply predicate object (cdr type))))
+	  ((setq dtp (or (rassq type type-of-alist) (rassq type typep-one-arg-alist)))
+	   (= (%data-type object) (car dtp)))
+	  ((setq expander (get (if (atom type) type (car type)) 'type-expander))
+	   (typep object
+		  (apply expander (if (atom type) nil (cdr type)))))
+	  ((progn (unless (symbolp type)
+		    (setq type (car type)))
+		  (get type 'flavor))
+	   (typep-structure-or-flavor
+	     object
+	     (dont-optimize (flavor-name (get-flavor-tracing-aliases type)))))
+	  ((or (and (setq structure-desc (get type 'defstruct-description))
+		    (defstruct-description-named-p structure-desc))
+	       (get type 'defstruct-named-p))
+	   (typep-structure-or-flavor object type))
+	  ((and (symbolp type) (fboundp 'class-symbolp) (class-symbolp type))
+	   (and (entityp object)
+		(subclass-of-class-symbol-p (class object) type)))
+	  (t (typep object (cerror t nil ':wrong-type-arg
+				   "~1@*~S is not a type known to TYPEP" 'typep type))))))
+
+;;; As of system 98, this is used only by old compiled expansions of TYPEP.
+(defun typep-structure (x type &aux xname d)
+  (cond ((setq xname (named-structure-p x))
+	 (do () ((eq xname type) t)
+	   (or (and (setq d (get xname 'defstruct-description))
+		    (defstruct-description-named-p d)
+		    (setq xname (car (defstruct-description-include d))))
+	       (return nil))))
+	((and (setq d (get type 'defstruct-description))
+	      (defstruct-description-named-p d))
+	 nil)
+	(t (typep x type))))			;Optimization turned out to be wrong
+
+(defun (:property satisfies type-predicate) (object predicate)
+  (funcall predicate object))
+
+(defun (:property satisfies type-optimizer) (expression predicate)
+  `(,predicate ,(cadr expression)))
+
+(defun (:property or type-predicate) (object &rest types)
+  (dolist (disjunct types)
+    (when (typep object disjunct)
+      (return t))))
+
+(defun (:property or type-optimizer) (expression &rest types)
+  (let ((object (cadr expression)))
+    (once-only (object)
+      `(or . ,(mapcar #'(lambda (type) `(typep ,object ',type))
+		      types)))))
+
+(defun (:property and type-predicate) (object &rest types)
+  (dolist (conjunct types t)
+    (unless (typep object conjunct)
+      (return nil))))
+
+(defun (:property and type-optimizer) (expression &rest types)
+  (let ((object (cadr expression)))
+    (once-only (object)
+      `(and . ,(mapcar #'(lambda (type) `(typep ,object ',type))
+		       types)))))
+
+(defun (:property not type-predicate) (object type)
+  (not (typep object type)))
+
+(defun (:property not type-optimizer) (expression type)
+  `(not (typep ,(cadr expression) ',type)))
+
+(defun (:property member type-predicate) (object &rest members)
+  (not (null (member-eql object members))))
+
+(defun (:property member type-optimizer) (expression &rest members)
+  `(member-eql ,(cadr expression) ',(copy-list members)))
+
+(defun (:property array type-predicate) (object &optional element-type (dimensions '*))
+  (and (arrayp object)
+       (or (memq element-type '(nil *))
+	   (eq element-type (array-element-type object)))
+       (or (eq dimensions '*)
+	   (if (numberp dimensions)
+	       (= dimensions (array-rank object))
+	     (and (= (length dimensions) (array-rank object))
+		  (dotimes (i (array-rank object) t)
+		    (unless
+		      (or (eq (nth i dimensions) '*)
+			  (= (nth i dimensions) (array-dimension object i))
+			  (return nil)))))))))
+
+(defun (:property array type-optimizer) (expression &rest args)
+  (if (null args) `(arrayp ,(cadr expression)) expression))
+
+(defun (:property simple-array type-predicate) (object &optional element-type (dimensions '*))
+  (and (simple-array-p object)
+       (or (memq element-type '(nil *))
+	   (eq element-type (array-element-type object)))
+       (or (eq dimensions '*)
+	   (if (numberp dimensions)
+	       (= dimensions (array-rank object))
+	     (and (= (length dimensions) (array-rank object))
+		  (dotimes (i (array-rank object) t)
+		    (unless
+		      (or (eq (nth i dimensions) '*)
+			  (= (nth i dimensions) (array-dimension object i))
+			  (return nil)))))))))
+
+(defun (:property simple-array type-optimizer) (expression &rest args)
+  (if (null args) `(simple-array-p ,(cadr expression)) expression))
+
+(defun (:property vector type-predicate) (object &optional element-type size)
+  (and (vectorp object)
+       (or (memq element-type '(nil *))
+	   (eq element-type (array-element-type object)))
+       (or (memq size '(nil *))
+	   (= size (array-length object)))))
+
+(defun (:property vector type-optimizer) (expression &rest args)
+  (if (null args) `(vectorp ,(cadr expression)) expression))
+
+(defun (:property vector type-expander) (&optional (element-type) (size '*))
+  `(array ,element-type (,size)))
+
+(defun (:property simple-vector type-predicate) (object &optional size)
+  (and (simple-vector-p object)
+       (or (memq size '(nil *))
+	   (= size (array-length object)))))
+
+(defun (:property simple-vector type-optimizer) (expression &rest args)
+  (if (null args) `(simple-vector-p ,(cadr expression)) expression))
+
+(defun (:property simple-vector type-expander) (&optional (size '*))
+  `(simple-array t (,size)))
+
+(defun (:property string type-predicate) (object &optional size)
+  (and (stringp object)
+       (or (memq size '(nil *))
+	   (= size (array-length object)))))
+
+(defun (:property string type-optimizer) (expression &rest args)
+  (if (null args) `(stringp ,(cadr expression)) expression))
+
+(defun (:property string type-expander) (&optional (size '*))
+  `(array string-char (,size)))
+
+(defun (:property simple-string type-predicate) (object &optional size)
+  (and (simple-string-p object)
+       (or (memq size '(nil *))
+	   (= size (array-length object)))))
+
+(defun (:property simple-string type-optimizer) (expression &rest args)
+  (if (null args) `(simple-string-p ,(cadr expression)) expression))
+
+(defun (:property simple-string type-expander) (&optional (size '*))
+  `(simple-array string-char (,size)))
+
+(defun (:property bit-vector type-predicate) (object &optional size)
+  (and (bit-vector-p object)
+       (or (memq size '(nil *))
+	   (= size (array-length object)))))
+
+(defun (:property bit-vector type-optimizer) (expression &rest args)
+  (if (null args) `(bit-vector-p ,(cadr expression)) expression))
+
+(defun (:property bit-vector type-expander) (&optional (size '*))
+  `(array bit (,size)))
+
+(defun (:property simple-bit-vector type-predicate) (object &optional size)
+  (and (simple-bit-vector-p object)
+       (or (memq size '(nil *))
+	   (= size (array-length object)))))
+
+(defun (:property simple-bit-vector type-optimizer) (expression &rest args)
+  (if (null args) `(simple-bit-vector-p ,(cadr expression)) expression))
+
+(defun (:property simple-bit-vector type-expander) (&optional (size '*))
+  `(simple-array bit (,size)))
+
+(defun (:property named-structure type-predicate) (object)
+  (not (null (named-structure-p object))))
+
+(defun (:property named-structure type-optimizer) (expression)
+  `(not (null (named-structure-p ,(cadr expression)))))
+
+(defun (:property named-structure type-expander) ()
+  'structure)
+
+(defun (:property structure type-predicate) (object)
+  (not (null (named-structure-p object))))
+
+(defun (:property structure type-optimizer) (expression)
+  `(not (null (named-structure-p ,(cadr expression)))))
+
+(defun (:property function type-predicate) (object &rest ignore)
+  object
+  (ferror nil "FUNCTION types are not meaningful for testing objects against."))
+
+(defun (:property values type-predicate) (object &rest ignore)
+  object
+  (ferror nil "VALUES types are not meaningful for testing objects against."))
+
+(defun (:property sequence type-predicate) (object)
+  (or (consp object) (vectorp object)))
+
+(defun (:property sequence type-expander) ()
+  '(or list vector))
+
+(defun (:property nil type-predicate) (object) object nil)
+
+(defun (:property nil type-optimizer) (expression) `(progn ,(cadr expression) nil))
+
+(defun (:property t type-predicate) (object) object t)
+
+(defun (:property t type-optimizer) (expression) expression `(progn ,(cadr expression) t))
+
+(defun (:property string-char type-predicate) (object)
+  (and (characterp object) (string-char-p object)))
+
+(defun (:property string-char type-expander) ()
+  `(and character (satisfies string-char-p)))
+
+(defun (:property fat-char type-predicate) (object)
+  (and (characterp object) (< object (lsh 1 #o20))))
+
+(defun (:property standard-char type-predicate) (object)
+  (and (characterp object) (standard-char-p object)))
+
+(defun (:property standard-char type-optimizer) (expression)
+  (let ((object (cadr expression)))
+    (once-only (object)
+      `(and (characterp ,object)
+	    (standard-char-p ,object)))))
+
+(defun (:property standard-char type-expander) ()
+  `(and character (satisfies string-char-p) (satisfies standard-char-p)))
+
+(defun (:property character type-optimizer) (expression)
+  `(characterp ,(cadr expression)))
+
+;;;; Numeric types.
+
+(defun (:property complex type-predicate) (object &optional type)
+  (and (complexp object)
+       (or (memq type '(nil *))
+	   (typep (%complex-real-part object) type))))
+
+(defun (:property complex type-optimizer) (expression &optional (type '*))
+  (let ((object (cadr expression)))
+    (if (eq type '*) `(complexp ,object)
+      (once-only (object)
+	`(and (complexp ,object)
+	      (typep (%complex-real-part ,object) ',type))))))
+
+(defun (:property real type-predicate) (object &optional low high)
+  (and (realp object)
+       (setq object (realpart object))
+       (cond ((memq low '(nil *)) t)
+	     ((numberp low) ( low object))
+	     ((consp low) (< (car low) object))
+	     (t (ferror nil "Invalid lower limit in REAL type specifier.")))
+       (cond ((memq high '(nil *)) t)
+	     ((numberp high) ( high object))
+	     ((consp high) (> (car high) object))
+	     (t (ferror nil "Invalid upper limit in REAL type specifier.")))))
+
+(defun (:property real type-optimizer) (expression &optional low high)
+  (if (and (memq low '(nil *)) (memq high '(nil *)))
+      `(realp ,(cadr expression))
+    (let ((object (cadr expression))
+	  (o (gensym)))
+      `(let ((,o ,object))
+	 (block real
+	   (and (setq ,o (typecase ,o
+			   (complex (%complex-real-part ,o))
+			   (number ,o)
+			   (t (return-from real nil))))
+		,(cond ((memq low '(nil *))
+			t)
+		       ((numberp low)
+			`( ,o ,low))
+		       ((consp low)
+			`(> ,o ,(car low))))
+		,(cond ((memq high '(nil *))
+			t)
+		       ((numberp high)
+			`( ,o ,high))
+		       ((consp high)
+			`(< ,o ,(car high))))))))))
+
+(defun (:property real type-optimizer) (expression &optional low high)
+  (optimize-numeric-type-test 'realp expression low high))
+
+(defun (:property integer type-predicate) (object &optional low high)
+  (and (integerp object)
+       (cond ((memq low '(nil *)) t)
+	     ((numberp low) ( low object))
+	     ((consp low) (< (car low) object))
+	     (t (ferror nil "Invalid lower limit in INTEGER type specifier.")))
+       (cond ((memq high '(nil *)) t)
+	     ((numberp high) ( high object))
+	     ((consp high) (> (car high) object))
+	     (t (ferror nil "Invalid upper limit in INTEGER type specifier.")))))
+
+(defun (:property integer type-optimizer) (expression &optional low high)
+  (if (and (not (memq low '(nil *)))
+	   (not (memq high '(nil *)))
+	   (< (- (if (consp high) (1- (car high)) high)
+		 (if (consp low) (1+ (car low)) low))
+	      4))
+      (let ((object (cadr expression)))
+	`(memq ,object
+	       ',(loop for i from (if (consp low) (1+ (car low)) low)
+		       upto (if (consp high) (1- (car high)) high)
+		       collect i)))
+    (optimize-numeric-type-test 'integerp expression low high)))
+
+(defprop fix integerp type-predicate)
+(defun (:property fix type-expander) () 'integer)
+
+(defprop fixnum fixnump type-predicate)
+
+(defun (:property fixnum type-expander) ()
+  `(integer ,most-negative-fixnum ,most-positive-fixnum))
+
+(defun (:property fixnum type-optimizer) (expression)
+  `(fixnump ,(cadr expression)))
+
+(defun optimize-numeric-type-test (predicate expression low high)
+  (let ((object (cadr expression)))
+    (once-only (object)
+      `(and (,predicate ,object)
+	    ,(cond ((memq low '(nil *))
+		    t)
+		   ((numberp low)
+		    `( ,object ,low))
+		   ((consp low)
+		    `(> ,object ,(car low))))
+	    ,(cond ((memq high '(nil *))
+		    t)
+		   ((numberp high)
+		    `( ,object ,high))
+		   ((consp high)
+		    `(< ,object ,(car high))))))))
+	     
+(defun (:property mod type-predicate) (object &optional limit)
+  (and (integerp object)
+       (not (minusp object))
+       (cond ((memq limit '(nil *)) t)
+	     ((numberp limit) (> limit object))
+	     (t (ferror nil "Invalid upper limit in MOD type specifier.")))))
+
+(defun (:property mod type-expander) (&optional (high '*))
+  (if (eq high '*)
+      '(integer 0)
+    `(integer 0 ,(1- high))))
+
+(defun (:property bit type-predicate) (object)
+  (memq object '(0 1)))
+
+(defun (:property bit type-expander) ()
+  '(integer 0 1))
+
+(defun (:property unsigned-byte type-predicate) (object &optional byte-size)
+  (and (integerp object)
+       (not (minusp object))
+       (cond ((memq byte-size '(nil *)) t)
+	     ((numberp byte-size) (> (ash 1 byte-size) object))
+	     (t (ferror nil "Invalid byte size in UNSIGNED-BYTE type specifier.")))))
+
+(defun (:property unsigned-byte type-expander) (&optional (byte-size '*))
+  (if (eq byte-size '*)
+      '(integer 0)
+    `(integer 0 ,(1- (ash 1 byte-size)))))
+
+(defun (:property signed-byte type-predicate) (object &optional byte-size)
+  (and (integerp object)
+       (cond ((memq byte-size '(nil *)) t)
+	     ((numberp byte-size)
+	      (and (< object (ash 1 (1- byte-size)))
+		   ( object (- (ash 1 (1- byte-size))))))
+	     (t (ferror nil "Invalid byte size in SIGNED-BYTE type specifier.")))))
+
+(defun (:property signed-byte type-expander) (&optional (byte-size '*))
+  (if (eq byte-size '*)
+      'integer
+    `(integer ,(- (ash 1 (1- byte-size))) ,(1- (ash 1 (1- byte-size))))))
+
+(defun (:property rational type-predicate) (object &optional low high)
+  (and (rationalp object)
+       (cond ((memq low '(nil *)) t)
+	     ((numberp low) ( low object))
+	     ((consp low) (< (car low) object))
+	     (t (ferror nil "Invalid lower limit in RATIONAL type specifier.")))
+       (cond ((memq high '(nil *)) t)
+	     ((numberp high) ( high object))
+	     ((consp high) (> (car high) object))
+	     (t (ferror nil "Invalid upper limit in RATIONAL type specifier.")))))
+
+(defun (:property rational type-optimizer) (expression &optional low high)
+  (optimize-numeric-type-test 'rationalp expression low high))
+
+(defprop float float-type-predicate type-predicate)
+(defun float-type-predicate (object &optional low high)
+  (and (floatp object)
+       (cond ((memq low '(nil *)) t)
+	     ((numberp low) ( low object))
+	     ((consp low) (< (car low) object))
+	     (t (ferror nil "Invalid lower limit in FLOAT type specifier.")))
+       (cond ((memq high '(nil *)) t)
+	     ((numberp high) ( high object))
+	     ((consp high) (> (car high) object))
+	     (t (ferror nil "Invalid upper limit in FLOAT type specifier.")))))
+
+(defun (:property float type-optimizer) (expression &optional low high)
+  (optimize-numeric-type-test 'floatp expression low high))
+
+(defprop short-float small-float-predicate type-predicate)
+(defprop small-flonum small-float-predicate type-predicate)
+(defun small-float-predicate (object &optional low high)
+  (and (small-floatp object)
+       (float-type-predicate object low high)))
+
+(defprop small-flonum canon-to-short-float type-expander)
+(defun canon-to-short-float (&rest params)
+  (cons 'short-float params))
+
+(defprop short-float small-float-type-optimizer type-optimizer)
+(defprop small-flonum small-float-type-optimizer type-optimizer)
+(defun small-float-type-optimizer (expression &optional low high)
+  (optimize-numeric-type-test 'small-floatp expression low high))
+
+(defprop single-float non-small-float-predicate type-predicate)
+(defprop double-float non-small-float-predicate type-predicate)
+(defprop long-float non-small-float-predicate type-predicate)
+(defprop flonum non-small-float-predicate type-predicate)
+(defun non-small-float-predicate (object &optional low high)
+  (and (floatp object)
+       (not (small-floatp object))
+       (float-type-predicate object low high)))
+
+(defprop double-float canon-to-single-float type-expander)
+(defprop long-float canon-to-single-float type-expander)
+(defprop flonum canon-to-single-float type-expander)
+(defun canon-to-single-float (&rest params)
+  (cons 'single-float params))
+
+(defprop single-float non-small-float-type-optimizer type-optimizer)
+(defprop double-float non-small-float-type-optimizer type-optimizer)
+(defprop long-float non-small-float-type-optimizer type-optimizer)
+(defprop flonum non-small-float-type-optimizer type-optimizer)
+(defun non-small-float-type-optimizer (expression &optional low high)
+  (optimize-numeric-type-test 'flonump expression low high))
+
+;;; Data base for inclusion relation on basic types.
+
+(defprop number (rational integer bignum ratio complex real
+		 float short-float single-float)
+	 subtypes)
+(defprop real (rational integer ratio bignum float short-float single-float)
+	 subtypes)
+(defprop rational (integer ratio bignum) subtypes)
+(defprop integer (bignum) subtypes)
+(defprop float (short-float single-float) subtypes)
+
+(defprop sequence (list cons null vector bit-vector string
+			simple-vector simple-bit-vector simple-string)
+	 subtypes)
+
+(defprop symbol (null keyword) subtypes)
+
+(defprop list (cons null) subtypes)
+
+(defprop character (standard-char string-char fat-char) subtypes)
+(defprop cli:character character type-alias-for)
+(defprop fat-char (string-char standard-char) subtypes)
+(defprop string-char (standard-char) subtypes)
+
+(defprop array (structure simple-array vector string bit-vector
+				simple-vector simple-bit-vector simple-string)
+	 subtypes)
+(defprop simple-array (simple-vector simple-bit-vector simple-string) subtypes)
+(defprop vector (string bit-vector simple-vector simple-bit-vector simple-string) subtypes)
+(defprop string (simple-string) subtypes)
+(defprop bit-vector (simple-bit-vector) subtypes)
+
+(defprop atom (array simple-array vector string bit-vector
+		     simple-vector simple-bit-vector simple-string
+		     standard-char
+		     symbol null
+		     number rational integer bignum ratio complex real
+		     float short-float single-float
+		     hash-table readtable package pathname stream random-state
+		     structure
+		     closure entity instance stack-group select locative
+		     compiled-function microcode-function)
+	 subtypes)
+
+(defprop common (array simple-array vector string bit-vector
+		       simple-vector simple-bit-vector simple-string
+		       standard-char
+		       list symbol cons null
+		       number rational integer bignum ratio complex real
+		       float short-float single-float
+		       hash-table readtable package pathname stream random-state
+		       structure)
+	 subtypes)
+
+(defprop atom atom type-predicate)
+(defprop bignum bigp type-predicate)
+(defprop common commonp type-predicate)
+(defprop complex complexp type-predicate)
+(defprop cons consp type-predicate)
+(defprop keyword keywordp type-predicate)
+(defprop list common-lisp-listp type-predicate)
+(defprop null null type-predicate)
+(defprop number numberp type-predicate)
+(defprop ratio ratiop type-predicate)
+(defprop stream streamp type-predicate)
+(defprop symbol symbolp type-predicate)
+
+(defun (:property select-method type-expander) ()
+  'select)
+
+;;; Pretty names for types.  This is used by the CHECK-ARG-TYPE macro.
+(defprop select "a select-method" type-name)
+(defprop fix "an integer" type-name)
+(defprop float "a floating-point number" type-name)
+(defprop real "a real number" type-name)
+(defprop null "NIL" type-name)
+(defprop complex "a complex number" type-name)
+
+(defun fixup-type-properties ()
+  (dolist (symbol
+	    '(array atom bignum bit bit-vector character closure common
+	      compiled-function complex cons double-float entity
+	      fat-char fix fixnum flonum float hash-table instance integer keyword ;list
+	      locative long-float microcode-function named-structure null number
+	      package pathname random-state ratio rational readtable real
+	      select select-method sequence short-float simple-array simple-bit-vector
+	      simple-string simple-vector single-float small-flonum
+	      standard-char stream string string-char structure symbol
+	      vector))
+    (when (get symbol 'type-predicate)
+      (setf (get (intern (string symbol) 'keyword) 'type-predicate)
+	    (get symbol 'type-predicate)))
+    (when (get symbol 'type-optimizer)
+      (setf (get (intern (string symbol) 'keyword) 'type-optimizer)
+	    (get symbol 'type-optimizer)))
+    (when (get symbol 'subtypes)
+      (let ((combined (nconc (mapcar #'(lambda (elt) (intern (string elt) 'keyword))
+				     (get symbol 'subtypes))
+			     (get symbol 'subtypes))))
+	(setf (get (intern (string symbol) 'keyword) 'subtypes) combined)
+	(setf (get symbol 'subtypes) combined)))
+    (when (get symbol 'type-expander)
+      (setf (get (intern (string symbol) 'keyword) 'type-expander)
+	    (get symbol 'type-expander)))
+    (when (get symbol 'type-name)
+      (setf (get (intern (string symbol) 'keyword) 'type-name)
+	    (get symbol 'type-name))))
+  (putprop ':list 'cons 'type-alias-for))
+
+(add-initialization 'fixup-type-properties '(fixup-type-properties) '(once))
+
+(defun type-canonicalize (typespec &aux tem)
+  "Returns a typespec equivalent in meaning to TYPESPEC, but possibly simpler."
+  (cond ((null typespec) ())
+	((eq typespec t) t)
+	((symbolp typespec)
+	 (cond ((setq tem (get typespec 'type-alias-for))
+		(type-canonicalize tem))
+	       ((setq tem (get typespec 'type-expander))
+		(type-canonicalize (funcall tem)))
+	       (t typespec)))
+	((and (consp typespec) (symbolp (car typespec)))
+	 (setq typespec (cons (get (car typespec) 'type-alias-for (car typespec))
+			      (cdr typespec)))
+	 (selectq (car typespec)
+	   (or (let ((z (mapcan #'(lambda (x)
+				    (setq x (type-canonicalize x))
+				    (if (and (consp x) (eq (car x) 'or))
+					(cdr x) (list x)))
+				(cdr typespec))))
+		 (if (cdr z) (cons 'or z) (car z))))
+	   (and (let ((z (mapcan #'(lambda (x)
+				     (setq x (type-canonicalize x))
+				     (if (and (consp x) (eq (car x) 'and))
+					 (cdr x) (list x)))
+				 (cdr typespec))))
+		  (if (cdr z) (cons 'and z) (car z))))
+	   (not (let ((z (type-canonicalize (cadr typespec))))
+		  (if (and (consp z) (eq (car z) 'not))
+		      (cadr z)
+		    (list 'not z))))
+	   (t (if (dolist (elt (cdr typespec) t)
+		    (unless (eq elt '*)
+		      (return nil)))
+		  (type-canonicalize (car typespec))
+		(if (setq tem (get (car typespec) 'type-expander))
+		    (apply tem (cdr typespec))
+		  typespec)))))
+	(t (type-canonicalize
+	     (cerror t nil 'wrong-type-argument "~*~S invalid typespec."
+		     'typespec typespec)))))
+
+;;;; subtypep
+
+(defun subtypep (x y &aux t1 t2)
+  "T if any object of type X must be of type Y.
+The second value is T if the first value is accurate:
+if the second value is T and the first is NIL,
+then there are objects of type X that are not of type Y.
+If the second value is NIL, it is not known whether X is really a subtype of Y."
+  (declare (values known-to-be-subtype known-whether-is-subtype))
+  (setq x (type-canonicalize x))
+  (setq y (type-canonicalize y))
+  (cond ((or (null x) (eq y t) (equal x y)) (values t t))
+	((and (consp y) (memq (car y) '(or and not)))
+	 (selectq (car y)
+	   (or (loop with knownp = t
+		     for y in (cdr y)
+		     do (multiple-value (t1 t2) (subtypep x y))
+		     when t1 return (values t t)
+		     do (setq knownp (and knownp t2))
+		     finally (return (values nil knownp))))
+	   (and (loop with val = t
+		      for y in (cdr y)
+		      do (multiple-value (t1 t2) (subtypep x y))
+		      unless t2 return (values nil nil)
+		      do (setq val (and val t1))
+		      finally (return (values val t))))
+	   (t
+	    (multiple-value (t1 t2) (disjoint-typep x (cadr y)))
+	    (values t1 (or t2 (subtypep x (cadr y)) (subtypep (cadr y) x))))))
+	((and (consp x) (memq (car x) '(and or not member)))
+	 (selectq (car x)
+	   (member (values (loop for z in (cdr x) always (typep z y)) t))
+	   (and (loop with known = t
+		      for z in (cdr x)
+		      do (multiple-value (t1 t2) (subtypep z y))
+		      when t1 return (values t t)
+		      do (setq known (and known t2))
+		      finally (return (values nil known))))
+	   (or (loop with val = t
+		     for z in (cdr x)
+		     do (multiple-value (t1 t2) (subtypep z y))
+		     when (not t2) return (values nil nil)
+		     unless t1 do (setq val nil)
+		     finally (return (values val t))))
+	   (t (multiple-value (t1 t2) (disjoint-typep (cadr x) y))
+	      (values nil (or t2
+			      (subtypep (cadr x) y)
+			      (subtypep y (cadr x)))))))
+	((and (consp y) (eq (car y) 'member))
+	 nil)
+	((symbolp y)
+	 (values (atom-subtypep (if (atom x) x (car x)) y)
+		 t))
+	((eq (car y) 'satisfies) nil)
+	((consp x)
+	 (cond ((eq (car x) 'satisfies) nil)
+	       ((and (atom-subtypep (car x) (car y))
+		     (setq t1 (get (car y) 'subtypep-predicate)))
+		(funcall t1 x y))
+	       (t (values nil t))))
+	(t
+	 (values nil t))))
+
+;;; T if atomic type X is a subtype of atomic type Y.
+;;; It is never impossible to tell, so only one value is returned.
+(defun atom-subtypep (x y &aux t1 t2
+		      (f1 (get-flavor-tracing-aliases x))
+		      (f2 (get-flavor-tracing-aliases y)))
+  (cond ((eq x y) t)
+	(f1
+	 (or (eq y 'atom)
+	     (and (eq y 'common)
+		  (subtypep x '(or pathname hash-table)))
+	     (and f2
+		  (memq (dont-optimize (flavor-name f2))
+			(dont-optimize (flavor-depends-on-all f1)))
+		  t)))
+	(f2 nil)
+	((class-symbolp x)
+	 (or (memq y '(atom entity))
+	     (and (class-symbolp y)
+		  (subclass-of-class-symbol-p x y))))
+	((class-symbolp y) nil)
+	((or (and (setq t1 (get x 'defstruct-description))
+		  (defstruct-description-named-p t1))
+	     (get x 'defstruct-named-p))
+	 (if (memq x '(structure atom array common))
+	     t
+	   (and (or (and (setq t2 (get y 'defstruct-description))
+			 (defstruct-description-named-p t2))
+		    (get y 'defstruct-named-p))
+		(do ((symbol x
+			     (and (setq t1 (get symbol 'defstruct-description))
+				  (car (defstruct-description-include t1)))))
+		    ((null symbol) nil)
+		  (and (eq y symbol) (return t))))))
+	(t (not (null (memq x (get y 'subtypes)))))))
+
+;;;; Comparing canonicalized types 
+(defprop array array-subtypep subtypep-predicate)
+(defprop simple-array array-subtypep subtypep-predicate)
+(defun array-subtypep (type1 type2)
+  (values
+    (and (or (null (cdr type2))
+	     (eq (cadr type2) '*)
+	     (and (cdr type1)
+		  (neq (cadr type1) '*)
+		  (equal (type-canonicalize (cadr type1))
+			 (type-canonicalize (cadr type2)))))
+	 (or (null (cddr type2))
+	     (eq (caddr type2) '*)
+	     (and (cddr type1)
+		  (neq (caddr type1) '*)
+		  (= (if (numberp (caddr type1)) (caddr type1)
+		       (length (caddr type1)))
+		     (if (numberp (caddr type2)) (caddr type2)
+		       (length (caddr type2))))
+		  (do ((1tail (if (consp (caddr type1))
+				  (caddr type1)
+				(make-list (caddr type1) ':initial-value '*))
+			      (cdr 1tail))
+		       (2tail (if (consp (caddr type2))
+				  (caddr type2)
+				(make-list (caddr type2) ':initial-value '*))
+			      (cdr 2tail)))
+		      ((null 1tail) t)
+		    (unless (or (eq (car 2tail) '*)
+				(eql (car 1tail) (car 2tail)))
+		      (return nil))))))
+    t))
+
+(defun (:property complex subtypep-predicate) (type1 type2)
+  (subtypep (cadr type1) (cadr type2)))
+
+(defun (:property integer subtypep-predicate) (type1 type2)
+  (values
+    (and (or (memq (cadr type2) '(nil *))
+	     (and (not (memq (cadr type1) '(nil *)))
+		  ( (if (consp (cadr type1))
+			 (1+ (caadr type1)) (cadr type1))
+		     (if (consp (cadr type2))
+			 (1+ (caadr type2)) (cadr type2)))))
+	 (or (memq (caddr type2) '(nil *))
+	     (and (not (memq (caddr type1) '(nil *)))
+		  ( (if (consp (caddr type1))
+			 (1- (caaddr type1)) (caddr type1))
+		     (if (consp (caddr type2))
+			 (1- (caaddr type2)) (caddr type2))))))
+    t))
+
+(defprop rational dense-arithmetic-subtypep subtypep-predicate)
+(defprop real dense-arithmetic-subtypep subtypep-predicate)
+(defprop float dense-arithmetic-subtypep subtypep-predicate)
+(defprop short-float dense-arithmetic-subtypep subtypep-predicate)
+(defprop single-float dense-arithmetic-subtypep subtypep-predicate)
+(defun dense-arithmetic-subtypep (type1 type2)
+  (values
+    (and (or (memq (cadr type2) '(nil *))
+	     (and (not (memq (cadr type1) '(nil *)))
+		  (if (and (consp (cadr type2)) (not (consp (cadr type1))))
+		      (> (cadr type1) (caadr type2))
+		    ( (if (consp (cadr type1))
+			   (caadr type1) (cadr type1))
+		       (if (consp (cadr type2))
+			   (caadr type2) (cadr type2))))))
+	 (or (memq (caddr type2) '(nil *))
+	     (and (not (memq (caddr type1) '(nil *)))
+		  (if (and (consp (caddr type2)) (not (consp (caddr type1))))
+		      (< (caddr type1) (caaddr type2))
+		    ( (if (consp (caddr type1))
+			   (caaddr type1) (caddr type1))
+		       (if (consp (caddr type2))
+			   (caaddr type2) (caddr type2)))))))
+    t))
+
+;;;; disjoint-typep
+
+(defvar subtypep-pairwise-disjoint-sets
+  '((integer fixnum bignum)
+    (rational ratio integer)
+    (number rational float complex)
+    (number real complex)
+    (list cons null)
+    (t cons symbol array number character entity locative instance closure
+       stack-group select compiled-function microcode-function)
+    (t list number hash-table readtable package pathname stream random-state)))
+
+(defun disjoint-typep (x y &aux t1 t2)
+  (let ((x (type-canonicalize x))
+	(y (type-canonicalize y)))
+    (cond ((not (atom x))
+	   (selectq (car x)
+	     (or (loop with val = t
+		       for x in (cdr x)
+		       do (multiple-value (t1 t2) (disjoint-typep x y))
+		       when (not t2) return (values nil nil)
+		       do (setq val (and val t1))
+		       finally (return (values val t))))
+	     (and (loop with val = t
+			for x in (cdr x)
+			do (multiple-value (t1 t2) (disjoint-typep x y))
+			when t1 return (values t t)
+			do (setq val (and val t2)) 
+			finally (return (values nil val))))
+	     (not (subtypep y (cadr x)))
+	     (member (loop for x in (cdr x)
+			   do (multiple-value (t1 t2) (subtypep x y))
+			   when (null t2) return (values nil nil)
+			   when t1 return (values nil t)
+			   finally (return (values t t))))
+	     (satisfies nil)
+	     ((array simple-array)
+	      (cond ((disjoint-typep (car x) y)
+		     (values t t))
+		    ((atom y) (values nil t))
+		    ((memq (car y) '(array simple-array))
+		     (disjoint-array-typep x y))
+		    (t nil)))
+	     (t (values nil nil))))
+	  ((not (atom y)) (disjoint-typep y x))
+	  ((or (subtypep x y) (subtypep y x)) (values nil t))
+	  (t (loop for (a . b) in subtypep-pairwise-disjoint-sets
+		   when (and (subtypep x a) (subtypep y a))
+		   do (let ((p (loop for tt in b
+				     when (subtypep x tt) return tt))
+			    (q (loop for tt in b
+				     when (subtypep y tt) return tt)))
+			(when (and p q) (return (values (not (eq p q)) t))))
+		   finally (return (values nil nil)))))))
+
+(defun disjoint-array-typep (x y)
+  (or (and (not (memq (cadr x) '(nil *)))
+	   (not (memq (cadr y) '(nil *)))
+	   (neq (type-canonicalize (cadr x)) (type-canonicalize (cadr y))))
+      (and (cddr x) (neq (caddr x) '*)
+	   (cddr y) (neq (caddr y) '*)
+	   (not (equal (if (numberp (caddr x))
+			   (make-list (caddr x) ':initial-value '*)
+			 (caddr x))
+		       (if (numberp (caddr y))
+			   (make-list (caddr y) ':initial-value '*)
+			 (caddr y)))))))
+
+(defun coerce (object result-type)
+  "Coerce OBJECT to an object of type RESULT-TYPE.  Only certain coercions are allowed.
+Any sequence can be coerced to any sequence type if the elements are legal.
+Strings, symbols and integers can be coerced to type CHARACTER.
+Any number can be coerced to type COMPLEX.
+Any real number can be coerced to any floating point number type."
+  (if (typep object result-type)
+      object
+    (prog ((canon (type-canonicalize result-type)))
+      (selectq (if (atom canon) canon (car canon))
+	(list
+	 (cond ((typep object 'vector)
+		(return (listarray object)))))
+	(short-float
+	 (if (realp object)
+	     (return (small-float object))))
+	(single-float
+	 (if (realp object)
+	     (return (float object))))
+	(float
+	 (if (realp object)
+	     (return (if (small-floatp object) object (float object)))))
+	((t) (return object))
+	(complex (return (complex object)))
+	((character cli:character)
+	 (cond ((stringp object)
+		(if (= (length object) 1)
+		    (return (aref object 0))))
+	       ((symbolp object)
+		(if (= (length (symbol-name object)) 1)
+		    (return (aref (symbol-name object) 0))))
+	       ((integerp object)
+		(return (int-char object)))))
+	((array simple-array)
+	 (when (typep object 'sequence)
+	   (return (make-array (length object) ':initial-contents object
+			       		       ':element-type (if (atom canon) t
+								(cadr canon)))))))
+      ;; If it did not already RETURN, this coercion is not allowed.
+      (ferror nil "~S cannot be coerced to a ~S." object result-type))))
+
+(deff cli:character 'coerce-to-character)
+(defun coerce-to-character (x)
+  "Convert X to a character if possible."
+  (cond ((characterp x) x)
+	((numberp x)
+	 (int-char x))
+	((and (stringp x) (= (length x) 1))
+	 (int-char (aref x 0)))
+	((and (symbolp x) (= (length (get-pname x)) 1))
+	 (int-char (aref (get-pname x) 0)))
+	(t (ferror nil "Cannot coerce ~S into a character" x))))
+
+(defun coerce-to-array (object element-type)
+  (make-array (length object)
+	      ':element-type element-type
+	      ':initial-contents object))
+
+(defun coerce-to-array-optimized (object array-type)
+  (make-array (length object)
+	      ':type array-type ':initial-contents object))
+
+(deff coerce-to-list 'listarray)
+
+(defun coerce-optimizer (form)
+  (if (not (compiler:quotep (caddr form)))
+      form
+    (let ((canon (type-canonicalize (cadr (caddr form))))
+	  (object (cadr form)))
+      (selectq (if (atom canon) canon (car canon))
+	(list
+	 (once-only (object)
+	   `(if (consp ,object) ,object (coerce-to-list ,object))))
+	(short-float `(small-float ,object))
+	(single-float `(float ,object))
+	(float
+	 (once-only (object)
+	   `(if (small-floatp ,object) ,object (float ,object))))
+	((t) object)
+	((or character cli:character) `(coerce-to-character ,object))
+	((array simple-array)
+	 `(coerce-to-array-optimized
+	    ,object
+	    ',(array-type-from-element-type
+		(if (atom canon) t (cadr canon)))))))))
+
+;;;; Open coding of TYPEP.
+
+;In QCOPT:
+;(add-optimizer typep typep-two-args typep-structure typep-flavor
+;	        subinstance-of-class-symbol-p)
+(defun typep-two-args (form &aux opt type pred dtp)
+  (cond ((and (= (length form) 3)
+	      (constantp (caddr form)))
+	 (setq type (if (consp (caddr form))
+			(cadr (caddr form))	;(typep foo ':bar)
+		      (caddr form)))		;(typep foo :bar)
+	 (flet ((frob (type)
+		   (if (and (symbolp type)
+			    (setq opt (get type 'type-optimizer)))
+		       (funcall opt form)
+		     (if (and (symbolp type)
+			      (setq opt (get type 'type-alias-for)))
+			 `(typep ,(cadr form) ',opt)
+		       (cond ((symbolp type)
+			      (cond ((setq opt (get type 'type-optimizer))
+				     (funcall opt form))
+				    ((and (setq pred (get type 'type-predicate))
+					  (symbolp pred))
+				     `(,pred ,(cadr form)))
+				    ((setq dtp (or (rassq type type-of-alist)
+						   (rassq type typep-one-arg-alist)))
+				     `(= (%data-type ,(cadr form)) ,(car dtp)))
+				    ((get type 'si:flavor)
+				     `(typep-structure-or-flavor
+					,(cadr form)
+					',(dont-optimize (flavor-name (get-flavor-tracing-aliases type)))))
+				    ((get type 'si:defstruct-description)
+				     `(typep-structure-or-flavor . ,(cdr form)))
+				    ((class-symbolp type)
+				     `(subinstance-of-class-symbol-p ,(cadr form) ',type))
+				    (t form)))
+			     (t
+			      (cond ((setq opt (get (car type) 'type-optimizer))
+				     (apply opt form (cdr type)))
+				    ((symbolp (setq pred (get (car type) 'type-predicate)))
+				     `(,pred ,(cadr form)))
+				    (t form))))))))
+	   (let ((tem (frob type)))
+	     (if (neq tem form)
+		 tem
+	       (frob (type-canonicalize type))))))
+	(t form)))
+
+;;;; pretty names for types (used in check-type, etypecase, etc)
+(defvar type-pretty-name-hash-table :unbound
+  "A hash table containing cached pretty names for types")
+
+(defun type-pretty-name (type)
+  "Return a string containing a noun phrase describing objects of type TYPE."
+  (unless (variable-boundp type-pretty-name-hash-table)
+    (setq type-pretty-name-hash-table (make-hash-table :test 'equal :size 500.)))
+  (or (gethash type type-pretty-name-hash-table)
+      (let ((type (type-canonicalize type))
+	    (default-cons-area background-cons-area))
+	;; Prevent lossage if TYPE was consed in a temporary area.
+	(setq type (copytree type))
+	(setf (gethash type type-pretty-name-hash-table)
+	      (cond ((symbolp type)
+		     (or (get type 'type-name)
+			 (string-append-a-or-an
+			   (string-subst-char #/space #/-
+					      (string-downcase (format nil "~a" type)) nil))))
+		    ((and (consp type)
+			  (funcall (get (car type) 'type-name-function #'ignore) type)))
+		    (t (string-append (format nil "an object of type ~S" type))))))))
+
+(defun (:property or type-name-function) (type)
+  (when (dolist (elt (cdr type) t)		;this is not SO gratuitous since cached
+	  (unless (type-pretty-name elt) (return nil)))
+    (string-append
+      (format:output nil
+	(do ((tail (cdr type) (cdr tail)))
+	    ((null tail))
+	  (unless (cdr tail)
+	    (princ "or "))
+	  (princ (type-pretty-name (car tail)))
+	  (when (cdr tail)
+	    (if (cddr tail)
+		(princ ", ")
+	      (tyo #/space))))))))
+
+(defun (:property and type-name-function) (type)
+  (when (dolist (elt (cdr type) t)		;this is not SO gratuitous since cached
+	  (unless (type-pretty-name elt) (return nil)))
+    (string-append
+      (format:output nil
+	(do ((tail (cdr type) (cdr tail)))
+	    ((null tail))
+	  (unless (cdr tail)
+	    (princ "and "))
+	  (princ (type-pretty-name (car tail)))
+	  (when (cdr tail)
+	    (if (cddr tail)
+		(princ ", ")
+	      (tyo #/space))))))))
+
+(defun (:property member type-name-function) (type &aux (len (length (cdr type))))
+  (selectq len
+    (0 nil)
+    (1 (string-append (format nil "EQL ~S" (cadr type))))
+    (2 (string-append (format nil "EQL either ~S or ~S" (cadr type) (caddr type))))
+    (t (string-append
+	 (format:output nil
+	   (princ "EQL one of ")
+	   (do ((tail (cdr type) (cdr tail)))
+	       ((null tail))
+	     (unless (cdr tail)
+	       (princ "or "))
+	     (prin1 (car tail))
+	     (when (cdr tail)
+	       (if (cddr tail)
+		   (princ ", ")
+		 (tyo #/space)))))))))
+(deff (:property cli:member type-name-function) (get 'member 'type-name-function))
+
+(defun (:property integer type-name-function) (type)
+  (let ((low (cond ((null (cdr type)) '*)
+		   ((consp (cadr type)) (car (cadr type)))
+		   ((integerp (cadr type)) (1- (cadr type)))
+		   (t (cadr type))))
+	(high (cond ((null (cddr type)) '*)
+		    ((consp (caddr type)) (car (caddr type)))
+		    ((integerp (caddr type)) (1+ (caddr type)))
+		    (t (caddr type)))))
+    (cond ((and (eq low '*) (eq high '*))
+	   "an integer")
+	  ((and (eq low -1) (eq high '*))
+	   "a positive integer")
+	  ((and (eq high 1) (eq low '*))
+	   "a negative integer")
+	  ((eq high '*)
+	   (string-append (format nil "an integer greater than ~D" low)))
+	  ((eq low '*)
+	   (string-append (format nil "an integer less than ~D" high)))
+	  (t
+	   (string-append (format nil "an integer between ~D and ~D (exclusive)" low high))))))
+
+(defun (:property real type-name-function) (type)
+  (float-type-name-function "real number" type))
+(defun (:property float type-name-function) (type)
+  (float-type-name-function "float" type))
+(defun (:property short-float type-name-function) (type)
+  (float-type-name-function "short float" type))
+(defun float-type-name-function (string type)
+  (let ((low (if (null (cdr type)) '* (cadr type)))
+	(high (if (null (cddr type)) '* (caddr type)))
+	lowex highex)
+    (if (consp low) (setq low (car low) lowex t))
+    (if (consp high) (setq high (car high) highex t))
+    (cond ((and (eq low '*) (eq high '*))
+	   (string-append "a " string))
+	  ((and (eq low 0) (eq high '*))
+	   (if lowex
+	       (string-append "a positive " string)
+	     (string-append "a non-negative " string)))
+	  ((and (eq high 0) (eq low '*))
+	   (if highex
+	       (string-append "a negative " string)
+	     (string-append "a non-positive " string)))
+	  ((eq high '*)
+	   (string-append (format nil "a ~A ~:[~;>~] ~D" string lowex low)))
+	  ((eq low '*)
+	   (string-append (format nil "a ~A ~:[~;<~] ~D" string highex high)))
+	  (t (string-append (format nil "a ~A satisfying ~D ~:[~;<~] ~A ~:[~;<~] ~D"
+				    string low lowex string highex high))))))
+
+(defun (:property complex type-name-function) (type)
+  (selectq (cadr type)
+    ((nil real) "a complex number")
+    (rational "a rational complex number")
+    (short-float "a complex number with short-float components")
+    (single-float "a complex number with single-float components")
+    (long-float "a complex number with long-float components")
+    (double-float "a complex number with double-float components")
+    (float "a complex number with floating-point components")
+    (t nil)))
