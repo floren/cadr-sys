@@ -1,0 +1,446 @@
+	TITLE MINI SERVER
+
+;Server for Lisp machine miniature Chaosnet
+
+;Contact name is MINI
+;
+;Protocol:  (all you can do is read files)
+;  User to server:
+;    200 ascii open, contents is file name
+;    201 binary open, contents is file name
+;  Server to user:
+;    202 win, contents is truename<nl>cdate
+;    203 lose, contents is error message<nl>
+;    200 ascii data
+;    300 binary data
+;    eof end of file, user can then ask for another
+
+.DECSAV
+
+A=1
+B=2
+C=3
+D=4
+E=5
+T=6
+TT=7
+P=17
+
+DEBUG:	0
+
+PDL:	-20,,.
+	BLOCK 22
+
+.INSRT MID:CHSDEF
+
+PKTBUF:	BLOCK %CPMXW+%CPKDT
+
+BUF1:	BLOCK 400
+BUF1L==400*5
+
+CHPMXC:	0			;MAX # CHARS IN A PACKET.
+CHPMXW:	0			;MAX # WORDS IN A PACKET.
+
+CHSJFN:	0			;JFN for CHAOS connection
+FILJFN:	0			;JFN for disk file.
+
+ASCMOD:	0			;-1 if ASCII mode open.
+
+OUTBP:	0			;BP and count for storing into output packets.
+OUTCNT:	0
+
+GO:	MOVE P,PDL
+	RESET 			;Reset the Universe
+
+;;; Log the job in under username LISPM if possible, 
+;;;  and with program name MINI
+
+	MOVE 1,[RC%EMO,,0]
+	MOVE 2,[440700,,[ASCIZ /LISPM/]]	;Account Name
+	SETZ 3,
+	RCUSR
+	  ERJMP .+1
+	MOVE 1,3		;User Number
+	MOVE 2,[440700,,[ASCIZ /LISPM/]]	;Password
+	MOVE 3,[440700,,[ASCIZ /LISPM/]]	;Account
+	LOGIN
+	  ERJMP .+1
+	MOVE 1,[SIXBIT /MINI/]
+	MOVE 2,1
+	SETSN			;Let the world know who we are.
+	MOVE 1,[SIXBIT /CHPMXT/]	; Get max packet size
+	SYSGT
+	TLNE 1,-1
+	 JRST [	MOVE 1,[SIXBIT /LHOSTN/]	; Old flavor monitor
+		SYSGT
+		CAIE 1,54			; XX ?
+		 SKIPA 1,300			; no - size is 300
+		  MOVEI 1,488.			; yes - size is max
+		JRST .+1 ]
+	SKIPN 1
+	 MOVEI 1,%CPMXC
+	MOVEM 1,CHPMXC				; Set max # chars
+	LSH 1,-2
+	MOVEM 1,CHPMXW				; Set max # words
+	HRLZI 1,(GJ%SHT)	;Short GTJFN to get the control channel
+	HRROI 2,[ASCIZ \CHA:.MINI\]
+	GTJFN
+	 ERCAL CTLDON
+	HRRZM 1,CHSJFN		;JFN for control channel
+	MOVE 2,[100000,,OF%RD\OF%WR]
+	OPENF			;Listen for connection
+	 ERCAL CTLDON
+	MOVEI 2,.MOPKR
+	MOVEI 3,PKTBUF
+	MTOPR
+	 ERCAL CTLDON
+	MOVE 1,CHSJFN
+	MOVEI 2,.MOOPN		;Accept the connection
+	MTOPR
+	 ERCAL CTLDON
+	JRST NXTFIL
+
+;Handle errors.
+
+;CTLDON to maybe dump us and the die.
+;CTLDN0 to simply die.
+
+DMPACS:	BLOCK 20
+
+CTLDON:	SKIPG DEBUG		;Dump ourselves
+	 JRST CTLDN0
+	MOVEM 0,DMPACS
+	MOVE 0,[1,,DMPACS+1]
+	BLT 0,DMPACS+17
+	MOVE 1,[GJ%SHT+GJ%FOU+GJ%NEW]
+	HRROI 2,[ASCIZ \PS:<L.COLD>DEAD-MINISR.EXE\]
+	GTJFN
+	 JRST CTLDN0
+	MOVE 2,[440000,,OF%WR]
+	OPENF	
+	 ERJMP CTLDN0
+	HRLI 1,.FHSLF
+	MOVE 2,[777760,,20]
+	SAVE
+CTLDN0:	MOVNI 1,1		;-1 means log us out
+	SKIPL DEBUG		;If debugging, just stop, will die if top-level
+	 LGOUT			;Bye-bye
+	 HALTF
+	JRST .-1
+
+NXTFIL:	MOVE 1,CHSJFN		;Wait for a control packet
+	MOVEI 2,.MOPKR
+	MOVEI 3,PKTBUF
+	MTOPR
+	 ERCAL CTLDON		;Flush ourselves if any error
+	LDB A,[$CPKOP+PKTBUF]
+	CAIE A,200
+	 CAIN A,201
+	  JRST OPENIT
+	PUSHJ P,CTLDON
+
+OPENIT:	SETZM ASCMOD
+	CAIE A,201
+	 SETOM ASCMOD
+	LDB B,[$CPKNB+PKTBUF]
+	MOVE C,[440800,,%CPKDT+PKTBUF]
+;B has number of chars, C has byte pointer to them.
+;Copy the chars into a 7-bit ASCIZ string.
+	MOVE D,[440700,,BUF1]
+OPEN1:	ILDB A,C
+	IDPB A,D
+	SOJG B,OPEN1
+	SETZ A,
+	IDPB A,D
+;Now get a JFN from that string.
+	SETZM FILJFN
+	MOVE 1,[GJ%SHT+GJ%OLD]
+	HRROI 2,BUF1
+	GTJFN
+	 JRST OPENLS
+	HRRZM 1,FILJFN
+	SKIPE ASCMOD
+	 SKIPA 2,[070000,,OF%RD+OF%PLN]	;Input, ASCII, no line numbers!
+	  MOVE 2,[440000,,OF%RD]	;Input, 36-bit
+	OPENF
+	 JRST OPENLS
+;SUCCESS, RETURN FILE-ID
+	MOVEI A,202
+	DPB A,[$CPKOP+PKTBUF]
+	HRROI 1,BUF1
+	MOVE 2,FILJFN
+	MOVE 3,[111110,,JS%PAF]
+	JFNS
+	 ERCAL CTLDON
+	MOVE A,[440700,,BUF1]
+	MOVE C,[440800,,%CPKDT+PKTBUF]
+	MOVEM C,OUTBP
+	SETZM OUTCNT
+JFNS1:	ILDB T,A
+	JUMPE T,JFNS2
+	PUSHJ P,CHOUT
+	JRST JFNS1
+
+JFNS2:	MOVEI T,215
+	PUSHJ P,CHOUT
+;NOW OUTPUT THE FILE CREATION DATE TO THE OUTPUT PACKET.
+	MOVE 1,FILJFN
+	MOVE 2,[1,,.FBWRT]
+	MOVEI 3,T
+	GTFDB
+	 ERCAL CTLDON
+	MOVE 2,T
+	AOSN T			;If -1, then use 0
+	 SETZ 2,
+	SETZ 4,
+	ODCNV			;Convert internal date/time to printable format
+	 ERCAL CTLDON
+	HRRZ A,4		;Local time in seconds
+	LSH A,1			;Number of half-seconds since midnight
+	HLRZ T,2		;The year
+	SUBI T,1900.
+	DPB T,[330700,,A]
+	AOS 2
+	DPB 2,[270400,,A]	;The month
+	HLRZ T,3		;The day
+	AOS T
+	DPB T,[220500,,A]
+	PUSH P,A
+	PUSHJ P,DATASC		;CREATION DATE
+	MOVEI T,40
+	PUSHJ P,CHOUT
+	POP P,A
+	PUSHJ P,TIMASC		;CREATION TIME
+	MOVE A,OUTCNT
+	DPB A,[$CPKNB+PKTBUF]
+;SEND THE REPLY PACKET.
+	PUSHJ P,SNDPKT
+;NOW TRANSMIT THE FILE
+	SKIPE ASCMOD
+	 JRST XMITA
+XMITB:	MOVE A,[444400,,%CPKDT+PKTBUF]
+	MOVE B,CHPMXW
+	MOVE C,B
+	PUSHJ P,FILGET
+	SUB C,B
+	JUMPE C,XMTEOF
+	IMULI C,4
+	DPB C,[$CPKNB+PKTBUF]
+	MOVEI A,300
+	DPB A,[$CPKOP+PKTBUF]
+	PUSHJ P,SNDPKT
+	JUMPE B,XMITB
+XMTEOF:	MOVSI B,(<.BYTE 8 ? %COEOF ? 0>)
+	MOVEM B,PKTBUF
+	PUSHJ P,SNDPKT
+	MOVE 1,FILJFN
+	CLOSF
+	RLJFN
+	JFCL
+	JRST NXTFIL
+
+;Send the packet in PKTBUF to the net.
+SNDPKT:	PUSH P,1
+	PUSH P,2
+	PUSH P,3
+	MOVE 1,CHSJFN
+	MOVEI 2,.MOPKS
+	MOVEI 3,PKTBUF
+	MTOPR
+	 ERCAL CTLDON
+	POP P,3
+	POP P,2
+	POP P,1
+	POPJ P,
+
+;Do a SIN from the disk file using accumulators A and B for the byte pointer and count.
+FILGET:	PUSH P,C
+	MOVE C,B
+	MOVE B,A
+	MOVE A,FILJFN
+	SIN
+	MOVE A,B
+	MOVE B,C
+	POP P,C
+	POPJ P,
+
+XMITA:	MOVE A,[440700,,BUF1]	;HAVE TO DELETE ^C'S AND ^L'S AT EOF
+	MOVEI B,5		;GET BUFFERED-BACK WORD
+	PUSHJ P,FILGET
+	MOVE C,[440800,,%CPKDT+PKTBUF]
+	MOVEM C,OUTBP
+	SETZM OUTCNT
+XMITA0:	MOVE A,[440700,,BUF1+1]
+	MOVEI B,BUF1L-5
+	MOVE C,B
+	PUSHJ P,FILGET
+	PUSH P,C
+	IDIVI B,5		;ROUND TO WORD BOUNDARY
+	IMULI B,5
+	JUMPG C,[ MOVEI D,0	;IF PARTIAL WORD TRANSFER, MAKE SURE FILLED WITH NULLS
+		  IDPB D,A
+		  SOJA C,. ]
+	POP P,C
+	SUB C,B
+	JUMPE C,XMITA9		;NOTHING TRANSFERRED, EOF
+XMITA3:	MOVE A,[440700,,BUF1]	;NOW MOVE AND CONVERT BYTE-SIZE.  DON'T MOVE LAST 5 CHARS
+ZIPCO:	ILDB T,A
+	XCT AS2LM(T)		;CONVERT CHAR CODE
+	PUSHJ P,CHOUT
+	MOVE T,OUTCNT
+	CAMGE T,CHPMXC
+	 JRST XMITA2
+	DPB T,[$CPKNB+PKTBUF]
+	MOVEI T,200
+	DPB T,[$CPKOP+PKTBUF]
+	PUSHJ P,SNDPKT
+	MOVE T,[440800,,%CPKDT+PKTBUF]
+	MOVEM T,OUTBP
+	SETZM OUTCNT
+XMITA2:	SOJG C,ZIPCO
+XMITA9:	JUMPL B,XMITA7		;HERE B HAS NUMBER CHARS NOT XFERRED LAST SIOT OR -1 FLAG
+	MOVEI C,BUF1L-5
+	SUB C,B
+	ADDI C,4
+	IDIVI C,5		;NUMBER OF VALID WORDS IN BUFFER (NOT COUNTING FIRST ONE)
+	MOVE D,BUF1(C)		;MOVE LAST WORD UP TO FIRST POSITION (REST HAVE BEEN XMTED)
+	MOVEM D,BUF1
+	JUMPE B,XMITA0		;NO EOF YET
+	;D HAS LAST WORD IN FILE, COUNT VALID CHARS
+	MOVEI C,5
+	LSH D,-1
+XMITA8:	MOVE A,D
+	ANDI A,177
+	JUMPE A,.+3	;Nulls appear from someplace
+	CAIE A,^C
+	 CAIN A,^L
+	  SOJG C,[ LSH D,-7 ? JRST XMITA8]
+	SETO B,
+	JUMPN C,XMITA3		;GO TRANSMIT LAST WORD, SUCH AS IT IS
+XMITA7:	MOVE T,OUTCNT
+	DPB T,[$CPKNB+PKTBUF]
+	MOVEI T,200
+	DPB T,[$CPKOP+PKTBUF]
+	PUSHJ P,SNDPKT
+	JRST XMTEOF
+
+;FAILURE, RETURN ERROR MESSAGE
+
+OPENLS:	MOVEI A,203
+	DPB A,[$CPKOP+PKTBUF]
+	MOVEI 1,.FHSLF
+	GETER
+	 ERCAL CTLDON		;Punt if no err
+	MOVE 1,[441000,,PKTBUF+%CPKDT]
+	MOVSI 3,-%CPMXC
+	ERSTR
+	 ERCAL CTLDON
+	 JFCL
+	SETZ C,
+	MOVE 1,[441000,,PKTBUF+%CPKDT]
+	ILDB 2,1
+	CAIE 2,0
+	 AOJA C,.-2		;Get real size
+	MOVEI T,215		;Put a Return after it.
+	DPB T,1
+	AOS C
+	DPB C,[$CPKNB+PKTBUF]
+	PUSHJ P,SNDPKT
+	JRST NXTFIL
+
+;DATE, TIME, NUMBER CONVERSION ROUTINES (LIFTED BODILY FROM FILE JOB)
+
+TM%SEC== 777776    ; 2.9-1.2	0-131K	seconds	0-86399.
+TM%DAY==     37,,0 ; 3.5-3.1	0-31	days	1-31
+TM%MON==    740,,0 ; 3.9-3.6	0-15	months	1-12
+TM%YR==  177000,,0 ; 4.7-4.1	0-127	years	0-127 relative to 1900 (1900-2027)
+
+TM$SEC==(.BP TM%SEC,)	; Define BP LH's into each field.
+TM$DAY==(.BP TM%DAY,)
+TM$MON==(.BP TM%MON,)
+TM$YR== (.BP TM%YR,)
+	
+; DATASC - Deposit MM/DD/YY using CHOUT
+;	Takes time wd in A
+
+DATASC:	PUSH P,B
+	PUSH P,C
+	PUSH P,E
+	SKIPA E,[-3,,[	TM$MON,,A
+			TM$DAY,,A
+			TM$YR,,A ] ]
+TMDT2:	 PUSHJ P,CHOUT
+	LDB B,(E)		; Get numerical value into B.
+	IDIVI B,10.		; Divide into 2 digits.
+	MOVEI T,"0(B)
+	PUSHJ P,CHOUT		; Output first,
+	MOVEI T,"0(C)
+	PUSHJ P,CHOUT		; and second.
+	MOVEI T,"/		; Set up separator, in case looping again.
+	AOBJN E,TMDT2
+TIMTMX:	POP P,E
+	POP P,C
+	POP P,B
+	POPJ P,
+
+; TIMASC - Deposit HH:MM:SS using CHOUT given a time word in A.
+;	Takes time wd in A.
+
+TIMASC:	PUSH P,B
+	PUSH P,C
+	PUSH P,E
+	HRRZ B,A		; For storage of hr, min, sec.
+	LSH B,-1
+	IDIVI B,60.		; Get secs
+	PUSH P,C		; save
+	IDIVI B,60.		; Get hr and mins
+	PUSH P,C		; Save mins too.
+	MOVSI E,-3
+	JRST TMTM3
+
+TMTM2:	PUSHJ P,CHOUT
+	POP P,B			; Get numerical value into B.
+TMTM3:	IDIVI B,10.		; Divide into 2 digits.
+	MOVEI T,"0(B)
+	PUSHJ P,CHOUT		; Output first,
+	MOVEI T,"0(C)
+	PUSHJ P,CHOUT		; and second.
+	MOVEI T,":		; Set up separator, in case looping again.
+	AOBJN E,TMTM2
+	JRST TIMTMX
+
+;CONVERT NUMBER IN A TO DECIMAL, THROUGH CHOUT
+NUMASC:	IDIVI A,10.
+	JUMPE A,NUMAS1
+	PUSH P,B
+	PUSHJ P,NUMASC
+	POP P,B
+NUMAS1:	MOVEI T,"0(B)
+	PUSHJ P,CHOUT
+	POPJ P,
+
+CHOUT:	IDPB T,OUTBP
+	AOSA OUTCNT
+POPJ1:	 AOS (P)
+CPOPJ:	POPJ P,
+
+SIXOUT:	SETZ T,
+	LSHC T,6
+	ADDI T,40
+	PUSHJ P,CHOUT
+	JUMPN TT,SIXOUT
+	POPJ P,
+
+;ASCII TO LISP-MACHINE CODE-CONVERSION XCT TABLE
+AS2LM:	REPEAT 10,JFCL		;0-7
+	MOVEI T,210		;BS
+	MOVEI T,211		;TAB
+	JRST XMITA2		;FLUSH LF'S
+	JFCL			;13
+	MOVEI T,214		;FORM
+	MOVEI T,215		;CR
+	REPEAT 177-16,JFCL	;16-176
+	HALTF			;177 I don't know how to handle escapes
+IFN .-AS2LM-200, .ERR AS2LM TABLE WRONG SIZE
+
+	END GO

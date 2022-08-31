@@ -1,0 +1,3619 @@
+21-Sep-82 04:54:32-EDT,320;000000000001
+Date: Tuesday, 21 September 1982, 04:50-EDT
+From: Richard M. Stallman <RMS at MIT-OZ>
+Subject: Control, meta and hyper keys turning mouse clicks into double clicks
+To: info-lispm-mit at MIT-OZ
+
+Do people like this feature?  I have had some complaints,
+and if the feeling is general I will turn it off by default.
+29-Sep-82 06:45:12-EDT,294;000000000001
+Date: Wednesday, 29 September 1982, 06:41-EDT
+From: Richard M. Stallman <rms at MIT-OZ>
+Subject: dired change
+To: info-lispm at MIT-OZ
+
+In 87.46, the C command in DIRED now copies the file you are pointing at.
+
+To compare the file against the latest version, you now use the = command.
+ 4-Oct-82 05:07:23-EDT,446;000000000001
+Mail-From: CYPHER created at  4-Oct-82 05:03:58
+Date: 4 October 1982  05:03-EDT (Monday)
+Sender: CYPHER at MIT-OZ
+From: D. Scott Cyphers <CYPHER at MIT-MC>
+Subject: 87.55
+Cc:   info-spire at MIT-OZ, info-lispm at MIT-OZ
+To:   DPH at MIT-OZ
+
+Dan,
+	Does your patch (87.55) make the 7th floor versatec the
+terminal-q device for everyone, or just for people who used to use the
+XGP?  We use terminal-q here for our own Versatec.
+-------
+ 6-Oct-82 02:31:48-EDT,608;000000000000
+Mail-From: HDT created at  6-Oct-82 02:27:36
+Date:  6 Oct 1982 0227-EDT
+From: Howard Daniel Trachtman <Hdt at MIT-OZ>
+Subject: Viewing your mail...
+To: info-lispm at MIT-OZ
+
+
+  I wrote a simple function that creates a temporary
+window that can display either your old mail file, the
+file with your new mail, or both.  I was considering making
+this function callable from a terminal key, to greatly
+decrease the time required to read your mail.
+
+ The question is: do people think it would be worthwhile
+to use up a terminal key for this?  Does anyone object
+vehemently?
+
+--Howard--
+-------
+ 6-Oct-82 04:39:38-EDT,355;000000000000
+Date: Wednesday, 6 October 1982, 04:31-EDT
+From: David A. Moon <Moon at SCRC-TENEX>
+Subject: Viewing your mail...
+To: Howard Daniel Trachtman <Hdt at MIT-OZ>
+Cc: info-lispm at MIT-OZ
+In-reply-to: The message of 6 Oct 82 02:27-EDT from Howard Daniel Trachtman <Hdt at MIT-OZ>
+
+Doesn't this already exist as the m-X View Mail command in the editor?
+12-Oct-82 14:39:32-EDT,904;000000000000
+Date: Tuesday, 12 October 1982, 14:32-EDT
+From: Robert P. Krajewski <rpk at MIT-OZ>
+Subject: While EE's LIB: is offline...
+To: INFO-LispM-MIT at MIT-OZ
+
+If you are running diagnostics or debugging other machines in CC,
+OZ:SRC:<L.UBIN> contains the neccessary microloads (MEMD, UCADR).
+
+Many times people try to salvage editor buffers (with
+CC:SALVAGE-EDITOR), but they lose because their machine cannot
+find the right microcode.  This happens when the machines are not
+running the same software.  The microload directory is
+EE:LIB:<LISPM.UBIN> for Symbolics, OZ:SRC:<L.UBIN> for MIT.
+These should be substituted for each other, or for SYS: UBIN; as
+alternative pathnames after a FNF (file not found) error.  You
+might have to use the c-N, C-P, c-m-R, and (eh-arg n) features of
+the debugger to get the file loaded correctly.  (This is
+neccessary for the :WHY command in CC.)
+
+``Bob''
+14-Oct-82 12:10:47-EDT,450;000000000000
+Date: Thursday, 14 October 1982, 12:07-EDT
+From: Richard M. Stallman <RMS at MIT-OZ>
+Subject: Syntax of Period in word commands, in Lisp mode
+To: info-lispm-mit at MIT-OZ
+
+Do you think that the character Period should separate words
+in Lisp mode?
+
+This would probably be better when editing strings and comments.  It
+might be wrong, sometimes, while editing the code, but maybe this would
+be infrequent.  So I would like to hear opinions.
+14-Oct-82 16:15:21-EDT,655;000000000001
+Date: 14 October 1982 16:03-EDT
+From: Alan Bawden <ALAN at MIT-MC>
+Subject:  [RMS: Syntax of Period in word commands, in Lisp mode]
+To: info-lispm at SCRC-TENEX
+
+Your opinion doesn't count I guess.
+
+Date: Thursday, 14 October 1982, 12:07-EDT
+From: Richard M. Stallman <RMS at MIT-OZ>
+To:   info-lispm-mit at MIT-OZ
+Re:   Syntax of Period in word commands, in Lisp mode
+
+Do you think that the character Period should separate words
+in Lisp mode?
+
+This would probably be better when editing strings and comments.  It
+might be wrong, sometimes, while editing the code, but maybe this would
+be infrequent.  So I would like to hear opinions.
+15-Oct-82 16:14:38-EDT,902;000000000000
+Date: 15 October 1982 11:14-EDT
+From: Patrick G. Sobalvarro <PGS at MIT-AI>
+To: BUG-HARDWARE at MIT-AI, INFO-LISPM at MIT-AI
+
+Attempts, possibly ill-fated, are being made to restore the Lab's Lisp
+Machines to their former pristine state, after the late summer madness.  You
+can help by sending mail to BUG-HARDWARE telling if you have broken
+keyboards, mice, memory boards, or other Lisp Machine components sitting
+around in your office, machine room, automobile, or what have you.  Better
+yet, you could bring them to 936.
+
+If your machine or machines have less than 256K of memory, send mail to
+BUG-HARDWARE.  It is no longer necessary or even desirable to cannibalize or
+gut other machines to make yours work; and it is no longer a good idea to
+steal, hoard, or lock up Lisp Machine components.  So if you got 'em, give
+'em back, or we'll snip some wires on your backplanes, O.K.?
+
+22-Oct-82 22:47:48-EDT,472;000000000000
+Date: 22 Oct 1982 2238-EDT
+From: David L. Andre <DLA at SCRC-TENEX>
+Subject: System 218 (Release 4)
+To: INFO-LISPM at MIT-OZ
+cc: DLA at SCRC-TENEX
+
+System 218 is now released for experimentation at beta test sites.
+System 218 comes with microcode 963.  A draft of the release notes
+is in EE:LIB:<LISPM.DOCUMENTATION>RELEASE-4.LPT.  New Error System
+documentation is in EE:LIB:<LISPM.DOCUMENTATION>NES.TEXT.  Bands
+are currently on the apiary machines.
+-------
+26-Oct-82 23:41:08-EDT,644;000000000000
+Date: 26 October 1982  23:31-EDT (Tuesday)
+Sender: HDT at MIT-OZ
+From: Howard Daniel Trachtman <HDT at MIT-MC>
+To:   Gregor J. Kiczales <Gregor at MIT-MC>
+Cc:   INFO-LISPM at MIT-MC
+In-reply-to: The message of 14 Oct 1982 22:21-EDT from Gregor J. Kiczales <Gregor at MIT-MC>
+
+    Date: Thursday, 14 October 1982, 22:21-EDT
+    From: Gregor J. Kiczales <Gregor at MIT-MC>
+    To:   BUG-LISPM at MIT-MC
+
+    When you say r(eply) top the window that pops up when you gets a
+    qsend, you should then be able to say c-m-y to yank the body of
+    the message you are replying to into your reply buffer.
+Done in System 89.20
+-------
+27-Oct-82 16:12:24-EDT,384;000000000000
+Date: Wednesday, 27 October 1982, 15:52-EDT
+From: Robert W. Kerns <RWK at SCRC-TENEX>
+Subject: Pathname casing in 218, UNIX especially
+To: info-lispm at SCRC-TENEX
+
+218.99 fixes the rest of the known pathname-case problems.  If your
+favorite case problem persists, please report it.
+
+Unix users note:  init filenames are now in lower case.  I.e.
+"lispm.in", and "zmail.in".
+28-Oct-82 00:41:00-EDT,638;000000000000
+Date: Sunday, 24 October 1982, 01:38-EDT
+From: David A. Moon <Moon at SCRC-POINTER>
+Subject: What microcode do I use with 218?
+To: scrc at SCRC-TENEX
+Redistributed-to: INFO-LISPM at MIT-OZ
+Redistributed-by: DLA at SCRC-TENEX
+Redistributed-date: Thursday, 28 October 1982, 00:34-EDT
+
+Apparently this did not get announced.  The microcode to use with system 218
+is 963.  If you have a band that thinks it wants 962, it is wrong.  Anyone
+who uses microcode 962 when they should be using 963 will be punished
+accordingly; we have arranged for their machine to crash when they start
+getting close to filling up the address space.
+30-Oct-82 19:49:35-EDT,859;000000000000
+Date: Saturday, 30 October 1982, 19:46-EDT
+From: David L. Andre <DLA at SCRC-TENEX>
+Subject: New Error System documentation
+To: INFO-LISPM-MIT at MIT-OZ
+Cc: whit at scrc-vixen, JWALKER at SCRC-TENEX, DLA at SCRC-TENEX
+
+An updated version of the new error system documentation has been placed
+in EE:LIB:<LISPM.DOCUMENTATION>NES.LPT.  It is in a somewhat easier to
+read format.
+
+A few people have requested that MIT get press files of these documents
+just in case the dover comes back up.  Unfortunately, the fonts used in
+these programs is incompatible with the dover; so we can't just copy
+over the files.  In any case, MIT will receive ample hardcopies of
+documentation at the next scheduled software release, which is currently
+scheduled for the first week in December.  (The current "218" release is
+only to beta-test sites, for testing.)
+ 3-Nov-82 13:43:57-EST,1181;000000000001
+Mail-From: IAN created at  3-Nov-82 13:40:33
+Date: 3 November 1982  13:40-EST (Wednesday)
+From: Ian G. Macky <Ian at MIT-OZ>
+To:   Info-LISPM at MIT-OZ
+Cc:   HDT at MIT-OZ
+Subject: OZ SPELL server...
+
+
+I hacked up ISPELL on OZ to run as a server, so that poor LM's can feed it
+text and have it spelling corrected.  What you do is...
+
+Send it a data packet (opcode 200)at a time of words separated by
+spaces or newlines, and you will get back 1-n data packets followed by
+an EOF packet.  The results you get are, for each word, one of
+
+	"T" if the word was found directly (as in SLOW) or indirectly
+	    (as in SLOWLY or SLOWER)
+
+	"(choice1 choice2 ... choiceN)" if the word was not found, but
+	    ISPELL had some suggestions
+
+or
+	"NIL" if it was not found, and there were no close matches.
+
+followed by a blank.
+
+-------
+
+If you send "now is the time for all good qgirhu to coem to"
+
+you will get back
+
+"T T T T T T T NIL T (POEM COME) T"
+
+-------
+
+When you are done sending text, just send an EOF packet and it will
+go away (in fact, it will go away if it gets ANYTHING but a data
+packet)
+
+
+
+Does this scheme sound reasonable?
+
+
+Ian
+ 4-Nov-82 01:06:47-EST,1562;000000000001
+Date:  3 NOV 1982 2058-PST
+From: JONL at PARC-MAXC
+Subject: 4th level indirection -- maybe you haven't yet seen this?
+To:   info-lisp at MIT-AI, info-lispm at MIT-AI
+cc:   gls at MIT-AI, rpg at MIT-MC
+
+Date: 3 Nov. 1982 1:49 pm PST (Wednesday)
+From: Treichel.PA
+Subject: Lisp Song
+To: CIS^
+Reply-To: Treichel
+
+Have you seen this?
+
+			Jeanie
+
+---------------------------
+
+Date: 3 Nov. 1982 4:23 pm EST (Wednesday)
+From: Gafter.Henr
+Subject: LISP song
+To: AllWhimsy^.pa, Language^, Gottwald, KAnderson
+cc: Gafter
+
+This was in the uucp bboard net.jokes recently.
+
+-------------------------------------------------------
+
+From decvax!utzoo!utcsrgv!roderick Mon Nov  1 14:24:35 1982
+
+Another Glitch in the Call
+------- ------ -- --- ----
+   (Sung to the tune of a recent Pink Floyd song.)
+
+
+We don't need no indirection
+We don't need no flow control
+No data typing or declarations
+   Hey! Did you leave the lists alone?
+
+Chorus:
+   All in all, it's just a pure-LISP function call.
+
+We don't need no side effect-ing
+We don't need no scope control
+No global variables for execution
+   Hey! Did you leave those args alone?
+
+(Chorus)
+
+We don't need no allocation
+We don't need no special nodes
+No dark bit-flipping in the functions
+   Hey! Did you leave the bits alone?
+
+(Chorus)
+
+We don't need no compilation
+We don't need no load control
+No link edit for external bindings
+   Hey! Did you leave that source alone?
+
+(Chorus, and repeat)
+
+
+------------------------------------------------------------
+
+
+ 6-Nov-82 09:21:12-EST,1399;000000000000
+Date: Saturday, 6 November 1982, 09:15-EST
+From: Chris Hanson <HANSON at MIT-OZ>
+To: INFO-LMFS at MIT-OZ, INFO-LISPM-MIT at MIT-OZ
+
+
+Experimental Local-File version 41 is now available.  Bugs to BUG-LMFS.
+
+In addition to fixing the problem of subdirectories not being correctly
+saved, some changes were made:
+
+* Undeletable files are now supported.  Deleted files don't go away
+  unless explicitly expunged.  This means that booting the file system
+  or the machine also doesn't expunge anything.  There is no current
+  "system expunge" function implemented.
+
+* The root directory is now a real directory.  It can be specified by
+  either LM:; or LM:<>.  For compatibility reasons, it cannot contain
+  arbitrary files, only other directories.
+
+* A new function, FS:DBG-EDIT, has been implemented.  This function
+  allows you to treewalk the file system directory structure and change
+  certain things.  It is intended to help you when aborting out of a
+  file operation leaves a file incorrectly closed or deleted, or just to
+  examine the directory structure in a way independent of the pathname
+  system.
+
+* Some of the "user" functions, such as LM-CREATE-DIRECTORY, had their
+  names changed.  This shouldn't affect anyone who only uses the
+  standard pathname/stream interface.
+
+For more information, see the updated documentation file
+OZ:SRC:<L.FILE>FSDOC.TEXT.
+17-Nov-82 15:59:45-EST,817;000000000001
+Mail-From: DICK created at 17-Nov-82 15:46:52
+Date: Wednesday, 17 November 1982  15:46-EST
+Sender: DICK at MIT-OZ
+From: Dick@MIT-MC
+To:   *its at MIT-OZ, info-lispm at MIT-OZ, info-lisp at MIT-OZ
+Subject: LetS -- a new looping macro for lisp
+
+
+LetS is a new Lisp looping macro which makes it possible to
+write a wide class of loops as simple expressions.  For example,
+in order to sum up the positive elements of the one
+dimensional array A one need only wirte:
+
+(Rsum (Fgreater (Evector A)))
+
+LetS is described fully in AIM-680 which has just appeared.
+I will give a talk describing LetS in a few weeks.
+
+LetS is compatably with both MacLisp and LispMachine Lisp.
+It exists on the directories LIBSLP and LMLIB.
+
+Try it you will like it.
+
+				Dick Waters
+
+Send all comments etc. to Dick@OZ.
+24-Nov-82 19:42:21-EST,494;000000000001
+Date: 24 Nov 1982 19:34:07-EST
+From: jek at scrc-vixen
+To: info-lispm@scrc, msgs@scrc-vixen
+Subject: New UNIX file server
+
+
+
+A new UNIX file server has been installed which includes the
+new error codes and also includes a filename completer.
+This has not been extensively tested, but seems to work ok.
+Please tryout the completer if you have time and report problems.
+Also, if the server is broken in someway, the old one can be
+reinstalled - its in /usr/local/lib/chaos/FILE.bak.
+26-Nov-82 18:22:20-EST,646;000000000000
+Mail-From: PGS created at 26-Nov-82 15:59:50
+Date: Friday, 26 November 1982  15:59-EST
+Sender: PGS at MIT-OZ
+From: PGS at MIT-MC
+To:   info-lispm at MIT-OZ
+Subject: CADR-19 moves
+
+CADR-19 has moved to the third floor machine room.  The console remains in
+301.  User will be amazed at the improvement in video quality.
+
+If you should happen to need a dozen foot-long vitreous enamelled resistors,
+or a 1000-watt light bulb, or two patches of fungus (or some crystalline
+product of corrosion) in green and red, each about two feet across, or a
+rotary pump that is not currently in use, look under the floor where CADR-19
+used to be.
+26-Nov-82 20:16:04-EST,1271;000000000001
+Date: Friday, 26 November 1982, 20:08-EST
+From: Howard D. Trachtman <Hdt at MIT-OZ>
+Subject: Let's use them undefined keys up!
+To: BUG-zwei at MIT-EECS, bug-lispm at MIT-OZ, info-lispm at MIT-OZ
+
+In zwei in Experimental System 218.157, Zmail 65.41, LMFS 28.38,
+Tape 11.3, LGP 20.4, microcode 963, site configuration 27, JSMiller, on Lisp Machine Two:
+
+I realize that the <Delete> key does not normally do anything anywhere,
+but perhaps some reasonable things could be done with when in ZWEI or
+in the rubout handler.   Its not immediately clear (to me) what the right
+thing is, but delete wiping out the last character in ZWEI and the input
+buffer in the rubout handler even thought that's not compatable.
+
+Anyone want to put in there two bits as to what this key should do?
+
+What do people think that the <Quote> key should do in general
+and in ZWEI?  I think it would be nice if all the keys which 
+aren't defined do something, as it seems that for most of them
+there's a reasonable thing for them to do.  Saving them for
+a "great idea later to come" isn't a valid argument, for if
+a much better use for them to be used for them is found, 
+then that will be used if its really so much better.
+
+Ok, everybody start flaming, but not all at once.
+27-Nov-82 03:24:46-EST,1308;000000000001
+Mail-From: HDT created at 27-Nov-82 03:20:40
+Date: 27 November 1982  03:20-EST (Saturday)
+Sender: HDT at MIT-OZ
+From: Howard D. Trachtman <HDT at MIT-MC>
+To:   RG.JMTURN at MIT-MC
+Cc:   info-lispm at MIT-OZ, BUG-zwei at MIT-EECS
+Subject: Let's use them undefined keys up!
+In-reply-to: The message of 27 Nov 1982  00:30-EST from RG.JMTURN at MIT-MC
+
+    Date: Saturday, 27 November 1982  00:30-EST
+    From: RG.JMTURN at MIT-MC
+    To:   Howard D. Trachtman <Hdt at MIT-OZ>
+    cc:   bug-lispm at MIT-OZ, BUG-zwei at MIT-EECS
+    Re:   Let's use them undefined keys up!
+
+    The quote key sounds like an excellent place to install control-q.
+    As for DELETE, perhaps it could be made synonymous with rubout, for people
+    used to the erase key being on the other side.
+
+    				James
+
+Great for ZWEI, but what should they do elsewhere?  It probably 
+would be a win for quote in an input stream to insert the next 
+character into the buffer, with all of its bucky bits.  That's
+the same thing in zwei, except that it doesn't exactly do
+a control-q.  
+
+Now I suppose that Macro in ZWEI should do a ^X ( if you
+are not typing in a kbd-macro and ^X ) if you are.
+I suppose if you're in a macro already you could type
+control-macro to recursively define a kbd-macro.
+
+Commnets?
+29-Nov-82 18:48:41-EST,789;000000000001
+Date: Monday, 29 November 1982, 18:48-EST
+From: Patrick Sobalvarro <PGS at MIT-OZ>
+Subject: help yourself!
+To: info-lispm at MIT-OZ
+
+Got a broken mouse?  A broken keyboard?  Don't tell us.  Get instant relief
+instead.
+
+If your mouse breaks, go to John Purbrick's office, room 908, and give it to
+him and get a working one.  If he is not there (like in the middle of the
+night), attach a note to the broken mouse describing the symptoms, leave it,
+and take a working one.
+
+If your keyboard breaks, go find Ron Wicken in the machine shop, room 916.
+Ron is in in the daytime, from about 8:00am to about 4:00pm every day.  Give
+him your broken keyboard and take a working one.  If it is not daytime when
+your keyboard breaks, you'll have to make do until the daytime.  Sorry.
+ 7-Dec-82 10:40:41-EST,503;000000000000
+Date: Tuesday, 7 December 1982, 10:32-EST
+From: Jan Walker <jwalker at SCRC-TENEX>
+Subject: review of release notes for release 4
+To: info-lispm at SCRC-TENEX, doc at SCRC-TENEX
+Cc: Whit at SCRC-TENEX
+
+The release 4 notes are ready enough for technical review.  The people
+who have done most of the work on the release have already received a
+review copy.  I have a few more copies for other people who are
+interested in reviewing it.  Please see Whit for a copy if you are in
+this category.
+10-Dec-82 12:57:46-EST,1910;000000000000
+Date: Friday, 10 December 1982, 12:55-EST
+From: David L. Andre <DLA at SCRC-TENEX>
+Subject: System 222
+To: INFO-LISPM at MIT-OZ
+
+System 222 is now released to users.  It goes with microcode 977.  LOD4
+of LM6 (222.57) contains the official release band.  Unfortunately a
+couple of the bands I used while debugging the release software were
+copied to a other machines before this announcement.  Although I think I
+destroyed all of them, there may still be some lurking in the shadows,
+beware.
+
+Updated release notes are in OZ:SRC:<S.DOC>RELEASE-4.TEXT.  Hardcopies
+of the release notes will be available in large quantities as soon as they
+are printed.  System 222 is being released early to beta-test sites; in
+a few weeks it will be renamed to Release 4 and sent to all Symbolics
+sites.
+
+There are very few changes in 222 since 218.  The only major change is a
+remodularization of the Hardcopy software (the long promised "New
+Hardcopy System").  Most programs which ran in 218 should run without
+change in 222.  Experimental System 218 had a number of fairly serious
+problems, and should no longer be used.
+
+A major change affecting MIT users in this release is that OZ is now the
+SYS host for symbolics systems.  The sources are kept in a hierarchy
+under SRC:<S>, and patches and sources will be updated between MIT
+and SCRC periodically.  The sources on EE will continue be updated
+infrequently, but should be considered read-only to make life easier for
+me when merging files.  We hope that this move is more conducive to
+co-operation between the MIT community and Symbolics.  The move to OZ does
+not, however, reflect any policy change:  software modifications made at
+customer sites are still subject to audit, and everyone is expected to
+abide by the software agreements between MIT and Symbolics.
+
+If there are any questions, please addess them to BUG-LISPM@MIT-OZ.
+17-Dec-82 06:00:05-EST,566;000000000000
+Date: Friday, 17 December 1982, 05:55-EST
+From: Richard M. Stallman <RMS at MIT-OZ>
+Subject: Two incompatible changes in system 91
+To: info-lispm-mit at MIT-OZ
+
+Users should note that, starting in 91.16,
+ (LOGIN user host T)
+means DO NOT load the init file.
+ (LOGIN user host NIL)
+means do load the init file.  (NIL is the default).
+
+This is to be compatible with (LOGIN user T).
+
+Also, the arguments to APROPOS are now keyword arguments,
+except for the first one (the substring).
+For example,
+ (APROPOS "FOO" ':PACKAGE "ZWEI" ':PREDICATE 'FBOUNDP)
+19-Dec-82 08:00:41-EST,314;000000000000
+Date: Sunday, 19 December 1982, 07:56-EST
+From: Richard M. Stallman <RMS at MIT-OZ>
+Subject: Query: Printing of uninterned symbols
+To: info-lispm-mit at MIT-OZ
+
+Do you think it would be a good idea for uninterned symbols,
+printed "with slashification", to look like
+
+      #<SYMBOL G0654 40523410>
+
+???
+27-Dec-82 17:24:01-EST,442;000000000000
+Date: Monday, 27 December 1982, 17:20-EST
+From: Richard M. Stallman <RMS at MIT-OZ>
+Subject: printing uninterned symbols again
+To: info-lispm-mit at MIT-OZ
+
+How about printing an uninterned symbol with pname FOO as
+FOO #|30451230|# (where 30451230 is the address of the symbol)?
+This does not affect reading it back in, shows that the symbol
+is uninterned, allows differentiation of symbols with like pnames,
+and is not so verbose.
+ 7-Jan-83 20:12:02-EST,765;000000000001
+Date: Friday, 7 January 1983, 20:08-EST
+From: Richard M. Stallman <RMS at MIT-OZ>
+Subject: Question about usage of window margin flavors
+To: info-lispm-mit at MIT-OZ
+
+How many of you use the flavors 
+BORDERS-MIXIN, ESSENTIAL-LABEL-MIXIN, BASIC-SCROLL-BAR
+or MARGIN-REGION-MIXIN directly in your own code?
+
+Anyone who uses the flavor WINDOW is using some of these
+indirectly, but what I am asking is whether you actually have
+those names appearing in definitions of your own window flavors.
+
+I am considering an incompatible change to the way these flavors
+interact with each other, to simplify it, which would require
+trivial but incompatible changes every place they are DIRECTLY used,
+and I want to find out how much this would impact the users.
+14-Jan-83 03:37:04-EST,1049;000000000000
+Date: Friday, 14 January 1983, 01:08-EST
+From: Robert W. Kerns <RWK at MIT-MC>
+Subject: Symbolics Release 4.0 now available.
+To: info-lispm-mit at MIT-MC
+Cc: bug-lispm at scrc
+Redistributed-to: info-lispm at MIT-OZ
+Redistributed-by: RWK at SCRC-TENEX
+Redistributed-date: Friday, 14 January 1983, 03:30-EST
+
+The official Symbolics Release 4.0 band for the LM-2 (and CADR) is now
+available, and should supplant the earlier versions distributed.  It has
+been newly compressed, and takes less room than patched earlier
+versions.  (19900 pages).  Also, it goes with microcode 979, which has
+some bug fixes.
+
+It consists of System 222.140, Zmail 74.28, LMFS 30.15, Hardcopy 11.12,
+and Tape 13.0.  This configuration is displayed in the herald as simply
+"Release 4.0".  Any systems which are patched beyond this level will
+still be listed separately in the herald.  The comment on the disk
+label is "Rel 4.0".
+
+The final 4.0 version of the 3600 software is not yet available.
+
+There is a copy on LM16, configured for MIT.
+
+Enjoy.
+27-Jan-83 23:40:30-EST,592;000000000000
+Mail-From: MARTY created at 27-Jan-83 23:28:34
+Date: 27 January 1983  23:28-EST (Thursday)
+Sender: MARTY @ MIT-OZ
+From: Martin David Connor <MARTY @ MIT-MC>
+To:   INFO-OZ @ MIT-OZ, INFO-LISPM @ MIT-OZ
+Subject: Logging out SUPDUP and TELNET windows
+
+
+Please LOGOUT explicitly from OZ when SUPDUPing or TELNETing.  When you 
+don't you can create a detached job that eats a jobs slot that can
+keep your fellow earthers from logging in.  This is especially
+important to do during the day when jobs slots for file serving and
+net-hopping are at a premium.
+
+Thanks for the help...
+
+28-Jan-83 10:45:26-EST,826;000000000000
+Date: Friday, 28 January 1983, 10:40-EST
+From: David C. Plummer <DCP at SCRC-TENEX>
+Subject: Logging out SUPDUP and TELNET windows
+To: MARTY at MIT-OZ, INFO-OZ at MIT-OZ, INFO-LISPM at MIT-OZ
+In-reply-to: The message of 27 Jan 83 23:28-EST from Martin David Connor <MARTY at MIT-MC>
+
+It is more subtle than you think.  Note that some LispM users use
+Network-L to log out.  This sends the SUPDUP logout sequence (and
+probably does nothing in TELNET).  This works on ITS, which correctly
+understands the SUPDUP sequence.  TWENEX can't do much about it (now),
+so the best it can do is detach.  Therefore,
+
+(1) TWENEX should be fixed (good luck, since this brings up some of the
+    same issues that terminal location brings up), and
+(2) People who use Network-L on TWENEX should try and change their
+    habbits.
+10-Feb-83 22:12:44-EST,839;000000000001
+Date: Thursday, 10 February 1983, 22:09-EST
+From: Hdt@MIT-OZ
+Subject: MIT documentation problems
+To: Info-LispM@MIT-OZ
+Cc: bug-lmdoc@MIT-OZ
+
+
+	Users of the MIT LispMachine software are encouraged to report any
+errors that they may find in the on- or off-line documentation of the
+LispMachine software to BUG-LMDOC@OZ (which points to LM-DOC-CHANGES@OZ).
+
+	Please report any documentation that you find inaccurate or
+merely confusing, as well as any suggestions that you have for improving
+the overall documentation of the system to the above list.
+Your suggestions will be acted upon promptly.
+
+Note: the above applies to all documentation problems other than those
+associated with the old and new Lisp Machine Manuals.  Mistakes found
+in the manuals should be reported to BUG-LMMAN@OZ.
+
+	Thanks for your cooperation.
+17-Feb-83 17:20:35-EST,2455;000000000000
+Mail-From: IAN created at 17-Feb-83 17:01:25
+Date: 17 February 1983  17:01-EST (Thursday)
+From: Ian Macky <Ian @ MIT-OZ>
+To:   System @ MIT-OZ
+cc:   Info-LISPM @ MIT-OZ
+Subject: GMSGS, GMSGS-server, SYSMSG, FORUM, MSGS, SMDATE, et al.
+
+
+GMSGS has been redone a bit.  It now takes just about all the options
+that the ITS version does, including re/MAILing the messages, specifying
+an arbitrary output file, and so on.  For full gory details, read the
+help file available by @HELP GMSGS or in HLP:GMSGS.HLP
+
+For LispM users:  The same GMSGS is running as a server.  You can have
+the messages dumped in your MAIL.TXT (or ZMAIL.TXT if /ZMAIL specified)
+by a simple transaction;  just send as arguments to the RFC the username
+of the person whose messages you want (and another options), and you'll
+get back an ANS with some string like "[There are messages]", or a CLS
+with an approriate error string.
+
+
+
+There have been a few changes made in these programs:
+
+SYSMSG, FORUM, and MSGS are all instances of the same program; you'll
+notice that they prompt you with "--Msgs--" and "--More--" instead of
+"[Msgs]" and "[More]", and will accept <space> for a positive answer.
+
+SYSMSG reads the mail to System, but can be told to check others
+by specifying their names as keywords or switches, e.g.
+
+@SYSMSG /FORUM or @SYSMSG FORUM
+
+Likewise, FORUM can read system messages by
+
+@FORUM /SYSMSG or @FORUM SYSMSG
+
+To read all of the known BBoards, as @MSGS does, you can specify ALL
+or /ALL.  The difference between @MSGS and @SYSMSG /ALL is that @MSGS
+will type out the name of the BBoard before the first --Msgs-- prompt
+in each BBoard.
+
+/NOISY will give you messages like "[No Forum messages]" and such, if
+you like to know that it's actually doing something.
+
+
+@SMDATE takes the same set of keywords as SYSMSG and friends.  By
+default, it sets the last-read date for System messages, but you can
+have it do other BBoards by specifying their names (in which case it
+will do only those ones), or ALL for all of them.  Also, you can give
+it a DATE&TIME, just a DATE (time defaults to one second after
+midnight), or just a TIME (date defaults to today), or "-nn" which
+says to set the read dats to nn days ago.  If no date or time is
+specified, it defaults to *now*.  For example,
+
+@SMDATE /FORUM -7
+
+Sets the last-read date for the FORUM BBoard to 7 days ago;
+
+@SMDATE 1-Jan-83 ALL
+
+@SMDATE 12:0:0
+
+etc.
+19-Feb-83 04:49:18-EST,899;000000000000
+Mail-From: IAN created at 19-Feb-83 04:45:00
+Date: 19 February 1983  04:44-EST (Saturday)
+From: Ian Macky <Ian @ MIT-OZ>
+To:   Info-LISPM @ MIT-OZ
+cc:   RMS @ MIT-OZ, Gumby @ MIT-OZ
+Subject: OZ GMSGS server
+
+
+OK, some changes have been made, for compatability with ITS: GMSGS
+opens a full connection, and will accept a filespec in place of a
+username.  It takes all the other switches and randomness that the
+interactive one does, and sends back all the same output (primary
+input and output are just reset to the Chaos JFNs).  One note: There
+must be a <space> or <CR> or <LF> or some TWENEX terminating character
+after the last field, since the COMND call that is parsing up the
+input line does not understand 215's to be EOL (the automatic 8->7bit
+character conversion has yet to be implimented, alas).  If there is no
+ending terminator, the last field will be missed entirely.
+19-Feb-83 07:18:36-EST,398;000000000000
+Date: Saturday, 19 February 1983, 07:13-EST
+From: Richard M. Stallman <RMS at MIT-OZ>
+Subject: system 93 incompatibility in ZMAIL
+To: hdt at MIT-OZ, info-lispm at MIT-OZ
+
+Compiled ZMAIL init files containing filter definitions must be
+recompiled to run in system 93.  Call QC-FILE with the init file source
+file name as first argument and the actual init file filename as
+second argument.
+23-Feb-83 02:34:32-EST,659;000000000000
+Date: Wednesday, 23 February 1983, 02:30-EST
+From: Richard M. Stallman <RMS at MIT-OZ>
+Subject: Question: ZMAIL mailing vs ZWEI mailing.
+To: info-lispm at MIT-OZ
+
+In ZWEI, mailing with the C-X M command separates the headers and text
+with a line --Text Follows This Line--.  In ZMAIL, when the headers and
+text are in the same window, they are separated by a blank line.
+
+Many people have complained about the difference between ZWEI and
+ZMAIL in this regard, so I would like to make them the same.
+My question is, which of the two ways do people prefer?
+Should a blank line separate them, or should a line that says
+what it does separate them?
+24-Feb-83 05:43:08-EST,1686;000000000000
+Mail-From: IAN created at 24-Feb-83 05:40:21
+Date: 24 February 1983  05:40-EST (Thursday)
+From: Ian Macky <Ian @ MIT-OZ>
+To:   Info-LISPM @ MIT-OZ
+cc:   RMS @ MIT-OZ, Gumby @ MIT-OZ, HDT @ MIT-OZ, PGS @ MIT-OZ, MMcM @ SCRC
+Subject: The last word on GMSGS (don't you dare reply to this message!)
+
+
+OK, ok...  noone's ever happy.  Here's the final word on the Twenex GMSGS
+server.
+
+Since it's supposed to be compatible with the ITS one, it takes the same
+set of arguments:  To specify the user whose messages are to be gotten,
+give his username, or a filespec (the directory is the username (sigh)).
+
+The default messages to get are the System ones.  You can specify FORUM
+or /FORUM to get those (currently the only other BBD we use), or ALL or
+/ALL to get all BBDs.
+
+The stuff is put by default in PS:<username>MAIL.TXT, but if you specify
+/ZMAIL, it goes in PS:<username>ZMAIL.TXT;  if you say /INTO you can then
+specify an arbitrary output file.
+
+The /MAIL switch remails all the messages through the mailer, so that
+any bizarre forwarding you are doing will work.
+
+/NOISY and /SILENT control how much output the thing sends back to you.
+Normally you'll get "[There are messages]" or "[No messages]", but with
+/SILENT you get nothing.  I can't remember what /NOISY does... I just
+remember that it prints out more junk in cases where it wouldn't
+normally.
+
+
+I kludged around having to put some sort of terminator at the end of
+the command line, so do whatever silly things you want... put a CR or
+a NEWLINE or nothing... It don't care...  It equally and fairly mutilates
+EVERYTHING you give it.
+
+
+That's it.   Don't send bug reports....
+
+
+Ian
+24-Feb-83 09:25:17-EST,997;000000000001
+Mail-From: RMS created at 24-Feb-83 09:21:53
+Date: 24 Feb 1983 0921-EST
+From: RMS at MIT-OZ
+Subject: Functions MAIL and DIRED now use ZMACS.
+To: info-lispm at MIT-OZ
+
+Starting in 93.15, the functions MAIL and DIRED now use a ZMACS
+frame to do the editing, rather than a special-purpose window.
+They know how to find a ZMACS frame which is idle waiting for
+commands, or to create one if necessary.
+
+Some of the advantages include the ability to switch from
+the one directory or message to other things without any more
+window switching.  However, there are various reasons people
+might not like this--I can't tell.  Therefore, there is a variable
+ZWEI:*MAIL-AND-DIRED-USE-ZMACS*, which if set to NIL brings
+back the old behavior.
+
+I would like to know whether anyone dislikes the new way,
+and, if so, why.  I would like to flush the complexity of
+providing the old way if nobody can point to a reason for it.
+Or make it the default again if there is a reason for it.
+-------
+15-Mar-83 20:24:26-EST,1008;000000000000
+Return-path: <rms@MIT-OZ>
+Date: Tuesday, 15 March 1983, 20:15-EST
+From: Richard M. Stallman <rms@MIT-OZ>
+Subject: ZWEI Undo command (C-Shift-U)
+To: info-lispm-mit@MIT-OZ
+
+I've found that few people know about the new ZWEI unlimited Undo feature.
+This feature is simply that you can undo all the changes you
+have made to a buffer since you read in or saved a file,
+one batch of contiguous changes at a time, by typing C-Shift-U
+over and over again.
+
+Absolutely all changes are recorded.  For example, you can
+undo a Query Replace, or part of one.  Each C-Shift-U gets
+one replacement.
+
+If you undo too far, type C-Shift-R to redo the changes undone.
+One C-Shift-R cancels one C-Shift-U.
+
+If you set ZWEI:*DISCARD-UNDO-INFO-ON-SAVING* to NIL,
+you can undo all the way to when you visited the file,
+regardless of whether you have saved it.
+
+I found that it required an effort at first to remember
+to consider using the command, but once I had developed the
+habit it was a great saver.
+15-Mar-83 20:30:21-EST,748;000000000000
+Return-path: <rms@MIT-OZ>
+Date: Tuesday, 15 March 1983, 20:21-EST
+From: Richard M. Stallman <rms@MIT-OZ>
+Subject: System 93
+To: info-lispm-mit@MIT-OZ
+
+System 93 is now released, and documented in SRC:<L.DOC>SYS93.MSG.
+I don't know of any serious bugs.
+
+System 93 is now up on the file computer, so the FC file system is now
+accessible from 93, using the FILE protocol.  This means you can get at
+it from other machines with CFTP.  Connect to CADR27 and use a filename
+that begins with "FC:", assuming that CFTP does not screw you by
+thinking it knows the pathname syntax for CADR27.  See SRC:<L.FILE2>DOC.TEXT
+for documentation on FC.
+
+FC still responds to its old protocol for the sake of systems before 93
+and job devices on ITS.24-Mar-83 16:21:34-EST,510;000000000000
+Return-path: <PGS@MIT-OZ>
+Mail-From: PGS created at 24-Mar-83 16:12:18
+Date: Thu, 24 Mar 1983  16:12 EST
+From: PGS@MIT-OZ
+To:   info-lispm@MIT-OZ
+
+We are missing a number of keyboards.  If anyone has a broken or spare
+keyboard sitting next to a machine or someplace, please take it to Ron
+Wicken's office.  If the door is closed, just leave it outside the door and
+it will be collected in the morning.  We have a new Lisp Machine that cannot
+be used because there is no keyboard for it (goddammit).
+ 2-Apr-83 21:08:37-EST,1788;000000000000
+Return-path: <LEVITT@MIT-OZ>
+Mail-From: LEVITT created at  2-Apr-83 20:59:51
+Date: Sat, 2 Apr 1983  20:59 EST
+From: LEVITT@MIT-OZ
+To:   info-lispm@MIT-OZ
+Subject: CADR-4 move
+
+CADR-4 has moved to the seventh floor.  This is partially because the
+console moved out of the lounge when the lounge became an office, and
+a number of people felt that it would be under-utilized in RG's
+office.  It was hoped that because the seventh floor is warmer and
+quieter than the ninth floor, CADR-4 would get more use there.  It was
+also done because the Music Group wanted to put some special-purpose
+hardware on one of the general-use AI Lab machines, for use as a
+backup for their own machine.
+
+Despite the fact that CADR-4 has moved to the seventh floor and a
+piece of special hardware (a synthesizer) will be attached to it, it
+remains a general AI lab resource.  The console will be in the alcove
+near 797, where CADR6 is now, and CADR6's console will be moved to the
+hammock station.  Just as before, any AI Lab member has as much right
+to its use as any other AI Lab member, including members of the Music
+Group.  No AI Lab member should attempt to punt any other AI Lab
+member from it.  In this respect it is like CADR-6, which, despite the
+fact that it is a general AI lab machine, also has special hardware on
+it (an FPS array processor).  While the music group will possibly
+attach synthesizer hardware to other 7th floor machines in the future
+(e.g. CADR6 or CADR33), these too would remain general AI lab machines
+like CADR4.
+
+CADR-7's T-300 disk will be swapped for CADR-4's T-80 so that a music
+band can fit on CADR-4 in addition to fresh bands.  We hope that its
+having moved to a more comfortable location will encourage increased
+use of the machine.
+ 9-Apr-83 16:25:10-EST,1828;000000000000
+Return-path: <dcp@SCRC-POINTER>
+Received: from SCRC-BOXER by SCRC-TENEX with CHAOS; Sat 9-Apr-83 16:15:46-EST
+Date: Saturday, 9 April 1983, 16:17-EST
+From: dcp@SCRC-POINTER
+Subject: Recent MINITS changes
+To: bug-minits@MIT-MC, bug-twenex@MIT-XX, info-lispm@MIT-OZ,
+    network@SCRC-POINTER
+
+It used to be the case that MINITS would read packets out of the chaos
+board at process level instead of interrupt level.  It did this so it
+would not spend excessive time at priority 5 frobbing the chaos board
+and not being able to service 9600 baud interrupts (whether they be
+DL-type or DUP-11).  Unfortunately, waiting for a process to schedule
+would often cause many packets to get lost.  Much of this is no longer
+true.
+
+It now drops the priority to that before the interrupt happened and
+services the interface immediately (with appropriate checks and locks).
+This allows 9600 baud interrupts to still happen, but does not have the
+scheduling latency.  For a LispM blasting packets to a MINITS as fast as
+it can (e.g., using the MINITS SINK contact name), about 34% of the
+packets used to get lost.  Now this number is about 2%.  This also
+improves output traffic because the output interrupt will also get
+serviced nearly immediately (providing the receiving end does not
+delay).
+
+When the new software propigates (I'll make an attempt to do the 4
+PDP-20s tomorrow [Sunday]) the effect users will see include the
+following:
+ * Faster writing of files to TWENEX (e.g., writing a LispM editor
+     buffer or a CFTP transfer)
+ * Better bridging between subnets (especially from a chaos subnet to an
+     ethernet subnet).
+ * Perhaps better terminal response on concentrators due to less lost
+     packets on both the concentrator and other MINITS bridges on the
+     route to/from the mainframe.
+14-Apr-83 10:20:17-EST,378;000000000000
+Return-path: <dove@MIT-DSPG>
+Date: Thursday, 14 April 1983, 10:08-EST
+From: Webster Dove <dove at MIT-DSPG>
+Subject: Does LOOP have a CONTINUE clause?
+To: info-LISPM at MIT-OZ
+
+
+Is there a way in (loop ...) to say
+
+"go directly to the next iteration.  Do not execute the remaining
+clauses of the body"
+
+Such statements typically are called "continue" or "next"
+
+
+14-Apr-83 10:30:43-EST,334;000000000000
+Return-path: <dove@MIT-DSPG>
+Date: Thursday, 14 April 1983, 10:14-EST
+From: Webster Dove <dove at MIT-DSPG>
+To: info-LISPM at MIT-OZ
+
+
+Is there a way in (loop ...) to say
+
+"go directly to the next iteration.  Do not execute the remaining
+clauses of the body"
+
+Such statements typically are called "continue" or "next"
+
+
+21-Apr-83 08:12:09-EST,699;000000000000
+Return-path: <RICKL@MIT-OZ>
+Mail-From: RICKL created at 21-Apr-83 08:06:10
+Date: 21 Apr 1983 0806-EST
+From: RICKL@MIT-OZ
+Subject: xdiag or diag or ????
+To: info-lispm@MIT-OZ
+
+a while ago on ai there was a program called xdiag
+or diag which let you draw nice diagrams on a lispm.
+does anyone know if this still exists, or if it has
+been ported to oz, or if it has a new name, or if 
+there is something else to do this?  i am particularly
+interested in being able to display parse trees of
+sentences, but any pretty graphics utility should
+work (it would be nice if it generated press files
+7 nicer if these could be spliced into existing
+press files......).
+thanks, rick
+
+-------
+21-Apr-83 09:53:06-EST,469;000000000000
+Return-path: <DANIEL@MIT-OZ>
+Mail-From: DANIEL created at 21-Apr-83 09:50:19
+Date: Thu, 21 Apr 1983  09:50 EST
+From: Daniel Weise <DANIEL@MIT-OZ>
+To:   RICKL@MIT-OZ
+Subject: xdiag or diag or ????
+cc:   info-lispm@MIT-OZ
+In-reply-to: Msg of 21 Apr 1983  08:06-EST from RICKL
+
+Please do not send requests for information to info-lispm.
+Please keep sending them to bug-lispm instead where they
+have been getting answered for many years now.  Thanks.
+
+Daniel
+22-Apr-83 21:58:40-EST,606;000000000000
+Return-path: <RMS@MIT-OZ>
+Date: Friday, 22 April 1983, 21:56-EST
+From: Richard M. Stallman <RMS@MIT-OZ>
+Subject: system 94 ready for everyone to try
+To: info-lispm-mit@MIT-OZ
+
+System 94 has been tried by several people
+and is showing only minor bugs.
+It also seems to be considerably faster.
+So now everyone should start trying it.
+
+There are no serious incompatibilities between 93 and 94
+and files compiled in either system should run in the other
+provided you do not use any of the new features.
+
+Documentation is in OZ:SRC:<L.DOC>SYS94.MSG,
+(which is the standard place for such files). 2-Jun-83 06:33:16-EDT,521;000000000000
+Return-path: <rms@MIT-OZ>
+Date: Thursday, 2 June 1983, 06:31-EDT
+From: Richard M. Stallman <rms@MIT-OZ>
+Subject: System 94 released.
+To: INFO-LISPM-MIT@MIT-OZ
+
+System 94 is now released, with microcode 239.
+Documentation is in SRC:<L.DOC>SYS94.MSG.
+
+User programs should be compatible with system 93.
+The main change is a new way notifications are presented to the user.
+
+Please try converting to system 94 as soon as possible.
+System 93 is not going to be patched any more
+unless there is an urgent need.
+ 2-Jun-83 18:56:05-EDT,474;000000000000
+Return-path: <RpK@MIT-OZ>
+Date: Thursday, 2 June 1983, 18:54-EDT
+From: Robert P. Krajewski <RpK@MIT-OZ>
+Subject: System 94 release
+To: INFO-LispM-MIT@MIT-OZ
+FCC: OZ:PS:<RPK.MAIL>CC.XMAIL
+Message-ID: <[MIT-LISPM-1].6/02/83 18:54:44.RpK>
+
+You can find a freshly GC'ed band with 
+
+ MIT-Specific  19.3
+ System        94.23
+ ZMail         50.9
+
+on MIT Lisp Machine One, on LOD4, with microcode 239 (which does
+not have the ROUND bug that appeared earlier) on MCR6. 3-Jun-83 08:38:29-EDT,319;000000000000
+Return-path: <@MIT-MC:RMS@MIT-OZ>
+Received: from MIT-MC by MIT-OZ; Fri 3 Jun 83 08:29:49-EDT
+Date: Friday, 3 June 1983, 06:57-EDT
+From: Richard M. Stallman <RMS at MIT-OZ>
+Re: ZMail manual
+To: info-lispm-mit at oz
+
+A ZMail manual that is accurate for system 94
+is now available from the document room (818).
+
+19-Jun-83 08:19:01-EDT,884;000000000001
+Return-path: <RMS@MIT-OZ>
+Mail-From: RMS created at 19-Jun-83 08:16:55
+Date: Sunday, June 19, 1983 8:16AM-EDT
+From: Richard M. Stallman <RMS@MIT-OZ>
+Subject: Function MEMBER to be changed?
+To: info-lispm-mit at MIT-OZ
+
+It happens that the Common Lisp plan involves changing the function MEMBER
+(and ASSOC and DELETE and REMOVE) to use EQL instead of EQUAL for comparison.
+(EQL is like = on numbers, like EQ on everything else).
+
+I have urged them to call the new functions MEMBERP and other new names
+so that the old names MEMBER, ASSOC, etc. can be unchanged.
+
+I expect most of you prefer to have the existing names not change their
+meanings.  I'd like to know whether you think this is important.
+Please send me mail about what you feel about this, and I will
+pass it on to the Common Lisp designers.  (If you prefer to have
+MEMBER change, you can tell me that.)
+19-Jun-83 11:58:41-EDT,432;000000000001
+Return-path: <ZVONA@MIT-OZ>
+Mail-From: ZVONA created at 19-Jun-83 11:55:47
+Date: Sun, 19 Jun 1983  11:55 EDT
+From: ZVONA@MIT-OZ
+To:   Richard M. Stallman <RMS@MIT-OZ>
+cc:   info-lispm-mit@MIT-OZ
+Subject: Function MEMBER to be changed?
+In-reply-to: Msg of 19 Jun 1983  08:16-EDT from Richard M. Stallman <RMS>
+
+Surely Common Lisp conversion will entail many other changes in code.
+Why is this particular change important?
+19-Jun-83 14:09:20-EDT,348;000000000001
+Return-path: <RMS@MIT-OZ>
+Mail-From: RMS created at 19-Jun-83 14:06:54
+Date: Sunday, June 19, 1983 2:06PM-EDT
+From: Richard M. Stallman <RMS@MIT-OZ>
+Subject: Change in MEMBER, etc.
+To: info-lispm-mit at MIT-OZ
+
+It should be noted that the possible change to MEMBER
+and related functions would apply to users of Symbolics
+systems as well.
+19-Jun-83 20:24:55-EDT,3379;000000000001
+Return-path: <KMP@MIT-OZ>
+Mail-From: KMP created at 19-Jun-83 20:18:19
+Date: Sun, 19 Jun 1983  20:18 EDT
+From: KMP@MIT-OZ
+To:   INFO-LISPM-MIT@MIT-OZ
+Subject: Changes to MEMBER, ASSOC, etc.
+
+RMS failed to note in his message the following relevant points.
+
+* The proposed definitions for MEMBER, ASSOC, etc. are compatible with all
+  the cases of the current ASSOC except in the case of searching for list
+  or string in list structure. Since Maclisp has no strings, Maclisp 
+  compatibility is affected only in the case where people do
+
+	(MEMBER '(B C) '((A B) (B C) (C D)))
+
+  which in Maclisp used to return ((B C) (C D)) and under the proposed 
+  definition would return NIL. On the LispM, the additional case of doing
+
+
+	(MEMBER "BAR" '("FOO" "BAR" "BAZ"))
+
+  which used to return ("BAR" "BAZ") would return NIL. Under the proposed
+  standard, this would return NIL.
+
+* In both of the cases written above, you can simply mechanically rewrite 
+  your code. eg,
+
+	(MEMBER '(B C) '((A B) (B C) (C D)) :TEST #'EQUAL)
+    or  (MEMBER "BAR"  '("FOO" "BAR" "BAZ") :TEST #'EQUAL)
+
+  In the cases where you've written
+
+	(MEMBER C '(#/A #/B #/C))
+    or  (MEMBER N '(1 2 3 4))
+    or  (MEMBER X '(1.0 2.0 3.0))
+
+  you need change nothing, you'll just find that in some implementations your
+  code may run a little faster.
+
+  The only thing that's in question is what the default test is.
+
+* The reason for changing the default test (which will be by a new function
+  EQL, which is like EQ except it can also compare characters or numbers)
+  is that it will allow searches for numbers and characters (which is believed
+  to be the most common use of MEMBER) to be more conveniently expressed.
+  eg, it used to be that
+
+	(MEMQ C '(#/A #/B #/C #/D))
+
+  was guaranteed to work only on the LispM because in Maclisp numbers were not
+  necessarily EQ and could not be searched for in some cases by MEMQ. (It 
+  happens to work in some cases, but not all of them). The only alternative
+  previously was to write
+
+	(MEMBER C '(#/A #/B #/C #/D))
+
+  which compiles inefficiently because it invokes an EQUAL test rather than
+  a simpler test. Similar arguments can be made about searching for flonums.
+
+  In the rarer cases of searching for strings or s-expressions, the intent
+  of the current proposed definition is that you'd then use the clumsier 
+  case of (MEMBER thing list :TEST test), specifying #'EQUAL, #'STRING-EQUAL,
+  or whatever.
+
+The :TEST argument will remain; that functionality is not in question. The
+real questions which RMS is getting at are the following two:
+
+(A) If you had no code you were worried about keeping compatible and you were
+    just writing code from scratch, do you think EQL or EQUAL would be the more
+    reasonable default predicate for MEMBER to use.
+
+(B) If you have code which you want to run as easily as possible, do you
+    consider the cost of locating the places which require this small change 
+    from (MEMBER x y) to (MEMBER x y :TEST #'EQUAL) to be too much of a price 
+    to pay for item A.
+
+    Keep in mind that this will likely not be the only incompatible change 
+    proposed by Common Lisp, so if you're thinking about the binary question
+    of "Will my code run without my messing with it?" there is a fair chance
+    the answer will be no anyway.
+
+19-Jun-83 23:20:40-EDT,1261;000000000001
+Return-path: <RMS@MIT-OZ>
+Mail-From: RMS created at 19-Jun-83 23:18:24
+Date: 19 Jun 1983 2318-EDT
+From: RMS@MIT-OZ
+Subject: KMP's message
+To: info-lispm-mit@MIT-OZ
+
+Please don't believe KMP's clarification of my question!
+His facts are correct, but the question he clarified is not the one I asked.
+
+Common Lisp has a nice set of sequence functions, with EQL the
+default for the test.  That is no problem for us, except:
+some of them have the same names as familiar old Lisp functions
+which they are incompatible with.
+
+KMP has raised the issue of how those sequence functions ought to
+work, and (it seems to me) supported the Common Lisp proposals.  I
+like them pretty well too, but that is a DIFFERENT ISSUE, which while
+more interesting in itself has less impact on all our existing code.
+It's also something that would require a much harder fight to change
+(it's too late).  So discuss that question if you want to, but don't
+be distracted by it from the one that is just barely NOT too late:
+
+  Should certain function Common Lisp sequence functions,
+  which may be useful, avoid having names that are the same as
+  existing Lisp functions which they are not compatible with,
+  just so that our old code does not break.
+-------
+20-Jun-83 13:37:52-EDT,440;000000000001
+Return-path: <dove@MIT-DSPG>
+Date: 20 Jun 1983 13:14:03-EDT
+From: dove at mit-dspg
+Subject: Re:  Changes to MEMBER, ASSOC, etc.
+To: INFO-LISPM-MIT at mit-oz, KMP at mit-oz
+
+Given that member is often used on the lispm to check for strings in
+things like menus, it seems that equal would be preferable.  The
+crux of the issue seems to be the simplification of that code (and the
+ability to leave old code unmodified) versus speed.
+20-Jun-83 20:36:03-EDT,960;000000000001
+Return-path: <GJC@MIT-OZ>
+Mail-From: GJC created at 20-Jun-83 20:31:55
+Date: Mon, 20 Jun 1983  20:31 EDT
+From: GJC@MIT-OZ
+To:   INFO-LISPM-MIT@MIT-OZ
+Subject: want to argue from experience?
+
+Those who would want to try out their code first hand to see what
+"Common-Lisp" might do to it could use NIL on some of the local VAX's.
+Other things such as incompatible "/" function and readtable have
+interesting effects.  You can also see what happens to numerical code
+in cases which were previously errors, such as (SQRT -1) which now
+returns #C(0.0 1.0), a complex number.
+
+Another problem area is the changes to the semantics of property list
+functions, which are unfortunately not completely specified!
+
+As of now I am trying to track down some subtle Macsyma bugs (not causing
+errors, just wrong results) which might be due to differences that I
+did not predict beforehand. Its a lot of fun, really.
+
+-gjc
+
+p.s. EMACS remains the same!
+21-Jun-83 11:04:23-EDT,304;000000000001
+Return-path: <GLR@MIT-OZ>
+Mail-From: GLR created at 21-Jun-83 10:59:48
+Date: Tue, 21 Jun 1983  10:59 EDT
+From: Jerry Roylance <GLR@MIT-OZ>
+To:   INFO-LISPM-MIT@MIT-OZ
+Subject: Common LISP Nonsense
+In-reply-to: Msg of 20 Jun 1983  20:31-EDT from GJC
+
+
+This mailing list is not the proper forum.
+21-Jun-83 19:47:01-EDT,780;000000000001
+Return-path: <JBA@MIT-OZ>
+Date: Tuesday, 21 June 1983, 19:42-EDT
+From: Jon Amsterdam <JBA@MIT-OZ>
+Subject: Common LISP Nonsense
+To: GLR@MIT-OZ, INFO-LISPM-MIT@MIT-OZ
+In-reply-to: The message of 21 Jun 83 10:59-EDT from Jerry Roylance <GLR at MIT-OZ>
+
+    Return-path: <GLR@MIT-OZ>
+    Mail-From: GLR created at 21-Jun-83 10:59:48
+    Date: Tue, 21 Jun 1983  10:59 EDT
+    From: Jerry Roylance <GLR@MIT-OZ>
+    To:   INFO-LISPM-MIT@MIT-OZ
+    Subject: Common LISP Nonsense
+    In-reply-to: Msg of 20 Jun 1983  20:31-EDT from GJC
+
+
+    This mailing list is not the proper forum.
+
+Where then?  Since I guess common lisp is going to be more and more a
+topic of discussion around here, how about "common-lisp-forum"
+or "common-lisp-flames" or something like that?
+22-Jun-83 01:37:34-EDT,2025;000000000001
+Return-path: <RMS@MIT-OZ>
+Mail-From: RMS created at 22-Jun-83 01:34:07
+Date: 22 Jun 1983 0134-EDT
+From: RMS@MIT-OZ
+Subject: [Scott E. Fahlman <Fahlman@CMU-CS-C>: Memberp]
+To: info-lispm-mit@MIT-OZ
+
+Return-path: <Fahlman@CMU-CS-C>
+Received: ID <FAHLMAN@CMU-CS-C>; 22 Jun 83 01:20:40 EDT
+Date: Wed, 22 Jun 1983  01:20 EDT
+From: Scott E. Fahlman <Fahlman@CMU-CS-C>
+To:   rms%mit-oz@mit-mc, Common-Lisp@su-ai
+Subject: Memberp
+
+
+The comments that I have received on the MEMBERP issue indicate that,
+with the exception of Chuck Hedrick (and RMS himself), none of the
+people responsible for Common Lisp implementation efforts believe that
+it is a good idea to adopt RMS's changes in MEMBER and friends.  Three
+different sets of reasons have been offered by the people responding:
+
+1. People are not convinced that changing MEMBER to use EQL makes
+substantially more trouble for RMS and his users than changing MEMBER to
+MEMBERP would make for the rest of us, despite RMS's argument that we
+could go on using our version of MEMBER.
+
+2. The original reasons why we chose to make this change (regularity in
+the choice of names leading to much less confusion in the long run) are
+still valid.
+
+3. Frozen is frozen.  It's hard enough to get consensus without
+reopening the debate every time someone wakes up and notices something
+he doesn't like.
+
+Even if we discount the opinions of the Symbolics people, who might be
+imagined to have political reasons for opposing RMS in this, the clear
+majority still seems to favor leaving the manual as it is, with MEMBER
+using EQL.  As far as I'm concerned, that's the end of it.  I hope that
+RMS will choose to remain compatible with Common Lisp despite this
+decision, but that's up to him.  All of us have had to make some major
+compromises in the course of this effort, and so far everyone has stayed
+aboard.
+
+-- Scott
+
+
+Now you know how much they care.  Anyway, I will change MEMBER or leave
+it the same as the MIT system users prefer.
+-------
+22-Jun-83 03:51:25-EDT,2661;000000000001
+Return-path: <Fahlman@CMU-CS-C>
+Received: ID <FAHLMAN@CMU-CS-C>; 22 Jun 83 03:44:05 EDT
+Date: Wed, 22 Jun 1983  03:44 EDT
+From: Scott E. Fahlman <Fahlman@CMU-CS-C>
+To:   info-lispm-mit%mit-oz@mit-mc
+Cc:   common-lisp@su-ai
+Subject: MEMBER
+
+
+Recently RMS polled asked the opinion of people on this list about the
+plan to change the definition of MEMBER in Common Lisp.  Some of the
+responses indicated some confusion as to what we (the people who have
+been working for the last two years to hammer out a Common Lisp
+definition) are actually proposing.  I would like to clarify this before
+too many people get too upset.
+
+For a long time, Lisp has had EQUAL and EQ versions of some of the
+important operators: MEMBER/MEMQ, DELETE/DELQ, etc.  Modern lisps have a
+lot more data types and a lot more specialized equality predicates: EQL,
+=, STRING=, etc.  Things began to multiply.  At one point, we had some
+600 of these sequence functions, including such gems as RASS-EQL and
+DEL-FROM-END-IF-NOT.  The decision was made to to cut this number down
+by providing a small number of powerful generic functions that could be
+further specialized by the use of keywords.  These generic functions
+were uniformly given the "good" names.  Thus we have operators like
+REPLACE, REMOVE, POSITION, and MEMBER, each of which takes a :TEST
+keyword telling what sort of equality test to use.  In all cases, the
+default test is EQL, by far the most useful.  (Though they are
+redundant, we kept around MEMQ, DELQ, and ASSQ as historical monuments.)
+
+So, if you want something that does what (MEMBER x y) does in Maclisp,
+you have to say (MEMBER x y :TEST #'EQUAL) in Common Lisp.  We
+considered many alternatives to this scheme: making EQUAL the universal
+default, having MEMBER default to EQUAL while the other functions
+default to EQL, or thinking up a new name for the function that does
+what MEMBER does.  In the end, we decided to do what I described above.
+It seemed clear to us that this would be best in the long run, after
+everyone has forgotten the details of earlier Lisps, and it seemed like
+an easy (mechanizable) conversion to put the :TEST 'EQUAL into every
+MEMBER call in a file.
+
+I'm sure that many people will disagree with this choice, but it was not
+a frivolous or hasty decision; a lot of experienced Lisp implementors
+agonized for a long time over this one, and finally reached an agreement
+acceptable to all those participating in the Common Lisp design at that
+time.  That is why we are reluctant to re-open the debate nine-months
+later, only days before the Common Lisp manual goes to press.
+
+-- Scott Fahlman
+22-Jun-83 16:46:44-EDT,476;000000000000
+Return-path: <RMS@MIT-OZ>
+Mail-From: RMS created at 22-Jun-83 16:42:26
+Date: 22 Jun 1983 1642-EDT
+From: RMS@MIT-OZ
+Subject: Common Lisp support
+To: info-lispm-mit@MIT-OZ
+
+I am now investigating ways to put all of the Common Lisp incompatibilities
+into an optional mode which users could specify on a per-file basis.
+This would allow users to convert only if they wish to.
+I think I can arrange for nearly all incompatibilities to be
+optional in this way.
+-------
+ 7-Jul-83 22:11:36-EDT,286;000000000000
+Return-path: <KLOTZ@MIT-OZ>
+Mail-From: KLOTZ created at  7-Jul-83 22:05:30
+Date: Thu, 7 Jul 1983  22:05 EDT
+From: Leigh L. Klotz <KLOTZ@MIT-OZ>
+To:   info-lispm@MIT-OZ
+Subject:Mouse
+
+Someone purloined CADR-20's mouse.  Please return it, even if it
+is broken.  It is mouse #29.
+12-Jul-83 16:27:23-EDT,334;000000000000
+Return-path: <X.JRD@MIT-OZ>
+Mail-From: X.JRD created at 12-Jul-83 15:16:50
+Date: Tuesday, July 12, 1983 3:16PM-EDT
+From: James R. Davis <X.JRD@MIT-OZ>
+Subject: Surface plotting?
+To: info-lispm at MIT-OZ
+
+Does anyone know of available lispm package
+for displaying views of functions of two
+variables in orthogonal projection
+20-Jul-83 05:43:23-EDT,756;000000000001
+Return-path: <RG@MIT-OZ>
+Mail-From: RG created at 20-Jul-83 02:24:34
+Date: Wed, 20 Jul 1983  02:24 EDT
+From: RG@MIT-OZ
+To:   info-lispm-mit@MIT-OZ
+Subject: LMI is looking for demo programs
+
+LMI will be showing a CADR and a Lambda at the IJCAI conference in
+Germany (August 8 through 12) and a Lambda at the AAAI conference
+in Washington DC (August 22 through 26).
+
+We are looking for demo programs to show at these conferences.
+If your program runs in the MIT system on a CADR, we expect it
+will run on the Lambda too.
+
+If you would like your program to be demonstrated,
+call 876-2890 and ask for Lowell Hawkinson.
+If your program is not ready until after the IJCAI conference,
+we will still be interested in it for the AAAI conference.
+25-Jul-83 20:31:32-EDT,223;000000000001
+Return-path: <CStacy@MIT-MC>
+Date: Monday, 25 July 1983, 19:50-EDT
+From: Christopher C. Stacy <CStacy at MIT-MC>
+Subject: LMLIB
+To: INFO-LISPM at MIT-MC
+
+A copy of LMLIB is now being maintained on PIG as well as OZ.
+ 1-Aug-83 18:07:46-EDT,693;000000000001
+Return-path: <RMS@MIT-OZ>
+Mail-From: RMS created at  1-Aug-83 17:50:41
+Date:  1 Aug 1983 1750-EDT
+From: RMS@MIT-OZ
+Subject: Window System manual
+To: info-lispm-mit@MIT-OZ
+
+A first batch of copies of the window system manual have been printed.
+I have put one by each CADR or group of CADRs where the MIT system
+is commonly used.  Please leave them there, as there are not many
+extra copies now (any extras may be in front of room 818, until
+they run out).
+
+More copies will come back from the printer in a couple of weeks,
+perhaps.
+
+This version of the manual corresponds to the next system version,
+but it also matches system 94 with only obscure minor differences.
+-------
+ 5-Aug-83 16:39:42-EDT,2498;000000000000
+Return-path: <Moon@SCRC-TENEX>
+Received: from SCRC-BORZOI by SCRC-TENEX with CHAOS; Fri 5-Aug-83 16:36:03-EDT
+Date: Friday, 5 August 1983, 16:33-EDT
+From: David A. Moon <Moon@SCRC-TENEX>
+Subject: wired-wait-timeout on 3600s
+To: TLP@MIT-OZ
+Cc: bug-3600-software@MIT-OZ, bug-3600-hardware@MIT-OZ, hoss@SCRC-VIXEN,
+    info-lispm@MIT-OZ
+In-reply-to: The message of 5 Aug 83 15:53-EDT from TLP at MIT-AI
+
+    Date: Fri, 5 Aug 1983  15:53 EDT
+    From: TLP@MIT-OZ
+    One of our 3600's (ROBOT1) keeps dropping dead (about once a day) with
+    the following message from FEP:
+
+    FEP> Machine halted "Wired-wait timeout, predicate ~S false for over
+    ~D ms. ~@
+    <211><211> Proceed to attempt recovery <DTP-6 20067> 72460(8)
+    FEP>
+
+Diagnosis:
+
+  There are a large number of problems that all manifest themselves
+  with this or a similar error message.  There are several software
+  and microcode bugs; these are fixed in Release 5.  There are also
+  at least two hardware bugs for which ECOs have been written.  These
+  problems are all being worked on pretty vigorously.
+
+Getting it fixed:
+
+  It will probably take some time for the fixes to the sources of this
+  problem to get to you.  As far as I know we have not decided to try to
+  retrofit software fixes for this into Release 4; Release 5 should get to
+  you some time in the fall.  You could contact field service to check
+  on when they can install the hardware fixes; the phone number is
+  576-2524 I think (you may want to check with Tom Callahan first).
+
+Recovery:
+
+  Normally you could type continue (at the FEP> prompt) and the
+  machine would recover and continue the disk operation that timed
+  out.  That's what the "proceed to attempt recovery" is trying to
+  say.  Unfortunately this does not work because of a bug in the
+  FEP software that bashes the state of the machine so that continuing
+  doesn't work at all.
+
+  In all cases that I have seen you can successfully recover from
+  a wired-wait timeout by warm booting; type start <return> at
+  the "FEP>" prompt.
+
+Reports:
+
+  If you feel like reporting this, please get more information, such
+  as exactly what the machine was doing at the time.  You will probably
+  find that it is impossible to get sufficiently precise information
+  about which was going on, in which case we have to assume you are
+  encountering one (or more) of the known causes of this symptom,
+  not a new one that we don't know about yet.
+26-Aug-83 18:49:03-EDT,317;000000000001
+Return-path: <RMS@MIT-OZ>
+Mail-From: RMS created at 26-Aug-83 18:19:33
+Date: 26 Aug 1983 1819-EDT
+From: RMS@MIT-OZ
+Subject: Window system manual
+To: info-lispm-mit@MIT-OZ
+
+Copies of the window system manual are now available near room 818,
+or by mail from the publications department of the AI lab.
+-------
+30-Aug-83 18:12:32-EDT,1056;000000000000
+Return-path: <RMS@MIT-OZ>
+Date: Tuesday, 30 August 1983, 17:33-EDT
+From: Richard M. Stallman <RMS@MIT-OZ>
+Subject: Incompatible changes poll
+To: info-lispm-mit@MIT-OZ
+
+There are two incompatible changes, part of Common Lisp,
+that I warned users a year ago to watch out for.
+
+These are (LISTP NIL) returning T,
+and (// 5 2) returning the rational number 5\2 instead of 2.
+
+I am now considering making these changes only for files
+marked as being Common Lisp files, so that they will not affect
+existing code.
+This change of plans would mean less conversion work for you,
+but it would produce a slightly less clean system.
+
+I will leave the decision up to you, the users.  Please tell me your opinion.
+Each of the two planned changes is a separate issue.
+
+
+It would be desirable to treat the change to order of array elements
+in the same fashion, but this is easier said than done.  Unless I
+see a way to do it, I will have to make this change for all programs
+as I announced a year ago.  See section 8.8 of the manual for details.
+19-Sep-83 01:15:58-EDT,817;000000000000
+Return-path: <RMS@MIT-OZ>
+Date: Monday, 19 September 1983, 01:11-EDT
+From: Richard M. Stallman <RMS@MIT-OZ>
+Subject: System 97 is now released.
+To: info-lispm-mit@MIT-OZ
+
+Documentation for System 97 is in OZ:SRC:<L.DOC>SYS97.MSG.
+I have been using system 97 for a month, and it is pretty solid.
+Make sure you use a band that uses microcode 257!
+Good sources of these are CADR1 and CADR18.
+
+The current version is 97.6.
+
+The most interesting improvements are:
+
+ A new Common-Lisp-compatible package system.
+
+ An improved undo facility,
+  the best an editor has ever had.
+
+ Incremental band saving:
+  save just the differences between your world
+  and the system you loaded, in a small partition.
+
+There are some incompatibilities, mostly due to Common Lisp,
+ so make sure you read SYS97.MSG.
+30-Sep-83 03:47:25-EDT,772;000000000000
+Mail-From: RMS created at 30-Sep-83 03:44:59
+Date: Fri 30 Sep 83 03:44:59-EDT
+From: RMS@MIT-OZ
+To: daniel.g.mly@MIT-OZ, info-lispm-mit@MIT-OZ
+In-Reply-To: Message from "Richard Mlynarik <daniel.g.mly at MIT-OZ>" of Wed 28 Sep 83 18:46:55-EDT
+
+It seems that ZMail formerly did not put colons in front of symbols
+such as SEND, FIRST and LAST in the ZMail init file
+when they appeared as values of ZMail user options.
+This did not matter in the past since SEND and :SEND were the same symbol.
+But in system 97 they are different symbols.  :SEND, :FIRST, :LAST are
+the symbols that are supposed to be there.  So ZMail init files should
+be edited by hand to put colons in front of such symbols.
+
+The init files thus edited will still work in system 94.
+-------
+29-Oct-83 16:23:30-EDT,608;000000000000
+Mail-From: DCB.TECH created at 29-Oct-83 16:21:36
+Date: Sat, 29 Oct 1983  16:21 EDT
+Message-ID: <DCB.TECH.11963425969.BABYL@MIT-OZ>
+From: Rich $alz <DCB.TECH@MIT-OZ>
+To:   info-lispm@MIT-OZ
+Cc:   dcb.tech@MIT-OZ
+Subject: lispm fonts
+
+The company I work for is interested in licensing/snarfing the fonts
+used in the lisp machine for use in their own display system and laser
+printer.  (We make a text editing/composition system for typesetters.)
+It's for incorporation into a commercial product.  Anyone help me out
+with pointers and/or info?  Best bet: 938-8095, MWF 9-1.
+ tnx much,
+	rich$alz
+11-Nov-83 22:00:34-EST,858;000000000001
+Received: from SCRC-HUDSON by SCRC-TENEX with CHAOS; Fri 11-Nov-83 21:54:12-EST
+Date: Friday, 11 November 1983, 21:59-EST
+From: RWK@SCRC-YUKON, Feinberg@SCRC-TENEX
+Sender: gsmith@SCRC-YUKON
+Subject: New Mailing List
+To: info-lispm@MIT-OZ
+
+OK, all you hackers have been testing away on our latest stuff; now all
+the bugs are getting too much for us to keep track of...
+
+In our never-ending struggle to keep up with all your bug reports,
+especially the ones you're testing for us, we'd like you to help
+us by sending bugs in Rel 5 Beta Test to a separate mailing list.
+
+All bug reports concerning the Symbolics Release 5.0 Beta Test should be
+sent to BUG-BETA-TEST@SCRC.  This will help us ensure these problems
+receive proper attention before we send out the Real Thing.  Thanks for
+all your help, and keep those packets and cards coming...
+14-Nov-83 01:49:39-EST,780;000000000000
+Date: Mon, 14 Nov 83 01:49 EST
+From: "Robert W. Kerns" <RWK%SCRC-YUKON@MIT-MC.ARPA>
+Subject: Beta Test mailing lists
+To: info-lispm@MIT-OZ.ARPA
+Message-ID: <831114014936.0.RWK@YUKON.SCRC.Symbolics>
+
+A number of people at MIT have requested that MIT people
+direct their beta-test mail to BUG-BETA-TEST at MIT-OZ,
+so they can see your messages as well.  (This mailing list has
+always been there).
+
+Thanks also to the many people who have suggested we make
+the software direct it there for itself.  It's a good idea;
+we already planned on doing it.  Stay tuned.
+
+Some people have raised questions about what to do when you
+don't know if a bug is specific to the beta-test or not.
+Just send it to BUG-BETA-TEST; if it's in the beta-test world,
+we want to track it.
+22-Nov-83 20:01:10-EST,1754;000000000000
+Received: from SCRC-TENEX by MIT-OZ via Chaosnet; 22 Nov 83 19:59-EST
+Received: from SCRC-EUPHRATES by SCRC-TENEX with CHAOS; Tue 22-Nov-83 19:52:20-EST
+Date: Tue, 22 Nov 83 19:54 EST
+From: "David A. Moon" <Moon%SCRC-TENEX@MIT-MC.ARPA>
+Subject: SCRC|DM problem
+To: Info-Lispm@MIT-OZ.ARPA
+Cc: lispm-networks%SCRC-TENEX@MIT-MC.ARPA,
+    software-maintenance%SCRC-TENEX@MIT-MC.ARPA
+
+Certain Release 5.0 beta-test worlds at MIT have been contaminated in such
+a way that the host MIT-MC thinks it has the name SCRC|DM.  This was caused
+by a mistaken patch to the namespace server that has since been fixed.  But
+since this bogus name never actually existed, as far as the namespace system
+knew, the incremental update mechanism does not remove it.  The problem
+has long since been fixed in the namespace server, LM15, but some worlds
+exist that contain this incorrect information.
+
+To correct this, load the file OZ:<MOON>FIX-MC.  You can load this in
+your init file if you habitually use a world load with this problem.
+The file is harmless if loaded into a machine that does not have the
+problem.
+
+If the file types out that it removed the bogus name, you can eliminate
+the problem entirely by re-disk-saving any contaminated world: cold boot
+it, (si:login-to-sys-host), load this file into it, and disk-save.  I
+recommend that you DO NOT do this without checking with the person
+primarily responsible for the machine in question, since some machines
+seem to have their disks set up in particular ways that are halfway between
+release 4 and release 5, and this should not be disturbed.
+
+Sorry about the inconvenience to everyone's mail through MC.  This is the
+sort of nasty lurking bug that beta-test is designed to expose.
+ 4-Dec-83 00:47:29-EST,695;000000000000
+Received: from MIT-JIMI by MIT-OZ via Chaosnet; 4 Dec 83 00:44-EST
+Date: Sunday, 4 December 1983, 00:46-EST
+From: Daniel Huttenlocher <dph at MIT-OZ>
+Subject: silly people do silly things
+To: info-lispm at MIT-OZ
+
+Somebody, somehow in the last couple of days set ROBOT-3's chaos address
+to be MOON's chaos address.  Who knows what they thought they were doing
+or why.  Somebody also deleted the configuration.fep file which the
+machine uses when it boots.
+
+Needless to say, neither MOON nor ROBOT-3 worked very well when they
+were both responding to the same network address.
+
+Please refrain from exercising itchy fingers on things like network
+addresses and boot command files.
+ 9-Jan-84 21:50:31-EST,1270;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 9 Jan 84 21:46-EST
+Date: 09 Jan 84  1842 PST
+From: Fred Lakin <FRD@SU-AI>
+Subject: High resolution video projection? 
+To:   info-lispm%mit-oz@MIT-MC   
+
+[I apologize to those who have already seen this msg; this is another attempt
+to reach LISP machine users as opposed to people on Symbolics' internal mailing
+lists]
+
+I want to buy a hi-resolution monochrome video projector suitable for use with
+generic LISP machine or Star-type terminals (ie approx 1000 x 1000 pixels).
+It would be nice if it cost less than $15K and didn't require expensive 
+replacement parts (like light valves).
+
+Does anybody know of such currently on the market?
+
+I know, chances seem dim, so on to my second point: I have heard it would be
+possible to make a portable video projector that would cost $5K, weigh 25lb,
+and project using monochrome green phosphor.  The problem is that industry
+does not feel the market demand would justify production at such a price ...
+Any ideas on how to find out the demand for such an item?  Of course if
+all of you who might be interested in this kind of projector let me know
+your suggestions, that would be a good start.
+ 
+Thanks in advance for replies and/or notions,
+Fred Lakin
+
+14-Jan-84 15:53:20-EST,826;000000000001
+Received: from MIT-LISPM-18 by MIT-OZ via Chaosnet; 14 Jan 84 15:48-EST
+Date: Saturday, 14 January 1984, 15:50-EST
+From: Richard Mlynarik <Mly at MIT-OZ>
+Subject: fonts in system 98
+To: info-lispm-mit at MIT-OZ
+Message-ID: <[MIT-LISPM-18].14-Jan-84 15:50:34.Mly>
+
+  Because of the change from 24 to 25 bit pointers which occurred
+with system 98, the kern tables of fonts saved in qfasl files in
+previous systems contain incorrect values for use in system 98.
+  The easiest way to transfer fonts from system 97 to 98 is to load
+the font into a machine running system 97 and use fed to write out
+a KST file for the font. Then load the KST file into system 98
+(using fed) and write out the new qfasl file.
+  All the fonts in the sys:fonts; directory have been updated, so
+problems will only exist for user fonts.
+21-Jan-84 14:06:48-EST,426;000000000000
+Received: from MIT-SPEECH by MIT-OZ via Chaosnet; 21 Jan 84 14:03-EST
+Date: Saturday, 21 January 1984, 12:59-EST
+From: Niels Lauritzen <SR.LAURITZEN at MIT-SPEECH>
+Subject: desire to be put on this mailing list
+To: info-lispm at MIT-OZ
+
+TO whom it may concern,
+
+May I please be added to the info-lispm mailing list.
+
+I am unsure how to add my name myself, if it is indeed possible.
+
+Thank you very much,
+
+Niels
+ 6-Feb-84 03:38:16-EST,771;000000000000
+Received: from SCRC-YUKON by MIT-OZ via Chaosnet; 6 Feb 84 03:36-EST
+Date: Monday, 6 February 1984, 03:36-EST
+From: Robert W. Kerns <RWK at SCRC-YUKON>
+Reply-to: Bug-Beta-Test at MIT-OZ
+Subject: Release 5 Beta Rev 4 available on LM-2's and CADR's
+To: info-lispm at MIT-OZ
+Message-ID: <840206033648.1.RWK@YUKON.SCRC.Symbolics>
+
+Imperial Purple (Release 5.0 Beta Test Rev 4) is now available for the
+LM-2's and CADR's on MIT-YOGI.  Patches have been loaded on OZ, but it
+is highly recommended that users get the imperial purple world using
+RECEIVE-BAND, and not load and save patches.
+
+Please replace all Rev 3 worlds promptly; in a short time they will
+cease to be bootable due to global namespace changes.
+
+Please send bug-reports to Bug-Beta-Test@OZ.  
+13-Feb-84 20:42:18-EST,4173;000000000001
+Received: from MIT-MC by MIT-OZ via Chaosnet; 13 Feb 84 20:38-EST
+Date: Monday, 13 February 1984, 20:32-EST
+From: Richard Mlynarik <Mly at MIT-OZ>
+Subject: Coming (System 99) changes to FORMAT in the MIT lisp machine system.
+To: info-lispm-mit at MIT-OZ
+
+
+[See SYS:DOC;SYS98 MSG (oz:ps:<l.doc>sys98.msg at MIT) to see this
+message in a technicolor multitude of fonts.]
+
+The control argument to FORMAT will change in System 99 to be compatible
+with Common Lisp. There will no longer be separate functions FORMAT and
+CLI:FORMAT, as there are in System 98.
+This change will affect the following FORMAT directives:
+
+~X      ~width,padchar,commacharX 
+                Prints its argument in hexadecimal. (Analogous to ~O, ~B and ~D)
+        This command used to be used to insert spaces into the output.
+
+        Use ~numberofspaces@T to achieve the same result as the old
+                ~numberofspacesX directive.
+
+~F      ~width,decimalplaces,scale,overflowchar,padcharF
+                Prints a floating-point number in nonexponential notation.
+                Multiplies by 10^scale before printing if scale is specified.
+                Prints in width positions, with decimalplaces digits after the
+                decimal point.  Pads on left with padchar if necessary.  If the
+                number doesn't fit in width positions, and overflowchar is
+                specified, this command just fills the width positions with
+                that character.
+        This directive used to just take one optional prefix control arg, which
+                specified how many mantissa digits to print. This is the same
+                as 2 + decimalplaces for the new FORMAT.
+
+        Use ~,n+2F to achieve the same result as the old ~nF directive.
+
+~E      ~width,decimalplaces,exponentplaces,scale,overflowchar,padchar,exptcharE
+                Prints a floating-point number in exponential notation.
+                Prints in width positions, with exponentplaces digits of
+                exponent.
+                If scale (default is 1) is positive, prints scale digits before
+                point, decimalplaces - scale + 1 after.
+                If scale is zero, prints decimalplaces digits after the point,
+                and a zero before if there's room.
+                If scale is negative, prints decimalplaces digits after the
+                point, of which the first -scale are zeros.
+                If exptchar is specified, it is used to delimit the exponent
+                (instead of "e" or whatever.)
+                If overflowchar is specified, then if the number doesn't fit in
+                the specified width, or if the exponent doesn't fit in
+                exponentplaces positions, the field is filled with overflowchar
+                instead.
+        This directive used to just take one optional prefix control arg, which
+                specified how many mantissa digits to print. This is the same
+                as 2+decimalplaces for the new FORMAT.
+
+        Use ~,n+2E to achieve the same result as the old ~nE directive.
+
+~G      ~width,decimalplaces,exponentplaces,scale,overflowchar,padchar,exptcharG 
+               Like ~E, but if the number fits without an exponent, it is
+               printed without one.
+        This command used to be used to go to a particular argument.
+
+        Use ~argumentnumber@T to achieve the same result as the old
+               ~argumentnumberG directive.
+
+Note: in System 98 you must use CLI:FORMAT to use the new Common Lisp style format
+directives. GLOBAL:FORMAT will continue to use the old directives.
+In System 99 these two functions will become identical, so the best thing is to
+update your code to use CLI:FORMAT now so that it will work in both System 98
+and in future systems.
+
+Since Brand S have also announced their intention to also change the meaning of
+FORMAT directives to agree with Common Lisp at some time in the future, this will
+also be compatible change in that respect.
+
+All MIT lispms have a new instruction, CLI:FORMAT
+(common-lisp-incompatible-format) Please update your code.
+22-Feb-84 16:59:59-EST,1086;000000000001
+Received: from MIT-LISPM-1 by MIT-OZ via Chaosnet; 22 Feb 84 16:44-EST
+Date: Wednesday, 22 February 1984, 16:45-EST
+From:  <Mly at MIT-OZ>
+Subject: atan/atan2 -- possible changes.
+To: info-lispm at MIT-OZ
+
+Here's how things stand at the present:
+
+There presently are two functions for taking arctangents,
+"atan" and "atan2".
+
+The difference between them is that atan returns a value
+in the range 0 to 2*pi, whereas atan2 returns a value in
+the range -pi to pi.
+(ie  atan:(RxR)  [0,2]
+    atan2:(RxR)  [-,])
+
+atan is defined the way it is mainly for maclisp compatibility --
+nearly everybody else in the computer languages world (*including
+common lisp*) believes that a function called "atan" should return
+what the lisp machine's atan2 returns.
+
+So, the $64000 question is:
+ Would anybody like to vote on whether the definition of atan
+ should change to be what atan2 is now???
+
+Such a change would not take place immediately, and in the meantime
+the compiler could generate a warning saying to use atan2, whose
+definition will not change.
+
+Thanks.
+23-Feb-84 15:48:59-EST,1338;000000000001
+Received: from MIT-DSPG by MIT-OZ via Chaosnet; 23 Feb 84 15:44-EST
+Date: 23 Feb 1984 09:19:49-EST
+From: dove at mit-dspg
+To: Mly@mit-oz, info-lispm@mit-oz
+Subject: Re:  atan/atan2 -- possible changes.
+
+why did this letter contain ^g's?
+----
+Received: from MIT-LISPM-1 by MIT-OZ via Chaosnet; 22 Feb 84 16:44-EST
+Date: Wednesday, 22 February 1984, 16:45-EST
+From:  <Mly at MIT-OZ>
+Subject: atan/atan2 -- possible changes.
+To: info-lispm at MIT-OZ
+
+Here's how things stand at the present:
+
+There presently are two functions for taking arctangents,
+"atan" and "atan2".
+
+The difference between them is that atan returns a value
+in the range 0 to 2*pi, whereas atan2 returns a value in
+the range -pi to pi.
+(ie  atan:(RxR)  [0,2]
+    atan2:(RxR)  [-,])
+
+atan is defined the way it is mainly for maclisp compatibility --
+nearly everybody else in the computer languages world (*including
+common lisp*) believes that a function called "atan" should return
+what the lisp machine's atan2 returns.
+
+So, the $64000 question is:
+ Would anybody like to vote on whether the definition of atan
+ should change to be what atan2 is now???
+
+Such a change would not take place immediately, and in the meantime
+the compiler could generate a warning saying to use atan2, whose
+definition will not change.
+
+Thanks.
+
+23-Feb-84 16:26:38-EST,560;000000000001
+Mail-From: KMP created at 23-Feb-84 16:22:33
+Date: Thu 23 Feb 84 16:22:32-EST
+From: KMP@MIT-OZ
+Subject: Re:  atan/atan2 -- possible changes.
+To: dove@MIT-DSPG
+cc: Mly@MIT-OZ, info-lispm@MIT-OZ
+In-Reply-To: Message from "dove at mit-dspg" of Thu 23 Feb 84 09:19:49-EST
+
+If you don't read your mail on a LispM, you should know that the
+ASCII char ^G has the same code as the LispM "pi" character and
+ASCII char ^Y has the same code as the LispM "->" character.
+MLY probably just forgot that some LispM users don't read their mail
+in ZMail.
+-------
+ 4-Mar-84 22:44:44-EST,1860;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 4 Mar 84 22:42-EST
+Received: from SCRC-HARLEM by SCRC-YUKON with CHAOS; Sun 4-Mar-84 22:42:59-EST
+Date: Sun, 4 Mar 84 22:46 EST
+From: Joseph R Goldstone <joseph%SCRC-QUABBIN@MIT-MC.ARPA>
+Subject: new Symbolics world available for 3600 users
+To: info-lispm@MIT-MC.ARPA
+
+A more up-to-date version of the Symbolics Release 5 Beta Test world
+is available for 3600 users (with a CADR version to follow shortly).
+A new microcode (tmc5-mic 270) should be installed in conjuction with
+the new world.  To install the new microcode and world load:
+
+ o   Clear out 20000. pages of space in your FEP file system, by deleting
+     obsolete world loads, old scratch files, and such...
+
+ o   Get the new microcode with (si:install-microcode 270.) assuming that
+     OZ is up and happy.
+
+ o   Get the new world from Buddy or Janis or whomever else has a copy,
+     with (si:receive-band "buddy" "grape") [substitutions for "buddy"
+     are encouraged to spread the load off that machine].  If the band
+     transfer process offers to checksum the transfer, don't turn it
+     down!  The checksum only takes an extra couple of minutes.
+
+ o   Adjust whatever boot file was being used for booting Release 5.
+
+Reboot the new world, and enjoy.
+
+This new world has the following improvements over previous Release 5 worlds:
+ Hardcopying to the dover works again (finally!).
+ Boot time is shorter (about 1 minute).
+ Miscellaneous bug fixes [(si:print-patches 'system 266.) tells all].
+
+As in the past, we ask that any worlds customized from this standard world
+be saved with a significantly different name.  It's a help to us when
+a bug report says "Apiary Grape", "Grape MEF", "Moby GripeX", etc. as opposed
+to the standard "Moby Grape".
+
+Bugs to BUG-BETA-TEST@OZ, as usual.  Thanks.
+
+-- joseph
+13-Mar-84 02:12:37-EST,660;000000000001
+Received: from MIT-LISPM-1 by MIT-OZ via Chaosnet; 13 Mar 84 02:09-EST
+Date: Tuesday, 13 March 1984, 02:09-EST
+From: Richard M. Stallman <RMS at MIT-OZ>
+Subject: TYPEP of one argument
+To: info-lispm-mit at MIT-OZ
+
+Should TYPEP of one argument return a keyword (such as :SYMBOL)
+or something in GLOBAL or USER (such as SYMBOL)?
+The former is what it does now, and is more compatible with the
+past few systems.  But it fails nowadays to be compatible with
+Maclisp, which is what TYPEP of one argument is really supported for.
+The latter would be compatible with Maclisp as it was originally
+intended to be, but might break a few programs right now.
+29-Mar-84 06:55:57-EST,1106;000000000000
+Received: from MIT-LISPM-18 by MIT-OZ via Chaosnet; 29 Mar 84 06:54-EST
+Received: from MIT-LISPM-9 by MIT-OZ via Chaosnet; 29 Mar 84 05:17-EST
+Date: Thursday, 29 March 1984, 05:18-EST
+From: Christopher Fry <cfry at MIT-OZ>
+Subject: 5.0 Beta Rev7 available
+To: bug-lispm at MIT-OZ
+Redistributed-to: info-lispm at MIT-OZ
+Redistributed-by: Richard Mlynarik <Mly at MIT-OZ>
+Redistributed-date: Thursday, 29 March 1984, 06:55-EST
+
+I've just configured a CADR Rel 5.0 Beta test rev 7 band
+configured for MIT. So far as I know, know other configured bands
+of this system exist.
+Copy it from :
+Cadr-4, LOD4    or
+Cadr-9, LOD3  .
+
+Its hard to figure out exactly how many blocks it needs.
+It currently fits in 34000.
+There is a bug in si:describe-partition where, if the 
+actual number of blocks exceeds 32000, a garbage answer is printed
+due to an overflow bug.
+
+si:describe-partition claims the valid size of this band is
+exactly 32000, which is hard to believe both because
+its such a convienient number, and because I would have guessed
+its actual size to be between 28k & 30k blocks.
+30-May-84 09:48:07-EDT,747;000000000000
+Mail-From: RICH created at 30-May-84 09:45:53
+Date: 30 May 1984  09:45 EDT (Wed)
+Message-ID: <RICH.12019452744.BABYL@MIT-OZ>
+From: Charles Rich <RICH@MIT-OZ>
+To:   cstacy@MIT-OZ
+Subject: Release 5 Beta 7 on Sinatra
+CC:   Info-Lispm@MIT-OZ
+
+Chris - Whoever (I thought it might be you) installed the
+new FEP0:>Rel5.boot.2 on Sinatra for Release 5 Beta 7
+made a slight error by putting a comment (in parens)
+in the text of the boot file which had an actual Beta
+character in it.  This caused the boot to blow
+up when it tried to read that character.  I fixed
+it by changing the beta to be spelled out as "Beta".
+Please not for other machines.  Note however that special
+characters in the file label comments seem to work
+ok.
+		-CR
+31-May-84 12:16:18-EDT,680;000000000000
+Mail-From: RICH created at 31-May-84 12:05:44
+Date: 31 May 1984  12:05 EDT (Thu)
+Message-ID: <RICH.12019740344.BABYL@MIT-OZ>
+From: Charles Rich <RICH@MIT-OZ>
+To:   info-lispm@MIT-OZ
+CC:   Pondy@MIT-OZ, Mark.Robbins@MIT-OZ
+Subject: Sinatra and Bing
+
+Please note that the ethernet cable plugs into the
+back of Sinatra and Bing have a tendency to get pulled
+out (assumedly because someone is mucking around in
+the cable nest back there).  The symptom is that these
+machines can't talk to anyone at all (e.g. they can't
+get the time when you boot).  It would probably help
+if the locking brackets on these plugs were improved
+(one of them is missing entirely).
+		-CR
+ 1-Jun-84 15:39:43-EDT,1401;000000000001
+Received: from SCRC-STONY-BROOK by MIT-OZ via Chaosnet; 1 Jun 84 15:13-EDT
+Received: from SCRC-HARLEM by SCRC-STONY-BROOK via CHAOS with CHAOS-MAIL id 42906; Fri 1-Jun-84 15:10:43-EDT
+Date: Friday, 1 June 1984, 15:11-EDT
+From: Joseph R Goldstone <joseph at SCRC-QUABBIN>
+Subject: Brave New World for 3600's
+To: info-lispm at MIT-OZ
+
+The Release 5.0 world (with several namespace enhancements) is available
+for 3600 users.  This world should cure the various boot-time problems common
+to the Release 5.0 Beta Test worlds now in use on MIT 3600's.
+
+With the availability of this world, the Release 5.0 product is no longer 
+in beta test, hence bug reports should no longer be sent to BUG-BETA-TEST@OZ.
+Instead, they should be sent to the appropriate list for the problem, be it
+BUG-LISPM, BUG-ZWEI, BUG-ZMAIL, BUG-LMFS, or BUG-SYMBOLICS-HARDWARE.
+
+Software questions (as opposed to bug reports) should be sent to HOSS@SCRC
+(Home Office Software Support) or to Dennis Doughty, your Field Software
+Support contact (doughty@SCRC).
+
+The new world is available (via si:receive-band) as Release-5-0-plus.load
+on the following machines:
+ Aspen
+ Buddy
+ Elvis
+ Jimi
+ Janis
+ Morrison
+ 
+The world takes up 19763 blocks, and requires microcode 270 (the same 
+microcode used in Release 5.0 Beta Test Rev 7).
+
+A Release 5 world for CADR's should follow shortly.
+
+-- joseph & Dennis
+ 7-Jun-84 20:00:53-EDT,3181;000000000000
+Received: from SCRC-STONY-BROOK by MIT-OZ via Chaosnet; 7 Jun 84 19:58-EDT
+Received: from SCRC-HARLEM by SCRC-STONY-BROOK via CHAOS with CHAOS-MAIL id 45634; Thu 7-Jun-84 19:54:31-EDT
+Date: Thursday, 7 June 1984, 19:54-EDT
+From: Joseph R Goldstone <joseph at SCRC-QUABBIN>
+Subject: keyboard
+To: Carl R. Manning <crm at MIT-OZ>
+Cc: ECC at MIT-OZ, BUG-APIARY-HARDWARE at MIT-OZ, info-lispm at MIT-OZ,
+    HOSS at SCRC-TENEX
+In-reply-to: The message of 7 Jun 84 17:00-EDT from Carl R. Manning <crm at MIT-OZ>
+
+    Date: Thursday, 7 June 1984, 17:00-EDT
+    From: Carl R. Manning <crm at MIT-OZ>
+        Date: Thursday, 7 June 1984, 16:37-EDT
+        From:  <ECC at MIT-OZ>
+        In APIARY-HARDWARE in Release 5.0, Experimental MIT 1.4, FEP 18, on APIARY-9 (3600):
+
+        This keyboard seems to have some trouble:
+                FUNCTION doesn't do its normal thing,
+                Backslash sends Back-space,
+                Backspace sends vertical bar,
+                Backquote sends backslash,
+        and probably other problems.
+
+    This probably has something to do with all the new keytops we received.
+    In that set, it looks like <function> and <local> have been swapped and
+    other keys rearranged as you noticed.
+
+You are quite correct; Release 5 assumes the new keytops are installed.
+
+Rather than hunt around for documentation that never got to you, let me just
+type in some paragraphs from a document entitled "Release 5 Update", dated
+31 May 1984.
+
+4.  Keytops:
+
+    Release 5.0 requires a small change to the 3600 keyboard.  You should
+find a small bag containing six keytops enclosed in your Release 5 software
+package.  To install the keytops on your keyboard please do the following:
+
+(1) Open up a paper clip so that one side forms a straight edge.
+
+(2) Open up the package of keys.  Enclosed should be six keys with the
+following symbols printed on them:
+
+  FUNCTION   LOCAL   BACK   {   }   ~
+                     SPACE  |   \   `
+
+(3) Take the paper clip and pry up the FUNCTION key on the keyboard.  Replace
+this key with the new function labelled LOCAL.
+
+[Note that since none of the old keys are re-used in the new layout, you can
+avoid confusion by setting the old keys well aside as you pry them up.]
+
+(4) Pry up the old LOCAL key and replace it with the new FUNCTION key.
+
+(5) Remove the key under RESUME labelled BACK  and replace it with the new }.
+                                         SPACE                             |
+
+(6) Remove the key labelled } and replace it with the new key labelled {.
+                            \                                          \
+
+(7) Remove the key labelled { and replace it with the new key labelled ~.
+                            ~                                          `
+
+(8) Remove the key labelled | and replace it with the new key labelled BACK.
+                            \                                          SPACE
+
+One helpful hint: as you pry up each old key, tap the piece of metal or
+plastic sticking up to make sure that what is printed on the screen
+corresponds to the key that you are about to put on.
+10-Jun-84 19:30:43-EDT,260;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 10 Jun 84 19:29-EDT
+Date: Sunday, 10 June 1984, 19:24-EDT
+From: Scott Cyphers <sr.ehpyc at MIT-SPEECH>
+Subject: Goldilocks is now an operational secondary namespace server for MIT
+To: info-lispm at MIT-OZ
+
+
+11-Jul-84 16:07:17-EDT,783;000000000000
+Mail-From: CJL created at 11-Jul-84 15:58:37
+Date: Wed, 11 Jul 1984  15:58 EDT
+Message-ID: <CJL.12030530649.BABYL@MIT-OZ>
+From: Chris Lindblad <CJL@MIT-OZ>
+To:   INFO-LISPM@MIT-OZ
+Subject: Symbolics REL 5.1 at MIT + PIG is now the sys host for MIT
+
+
+I have made a World load with the Symbolics Release 5.1 patches in it.
+It's name is Release-5-1-plus.load.1,
+and can be found on at least the following lisp machines:
+
+	elvis
+	buddy
+	jimi
+	morrison
+
+Rel 5.1 requires version 292 of the microcode, so snarf that too.
+Update your Lisp machine today!
+
+With this new release, the sys host has been moved from OZ to PIG.
+The most important thing to remember about this fact is that the MIT
+site directory is now PIG:USRD$:[S.R5.SITE], instead of
+OZ:OZ:<S.R5.SITE>.
+15-Jul-84 21:47:52-EDT,404;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 15 Jul 84 21:45-EDT
+Date: Sun 15 Jul 84 18:42:59-PDT
+From: Christopher Schmidt <SCHMIDT@SUMEX-AIM.ARPA>
+Subject: Etherwatch for 3600's?
+To: Info-LispM%MIT-OZ@MIT-MC.ARPA
+
+	Does anyone know of a version of Etherwatch or ECWatch that would let me
+promiscuously monitor traffic on our 10mb ethernet with a 3600 or 3670?  Thanks,
+--Christopher
+-------
+28-Jul-84 21:19:43-EDT,35919;000000000000
+Mail-From: RMS created at 28-Jul-84 21:17:12
+Date: Sat 28 Jul 84 21:17-EDT
+From: Richard M. Stallman <RMS@MIT-OZ>
+Subject: You!
+To: info-lispm@MIT-OZ, info-mac@MIT-OZ, info-cobol@MIT-OZ, bboard@MIT-OZ
+
+\pagelayout{normal}
+
+
+\documentstyle{article,12pt}
+
+
+
+
+\begin{document}
+\begin{center}
+\bf
+
+ Sexuality and the Physician
+
+
+\end{center}
+
+
+
+
+
+
+
+
+
+
+
+      Physicians grow in confidence and competence through practice and
+experience, medical students are taught again and again, but for that most
+challenging confrontation, the first time, one cannot practice.  The only
+softening of its blunt arrival comes from first plunging into one's
+imagination, recognizing the situation that would, on its first time, shock
+or unsettle, and exploring all the consequences one's feelings could create.
+Those for which the average medical student is least prepared, even when
+trained rigorously in medicine and ethics, Nancy Gagliano suggested as the
+premise for tonight's meeting, are situations in which sexuality abruptly
+bares itself in an otherwise sterile professional setting, in performing
+one's first pelvic exam, for example, or extracting one's first sexual
+history.
+
+     For Nancy, the recognition of how unnerving the intrusion of sexuality
+could be in a professional situation startled her.  She had spent the summer
+doing library research for a neurologist at the Veteran Administration's 
+Hospital, when he asked that she investigate the dentate ligament,
+which runs between the corpora cavernosa of the penis.  Now she had not
+only to read the literature, but also to dissect human specimens!
+"I couldn't admit to the big, friendly man who ran the anaytomy lab
+what I needed.  I stalled.  Finally I said, 'I need some specimens;'
+and then I shrieked, 'some PENISES!'"
+
+     In her future as a physician, Nancy wondered, how would she ever
+be comfortable discussing intimate aspects of the body with her patients if
+she
+could not even say the word "penis" to an anatomist?  She acknowledged
+that after seeing more patients, she would undoubtedly become more com-
+fortable in the clinic with not only the vocabulary but also the entire
+subject of sexuality but that it could only ease her trepidations to 
+face them now. 
+
+     Thus she ushered in the meeting's topic, "Sexuality and the Physician"
+with a baring of her own apprehensions.  She hoped that by explicitly
+introducing the multifaceted role sexuality plays in the daily practice
+of medicine, she could incite the group to air similar anxieties and appre-
+hensions, share attitudes and experiences and thereby educate and liberate
+itself in a subject largely neglected in formal curriculums.  Her incite-
+ment resulte in a discussion which ranged further than the issue of sexuality
+into the fundamental aspects of the patient-physician relationship.  The
+group confronted the barrier imposed by the roles that patient and physician
+play and asked when it must be torn down in order to reach the underlying 
+naturalness and sensitivity of ordinary humanity.
+
+     Several articles the group had read helped to provide starting-points
+for the discussion.  The first, by Julius Buchwald in                       
+reported the beneficial results of a similar seminar in which students 
+beginning ob-gyn rotations revealed emotional attitudes and reactions 
+to performing the first pelvic examination.  Nancy summarized their
+main fears: 1) of hurting the patient, 2) of being inept or being judged
+inept, 3) of the patient or oneself getting sexaully aroused, and 4)of
+finding the patient and/or the situation repulsive.  
+
+     These concerns were in turn mirrored and elaborated on by the group as
+they discussed intimate clinical examinations and situations.  Nancy
+Gagliano wondered, "How will I walk in and do a genital exam on a young
+attractive male?  I wouldn't be able to do it now without smiling and
+blushing."  The patient would sense her embarrassment and lack of profession-
+alism, and surely, she thought, she would only grow more self-conscious.
+However, after her experiences this summer, she understood better what
+was going on inside herself and perceived the problem as one of learning
+to treat all bodies in a non-sexaul way, when she had been accustomed
+to handling only certain male bodies in a sexual way.  It would be fascinating
+to perform her first pelvic exam, yet at the same time awkward and disquieting
+to touch a female patient.  The kay to overcoming her anxiety, she thought,
+would be to be able to separate at will the human body from its sexuality.
+
+     (               ) wondered why she did not share the worry some of her
+friends expressed of becoming aroused while examining patients.  Was it
+because her feelings on the subject were still in the "pluripotential
+stage" and she had not yet reached a decisive attitude or because she
+consciously blocked out her fears?  If the latter, then she worried what
+would happen if she did get aroused by patients; her guilt would be
+magnified by its unexpectedness.  "On the other hand," she said, "I do
+worry that I might arouse my patient, by making a wrong move or being too 
+tentative and schoolgirlish."
+
+     (                     ) said that he had heard stories of male patients
+getting erections under the examination of the more incompetent I.C.M.
+students.  Allan Hobson doubted the report saying he'd never  known or heard
+of a patient to get so aroused.  "As for myself," he continued, "I've
+always been too nervous under the circumstances to feel anything sexual."
+
+     Echoing Allan,  (                      ) said that her own performance
+anxiety would be so high, she simply wouldn't be able to find the situation
+erotic.  Steven Denlinger doubted for another reason that he could
+be aroused in clinical situations.  "I have a history," he said,"of
+decidedly not finding medical pictures of nudes erotic."
+
+     "But what happens," countered (                ), "when the body is
+living, breathing, warm, and standing in front of you?"
+
+     Analyzing these concerns on another level, Clare Bloom admitted that
+she had also worried how she would manage an aroused patient, but that she
+had reognized a trick in hr thinking: as when she had first performed
+venupuncture and nervously worried about her patient's nervousness,
+now she felt she had projected her own anxiety about getting aroused onto
+the patient.  "I can distill my nervousness, and not feel it, simply by
+putting it onto someone else!"
+
+     Worse for him than fears of sexuality, said (               ), was the
+prospect of examining a "250-300 pound body.  It would revolt me, and yet I
+would feel guilty for my disgust."  This concern struck a chord in the
+group.  (                      ) said she dreaded above all the confrontation with
+obesity, and (                    )
+ confessed that he had been apalled in his third
+year of medical school by the extent of human ugliness.  One unnamed student,
+described by (             ), was so worried about seeing fat patients that
+he planned to brave Boston's 'combat zone' for the first time to photo-
+graph particularly fat nd ugly people in order to desensitize himself in 
+preparation for the clinic.  Surely a patient with a personal history could
+never be as offensive as such photographs, commented (                )!
+
+     Until now the discussion had dealt with the problems of confronting
+physical aspects of sexuality in a clinical setting, in switching from
+a sexual to a clinical attitude when in intimate contact with another body.  
+What might happen to us, though, asked(                        ), when we then 
+switched back to the sexual setting?   Would the clinical sights and experi-
+ences change our views of our personal seual lives?
+
+     The answers must depend on what one's attitudes toward sex had been
+before starting in the clinic, said (                   ).  If one's
+sexual experiences had been overly objective and dijoint from the rest
+of one's life, she continued, then, yes, the clinical view of sexuality
+might be even more alienating.  But if one's sexuality were well-defined and
+integrated in one's life, then surely it could sustain new comfrontations 
+from the clinical realm.
+
+     Clare Bloom extended the question, wondering whether "once we begin to
+see living pathology in the whole body, will we be able to look at friends
+and lovers in the same way as before?"  Allan Green answered that his 
+colleagues and he, although not unaffected by thier clinical experiences,
+had not changed so dramatically as to lose their nervousness or sensitivity
+during delicate situations.  Their humanity had been preserved, he
+concluded.
+
+     Recalling her dissections of human penises, Nancy Gagliano said
+that she'd had the distinct fear she would not be able to look at the
+erect penis of her lover again without seeing the erect penis of a
+cadaver.  Although she did have flashbacks occasionally,she said, more
+importantly, she felt more comfortable with genitals as a result of
+her work.  Simply by becoming more familiar with the anatomy of
+sexuality, she could better view genitals as parts of a whole rather
+than as parts separate in themselves.  Several others agreed on the
+beneficial effects of such familiarity and knowledge   
+
+     Allan Hobson proposed that although it would seem that in switching 
+between settings, one might get one's wires crossed, the context wielded
+a remarkable power to keep them straight.  "The context explains why
+I'm in no way aroused in clinical/pathological settings, and yet, having
+seen all sorts of pathology, I'm in no way impaired in non-clinical 
+settings."
+      
+      The patients too are not simply passive objects in the clinical 
+situation but contribute to its dynamics with their own feelings and 
+attitudes.  The burden of one's role as a physician is lifted not only
+by closely examining one's feelings, but also by shifting to the patient's
+point of view.  Two articles the group read illustrated this shift.  In
+"The Pelvic Examination: A View From the Other End of the Table,"  Joni 
+Magee suggests ways to make the pelvic exam less unpleasant for the
+patient, base on her experiences both as a patient and gynecologist.
+Implicit in her article is the urge to focus on the patient's feelings 
+as if they were one's own; one can thus displace one's discomfort in
+a healthy way and gain new insight into the situation.  
+
+     Along similar lines, Judith Mitchell in "Male Adolescents' Concern
+About a Physical Exam Conducted By a Female" present findings that the
+average male adolescent is afraid of a female examiner touching him; afraid
+specifically of her touching his genitls; afraid of her not taking his
+word on his health; and, most of all, "afraid of what the other guys would
+think" to know he had been examined by a female.  She argues that these
+concerns should be honored in such examinations with careful consideration.
+Nancy remarked that the article was important also for illuminating the fact
+that although "men may have a corner on the market" in examining the opposite
+sex, one must consider equally the difficulties and concerns that arise when
+female physicians examine men.
+
+     Other articles that Nancy summarized dealt with more subtle
+attitudes affecting the interaction between patient and physician.
+The first, by (                     ), reported a bias amongst patients
+towards the physician's gender.  All patients, male or female, were
+more likely to choose a male over a female g.p., but males were much
+less likely than females to choose a female g.p., so that female g.p.s
+had a patient population 70% female, 30% male, whereas male g.p.s had
+one 50% female, 50% male.
+
+     Another study reported a correlation between the attractiveness of the
+physician and the openness of the patient in reporting his symptoms. 
+Generally, a patient gave more information to a doctor of the same sex, but,
+on the whole, patients told most to a highly attractive male doctor.  
+Members of the seminar raised objections, however, to the method of the
+study, in which a subject looked at pictures of physicians that had been
+rated on physical attractiveness and chose those to whom he would most likely
+tell his problems.  Allan Green said that attractiveness in the actual
+presence of the physician might be measured in terms different from
+physical qualities, such as ability to listen or to make the patient feel at
+ease; furthermore, his own observations of successful physicians didn't
+concur with the results.  (                     ) also pointed out
+that the concept of attractiveness varied widely; how could the pictures be
+accurately rated when males may equate it with strength and power, while
+females may view attractiveness as something completely different?  Nancy
+agreed that the study ignored the live patient-physician interaction,
+and, harking back to the earlier discussion, Alan Green commented that
+the interaction might even change significantly if the physician was so
+attractive as to actually arouse the patient.
+
+     Yet if the results were to be accepted, how might they be interpreted,
+asked (                     )?  Did they mean that attractive male doctors were
+trusted more than female ones?  Steven Denlinger wondered if the phenomenon
+might not be similar to what happens at a cocktail party, when one tries
+to seek out and hold the attention of the person he finds most attractive;
+the patient may have similar desires and fantasies in trying to describe 
+his problems so well that he elicits the physician's personal interest
+in response.   Nancy commented that the bias may simply reflect the fact that
+there are more male than female physicians; the males therefore have more
+patients and the females haven't yet been fully accepted or treated equally
+by society.
+
+     In a similar study that Nancy reported, the physician's bias towards
+the patient's gender was revealed.  Physicians were three times more 
+likely to describe a female's complaint - illustrated in a vignette -
+as psychosomatic than a male's, and more likely to prescribe sedatives 
+to her than to him.  On the other hand, physicians tended to deny the
+emotional aspects of a male's complaint and instead to treat it as purely
+physical, further denying the less open male patient of emotional and
+psychological support.  
+
+    In light of these statistics, (                        )'s anecdote
+was particularly interesting.  She once worked under a very tough, machismo
+ex-Marine policeman, who, hearing of her plans for medical school, said
+he would 'love to go to a female doctor,' that he couldn't tolerate a 
+male touching his body.  Perhaps, (                ) wondered, when
+"push came to shove," he might have preferred the traditional male, but she
+felt there was truth in his desire: many men find themselves physically
+more comfortable and emotionally more intimate with women and this ease
+may extend to the clinic.
+
+     Nancy then introduced another aspect of the patient-physician
+relationship.  Delicate clinical examinations normally arouse fears and
+discomforts, she said, yet they have the potential also to evolve into
+abusive situations, in which feelings on both sides may change radically.
+Where is the line drawn, and how do the attitudes of patients and
+physicians change when abuse threatens?
+
+      [Insert]
+
+  (                 ) told a simialr story of a gynecologist who
+"put his patients on the table and instead of a speculum inserted his
+penis."  His patients, generally of a low socio-economic class, although
+certainly aware that his behavior was abnormal, had never accused him,
+and he had been neither arrested nor prosecuted.
+
+     Allan Hobson remarked that these silent patients were most likely 
+intimidated by the medical context, in which they played an ignorant,
+supplicant role, and dared not question the physician's procedure.  Some 
+certainly blamed themselves for the incomprehensible occurrence of sex.
+Nancy added that some patients, should they have had the courage, might not
+have known what they could do to defend themselves.
+
+     The question then arose of how physicians with such potential to 
+abuse patients were allowed into the profession.  (             )
+related an experience he had as a third year medical student on a gynecology
+rotation.  A senior resident who was generally believed to have a sexual
+problem one morning made a revealingly crude comment about his activities
+with female patients.  On another occasion when (               )'s female
+partner asked if she could do anything to help in the O.R., the resident
+replied , "Yeah, take off all your clothes."  When his behaviour later
+came up in conversation, he admitted to (                   ) that he had a
+problem, but that he had gone into gynecology specifically to "resolve
+it," by exposure.  Allan Hobson remarked that screening should, but clearly
+didn't, eliminate that type of problem-solving.
+
+     Nancy wondered if it were true that the incidence of such sexual abuse 
+were highest among gynecologists and psychiatrists.  Alan Green replied,
+yes, they, of all physicians, have the most intimate contact with patients."
+He asked the group to consider, however, is it were ever appropriate for 
+a physician to have a sexual relationship with a patient to whom he is 
+attracted, whether inside or outside the medical context.  (            )
+thought that in any therapeutic setting, whether psychological or physical,
+the professional relationship precluded a more personal one, and if the
+boundary were crossed, the patient should post-haste be referred to another
+physician.  The conclusion voiced by Alan Green was that in no circumstance
+could such an intimate relationship be justified; the patient, whether
+a woman in stirrups or a man in a blood-pressure cuff, is in an "extremely 
+vulnerable position" and the physician must recognize his power and not take
+advantage of it.  Even when affairs or marriages between patient and physician
+occur long after treatment has ended, they cannot be condoned.
+
+
+     Having highlighted these tensions involved in delicate clinical situa-
+tions, the group then turned to weays of ameliorating them.  Nancy Gagliano
+began by considering how one simply talked about sexualtiy with a patient.
+Taking a sexual history is in itself a delicate procedure and Nancy 
+illustrated the point by contrasting two questionnaires; the first, taken
+from a counselor's examination, included questions such as : "What are
+{your} individual needs for optimal sexual functioning?," "How do {you
+and your partner} communicate about sexual issues?," "what is {your}
+masturbatory behaviour?", and "how do {you} meet {your} needs for intimacy?"
+while the second, from a dermatology exam, asked, "how frequently per
+month {do you have} intercourse?,"how frequently do you masturbate?" and
+"how is {your partner's} sexual functioning?"  Because dermatology deals
+with a patient's skin and hence his appearance, which very much influences
+his sexuality, and the article from which the latter questions were taken
+purported to teach its readers how to take a sexual history, Nancy found
+"appalling" the manner in which the patients were attacked by demands
+for "numbers of times" rather than treated as individuals with needs as
+the first questionnaire did.  She described an incident she had witnessed
+in the operating room where a male patient required urgent shortening
+of the tunica albuginea to relieve torsion of the testes.  The patient
+requested very neat stitches as he was a striptease dancer and "jokes
+flew around the room, where everyone else but the attendant was female."
+The resident surgeon after unsuccessfully quizzing the patient asked the
+attendant what the odd mark was on the patient's penis and was told
+"a human bite, of course." Turning to the patient, she asked, "How
+did you get that on your penis?' and he replied, 'Dear, you don't ask
+"what's that," you ask, "who bit you?"'  The important thing in talking about
+the patient's sexual history, Nancy concluded, was not to reveal one's
+bias or judgment, but rather to be bold and to provoke an open discussion.
+
+
+     (                 )pointed out that although that guideline worked in
+dealing with experienced but closed patients, igt might not work, for
+example, with inexperienced adolescents.  "If one followed Mitchell's 
+instructions and asked, 'when did you first masturbate?' of a young boy
+who hadn't yet masturbated, he might feel humiliated, afraid or forced to 
+lie."  It was difficult in some situations,(               ) suggested,
+to know whether to be bold or tentative.  
+
+     (                )a greed and said that over the summer a similar 
+question had arisen with young male diabetics.  It's a fact that male 
+diabetics become impotent as the disease progresses, so when does one 
+break it to a severely afflicted young patient?  A 15-year-old struggling
+with the normal throes of adolescence and with diabetes in addition, 
+probably would not be able to handle the knowledge. Yet the 'rule' of
+'5 years after the onset of the disease' seems simple enough in the
+classroom.(              ) suggested that one ought certainly to get an
+idea of the patient's sexual life first before broaching the subject
+of impotence, but that the problem remained of how to discuss sex with
+a young patient.  Should one wait until the patient brought up the 
+subject?  Steven Denlinger commented, "If I were to lose erectile func-
+tion in a few years, I'd certainly want to know about it as soon as
+possible."(                   ) added that it one said nothing, in
+the case of a well-documented disease like diabetes, the patient would
+most likely read or hear about the facts elsewhere, but noted that 
+"he may not come back to discuss them with you, but instead just get
+depressed."  Alan Green suggested that it was the physician's obligation
+to give the patient the possible outcomes whether or not he might learn 
+elsewhere, but Allan Hobson qualified the remark saying there could be
+no absolute rule -- one could never, categorically, tell each patient all
+aspects of his disease and prognosis; :some patients want to know, others
+make it clear they do not want to know, and some you know would over-
+react in terror at the bad news."  The same problem also occurs in
+choosing when to tell a patient he has a terminal illness. "My guideline,
+in part, " Allan said, "is to move as far as I can before encountering
+defensive or phobic anxiety."
+
+
+     Much of the art of medicine is in learning when to say what, agreed
+Alan Green.  As another example, he raised the problem of giving a prognosis
+to a patient with multiple sclerosis, a disease which varies widely in its
+progression.  A patient may experience two or three isolated bouts in a
+lifetime or he may be confined to a wheel chair within three years of the
+diagnosis. "Should one give him hope by giving only the first prognosis, or
+should one explain the whole continuum of possibilities?"
+
+     In reply(                        )
+ reiterated Allan Hobson's point, saying 
+that what one told a patient must depend on his particular history, both
+inside and out of the medical relationship.  He related a personal story.
+"I once had a psychiatric patient who developed neurological symptons
+and was hospitalized while I was away.  When I returned, I was faced with
+chossing the best method to break the news of a multiple sclerosis diagnosis
+to him.  I conferred with the neurologist and we both agreed that it was his 
+duty to deliver the diagnosis, but only if I could join my patient immediately
+afterwards to assess his reaction and offer him support."  The patient closed
+his ears to the worst in his prognosis and confided to Steve that he was
+afraid to go out into the world after having battled a psychiatric illness for
+15 years, only to be struck down by a physical one.  He would rather never 
+recover from his psychiatric illness, he said.  On the other hand, his family,
+who were involved in the ongoing psychotherapy, wanted to know specific 
+answers, to know all possible outcomes.  In dealing with the neurologist, the
+patient, and the patient's family, with their different levels of attitudes
+and authority, (                   ) had to make difficult decisions for which 
+there were no hard and fast rules, only feelings to play by.
+
+     Steven Denlinger marveled at the seeming smoothness of (              )'s
+experience in pooling resources to cope with the patient's crisis.  "When I 
+worked in the cardiac unit at the Brigham," he said,"I was required to trans-
+cribe verbatim my interviews with patients and then to discuss them line-
+by-line with my supervisor, to decide whether I had said the right thing at
+the right time."  In other specialties and at higher levels, did such instruc-
+tive scrutiny of one's techniques take place? 
+
+     In one's residency,(                   ) replied, such scrutiny did
+take place, but later, one simply had to learn by experience.  One must
+accept one's mistakes and like a comedian who makes a bad joke know how to turn
+bad to good and when not to repeat oneself.
+
+     "Such comfort as I've developed," emphasized Allan Hobson,"has come from
+patients, not other doctors.  They show you how far to go, if you try to
+keep in touch with your own feelings -- a difficult task since M.D.s are not
+supposed to have feelings.  Patients themselves are not as fragile as we
+think; they have their own resources, and they might some burdens easier
+than we do?"
+
+     The remarkable but simple thought that the patients might not simply be
+helpless subjects but rather helpful colleagues took hold and cheered the
+group.  Some recalled illustrative instances: Once (                  ) worked 
+as an orderly at the bottom of the hierarchy in a hospital, performing tasks
+considered unpleasant or improper for female staff. , one of which was
+euphemistically called "to finish a bath."  He would wash the genitalita of
+bedridden men after the female nurses had bathed their other parts.  Once while
+doing so for a young quadriplagic, he was embarrassed to see his patient's
+penis erect.  Immediately however, the young man perceived (             )'s
+feelings and said "don't worry about that; it happens all the time."
+
+     Another time he gave an enema to an elderly man who was ready and
+anxious to leave the hospital.  He could detect (              )'s discomfort 
+and being both patient and religious, began to pray audibly not only for
+himself, but also for (                )).  "I suspect that a lot of
+patients we'll work with will be veteran," concluded (                 ),"and
+will be willing to give of their experience and knowledge."
+
+     Steven Denlinger recalled a similar example from an article on medical
+ethics by Steve Hoffman in the Alumni Bulletin a few years ago.  The author
+described learning arterial punctures on an elderly woman, unsuccessfully 
+jabbing her arm again and again.  She responded by shouting to a passing 
+attendant, 'This medical student really knows his stuff,' because  in prac-
+ticing on her, he had made her feel a comrade in his learning and healing.
+
+     The discussion had gradually come to pinpoint the conventional roles
+of physician and patient as much of the source of unease in delicate
+clinical situations.  In fact, the group realized,a  simple way to deal with
+tensions or fears was to loosen the physician's garb when it became too
+restrictive, and to reveal the underlying human engagement.  Using one's
+feelings as guides rather than repressing them was often the way to the
+most humane, therapeutic solution in a difficult clinical problem, Allan 
+Hobson had said.  Yet the roles must also be maintained enough to impose
+responsibility and control, the group concluded in the remainder of the
+discussion.
+
+     (                      drew on the new sense of sensitivity and relief by
+asking whether it was acceptable to simply admit one's feelings, such as
+to say:"I'm a bit new at this -- my hands may be a bit cold."  Steven 
+Denlinger echoed her, saying he'd thought about that question for the last two
+years.
+
+     Allan Hobson encouraged the students to do so; "no matter how much exper-
+ience one has," he said,"one should never expect to be perfectly confident.
+When, in certain situations, I am forced to make a tentative approach to a
+patient's problem, I always begin by confessing, 'I'm not certain this is
+correct...' and only then offer my opinion."
+
+     But(                  )    raised the possibility that in some delicate
+examinations, for example, a pelvic, one's admission of inexpertise might
+instead make the patient more uncomfortable.
+
+      Allan replied that there was a difference in being comfortable or
+uncomfortable about one's own discomfort.  "If I accept my discomfort in a
+normal situation and state it without spreading anxiety and panic, and
+instead elicit my patient's alliance and cooperation, then I make him 
+feel better.  If I spill out my anxiety, without having thought it through, 
+then I make him feel worse."
+
+     It wasn't always so easy to admit one was still a student and not yet
+fully qualified, said Clare Bloom.  Often when accompanying a clinical tutor
+she would be introduced to a patient as 'Dr. Bloom.' a title she would then
+be forced to challenge if she wished to alleviate her inexpertise by
+explaining that she was not a doctor, and in fact, learning from the
+patient himself.
+
+     Steven Denlinger commented that in the previous years some of the I.C.M.
+students had been angered by just such authority from the attending physicians;
+particukarky when after having been touted as doctors, the students might
+worry they wouldn't know an 'ear from an elbow' on the physical exam.  They
+had suggested that students be given a unique and distinctive garb for 
+immediate identification in the hospital.  A variety of eager suggestions arose
+from the group.
+
+     Many patients, said (                   ), would easily recognize medical
+students simply by their behaviour and attitudes.  She related her story of 
+working in a hospital where she did not perform physical examinations on 
+patients but discussed with them details of theor personal lives such as
+impotence caused by illness.  Sometimes she would feel compelled to remind 
+patients that she was only a medical student and they would usually reply, "Oh,
+I know, that's the only reason I was talking to you."
+
+     "What do you think that meant?" asked Allan Hobson.
+
+     "That they were hostile to doctors," replied (                  ).
+
+     She further explained that because she was there to learn how people
+cope with illness, she had more time to spend with them, and never imposed
+a schedule on them.  They undoubtedly felt freer and more willing to open
+up to her and help her.
+
+     Alan Green agreed that as a student one has a very special relationship
+with the patient.  "As a student, you aren't ultimately responsible for the
+care of someone's illness and therefore his attitude toward you will be 
+different, more tolerant, understanding, and sympathetic than toward his
+doctor."
+
+     If, on the contrary, the patient's attitude were obnoxious or offensive,
+there would be nothing wrong in confronting him, concluded the group.  
+(                     ) confessed that a "tough guy" making rude comments
+would unnerve her more than a patient with an erection.   Allan Hobson said
+that in this new situation there were again no absolute rules on how to
+handle it, but that one had to be sensitive to the motivation between the
+patient's behaviour.  Alan Green said, "If you're a psychotherapist, talk
+about it."  Nancy emphasized that one oughtn't feel there is such "holiness"
+about the examination room that one couldn't say straight to the patient, 
+when the situation has gone too far,"Either you cooperate, or I won't be able 
+to help you."
+
+
+      "Not all medical students belong to William James Seminars; where do
+most learn what we've taught ourselves tonight?" asked (                   )
+Nancy related an experience, again from her summer's work, which revealed that
+some doctors never learn.  She observed a physician performing the Doppler
+technique on an elderely man to determine the patency of the dorsal arteries
+and veins of his penis.  After half an hour of the operation, the patient,
+very upset, asked what was wrong and the physician merely shrugged him off.
+Nancy interpreted his inability to discuss sexual dysfunction with the patient
+as an unwillingness to venture into an area where he knew little, but she
+emphasized that even without all the answers, a doctor must know how to deal
+with a patient's fears.
+
+     Is the necessary emotional and sexual education ever taught in a formal
+curriculum?  Students mentioned courses in sexual dysfunction, human
+reproductive pathophysiology, and human sexuality, which dealt largely
+with the physical aspects of sexuality.  In  the introductory psychiatry
+course, however, Alan Green said psychological aspects such as the demystifi-
+cation of the doctor's task in treating sexual problems were probed and
+ afilm of several downright funny but appalling scenes between doctors and
+patients was used to illustrate the points madein lecture.
+
+    (                )  described the reaction his class in the second year
+of medical shool had had to an explicit film on homosexuality: silence. 
+The instructors abruptly ended the class, the last of the course, and
+departed.  During the film it was clear that some strong emotional responses
+had been elicited from the audience but afterwards there was no discussion 
+whatsoever.
+
+    (                 )'s story prompted (              ) to describe the most
+popular course in his undergraduate school, which explored human sexuality
+through films and discussions.  "The small discussion groups saved the course,"
+said (                      ) "I compare my medical school education with what
+I learned then, which gave me much better education in sexuality and I feel
+for those people who don't get it here."
+
+     "Society in general expects us to be much better trained in sexuality
+than we are," nancy said.  "Society expects us to be the ones who are
+knowledgable and comfortable and who take the initiative.  We cannot wait
+for the patients to become so uncomfortable that they must confront the 
+issue."  Her words again pointed to the role that physicians are expected
+to play, but here to its necessary and beneficial aspects.  A physician
+who does not live up to the responsibility of his role can experience
+no relief in playing it down, only failure.
+
+     Two reactions from the group summarized the conclusions that had been 
+steadily illuminated.  (                ) said that the acceptance of
+his role as physician had come to him as a revelation; that it gave him 
+strength and made the responsibility it required him to shoulder seem reasonable and bearable.  Yet at the same time, he knew that he should always fall
+back on his feelings as the best guide to what was happening.
+
+     The feeling of the group towards the concerns they had expressed was 
+reflected in (              ) 's exclamation, "I feel better, just
+having talked about them."
+
+
+
+
+
+
+\end{document}
+
+
+
+
+
+
+
+
+
+30-Jul-84 23:32:29-EDT,280;000000000000
+Mail-From: RMS created at 30-Jul-84 23:30:28
+Date: Mon 30 Jul 84 23:30:28-EDT
+From: RMS@MIT-OZ
+Subject: Long message
+To: info-lispm@MIT-OZ
+
+That long message was not actually from me.
+I don't know who sent it or where it was from.
+I'm sorry if it harmed anyone.
+-------
+23-Aug-84 09:00:11-EDT,595;000000000001
+Mail-From: DJB created at 23-Aug-84 08:55:36
+Date: Thu 23 Aug 84 08:55:36-EDT
+From: Dave Braunegg <DJB@MIT-OZ>
+Subject: thin film cleaner for LISPM screens
+To: info-lispm@MIT-OZ
+cc: bug-lispm@MIT-OZ
+
+Does anyone know where I can purchase the thin film cleaner for use on
+LISPM screens?  This is supposed to be used to clean the screens but
+not take off the anti-glare coating (at least for 3600's, I'm not sure
+about CADR's).
+
+I need it for work at GTE Labs, not here at MIT.
+
+                                        Thanks,
+                                        Dave
+-------
+30-Aug-84 08:08:13-EDT,471;000000000001
+Received: from MIT-MC by MIT-OZ via Chaosnet; 30 Aug 84 08:07-EDT
+Date: Thursday, 30 August 1984, 08:07-EDT
+From:  <TOMR at MIT-OZ>
+Subject: thin film cleaner for LISPM screens
+To: DJB at MIT-OZ, info-lispm at MIT-OZ
+Cc: bug-lispm at MIT-OZ, MPSG at MIT-OZ
+In-reply-to: The message of 23 Aug 84 08:55-EDT from Dave Braunegg <DJB at MIT-OZ>
+
+Try:
+
+Optical Caoting Laboratory, Inc.
+2789 Northpoint Parkway
+Santa Rosa, CA 95407-7397
+Telephone: (7070545-6440
+
+11-Sep-84 21:18:43-EDT,467;000000000000
+Mail-From: CJL created at 11-Sep-84 21:15:49
+Date: Tue, 11 Sep 1984  21:15 EDT
+Message-ID: <CJL.12046841320.BABYL@MIT-OZ>
+From: Chris Lindblad <CJL@MIT-OZ>
+To:   Info-Lispm-MIT@MIT-OZ
+Subject: Announcement of availability of Symbolics Rel 5.2 at MIT
+
+I installed a 5.2 world on JIMI, ELVIS, LENNON, and MOON.
+If you want the latest and greatest from Symbolics, band transfer
+fep0:>Release-5-2.load.1 and fep0:>tmc5-mic.mic.296 from one of those
+machines. 
+18-Sep-84 00:16:39-EDT,598;000000000000
+Mail-From: CJL created at 18-Sep-84 00:14:58
+Date: Tue, 18 Sep 1984  00:14 EDT
+Message-ID: <CJL.12048446797.BABYL@MIT-OZ>
+From: Chris Lindblad <CJL@MIT-OZ>
+To:   Info-LISPM-MIT@MIT-OZ
+Subject: Better Symbolics Release 5.2 at MIT
+
+I have made a new world load, >Release-5-2-bulletin.load.1,
+on MOON. It has the two patches mentioned in the Release 5.2 bulletin.
+These two patches involve multiple fonts in ZWEI, and a make-system fix.
+These patches weren't in the release 5.2 I had previously announced,
+and only partially in the world >Release-5-2-fixed.load as announced by
+Pinhead. 
+ 9-Nov-84 01:51:29-EST,1050;000000000001
+Received: from MIT-MC by MIT-OZ via Chaosnet; 9 Nov 84 01:47-EST
+Date: Friday, 9 November 1984, 01:44-EST
+From: Chris Lindblad <cjl at MIT-OZ>
+Subject: New Symbolics world load for 3600s
+To: Info-Lispm-MIT at MIT-OZ
+
+There is a new and improved Symbolics world load availiable to MIT.  The
+name of the load is Release-5-2-prime.load, and it is available on any
+one of these machines for band transferring to your machine: SID, ELVIS,
+JIMI, MOON, BUDDY, DUANE, JANIS, MORRISON, ROBOT-1, ROBOT-4, APIARY-6,
+APIARY-5, ASPEN, ZERMATT. It is highly recommended that if you are
+currently using a 5.2 load, you start using this load as soon as
+possible.
+
+The changes to this world load significantly improve the performance of
+the Namespace system. Patches were added to query servers only at the
+local site and solve the MC/DM problem. Perhaps most importantly, with
+this new load, MIT is now running a 3600 as a primary namespace server.
+The machine's name is REAGAN. CADR-15 has been permanently
+decommissioned as a namespace server.
+ 9-Nov-84 12:20:22-EST,2685;000000000001
+Received: from MIT-BUGS-BUNNY by MIT-OZ via Chaosnet; 9 Nov 84 12:15-EST
+Received: by bugs-bunny.mit.arpa (4.12/4.8) id AA12987; Fri, 9 Nov 84 12:13:30 est
+Date: Fri, 9 Nov 84 12:13:30 est
+From: Web Dove <dove@bugs-bunny>
+To: Info-Lispm-MIT@mit-oz
+Subject: Re:  New Symbolics world load for 3600s (bug)
+
+It seems that the world load has lm15 listed as a secondary to MIT
+which is incorrect.  It is best to correct that fact before resaving the
+world.
+
+This is a problem I have noticed with the scrc namespace.  The problem
+can be observed by using the function (query-namespace ...) defined in
+tweety:>util>query-namespace.(lisp/bin).  This uses the function
+(neti:query-namespace-server class namespace properties) to find out
+current information about objects.  It prints whether the information
+was found on the server, whether the server considered it valid, and
+whether the information was found locally using find-object-named.
+
+It has usually been the case that when the primary was down, queries
+about objects in some namespace went out to secondaries of that
+namespace and came back "present but invalid" since the secondary
+couldn't verify the requested information.  However, on some occasions
+the server claimed that the information was present and valid even
+though it was out of date.
+
+This is what happened to me with the scrc namespace as seen from the scrc
+namespace with a query from daffy to ap6.  Apparently, ap6 was out of
+contact with scrc.  From daffy I asked for namespace scrc in namespace
+scrc via the following request:
+(query-namespace :namespace "scrc" :scrc)
+This came back valid and present, but showed lm15 as a secondary.
+
+I telneted to ap6 and tried the same query.  From there it came back
+invalid and present.  So ap6 knew the info was out of date and claimed
+that it was valid anyway!!  I then reset-host-availabilities on ap6,
+redid the query and got valid information.  Then tried the same back on
+daffy and got valid information.  The important fact was that daffy had
+know way of being sure that ap6 hadn't lied!  Only if you were using ap6
+itself could you tell that the info was invalid.
+
+To make a long story short I have the following suggestion for
+maintainers of secondaries.  In the file query-namespace.bin is another
+function (validate-namespace) that resets all host availabilities and
+then tries lots of queries for important things like namespaces and
+networks and primaries and secondaries (and some unimportant things like
+:user dove).  Please load this function and see that it evaluates
+completely before saving worlds on secondaries!  This will save the rest
+of us undue grief.
+13-Nov-84 23:14:46-EST,1912;000000000001
+Mail-From: MLY created at 13-Nov-84 23:11:31
+Received: from SCRC-STONY-BROOK by MIT-OZ via Chaosnet; 13 Nov 84 23:02-EST
+Received: from SCRC-NEPONSET by SCRC-STONY-BROOK via CHAOS with CHAOS-MAIL id 126476; Tue 13-Nov-84 23:06:10-EST
+Date: Tuesday, 13 November 1984, 23:03-EST
+From: David C. Plummer in disguise <DCP at SCRC-TENEX>
+Subject: "OZ" is not a flavor object
+To: Carl R. Manning <crm at MIT-OZ>, bug-lispm at MIT-OZ,
+    LispM-Users at MIT-OZ
+In-Reply-To: The message of 13 Nov 84 18:31-EST from Carl R. Manning <crm at MIT-OZ>
+Message-ID: <841113230319.7.NFEP@NEPONSET.SCRC.Symbolics.COM>
+ReSent-Date: Tue 13 Nov 84 23:11:30-EST
+ReSent-From: Your Friendly(*) Marketing Representative <MLY@MIT-OZ>
+ReSent-To: info-lispm@MIT-OZ
+
+    Date: Tuesday, 13 November 1984, 18:31-EST
+    From: Carl R. Manning <crm at MIT-OZ>
+
+    This bug is easily reproduced; just type <function> <help>.  However
+    it seems to be deeply rooted, as the same error crops up if you then try
+    to send a bug report, either from the debugger or from ZMail.  That's
+    why this message isn't in the form of a bug report.
+
+    I think something is finding a string where it expects a flavor object. 
+    Error messages look something like:
+
+	...
+
+The bug is in your init file.
+    (login-setq
+	...
+	    zwei:*host-for-bug-reports* "OZ"	  ; Where to BUG- people.
+	)
+zwei:*host-for-bug-reports* is supposed to be a host, not a string.
+Many other people have reported this, but apparently our replies haven't
+hit everybody.  Therefore, I am sending this to LispM-Uses.
+
+This applies for Symbolics machines running 5.2.
+zwei:*host-for-bug-reports* must be a host object, not a string.  If you
+don't like the default value (I don't know what it is) and if you want
+it to be OZ, you should use (net:parse-host "OZ") instead of just the
+string "OZ".  Everybody please update your init files.
+23-Nov-84 15:56:46-EST,463;000000000001
+Received: from MIT-XX by MIT-OZ via Chaosnet; 23 Nov 84 15:56-EST
+Received: from SUMEX-AIM.ARPA by MIT-XX.ARPA with TCP; Fri 23 Nov 84 15:56:46-EST
+Date: Fri 23 Nov 84 12:56:48-PST
+From: Eric Schoen <Schoen@SUMEX-AIM.ARPA>
+Subject: Imagen 8/300 laser printers
+To: info-lispm%MIT-OZ@MIT-XX.ARPA
+
+Does anyone know if ZetaLisp can hardcopy to an Imagen printer (i.e. does
+it speak the "hardcopy" protocol mentioned in the protocol manual)?
+
+Eric
+-------
+23-Nov-84 15:57:56-EST,463;000000000001
+Received: from MIT-XX by MIT-OZ via Chaosnet; 23 Nov 84 15:56-EST
+Received: from SUMEX-AIM.ARPA by MIT-XX.ARPA with TCP; Fri 23 Nov 84 15:56:46-EST
+Date: Fri 23 Nov 84 12:56:48-PST
+From: Eric Schoen <Schoen@SUMEX-AIM.ARPA>
+Subject: Imagen 8/300 laser printers
+To: info-lispm%MIT-OZ@MIT-XX.ARPA
+
+Does anyone know if ZetaLisp can hardcopy to an Imagen printer (i.e. does
+it speak the "hardcopy" protocol mentioned in the protocol manual)?
+
+Eric
+-------
+ 7-Jan-85 23:18:52-EST,920;000000000000
+Mail-From: CJL created at  7-Jan-85 23:18:00
+Date: Mon, 7 Jan 1985  23:18 EST
+Message-ID: <CJL.12077807479.BABYL@MIT-OZ>
+From: Chris Lindblad <CJL@MIT-OZ>
+To:   info-lispm-mit@MIT-OZ
+Subject: New world load for Symbolics 3600s
+
+In the next few days we will be soon running a beta test version of
+Release 6 on our namespace servers. There is a bug in release 5 systems
+that cause them to die sometimes when querying release 6 namespace
+servers. A patch exists to fix this bug, and a newly patched world load
+exists with this patch in it.  The name of the world load is
+">Release-5-2-name6.load", and you can band-transfer it from any one of
+many 7th floor machines (ELVIS, JIMI, JANIS, BUDDY, MOON, ROBOT1). You
+should put this world load on your machine today, and avoid problems
+tomorrow. If you want to patch an existing world load to avoid this bug,
+load "sys: patch; name6" and disk save the world.
+17-Jan-85 21:52:06-EST,1054;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 17 Jan 85 21:51-EST
+Received: from ti-csl by csnet-relay.csnet id a002146; 17 Jan 85 21:21 EST
+Date: 17 Jan 1985 1742-CST
+From: Sloat%ti-csl.csnet@csnet-relay.arpa
+Subject: Any cures for 5.2 Namespace Login Glitch
+To: Info-Lispm-Mit%MIT-OZ@mit-mc.ARPA
+Received: from csl60 by ti-csl; Thu, 17 Jan 85 18:15 CST
+
+Lispm Users,
+        While running 5.2 on a 3600 made at TI CSL from 5.0/5.1 via
+loading Patches I find that under certain conditions our Namespace
+machine requires manual login (ie. force-user-to-login).  I have heard
+some rumors about a "5.2 Prime" but I haven't heard what fixes are
+incorporated in that Release. Did anyone have a fix for this bug
+before Release 6 was installed? (other than dedicating a Lispm as
+Namespace Server)
+                                Thanks in Advance,
+                                        Jay Sloat
+                                        Texas Instruments, Dallas
+                                        Sloat%TI-CSL@csnet-relay
+-------
+
+15-Feb-85 00:55:50-EST,719;000000000000
+Mail-From: CJL created at 15-Feb-85 00:55:36
+Date: Fri, 15 Feb 1985  00:55 EST
+Message-ID: <CJL.12087786719.BABYL@MIT-OZ>
+From: Chris Lindblad <CJL@MIT-OZ>
+To:   Info-lispm-mit@MIT-OZ
+Subject: Patch and world load that fixes Symbolics 3600 namespace lossage
+
+I have tried out hornig's patch, and made a world load that seems to fix
+the Symbolics 3600 namespace blowout your machine might be having when
+you boot it.  The world load is >Release-5-2-qnam6.load and can be found
+on any one of: MOON, ELVIS, BUDDY, JANIS, SID, DUANE, LENNON, ROBOT1,
+ROBOT4.  You can band transfer this world onto your machine, or if you
+want to load the patch yourself, just load "oz:<cjl>qns" and then disk
+save your world.
+ 6-Mar-85 15:14:08-EST,643;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 6 Mar 85 15:13-EST
+Received: from BBNA.ARPA by MIT-MC.ARPA; WED 6 MAR 1985 1509 EST
+Date: Wed 6 Mar 85 15:10:27-EST
+From: TI Computer Science Lab, Dallas <TICSL@BBNA.ARPA>
+Subject: INFO-LISPM MAILING LIST
+To: INFO-LISPM%MIT-OZ@MIT-MC.ARPA
+cc: FORDYCE%CSL60%TI-CSL@CSNET-RELAY.ARPA
+REPLY-TO: FORDYCE%CSL60%TI-CSL@CSNET-RELAY
+
+PLEASE DELETE THE FOLLOWING USER FROM THE INFO-LISPM
+MAILING LIST:
+
+	TICSL@BBNA
+
+PLEASE ADD THE FOLLOWING USER TO THE INFO-LISPM MAILING
+LIST:
+
+	INFO-LISPM-INCOMING%CSL60%TI-CSL@CSNET-RELAY
+
+REGARDS, DAVID FORDYCE
+	TI-CSL 2060 SYSTEM MANAGER
+-------
+28-Mar-85 21:46:40-EST,818;000000000000
+Mail-From: CJL created at 28-Mar-85 21:45:59
+Date: Thu, 28 Mar 1985  21:45 EST
+Message-ID: <CJL.12098762244.BABYL@MIT-OZ>
+From: Chris Lindblad <CJL@MIT-OZ>
+To:   info-lispm-mit@MIT-OZ
+Subject: Symbolics system release 6.0 for 3600's is now avaliable here at mit
+
+Symbolics system release 6.0 for 3600's is now avaliable for machines
+here at mit. Included in this release is a distribution of TCP/IP.  If
+you want to get a copy of this release on your machine, band transfer
+from JIMI >MIT-6-0.load to your machine, and also take version 319 of
+the microcode. If you machine is an AI lab machine, you want
+>AI-6-0.load instead.
+
+Also with this release the sys host for mit ans ai sites is now reagan.
+The mit and ai site directory is reagan:>sys>site, and the lispm sources
+are kept on reagan as well.
+ 1-Apr-85 22:10:03-EST,2208;000000000000
+Received: from SCRC-STONY-BROOK by MIT-OZ via Chaosnet; 1 Apr 85 22:06-EST
+Received: from SCRC-NEPONSET by SCRC-STONY-BROOK via CHAOS with CHAOS-MAIL id 206875; Mon 1-Apr-85 20:42:06-EST
+Date: Monday, 1 April 1985, 20:42-EST
+From: DCP at SCRC-QUABBIN
+Sender: DCP at SCRC-QUABBIN
+Subject: Release 6
+To: Info-LispM at OZ
+Supersedes: <850328214657.0.NFEP@NEPONSET.SCRC.Symbolics.COM>
+Message-ID: <850401204259.6.NFEP@NEPONSET.SCRC.Symbolics.COM>
+
+[I tried to send this Thursday night, but misspelled info-lispm.  The
+examples here have already been answered, but maybe that's good in that
+it will allow a more global picture of what I'm trying to say.]
+
+I just (textually) scanned my mailbox, and it appears to me that a lot
+of the bug reports are knee-jerk reactions.  For example (sorry not to
+include references, I don't have Zmail fired up yet):
+
+LOOP grinding is broken.  No example was provided.  If this is in
+reference to the way Zwei now indents LOOP, many consider it a feature.
+There is a variable (zwei:*inhibit-fancy-loop-indentation*) that turns
+it off.  The variable is in the Release notes I believe (which you
+probably don't have yet) and can also be found by disassembling
+zwei:indent-loop
+
+DEFF loses when not at top level.  That is true.  DEFF is a special form
+that is only intended to be used at top level.  THIS IS JUST ONE EXAMPLE
+OF A MUCH LARGER GENERAL CHANGE.  Many things were made more consistent
+with the introduction of lexical scoping.  Another things you will find
+is that you can't funcall special forms.  For example,
+	(funcall #'or a b c)
+will no longer work.  It is a mistake it ever did.
+
+There are three things I ask before spouting bug reports: (1) Try to
+find some release notes or use the document examiner to scan them (I
+know this isn't as good as paper for rapid scanning), (2) Think about
+the reasonableness of what used to work and why it may have changed, (3)
+compare the behavior of the system with the specifications of Common
+Lisp, especially with language issues; if there is a conflict in
+semantics between Release 5 and Common Lisp, Common Lisp will often win.
+We are not IBM; complete compatibility is not a goal.
+30-Apr-85 20:11:41-EDT,375;000000000000
+Mail-From: STRAZ created at 30-Apr-85 20:11:20
+Date: Tue, 30 Apr 1985  20:11 EDT
+Message-ID: <STRAZ.12107384843.BABYL@MIT-OZ>
+From: Steve Strassmann <STRAZ@MIT-OZ>
+To:   info-lispm@MIT-OZ
+Subject: request for info about matrix pseudo-inverse
+
+
+Before I go and write it, does anyone know of existing code that
+computes the pseudoinverse of an N by M matrix? Thanks.
+31-May-85 17:30:22-EDT,3355;000000000000
+Received: from MIT-REAGAN by MIT-OZ via Chaosnet; 31 May 85 17:29-EDT
+Received: from SCRC-STONY-BROOK by MIT-REAGAN via INTERNET with SMTP id 5473; 31 May 85 17:30:50-EDT
+Received: from ALBATROSS.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 247178; Fri 31-May-85 17:25:50-EDT
+Date: Fri, 31 May 85 17:30 EDT
+From: Ilene H. Lang <LANG@SCRC-YUKON.ARPA>
+Subject: Communication Channels Between M.I.T. and Symbolics
+To: INFO-LISPM@OZ.MIT, BUG-LISPM@OZ.MIT, BUG-SYMBOLICS-SOFTWARE@OZ.MIT
+cc: Lang@SCRC-YUKON.ARPA
+Message-ID: <850531173020.0.LANG@ALBATROSS.SCRC.Symbolics.COM>
+
+
+The purpose of this message is to publicize the channels of
+communication that we will be using with M.I.T.  We are trying to
+distinguish between the two most common types of discussions:  technical
+and administrative/policy.
+
+
+Disclaimer:
+
+I realize that this message will be read by people other than M.I.T.
+users, due to the broad distribution of these mailing lists.  However,
+please understand that the procedures described herein apply only to
+M.I.T. users.
+
+
+Technical Discussions:
+
+These discussions happen on Bug-LispM.  Symbolics people will
+communicate freely.  If the discussion leads to the conclusion that
+M.I.T. needs a special patch, the patch will be forwarded to Dennis
+Doughty, the Symbolics Field Office Software Support person responsible
+for providing service to M.I.T.  Dennis will deliver it to M.I.T.  We
+hope that this will provide the most prompt and efficient response, as
+well as the most complete technical service, to M.I.T. users.
+
+
+Administrative/Policy Discussions:
+
+These discussions are appropriately left to administrative people.  Jim
+Roche, the Symbolics sales representative who is responsible for M.I.T.,
+is our spokesperson.  He has identified the administrative people at
+M.I.T. who buy systems, negotiate deals, sign contracts, and discuss
+policy.  These people include, but are not necessarily limited to:
+
+	AI Lab		Karen Prendergast 
+
+	LCS		Dave Gifford
+			Greg Papadopoulos
+			Richard Soley
+			Peter Szolovits
+			Richard Zippel
+
+	RLE		Web Dove
+			Lance Glasser
+			Ken Krohn
+			Bill Rabinowitz
+
+	ERL		Roger M. Turpening
+
+	Arts & Media	Dave Zeltzer
+
+Any M.I.T. user who has questions or comments regarding purchases,
+loaners, policies, and the like, should contact the M.I.T.
+administrative person who is responsible for his or her machine.  If you
+don't know who that person is, you can call Jim Roche (577-7600), and he
+will help you figure it out.  You can also send mail to ROCHE at
+Symbolics.
+
+Our technical people will not respond to any administrative/policy
+issues that come to Symbolics via Bug-LispM.  Instead they will redirect
+the question to an appropriate internal forum, to be discussed, resolved,
+and communicated by the administrative folks.  Such issues will be
+acknowledged on Bug-LispM, and periodic status reports will be issued.  
+
+
+Current Status of Open Issues:
+
+A revision of the Release 6 Source Code Distribution Program is now in
+place.  Jim Roche has all the details.  As soon as we have a general
+flyer for distribution to customers, we will send it to these mailing
+lists.  In the meantime, contact your administrative person.  
+
+
+
+
+
+From:	Ilene H. Lang, Vice President, Software Products 
+
+ 6-Jul-85 14:59:01-EDT,294;000000000000
+Received: from MIT-MC.ARPA by MIT-OZ via Chaosnet; 6 Jul 85 14:58-EDT
+Date: Sat,  6 Jul 85 14:58:32 EDT
+From: George J. Carrette <GJC@MIT-MC.ARPA>
+To: INFO-LISPM@MIT-MC.ARPA
+Message-ID: <[MIT-MC.ARPA].566163.850706.GJC>
+
+Does anybody have a DVI driver for the Lispmachine window system?
+29-Jul-85 15:04:49-EDT,539;000000000000
+Received: from MIT-MC.ARPA by MIT-OZ via Chaosnet; 29 Jul 85 15:04-EDT
+Received: from SUMEX-AIM.ARPA by MIT-MC.ARPA 29 Jul 85 15:04:30 EDT
+Date: Mon 29 Jul 85 10:38:55-PDT
+From: Richard Acuff <Acuff@SUMEX-AIM.ARPA>
+Subject: Metering Consing under 6.0
+To: info-lispm@MIT-MC.ARPA
+Message-ID: <12130906371.40.ACUFF@SUMEX-AIM.ARPA>
+
+   Is there a method for finding out what functions are responsible for
+what consing under 6.0?  The tool that used to do this under 5 doesn't
+seem to work any longer.
+
+	Thanks,
+	-- Rich
+-------
+ 3-Aug-85 18:39:22-EDT,566;000000000000
+Received: from MIT-MC.ARPA by MIT-OZ via Chaosnet; 3 Aug 85 18:39-EDT
+Date: Sat,  3 Aug 85 18:40:30 EDT
+From: George J. Carrette <GJC@MIT-MC.ARPA>
+Subject: KERMIT for LISPMACHINE
+To: INFO-LISPM@MIT-MC.ARPA
+Message-ID: <[MIT-MC.ARPA].599622.850803.GJC>
+
+A KERMIT that will run in both MIT System 99 and Symbolics
+Release 6.0 is on MIT-MC. See GJC;LM0HLP DOC.
+A simple (MAKE-SYSTEM 'KERMIT) should be sufficient
+for those with system sources pointing to ZERMATT
+or the MIT system 99. Try it out now before it
+gets into the Columbia U kermit distribution.
+ 5-Aug-85 12:56:47-EDT,547;000000000000
+Received: from MIT-REAGAN.ARPA by MIT-OZ via Chaosnet; 5 Aug 85 12:56-EDT
+Received: from JANIS by MIT-REAGAN via CHAOS with CHAOS-MAIL id 6798; Mon 5-Aug-85 12:58:24-EDT
+Date: Mon, 5 Aug 85 12:56 EDT
+From: lmz@OZ
+Sender: PARKER@MIT-REAGAN
+Subject: TI Explorers
+To: info-lispm-mit@OZ
+Message-ID: <850805125633.3.PARKER@JANIS>
+
+
+Does anybody know the location and/or status of TI Explorers in Tech
+Square?  We are interested in this for the MacDoc AI/LCS Documentation
+project, and were wondering if they should be included.
+
+Thanks.
+ 6-Nov-85 17:23:23-EST,1323;000000000000
+Received: from MIT-MC.ARPA by MIT-OZ via Chaosnet; 6 Nov 85 17:19-EST
+Received: from MIT-CHERRY.ARPA by MIT-MC.ARPA via Chaosnet; 6 NOV 85  16:56:22 EST
+Date: Wednesday, 6 November 1985, 16:56-EST
+From: Soley@MIT-MC
+Subject: Common Lisp meeting
+To: RZ@ZERMATT
+cc: Soley@MIT-MC, INFO-LISPM-MIT@OZ, INFO-NIL@MIT-MC,
+    INFO-MACLISP-LOCALS@MIT-MC
+In-Reply-To: The message of 6 Nov 85 10:27-EST from Richard E. Zippel <RZ at ZERMATT>
+Message-ID: <851106165614.1.SOLEY@CHERRY.MIT.EDU>
+
+    Date: Wed, 6 Nov 85 10:27 EST
+    From: Richard E. Zippel <RZ at MIT-ZERMATT.ARPA>
+    To:   Soley at MIT-MC.ARPA
+    Re:   Common Lisp meeting
+
+	Date: Tue, 5 Nov 85 17:04 EST
+	From: Soley@MIT-MC.ARPA
+
+	    Date: Tue, 5 Nov 85 10:59 EST
+	    From: Richard E. Zippel <RZ@MIT-ZERMATT.ARPA>
+
+	    Is there any organization among the MIT people as to who will represent
+	    MIT at the meeting?
+
+    Do you want to send a message out to BUG-LISPM, INFO-LISPM asking for
+    volunteers?
+
+RZ has pointed out that there should probably be some organization among
+the MIT people attending the next Common Lisp meeting, especially since
+there will probably be a limit to the number of VOTING attendees from
+each organization.  Anyone want to volunteer, or have any other good
+organizational ideas?
+
+	-- Richard
+13-Nov-85 13:10:47-EST,639;000000000000
+Received: from MIT-BUGS-BUNNY.ARPA by MIT-OZ via Chaosnet; 13 Nov 85 13:10-EST
+Return-Path: <cory@mit-bugs-bunny>
+Received: by mit-bugs-bunny.ARPA (4.12/MIT.1x)
+	 on Wed, 13 Nov 85 13:07:09 est; User info-lispm@oz; Host oz
+Date: Wed, 13 Nov 85 13:07:09 est
+From: Cory Myers <cory@mit-bugs-bunny>
+To: info-lispm@oz
+Subject: Magnifying Blinker Wanted
+
+I seem to remember once playing with a magnifying blinker but I can not
+remember where I saw it.  I find some stuff in HACKS for magnifying blinkers
+but the actual blinker definition code is missing.  I would appreciate any
+leads.  Thank,
+
+	Cory Myers (cory@mit-bugs-bunny)
+16-Nov-85 03:04:46-EST,1539;000000000000
+Mail-From: CJL created at 16-Nov-85 03:04:10
+Date: Sat, 16 Nov 1985  03:04 EST
+Message-ID: <CJL.12159637575.BABYL@MIT-OZ>
+From: Chris Lindblad <CJL@MIT-OZ>
+To:   info-lispm-mit@MIT-OZ
+Subject: Availiability of Symbolics Release 6.1 for 3600's at MIT
+
+We now have Release 6.1 of the Symbolics system here at MIT.  Here's how
+to get it onto your machine.
+
+If you use an AI lab machine, you have to get a FEP:>AI-6-1-A.load
+world load on your machine. There are many machines at the lab that
+already have this world installed on them. Use the Copy World command to
+copy the world from one of them to your machine.
+
+If you use any other machine, you have to get a FEP:>MIT-6-1-A.load
+world load on your machine. You can copy it over from other machines
+that you might know have it with the Copy World command. Two machines
+that surely have this band are JANIS and BUDDY, but look around first
+before transferring from one of those machines, because they might be
+busy.
+
+You will also need microcode version 336 to run Release 6.1. Make sure
+to type Copy Microcode 336 to your machine before you try to run 6.1.
+
+People with FPA's on their machine should note a warning included with
+the distribution: "If our machine has a Floating Point Accelerator, then
+you should use FPA microcode. Instead of using the standard FPA
+microcode you would ordinarily use, you should use the color version of
+the FPA microcode." Consult the paper titled "Documentation Updates for
+Release 6.1" for the full text of this warning.
+ 5-Dec-85 17:19:16-EST,769;000000000001
+Received: from MIT-MC.ARPA by MIT-OZ via Chaosnet; 5 Dec 85 17:18-EST
+Received: from BBNG.ARPA by MIT-MC.ARPA  5 Dec 85 17:19:32 EST
+Date: Thu 5 Dec 85 17:15:40-EST
+From: INGRIA@BBNG.ARPA
+Subject: LUNAR for LISPMs
+To: INFO-LISPM@MIT-MC.ARPA
+
+In the Greenblatt, et al paper, ``The LISP Machine'', the following
+provocative paragraph appears:
+
+``As a demonstration of the system, and a test of its capabilities,
+two large programs have been brought over from the PDP-10.  William
+Wood's LUNAR English-language data-base query system was converted
+from INTERLISP to MACLISP, thence to LISP machine LISP.''
+
+Anybody know the whereabouts of a copy of this LISPM version of LUNAR?
+I'm very interested in obtaining a copy.
+
+Thanks in advance,
+Bob
+-------
+18-Dec-85 12:31:24-EST,476;000000000000
+Received: from MIT-POINCARE by MIT-OZ via Chaosnet; 18 Dec 85 12:30-EST
+Date: Wed, 18 Dec 85 12:30 EST
+From: Henry Lieberman <Henry@OZ.AI.MIT.EDU>
+Subject: Optimice for Lispms
+To: Info-Lispm-MIT@OZ.AI.MIT.EDU
+Message-ID: <851218123044.3.HENRY@POINCARE.AI.MIT.EDU>
+
+
+Tired of your sluggish mouse?  Why not replace your mouse with 
+an optical one?  If anyone is interested, I have info on how
+to get Xerox optical mice and hook them up to Lispms.  They cost
+$325.
+
+21-Dec-85 20:30:59-EST,1538;000000000000
+Mail-From: CJL created at 21-Dec-85 20:30:41
+Date: Sat, 21 Dec 1985  20:30 EST
+Message-ID: <CJL.12169003131.BABYL@MIT-OZ>
+From: Chris Lindblad <CJL@MIT-OZ>
+To:   INFO-LISPM-MIT@MIT-OZ
+Subject: New world loads availiable for Symbolics machines.
+
+If you have been having Namespace problems (!) on your Symbolics lispms
+lately, like not being able to refer to OZ and getting random
+notifications about machines getting deleted from the MIT namespace, you
+probably are running an old world load that will cause you problems, and
+you need to get a new world load on your machine.
+
+If you are using an AI lab machine, you should be running at least the
+world AI-6-1-B.load. This load is on most of the lab machines, but not
+all. You can easily get this world on your machine by typing
+(dis:get-distribution), and then rebooting when it's done.
+
+If you're not using an AI lab machine, but are using a MIT machine, you
+need to use the :Copy World command to get a new world load on your
+machine. If your machine has the new fep system installed in it (version
+127), then you want to copy the world MIT-6-1-C.load from JIMI, which is
+an incremental save from the distribution world Release-6-1.load, which
+you copy from one of many machines. If you don't have new fep proms in
+your machine yet, copy the world MIT-6-1-B.load from JIMI. You should
+arrange with your service rep to get V127 Fep proms installed in your
+machine as soon as possible. See the Release 6.1 patch notes for
+information about the new FEP proms.
+29-Apr-86 18:32:37-EDT,2691;000000000000
+Received: from SPACE-CADET.AI.MIT.EDU by OZ.AI.MIT.EDU via Chaosnet; 29 Apr 86 18:32-EDT
+Date: Tue, 29 Apr 86 18:32 EDT
+From: Patrick A. O'Donnell <PAO@EECS.MIT.EDU>
+Subject: Compromised passwords
+To: psr@OZ.AI.MIT.EDU, drm@MIT-XX.ARPA
+cc: info-lispm@OZ.AI.MIT.EDU
+Message-ID: <860429183208.9.PAO@SPACE-CADET.AI.MIT.EDU>
+
+It appears that someone has hacked Illustrate such that it
+has been collecting passwords from at least one user.  The creation date
+on oak:>illustrate>ill-font.bin is 08/06/85.
+
+------------------------------
+
+-> si:advised-functions
+
+(CHAOS:CHAOS-SCREEN-SPY-SERVER-FUNCTION-INTERNAL FS:GET-USER-ID-AND-PASSWORD)
+
+-> (grindef FS:GET-USER-ID-AND-PASSWORD)
+
+(ADVISE FS:GET-USER-ID-AND-PASSWORD
+        :AFTER
+        :PATCH-242.356
+        0.
+        (PROCESS-RUN-FUNCTION "Notify" (FUNCTION SI:SEND-IT) VALUES))
+(DEFF FS:GET-USER-ID-AND-PASSWORD
+      '#<DTP-COMPILED-FUNCTION FS:GET-USER-ID-AND-PASSWORD 11532517>)
+*
+
+-> (grindef si:send-it)
+
+(DEFUN SI:SEND-IT (VALUES)
+    (IGNORE-ERRORS (WHEN (AND (STRING-EQUAL (FIRST VALUES) "PSR")
+                              (SECOND VALUES))
+                         (ZWEI:SEND-MESSAGE-STRING "DRM@XX"
+                                                   (FORMAT NIL
+                                                           "~A = ~A"
+                                                           (FIRST VALUES)
+                                                           (SECOND VALUES))))))
+*
+
+-> (describe 'si:send-it)
+
+SI:SEND-IT is the function (SI:DIGESTED-LAMBDA (LAMBDA ** **) (SI:SEND-IT) ...): (VALUES)
+    (SI:DIGESTED-LAMBDA (LAMBDA (VALUES) (IGNORE-ERRORS (WHEN (AND ** **) (ZWEI:SEND-MESSAGE-STRING "DRM@XX" **)))) (SI:SEND-IT) 2049. 262401. NIL (VALUES) NIL (IGNORE-ERRORS (WHEN (AND (STRING-EQUAL ** "PSR") (SECOND VALUES)) (ZWEI:SEND-MESSAGE-STRING "DRM@XX" (FORMAT NIL "~A = ~A" ** **))))) is a list
+    
+SI:SEND-IT is in the SYSTEM-INTERNALS package.
+SI:SEND-IT has property :SOURCE-FILE-NAME: #<LOGICAL-PATHNAME "ILL: CODE; ILL-FONT">
+    #<LOGICAL-PATHNAME "ILL: CODE; ILL-FONT">, an object of flavor FS:LOGICAL-PATHNAME,
+     has instance variable values:
+     FS:TRANSLATED-PATHNAME:   #<LMFS-PATHNAME "OAK:>illustrate>ill-font">
+     FS:TRANSLATION-TICK:      5.
+     FS:HOST:                  #<LOGICAL-HOST ILL>
+     FS:DEVICE:                :UNSPECIFIC
+     FS:DIRECTORY:             ("CODE")
+     FS:NAME:                  "ILL-FONT"
+     FS:TYPE:                  NIL
+     FS:VERSION:               NIL
+     SI:PROPERTY-LIST:         NIL
+     FS:STRING-FOR-PRINTING:   "ILL: CODE; ILL-FONT"
+    
+SI:SEND-IT
+
+------------------------------
