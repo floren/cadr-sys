@@ -1,0 +1,115 @@
+;;; -*- Mode:LISP; Package:USER; Base:10; Readtable:T; Patch-File:T -*-
+;;; Patch directory for System version 99
+;;; Written 10-Nov-84 20:51:48 by mly,
+;;; while running on Unknown from band 6
+;;; with Don't-dump-a-band! Inconsistent (unreleased patches loaded) System 99.11, CADR 4.0, Experimental ZMail 54.2, MIT-Specific 23.0, microcode 320, GC@2.
+
+(:EXPERIMENTAL
+ ((0 "System Loaded" "Mly" NIL)
+  (1 "COPY-FILE, RENAMEF parsing new file name.
+Make FASL-TEMP-AREA, FASL-TABLE-AREA dynamic.
+:DELETE-MULTIPLE-FILES pathname operation exists.
+MERGE-PATHNAME-DEFAULTS bug.
+:REMOTE-CONNECT bug.  CHAOS:RETRANSMISSION bug." "RMS" NIL)
+  (2 "Printing of package objects.
+Chaosnet retransmission every 1//2 second.
+LET-IF arg evaluation bug.  PROGW now uses global environment.
+ERRSET-HANDLER bug." "RMS" NIL)
+  (3 "Terminal 1 F bug (chaos:finger-lispms).
+Bug writing header comments of patch files.
+INIT-FILE-PATHNAME ref'd in package SI.
+FS:ALL-DIRECTORIES problems.  Translation of wild logical directories.
+FS:MAKE-PATHNAME-DEFAULTS.  DESCRIBE-SYSTEM.
+Defaulting of explicitly specified object file name in DEFSYSTEM.
+Explicit object file in DEFSYSTEM defaults to the source file." "RMS" NIL)
+  (4 "bug in OPEN with :PROBE keyword.
+Make symbol || read in properly.
+Fix ZWEI:SET-COMTAB-CONTROL-INDIRECTION typo.  Run it again.
+FILLARRAY bug.  Lexical scoping of block names and tags bug.
+MAKE-LOGICAL-PATHNAME-HOST bug (MLY).
+MERGE-PATHNAMES-1 bug (MLY)." "RMS" NIL)
+  (5 "LOAD-AND-SAVE-PATCHES lets you specify band to save on as a fixnum
+Reading uninterned symbols bug
+STRING-PLURALIZE bug
+(TYPEP foo 'COMPLEX) typo
+(TYPEP foo 'STRING-CHAR) optimizes in compiler
+New functions:
+  SEND-IF-HANDLES
+  LEXPR-SEND-IF-HANDLES
+  OPERATION-HANDLED-P
+Brand s compatible functions:
+  CHAR-FLIPCASE
+  STRING-FLIPCASE -- with bd incompatible inconsistent arguments
+  CHAR-STANDARD -- has NO EFFECT on system string functions.
+                   Takes one arg and returns T
+Stepper hacks lexical macro and function definitions
+TRACE and ADVISE encapsulation code miscompiled
+(PUSHNEW FOO BAR #'TEST) optimizes (used to only optimize 'TEST)
+Closures print more informatively
+LOAD-PATCHES only tries to load translations file for logical
+  hosts created by FS:MAKE-LOGICAL-PATHNAME-HOST" "Mly" NIL)
+  (6 "SI::GET-NEW-SYSTEM-VERSION
+DESCRIBE-SYSTEM
+Lap bug -- outputting MISC when should have been MISC1 causing overLAP" "RMS" NIL)
+  (7 "interpreted &key conses less
+make lmfile accessible
+(^ float negative-fixnum) bug
+faster numeric contagion
+compiler: (declare (ignore *special*)) causes barfage
+login-setq uses lexical env
+inspector uses more lenient eval
+typo in unfasl
+altering window shapes from system edit menu bug" "Mly" NIL)
+  (8 "READ, READ-FOR-TOP-LEVEL, READ-OR-END all take kludgey third
+  rubout-handler-options argument.  (It is preferable to use
+  the WITH-INPUT-EDITING macro directly than to supply this arg.)
+Merge bucky bits into mouser clicks earlier to avoid timing screw.
+In Split Screen system menu, plain window is just that -- TV:WINDOW
+Patchable systems cache the the truename of their patch-directory,
+  and do not bother to reread it if it hasn't changed." "Mly" NIL)
+  (9 "Disassembly works better with different *print-case*'s
+load-and-save-patches spazz
+Zmacs documentation functions hack new-style documentation
+Zmacs c-x j doesn't cause cerebral haemorrhage when jumping to another buffer
+read-delimited-string understands characters (but copies... sigh)
+si:function-spec-get takes third optional default argument
+(replace foo foo ...) bug
+Zmacs pathname history records the result of parsing what you typed to it
+ Is this a good idea?
+Directory lister ~X Foo.
+cerror (commonlisp style)'s first arg is a format string, (not just a
+ literal string) and gets used on the same format args as the second arg.
+color:color-draw-line
+macro-function, special-form-p take environment arg.
+Make multiple-value-call a special form, for what that's worth.
+Zmacs key-for-command (as used by apropos) had typo.
+Compiler makes available *check-style-p* to optimizers and p1 handlers
+Compiler wasn't optimizing args to lexical functions
+Creation of lisp patch files (m-x add patch & friends) uses generic type" "Mly" NIL)
+  (10 "Crufty site kludge clobbers pathname translations! Thousands homeless!
+time parser accepts ISO formats. eg 1966-10-27 and 1966-Oct-27
+Chaos unknown host doesn't blow out when arg not a string
+time:*daylight-savings-time-p-function*
+new date-print-modes: /"yyyy/" sequence to go with /"yy/" sequence: dd////mm////yyyy, etc
+inserting characters objects in zmacs
+zwei:insert-moving takes optional start and end substring args
+macros may expand into declarations (in compiler)
+documentation declaration -- useful for macros to expand into
+m-x Add patch records source file version number
+#| reader macro eof bug
+set-syntax-from-char, set-macro-character, etc, etc hack character objects
+reduce bug
+Bug reading zmacs register names
+:tyoing characters to sheets
+sheets clip lozenged strings more winningly
+File resume handler doesn't blow out if given new pathname
+Activity string returned by NAME server
+  Other random cruft" "Mly" NIL)
+  (11 "gc-immediately doesn't run pre full-gc-initialization-list forms
+multiple-value-bind compilation
+format temporary string cache
+stupid float printing bug
+copy-value bug. compiler support
+inspector won't highlight mapping tables which would make it blow out" "RMS" T)
+  (12 NIL "Mly" NIL)
+  ))

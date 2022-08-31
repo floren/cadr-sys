@@ -1,0 +1,14 @@
+;;;-*- Mode:LISP; Package:FS; Readtable:CL; Base:10 -*-
+
+(SET-LOGICAL-PATHNAME-HOST "SYS"
+  :PHYSICAL-HOST "MIT-OZ"
+  :TRANSLATIONS '(("LMLIB;" "OZ:KANSAS:<LMLIB>")
+		  ("PRESS-FONTS;" "OZ:KANSAS:<FONTS>")
+		  ("CHAOS;HOSTS TEXT" "OZ:KANSAS:<SYSTEM>HOSTS.MIT")
+		  ;; this kludge is to make chaos and ip pathnames backtranslate into network;
+		  ("NETWORK; *;" "OZ:KANSAS:<L.NETWORK.*>")
+		  ("IP;" "OZ:KANSAS:<L.NETWORK.IP>")
+		  ("CHNCP;" "OZ:KANSAS:<L.NETWORK.CHAOS>")
+		  ("SITE;" "OZ:OZ:<L.SITE>")
+		  ("*;" "OZ:KANSAS:<L.*>")
+		  ("*;*;" "OZ:KANSAS:<L.*.*>")))

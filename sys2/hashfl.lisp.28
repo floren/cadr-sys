@@ -1,0 +1,553 @@
+;;; -*-Mode: Lisp; Package: SI; Base: 8-*-
+
+;;; hash table flavors.
+
+;;; The actual hash table is an array called the hash-array.
+;;; The flavor instance serves only to point to that.
+;;; Hash arrays are defined in the file HASH.
+
+(DEFVAR HASH-TABLES-REHASH-BEFORE-COLD NIL
+  "List of hash tables to rehash when DISK-SAVE is done.")
+
+(ADD-INITIALIZATION 'REHASH-HASH-TABLES
+		    '(DOLIST (H HASH-TABLES-REHASH-BEFORE-COLD)
+		       (GETHASH H NIL))
+		    '(:BEFORE-COLD))
+
+(DEFFLAVOR HASH-TABLE (HASH-ARRAY) ()
+  :GETTABLE-INSTANCE-VARIABLES
+  :INITTABLE-INSTANCE-VARIABLES
+  (:INIT-KEYWORDS :SIZE :AREA :REHASH-FUNCTION :REHASH-SIZE :GROWTH-FACTOR
+		  :NUMBER-OF-VALUES :ACTUAL-SIZE :REHASH-THRESHOLD :REHASH-BEFORE-COLD
+		  :FUNCALLABLE-P :HASH-FUNCTION :COMPARE-FUNCTION :TEST)
+  (:DEFAULT-INIT-PLIST :HASH-FUNCTION NIL :COMPARE-FUNCTION 'EQ))
+
+(DEFFLAVOR EQ-HASH-TABLE () (HASH-TABLE)
+  :ALIAS-FLAVOR)
+
+(DEFFLAVOR EQUAL-HASH-TABLE () (HASH-TABLE)
+  (:DEFAULT-INIT-PLIST :HASH-FUNCTION 'EQUAL-HASH :COMPARE-FUNCTION 'EQUAL))
+
+(DEFMETHOD (HASH-TABLE :BEFORE :INIT) (PLIST)
+  (UNLESS (VARIABLE-BOUNDP HASH-ARRAY)
+    (SETQ HASH-ARRAY
+	  (APPLY 'MAKE-HASH-ARRAY
+		 ':INSTANCE SELF
+		 (CONTENTS PLIST))))
+  (SETF (HASH-TABLE-INSTANCE HASH-ARRAY) SELF)
+  (IF (GET PLIST ':REHASH-BEFORE-COLD)
+      (PUSH SELF HASH-TABLES-REHASH-BEFORE-COLD)))
+
+(DEFMETHOD (HASH-TABLE :FASD-FORM) ()
+  (LET ((ARRAY (MAKE-ARRAY (ARRAY-LENGTH HASH-ARRAY)
+			   ':TYPE ART-Q
+			   ':LEADER-LENGTH (ARRAY-LEADER-LENGTH HASH-ARRAY)
+			   ':DISPLACED-TO HASH-ARRAY)))
+    (%BLT-TYPED (%FIND-STRUCTURE-LEADER HASH-ARRAY)
+		(%FIND-STRUCTURE-LEADER ARRAY)
+		(1+ (ARRAY-LEADER-LENGTH ARRAY))
+		1)
+    ;; Get rid of circularity.
+    (SETF (HASH-TABLE-INSTANCE ARRAY) NIL)
+    (MAKE-ARRAY-INTO-NAMED-STRUCTURE ARRAY 'HASH-ARRAY)
+    `(MAKE-INSTANCE ',(TYPEP SELF) ':HASH-ARRAY ',ARRAY)))
+
+(DEFMETHOD (HASH-TABLE :SIZE) ()
+  (HASH-TABLE-MODULUS HASH-ARRAY))
+
+(DEFMETHOD (HASH-TABLE :FILLED-ENTRIES) ()
+  (HASH-TABLE-FULLNESS HASH-ARRAY))
+
+(DEFMETHOD (HASH-TABLE :CLEAR-HASH) (&OPTIONAL IGNORE &AUX (HASH-TABLE HASH-ARRAY))
+  "Clear out a hash table; leave it with no entries."
+  (WITH-LOCK ((HASH-TABLE-LOCK HASH-TABLE))
+    ;; Set all of hash table to NIL with cdr-next.
+    (SETF (AREF HASH-TABLE 0) NIL)
+    (%P-STORE-CDR-CODE (ALOC HASH-TABLE 0) CDR-NEXT)
+    (%BLT (ALOC HASH-TABLE 0) (ALOC HASH-TABLE 1) (1- (ARRAY-LENGTH HASH-TABLE)) 1)
+    ;; Set first word of each group to DTP-NULL, 0.
+    (LET ((ELT-0 (ALOC HASH-TABLE 0))
+	  (BLEN (HASH-TABLE-BLOCK-LENGTH HASH-TABLE)))
+      (%P-STORE-POINTER ELT-0 0)
+      (%P-STORE-DATA-TYPE ELT-0 DTP-NULL)
+      (%BLT-TYPED ELT-0 (%MAKE-POINTER-OFFSET DTP-LOCATIVE ELT-0 BLEN)
+		  (1- (TRUNCATE (ARRAY-LENGTH HASH-TABLE) BLEN))
+		  BLEN)
+      ;; Set last word of each group to CDR-NIL.
+      (%P-STORE-CDR-CODE (ALOC HASH-TABLE (+ BLEN -1)) CDR-NIL)
+      (%BLT-TYPED (ALOC HASH-TABLE (+ BLEN -1)) (ALOC HASH-TABLE (+ BLEN BLEN -1))
+		  (1- (TRUNCATE (ARRAY-LENGTH HASH-TABLE) BLEN))
+		  BLEN))
+    (SETF (HASH-TABLE-FULLNESS HASH-TABLE) 0)
+    (SETF (HASH-TABLE-NUMBER-OF-DELETED-ENTRIES HASH-TABLE) 0)
+    (SETF (HASH-TABLE-GC-GENERATION-NUMBER HASH-TABLE) %GC-GENERATION-NUMBER)
+    HASH-TABLE))
+
+(DEFMETHOD (HASH-TABLE :DESCRIBE) ()
+  (FORMAT T "~&~S is a hash-table with ~D entries out of a possible ~D (~D%).~%"
+	  SELF (HASH-TABLE-FULLNESS HASH-ARRAY) (HASH-TABLE-MODULUS HASH-ARRAY)
+	  (TRUNCATE (* (HASH-TABLE-FULLNESS HASH-ARRAY) 100.)
+		    (HASH-TABLE-MODULUS HASH-ARRAY)))
+  (IF (AND (HASH-TABLE-LOCK HASH-ARRAY) (CAR (HASH-TABLE-LOCK HASH-ARRAY)))
+      (FORMAT T "Locked by ~s~%" (HASH-TABLE-LOCK HASH-ARRAY)))
+  (IF (HASH-TABLE-FUNCALLABLE-P HASH-ARRAY)
+      (FORMAT T "FUNCALLing it hashes on the first argument to get a function to call.~%"))
+  (FORMAT T "There are ~D formerly used entries now deleted~%"
+	  (HASH-TABLE-NUMBER-OF-DELETED-ENTRIES HASH-ARRAY))
+  (IF (FLOATP (HASH-TABLE-REHASH-THRESHOLD HASH-ARRAY))
+      (FORMAT T "Rehash if table gets more than ~S full~%"
+	      (HASH-TABLE-REHASH-THRESHOLD HASH-ARRAY)))
+  (IF ( 1 (- (HASH-TABLE-BLOCK-LENGTH HASH-ARRAY) 1
+	      (IF (HASH-TABLE-HASH-FUNCTION HASH-ARRAY) 1 0)))
+      (FORMAT T "Each key has ~D values associated.~%"
+	      (- (HASH-TABLE-BLOCK-LENGTH HASH-ARRAY) 1
+		 (IF (HASH-TABLE-HASH-FUNCTION HASH-ARRAY) 1 0))))
+  (OR (= (HASH-TABLE-GC-GENERATION-NUMBER HASH-ARRAY) %GC-GENERATION-NUMBER)
+      (FORMAT T " rehash is required due to GC.~%"))
+  (FORMAT T " The rehash function is ~S with increase parameter ~D.~%"
+	  (HASH-TABLE-REHASH-FUNCTION HASH-ARRAY) (HASH-TABLE-REHASH-SIZE HASH-ARRAY))
+  (AND (NOT (ZEROP (HASH-TABLE-FULLNESS HASH-ARRAY)))
+       (Y-OR-N-P "Do you want to see the contents of the hash table? ")
+       (IF (NOT (Y-OR-N-P "Do you want it sorted? "))
+	   (SEND SELF ':MAP-HASH
+		 #'(LAMBDA (KEY &REST VALUES)
+		     (FORMAT T "~& ~S -> ~S~%" KEY VALUES)))
+	 (LET ((L NIL))
+	   (SEND SELF ':MAP-HASH
+		 #'(LAMBDA (KEY &REST VALUES)
+		     (PUSH (LIST KEY (COPYLIST VALUES)) L)))
+	   (SETQ L (SORTCAR L #'ALPHALESSP))
+	   (FORMAT T "~&~:{ ~S -> ~S~%~}" L)))))
+
+(DEFMETHOD (HASH-TABLE :GET-HASH)
+	   (KEY &OPTIONAL DEFAULT-VALUE
+	    &AUX
+	    (HASH-TABLE HASH-ARRAY)
+	    (HASH-FUNCTION (HASH-TABLE-HASH-FUNCTION HASH-TABLE))
+	    (COMPARE-FUNCTION (HASH-TABLE-COMPARE-FUNCTION HASH-TABLE))
+	    (HASH-CODE (IF HASH-FUNCTION (FUNCALL HASH-FUNCTION KEY) KEY)))
+  (DECLARE (RETURN-LIST VALUE KEY-FOUND-FLAG ENTRY-POINTER))
+  (WITH-LOCK ((HASH-TABLE-LOCK HASH-TABLE))
+    (DO ((P (HASH-BLOCK-POINTER HASH-TABLE HASH-CODE)
+	    (%MAKE-POINTER-OFFSET DTP-LOCATIVE P BLEN))
+	 (BLEN (HASH-TABLE-BLOCK-LENGTH HASH-TABLE)))
+	(())
+      ;; Make P wrap around at end of table.
+      ;; > is used because the pointer-difference, when time to wrap,
+      ;; is actually 1 or 2 more than the array length (because it includes the header);
+      ;; if BLEN is 2, we could wrap too soon if >= were used.
+      (IF (> (%POINTER-DIFFERENCE P HASH-TABLE)
+	     (ARRAY-LENGTH HASH-TABLE))
+	  (SETQ P (%MAKE-POINTER-OFFSET DTP-LOCATIVE P (- (ARRAY-LENGTH HASH-TABLE)))))
+      (WHEN (AND (%P-CONTENTS-EQ P HASH-CODE)
+		 (OR (NULL HASH-FUNCTION)
+		     (FUNCALL COMPARE-FUNCTION KEY (%P-CONTENTS-OFFSET P 1))))
+	(IF HASH-FUNCTION (SETQ P (%MAKE-POINTER-OFFSET DTP-LIST P 1)))
+	(RETURN (%P-CONTENTS-OFFSET P 1)
+		T
+		(%MAKE-POINTER DTP-LIST P)))
+      ;; If we find a slot that has never been used, this key is not present.
+      ;; We assume that not all slots are used!
+      (IF (AND (= (%P-DATA-TYPE P) DTP-NULL)
+	       (ZEROP (%P-POINTER P)))
+	  (COND (( (HASH-TABLE-GC-GENERATION-NUMBER HASH-TABLE) %GC-GENERATION-NUMBER)
+		 ;; Some %POINTER's may have changed, try rehashing
+		 (SETQ HASH-ARRAY
+		       (FUNCALL (HASH-TABLE-REHASH-FUNCTION HASH-TABLE) HASH-TABLE NIL))
+		 (RETURN (SEND SELF ':GET-HASH KEY)))
+		(T (RETURN DEFAULT-VALUE NIL NIL)))))))	;Not found
+
+;;; note that setf cannot hope to give get-hash multiple VALUEs
+(DEFMETHOD (HASH-TABLE :CASE :SET :GET-HASH) (KEY &REST VALUES)
+  (DECLARE (ARGLIST (KEY VALUE)))
+  ;; use car last is to ignore optional default eg from "(push zap (send foo :get-hash bar))"
+  (LEXPR-SEND SELF ':PUT-HASH KEY (CAR (LAST VALUES))))
+
+(DEFMETHOD (HASH-TABLE :PUT-HASH)
+	   (KEY &REST VALUES
+	    &AUX
+	    (VALUES-LEFT VALUES)
+	    (HASH-TABLE HASH-ARRAY)
+	    (HASH-FUNCTION (HASH-TABLE-HASH-FUNCTION HASH-TABLE))
+	    (COMPARE-FUNCTION (HASH-TABLE-COMPARE-FUNCTION HASH-TABLE))
+	    (HASH-CODE (IF HASH-FUNCTION (FUNCALL HASH-FUNCTION KEY) KEY)))
+  (DECLARE (RETURN-LIST VALUE OLD-VALUE KEY-FOUND-FLAG ENTRY-POINTER))
+  (WITH-LOCK ((HASH-TABLE-LOCK HASH-TABLE))
+    (DO ((P (HASH-BLOCK-POINTER HASH-TABLE HASH-CODE)
+	    (%MAKE-POINTER-OFFSET DTP-LOCATIVE P BLEN))
+	 (BLEN (HASH-TABLE-BLOCK-LENGTH HASH-TABLE))
+	 (OLD-VALUE)
+	 (EMPTYP NIL))
+	(())
+      ;; Make P wrap around at end of table.
+      ;; > is used because the pointer-difference, when time to wrap,
+      ;; is actually 1 or 2 more than the array length (because it includes the header);
+      ;; if BLEN is 2, we could wrap too soon if  were used.
+      (IF (> (%POINTER-DIFFERENCE P HASH-TABLE)
+	     (ARRAY-LENGTH HASH-TABLE))
+	  (SETQ P (%MAKE-POINTER-OFFSET DTP-LOCATIVE P (- (ARRAY-LENGTH HASH-TABLE)))))
+      (COND ((AND (%P-CONTENTS-EQ P HASH-CODE)	;Found existing entry
+		  (OR (NULL HASH-FUNCTION)
+		      (FUNCALL COMPARE-FUNCTION (%P-CONTENTS-OFFSET P 1) KEY)))
+	     (LET ((VALUE-INDEX (IF HASH-FUNCTION 2 1)))
+	       (SETQ OLD-VALUE (%P-CONTENTS-OFFSET P VALUE-INDEX))
+	       (DO ((I VALUE-INDEX (1+ I))) ((= I BLEN))
+		 (%P-STORE-CONTENTS-OFFSET (POP VALUES-LEFT) P I))
+	       (RETURN (CAR VALUES) OLD-VALUE T (%MAKE-POINTER-OFFSET DTP-LIST P (1- VALUE-INDEX)))))
+	    ((= (%P-DATA-TYPE P) DTP-NULL)
+	     (OR EMPTYP (SETQ EMPTYP P))
+	     (WHEN (ZEROP (%P-POINTER P))
+	       (COND (( (HASH-TABLE-GC-GENERATION-NUMBER HASH-TABLE) %GC-GENERATION-NUMBER)
+		      ;; Some %POINTER's may have changed, try rehashing
+		      (SETQ HASH-ARRAY
+			    (FUNCALL (HASH-TABLE-REHASH-FUNCTION HASH-TABLE) HASH-TABLE NIL))
+		      (RETURN (LEXPR-SEND SELF ':PUT-HASH KEY VALUES)))
+		     ;; Also, if we are nearly full, rehash in a larger array.
+		     ;; Don't allow the hash table to become full.
+		     (( (+ (HASH-TABLE-FULLNESS HASH-TABLE)
+			    (HASH-TABLE-NUMBER-OF-DELETED-ENTRIES HASH-TABLE))
+			 (FIX (* (IF (FLOATP (HASH-TABLE-REHASH-THRESHOLD HASH-TABLE))
+				     (HASH-TABLE-REHASH-THRESHOLD HASH-TABLE)
+				     0.7s0)
+				 (- (HASH-TABLE-MODULUS HASH-TABLE) 2))))
+		      (SETQ HASH-ARRAY
+			    (FUNCALL (HASH-TABLE-REHASH-FUNCTION HASH-TABLE) HASH-TABLE
+				     (HASH-TABLE-REHASH-SIZE HASH-TABLE)))
+		      (RETURN (LEXPR-SEND SELF ':PUT-HASH KEY VALUES)))
+		     (T				;Add to table using empty slot found
+		      (%P-STORE-CONTENTS EMPTYP HASH-CODE)
+		      (COND (HASH-FUNCTION
+			     (%P-STORE-CONTENTS-OFFSET KEY EMPTYP 1)
+			     (DO ((I 2 (1+ I))) ((= I BLEN))
+			       (%P-STORE-CONTENTS-OFFSET (POP VALUES-LEFT) EMPTYP I)))
+			    (T
+			     (DO ((I 1 (1+ I))) ((= I BLEN))
+			       (%P-STORE-CONTENTS-OFFSET (POP VALUES-LEFT) EMPTYP I))))
+		      (INCF (HASH-TABLE-FULLNESS HASH-TABLE))
+		      ;; If reusing a deleted slot, decrement number of them slots.
+		      (OR (EQ EMPTYP P)
+			  (DECF (HASH-TABLE-NUMBER-OF-DELETED-ENTRIES HASH-TABLE)))
+		      (RETURN (CAR VALUES))))))))))
+
+(DEFMETHOD (HASH-TABLE :REM-HASH)
+	   (KEY &AUX
+	    (HASH-TABLE HASH-ARRAY)
+	    (HASH-FUNCTION (HASH-TABLE-HASH-FUNCTION HASH-TABLE))
+	    (COMPARE-FUNCTION (HASH-TABLE-COMPARE-FUNCTION HASH-TABLE))
+	    (HASH-CODE (IF HASH-FUNCTION (FUNCALL HASH-FUNCTION KEY) KEY)))
+  "Delete any entry for KEY in HASH-TABLE.  Return T if there was one."
+  (WITH-LOCK ((HASH-TABLE-LOCK HASH-TABLE))
+    (DO ((P (HASH-BLOCK-POINTER HASH-TABLE HASH-CODE)
+	    (%MAKE-POINTER-OFFSET DTP-LOCATIVE P BLEN))
+	 (BLEN (HASH-TABLE-BLOCK-LENGTH HASH-TABLE)))
+	(())
+      ;; Make P wrap around at end of table.
+      ;; > is used because the pointer-difference, when time to wrap,
+      ;; is actually 1 or 2 more than the array length (because it includes the header);
+      ;; if BLEN is 2, we could wrap too soon if >= were used.
+      (IF (> (%POINTER-DIFFERENCE P HASH-TABLE)
+	     (ARRAY-LENGTH HASH-TABLE))
+	  (SETQ P (%MAKE-POINTER-OFFSET DTP-LOCATIVE P (- (ARRAY-LENGTH HASH-TABLE)))))
+      (WHEN (AND (%P-CONTENTS-EQ P HASH-CODE)		;Found existing entry
+		 (OR (NULL HASH-FUNCTION)
+		     (FUNCALL COMPARE-FUNCTION (%P-CONTENTS-OFFSET P 1) KEY)))
+	(DO ((I 1 (1+ I))) ((= I BLEN))
+	  (%P-STORE-CONTENTS-OFFSET NIL P I))	;Wipe out old values
+	(%P-STORE-DATA-TYPE P DTP-NULL)
+	(%P-STORE-POINTER P 1)			;Remove entry
+	(DECF (HASH-TABLE-FULLNESS HASH-TABLE))
+	(INCF (HASH-TABLE-NUMBER-OF-DELETED-ENTRIES HASH-TABLE))
+	(RETURN T))
+      (IF (AND (= (%P-DATA-TYPE P) DTP-NULL)
+	       (ZEROP (%P-POINTER P)))
+	  (RETURN
+	    (COND (( (HASH-TABLE-GC-GENERATION-NUMBER HASH-TABLE) %GC-GENERATION-NUMBER)
+		   ;; Some %POINTER's may have changed, try rehashing
+		   (SETQ HASH-ARRAY
+			 (FUNCALL (HASH-TABLE-REHASH-FUNCTION HASH-TABLE) HASH-TABLE NIL))
+		   (SEND SELF ':REM-HASH KEY))
+		  (T NIL)))))))			;Really not found
+
+(DEFMETHOD (HASH-TABLE :MODIFY-HASH) (KEY FUNCTION &REST ADDITIONAL-ARGS)
+  (MULTIPLE-VALUE-BIND (VALUE KEY-FOUND-P VALUES-LIST)
+      (SEND SELF ':GET-HASH KEY)
+    (SETQ VALUE
+	  (APPLY FUNCTION KEY VALUE KEY-FOUND-P ADDITIONAL-ARGS))
+    (IF KEY-FOUND-P
+	(SETF (CADR VALUES-LIST) VALUE)
+      (SEND SELF ':PUT-HASH KEY VALUE))
+    VALUE))
+
+(DEFMETHOD (HASH-TABLE :SWAP-HASH) (KEY &REST VALUES)
+  (DECLARE (RETURN-LIST OLD-VALUE OLD-VALUE-P LOCATION))
+  (MULTIPLE-VALUE-BIND (NIL OLD-VALUE OLD-VALUE-P LOCATION)
+      (LEXPR-SEND SELF ':PUT-HASH KEY VALUES)
+    (VALUES OLD-VALUE OLD-VALUE-P LOCATION)))
+
+(DEFMETHOD (HASH-TABLE :MAP-HASH) (FUNCTION &REST EXTRA-ARGS &AUX (HASH-TABLE HASH-ARRAY))
+  (WITH-LOCK ((HASH-TABLE-LOCK HASH-TABLE))
+    (DO ((BLEN (HASH-TABLE-BLOCK-LENGTH HASH-TABLE))
+	 (BLOCK-OFFSET (IF (HASH-TABLE-HASH-FUNCTION HASH-TABLE) 1 0))
+	 (I 0 (+ I BLEN))
+	 (N (ARRAY-LENGTH HASH-TABLE)))
+	(( I N))
+      (COND (( (%P-DATA-TYPE (ALOC HASH-TABLE I)) DTP-NULL)
+	     (%OPEN-CALL-BLOCK FUNCTION 0 0)
+	     (DOLIST (I (%MAKE-POINTER-OFFSET DTP-LIST (ALOC HASH-TABLE I) BLOCK-OFFSET))
+	       (%PUSH I))
+	     (DOLIST (I EXTRA-ARGS)
+	       (%PUSH I))
+	     (%ACTIVATE-OPEN-CALL-BLOCK))))
+    HASH-TABLE))
+
+(DEFMETHOD (HASH-TABLE :MAP-HASH-RETURN) (FUNCTION &OPTIONAL (RETURN-FUNCTION 'LIST)
+					     &AUX VALUES (HASH-TABLE HASH-ARRAY))
+  (WITH-LOCK ((HASH-TABLE-LOCK HASH-TABLE))
+    (DO ((BLEN (HASH-TABLE-BLOCK-LENGTH HASH-TABLE))
+	 (BLOCK-OFFSET (IF (HASH-TABLE-HASH-FUNCTION HASH-TABLE) 1 0))
+	 (I 0 (+ I BLEN))
+	 (N (ARRAY-LENGTH HASH-TABLE)))
+	(( I N))
+      (COND (( (%P-DATA-TYPE (ALOC HASH-TABLE I)) DTP-NULL)
+	     (LET ((VALUE (APPLY FUNCTION
+				 (%MAKE-POINTER-OFFSET DTP-LIST (ALOC HASH-TABLE I)
+						       BLOCK-OFFSET))))
+	       (SELECTQ RETURN-FUNCTION
+		 (NCONC (SETQ VALUES (NCONC VALUE VALUES)))
+		 (T (PUSH VALUE VALUES)))))))
+    (IF (MEMQ RETURN-FUNCTION '(LIST NCONC))
+	VALUES
+      (APPLY RETURN-FUNCTION VALUES))))
+
+;;These two functions are no longer needed here, or for that matter anywhere,
+;; but keep them in case there are old compiled uses of WITH-LOCK.
+(COMMENT
+(DEFUN SEIZE-LOCK (LOCK-LOCATION &OPTIONAL (RECURSIVE T))
+  ;; Initially locks are NIL, and the first call to SIEZE-LOCK sets it up properly
+  (AND (%STORE-CONDITIONAL LOCK-LOCATION NIL '(T))
+       (SETF (CDR LOCK-LOCATION) (CONS NIL 0)))
+  (COND ((EQ (CADR LOCK-LOCATION) CURRENT-PROCESS)
+	 (IF RECURSIVE
+	     (INCF (CDDR LOCK-LOCATION))
+	   (FERROR NIL "Attempt to lock ~S recursively" LOCK-LOCATION)))
+	(T
+	 (DO-FOREVER
+	  (IF (%STORE-CONDITIONAL (CDR LOCK-LOCATION) NIL CURRENT-PROCESS)
+	      (RETURN (SETF (CADR LOCK-LOCATION) CURRENT-PROCESS))
+	    (PROCESS-WAIT "Lock"
+			  #'(LAMBDA (LOCK-LOCATION)
+			      (NULL (CADR LOCK-LOCATION))) LOCK-LOCATION)))
+	 (INCF (CDDR LOCK-LOCATION))))
+  NIL)
+
+(DEFUN RELEASE-LOCK (LOCK-LOCATION &OPTIONAL (ERROR T))
+  (IF (NEQ (CADR LOCK-LOCATION) CURRENT-PROCESS)
+      (AND ERROR
+	   (FERROR NIL "Lock ~S is not locked by this process." LOCK-LOCATION))
+    (DECF (CDDR LOCK-LOCATION))
+    (IF (ZEROP (CDDR LOCK-LOCATION))
+	(SETF (CADR LOCK-LOCATION) NIL))))
+); end comment
+
+;;;; Compatibility functions.
+
+(DEFUN MAKE-HASH-TABLE (&REST OPTIONS)
+  "Create a hash table.  Keyword args are as follows:
+COMPARE-FUNCTION: the function for comparing the key against
+ keys stored in the table.  Usually EQ or EQUAL.
+HASH-FUNCTION: the function to compute a hash code from a key.
+ NIL (the default) is for EQ hash tables,
+ and SI:EQUAL-HASH is used for EQUAL hash tables.
+TEST: Common Lisp way to specify the compare-function.
+ It must be EQ, EQL or EQUAL.  A suitable hash function will be used automatically.
+AREA: area to cons the table in.
+SIZE: lower bound for number of entries (rounded up).
+ Note that the table cannot actually hold that many keys.
+ACTUAL-SIZE: precise number of entries worth of size to use.
+NUMBER-OF-VALUES: number of values to associate with each key (default 1).
+ Each PUTHASH can set all the values, and GETHASH retrieves them all.
+REHASH-THRESHOLD: a flonum between 0 and 1 (default 0.7).
+ When that fraction of the table is full, it is made larger.
+REHASH-FUNCTION: a function which accepts a hash table
+ and returns a larger one.
+REHASH-SIZE: the ratio by which the default REHASH-FUNCTION
+ will increase the size of the table.  By default, 1.3.
+ The keyword :GROWTH-FACTOR is synonymous with this."
+  (DECLARE (ARGLIST &KEY &OPTIONAL TEST COMPARE-FUNCTION HASH-FUNCTION
+		    AREA SIZE ACTUAL-SIZE NUMBER-OF-VALUES
+		    REHASH-THRESHOLD REHASH-FUNCTION REHASH-SIZE))
+  (APPLY 'MAKE-INSTANCE 'HASH-TABLE OPTIONS))
+
+(DEFUN HASH-TABLE-COUNT (HASH-TABLE)
+  "Returns the number of associations currently stored in HASH-TABLE."
+  (SEND HASH-TABLE ':FILLED-ENTRIES))
+
+(DEFUN CLRHASH (HASH-TABLE &OPTIONAL IGNORE)
+  "Clear out a hash table; leave it with no entries."
+  (SEND HASH-TABLE ':CLEAR-HASH))
+
+(DEFUN GETHASH (KEY HASH-TABLE &OPTIONAL DEFAULT-VALUE)
+  "Read the values associated with KEY in HASH-TABLE.
+Returns:
+ 1) The primary value associated with KEY (DEFAULT-VALUE if KEY is not found),
+ 2) a flag which is T if KEY was found,
+ 3) a pointer to the list (inside the hash table)
+    which holds the key and the associated values
+    (NIL if KEY is not found)."
+  (DECLARE (RETURN-LIST VALUE KEY-FOUND-FLAG ENTRY-POINTER))
+  (SEND HASH-TABLE ':GET-HASH KEY DEFAULT-VALUE))
+
+;;;Used by SETF of GETHASH.
+(DEFUN SETHASH (KEY HASH-TABLE VALUE)
+  (SEND HASH-TABLE ':PUT-HASH KEY VALUE))
+
+(DEFUN PUTHASH (KEY VALUE HASH-TABLE &REST ADDITIONAL-VALUES)
+  "Set the values associated with KEY in HASH-TABLE.
+The first value is set from VALUE.  If the hash table associates more
+than one value with each key, the remaining values are set from ADDITIONAL-VALUES.
+Returns: 1) VALUE, 2) the previous value (or NIL),
+ 3) T if KEY already had an entry in the table,
+ 4) a pointer to the list (inside the hash table)
+    which holds the key and the associated values."
+  (DECLARE (RETURN-LIST VALUE OLD-VALUE KEY-FOUND-FLAG ENTRY-POINTER))
+  (LEXPR-SEND HASH-TABLE ':PUT-HASH KEY VALUE ADDITIONAL-VALUES))
+
+(DEFUN SWAPHASH (KEY VALUE HASH-TABLE &REST ADDITIONAL-VALUES)
+  "Set the values associated with KEY in HASH-TABLE, returning the previous values.
+The first value is set to VALUE.  If the hash table holds more than one
+value per entry, the additional values are set from ADDITIONAL-VALUES.
+The values returned by SWAPHASH are the same as those of GETHASH."
+  (DECLARE (RETURN-LIST OLD-VALUE OLD-VALUE-P LOCATION))
+  (MULTIPLE-VALUE-BIND (NIL OLD-VALUE OLD-VALUE-P LOCATION)
+      (LEXPR-SEND HASH-TABLE ':PUT-HASH KEY VALUE ADDITIONAL-VALUES)
+    (VALUES OLD-VALUE OLD-VALUE-P LOCATION)))
+
+(DEFUN REMHASH (KEY HASH-TABLE)
+  "Delete any entry for KEY in HASH-TABLE.  Return T if there was one."
+  (SEND HASH-TABLE ':REM-HASH KEY))
+
+(DEFUN MAPHASH (FUNCTION HASH-TABLE &REST EXTRA-ARGS)
+  "Apply FUNCTION to each item in HASH-TABLE; ignore values.
+FUNCTION's arguments are the key followed by the values associated with it,
+ followed by the EXTRA-ARGS."
+  (LEXPR-SEND HASH-TABLE ':MAP-HASH FUNCTION EXTRA-ARGS))
+
+(DEFUN MAPHASH-RETURN (FUNCTION HASH-TABLE &OPTIONAL (RETURN-FUNCTION 'LIST))
+  "Apply FUNCTION to each item in HASH-TABLE; apply RETURN-FUNCTION to list of results.
+FUNCTION's arguments are the key followed by the values associated with it.
+The values returned by FUNCTION are put in a list.
+At the end, RETURN-FUNCTION is applied to that list to get the final value."
+  (LEXPR-SEND HASH-TABLE ':MAP-HASH-RETURN FUNCTION RETURN-FUNCTION))
+
+;;; EQUAL hash tables
+
+(DEFUN MAKE-EQUAL-HASH-TABLE (&REST OPTIONS)
+  "Creates an EQUAL hash table.  Valid keywords are the same as for
+MAKE-HASH-TABLE, except for :HASH-FUNCTION, which should be NIL, since
+the key is the code."
+  (APPLY 'MAKE-INSTANCE 'EQUAL-HASH-TABLE OPTIONS))
+
+;;; The functions here have similar names to the EQ hashing ones.
+
+(DEFF CLRHASH-EQUAL 'CLRHASH)
+(DEFF GETHASH-EQUAL 'GETHASH)
+(DEFF PUTHASH-EQUAL 'PUTHASH)
+(DEFF REMHASH-EQUAL 'REMHASH)
+(DEFF SWAPHASH-EQUAL 'SWAPHASH)
+(DEFF MAPHASH-EQUAL 'MAPHASH)
+(DEFF MAPHASH-EQUAL-RETURN 'MAPHASH-RETURN)
+
+(DEFF SXHASH-FOR-HASH-TABLE 'EQUAL-HASH)
+(DEFUN EQUAL-HASH (KEY) (SXHASH KEY T))
+
+(DEFUN EQL-HASH (KEY)
+  (IF (AND (NUMBERP KEY) (NOT (FIXNUMP KEY)))
+      (SXHASH KEY) KEY))
+
+;;; Bootstrapping of flavor hash tables.
+
+(COMPILE-FLAVOR-METHODS HASH-TABLE EQUAL-HASH-TABLE)
+
+;;; This is what the flavor system calls to puthash into a hash array
+
+;;; HASH FSET's this to PUTHASH-BOOTSTRAP so FLAVOR can load.
+(DEFUN PUTHASH-ARRAY (KEY VALUE HASH-ARRAY &REST ADDITIONAL-VALUES)
+  (LET ((INSTANCE (HASH-TABLE-INSTANCE HASH-ARRAY)))
+    (IF INSTANCE (LEXPR-SEND INSTANCE ':PUT-HASH KEY VALUE ADDITIONAL-VALUES)
+      (APPLY 'PUTHASH-BOOTSTRAP KEY VALUE HASH-ARRAY ADDITIONAL-VALUES))))
+
+;;; Create a hash table suitable for a flavor's method hash table
+;;; and return its hash array.
+;;; Before this file is loaded, another definition in the file HASH is used
+;;; which just makes a hash array with no instance.
+(DEFUN MAKE-FLAVOR-HASH-ARRAY (AREA SIZE)
+  (SEND (INSTANTIATE-FLAVOR 'HASH-TABLE
+			    (LIST NIL ':AREA AREA ':SIZE SIZE
+				  ':FUNCALLABLE-P T
+				  ':REHASH-THRESHOLD 0.8s0
+				  ':NUMBER-OF-VALUES 2)
+			    T NIL AREA)
+
+	':HASH-ARRAY))
+
+;;; When this file is first loaded, various flavors have been given hash arrays
+;;; that have no hash instances associated with them.
+;;; Find all those hash arrays and give them instances.
+(DEFUN HASH-FLAVOR-INSTALL ()
+  (DOLIST (FN *ALL-FLAVOR-NAMES*)
+    (LET ((FL (COMPILATION-FLAVOR FN)))
+      (AND (TYPEP FL 'FLAVOR)
+	   (LET ((MHT (FLAVOR-METHOD-HASH-TABLE FL)))
+	     (AND MHT
+		  (NULL (HASH-TABLE-INSTANCE MHT))
+		  (SETF (HASH-TABLE-INSTANCE MHT)
+			(INSTANTIATE-FLAVOR 'HASH-TABLE
+					    (LIST NIL ':HASH-ARRAY MHT)
+					    T NIL PERMANENT-STORAGE-AREA))))))))
+
+(ADD-INITIALIZATION 'HASH-FLAVOR-INSTALL '(HASH-FLAVOR-INSTALL) '(:ONCE))
+
+;;;; LOOP iteration path HASH-ELEMENTS
+
+(ADD-INITIALIZATION 'ADD-LOOP-HASH-ELEMENTS-PATH '(ADD-HASH-ELEMENTS-PATH) '(:BEFORE-COLD))
+
+(DEFVAR HASH-ELEMENTS-PATH-ADDED NIL
+  "T if the HASH-ELEMENTS LOOP path has been added.")
+
+;; Cannot just add it now because this file is loaded too early.
+(DEFUN ADD-HASH-ELEMENTS-PATH ()
+  (UNLESS HASH-ELEMENTS-PATH-ADDED
+    (SETQ HASH-ELEMENTS-PATH-ADDED T)
+    (DEFINE-LOOP-PATH HASH-ELEMENTS HASH-ELEMENTS-PATH-FUNCTION (WITH-KEY OF))))
+
+(DEFUN HASH-ELEMENTS-PATH-FUNCTION (IGNORE VARIABLE IGNORE PREP-PHRASES INCLUSIVE? IGNORE IGNORE)
+  (IF INCLUSIVE?
+      (FERROR NIL "Inclusive stepping not supported in HASH-ELEMENTS path for ~S."
+	      VARIABLE))
+  (UNLESS (LOOP-TASSOC 'OF PREP-PHRASES)
+    (FERROR NIL "No OF phrase in HASH-ELEMENTS path for ~S." VARIABLE))
+  (LET (BINDINGS PROLOGUE STEPS POST-ENDTEST PSEUDO-STEPS
+	(BLEN-VAR (GENSYM))
+	(HT-VAR (GENSYM))
+	(I-VAR (GENSYM))
+	(LEN-VAR (GENSYM))
+	(TEM (GENSYM))
+	(KEY-VAR (OR (CADR (LOOP-TASSOC 'WITH-KEY PREP-PHRASES)) (GENSYM)))
+	(OFFSET-VAR (GENSYM)))
+    (SETQ BINDINGS `((,HT-VAR (SEND ,(CADR (LOOP-TASSOC 'OF PREP-PHRASES)) ':HASH-ARRAY))
+		     (,BLEN-VAR NIL) (,OFFSET-VAR NIL) (,VARIABLE NIL)
+		     (,I-VAR NIL) (,KEY-VAR NIL) (,LEN-VAR NIL))
+	  PROLOGUE `((SETQ ,BLEN-VAR
+			   (HASH-TABLE-BLOCK-LENGTH ,HT-VAR))
+		     (SETQ ,I-VAR (- ,BLEN-VAR))
+		     (SETQ ,OFFSET-VAR (IF (HASH-TABLE-HASH-FUNCTION ,HT-VAR) 1 0))
+		     (SETQ ,LEN-VAR (ARRAY-LENGTH ,HT-VAR)))
+	  STEPS `(,I-VAR
+		  (DO ((,TEM (+ ,BLEN-VAR ,I-VAR) (+ ,BLEN-VAR ,TEM)))
+		      ((OR ( ,TEM ,LEN-VAR)
+			   ( (%P-DATA-TYPE (ALOC ,HT-VAR ,TEM)) DTP-NULL))
+		       ,TEM)))
+	  POST-ENDTEST `( ,I-VAR ,LEN-VAR)
+	  PSEUDO-STEPS `(,KEY-VAR (AREF ,HT-VAR (+ ,I-VAR ,OFFSET-VAR))
+			 ,VARIABLE (AREF ,HT-VAR (+ ,I-VAR ,OFFSET-VAR 1))))
+    (LIST BINDINGS PROLOGUE NIL STEPS POST-ENDTEST PSEUDO-STEPS)))
