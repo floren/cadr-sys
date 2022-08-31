@@ -1,0 +1,401 @@
+
+SILVER@MIT-AI 04/30/81 13:31:10 Re: Editor compatibility questions
+To: RMS at MIT-AI
+yes
+
+LEVITT@MIT-AI 04/24/81 05:38:33 Re:  Update on EMACS/ZWEI opinion.
+To: RMS at MIT-AI
+I've just been using EMACS after a long hiatus, and realize
+it can be a small pain to be in the habit of one while using the
+other.  Thus I think your compatibility objective is a good idea.
+
+However I had forgotten about the use of Altmode, and how
+counterintuitive I always found it, when I sent you the last note.  As
+far as I'm concerned, EMACS should become more like ZWEI in that
+regard.  I don't remember exactly what you said, but if you want to
+add it to ZWEI, I urge that you let it be an optional syntax, rather
+than a replacement of anything ZWEI has done instead.
+
+--David
+   
+CWH@MIT-MC 04/24/81 08:22:43 Re: Editor compatibility questions
+To: RMS at MIT-AI
+    Date: 21 April 1981 21:05-EST
+    From: Richard M. Stallman <RMS at MIT-AI>
+
+    What is your opinion of making the standard ZWEI command set more
+    compatible with EMACS?  Specifically, what do you think of these
+    proposed changes:
+
+    1) Make Altmode, C-C and C-^ always defined as bit prefixes.
+
+I wouldn't like this in the default Zwei.  In Emacs mode, this is fine, and
+perhaps you want to make Emacs mode the default for the MIT machines or
+machines where new Lispm users have had experience with PDP10 Emacs.  But
+new Lispm conventions should be independent of what may have existed on
+other computers in the past.  For instance, at the moment, Altmode seems to
+be used mainly for completing names of various sorts.  Perhaps in Lisp mode
+we might want to use it for completing function and variable names.
+
+    2) Making the names of M-X commands and option variables in ZWEI the
+    same as those in EMACS whenever possible.
+
+Only to the extent in which these names make sense on the Lisp Machine.  In
+general, though, I would like to see greater symmetry and orthogonality in
+the M-X command names.
+
+    3) Allow arguments to M-X commands to be delimited with Altmodes, in
+    which case they would be read in the same minibuffer as the command
+    name.
+    This would not only be compatible, it would give faster response.
+    The existing mode of operation with a separate minibuffer for each
+    argument would still exist.
+
+I don't feel too strongly about this, and I probably wouldn't use it.  It
+might be confusing to naive users to see an altmode appear in the minibuffer.
+
+    4) Displaying some sort of position-in-file information,
+    and the file version number, in the mode line.
+
+This would be useful.
+
+   
+DCB@MIT-AI 04/24/81 09:44:12 Re: Editor compatibility questions
+To: RMS at MIT-AI
+I like all the changes.  Consistency would be useful.
+	dan
+   
+Date: 23 April 1981 12:35-EST
+From: Kent M. Pitman <KMP at MIT-MC>
+Subject:  Editor compatibility questions
+To: RMS at MIT-AI
+
+(1) Yes, I make Alt and C-C do the normal Emacs thing in my environment and
+    would favor having the LispM do this by default.
+
+(2) Making M-X commands the same where possible seems reasonable. Having option
+    variables the same seems extraneous since options are not set interactively
+    a lot of the time, and init files cannot be shared (a common init file 
+    generator for Emacs/Zwei from some meta-language might be cute), but I 
+    guess uniform naming where possible couldn't hurt.
+
+(3) Making M-X commands be delimited by Alts seems somewhat counter-intuitive
+    with respect to query #1 where you are going to have Alt be metizing, but
+    since Emacs gets away with Alt doing something different in minibuffers,
+    I guess Zwei could, too.
+
+(4) File version numbers in the mode line are clearly a win. I have found them
+    to be tremendously useful. As to position-in-file, again, it seems 
+    extraneous since that info is already supplied trivially with the mouse,
+    but it is very cheap and couldn't hurt.
+
+Making it easy to go back and forth between Emacs and LispM editting is 
+definitely a good idea. I think most people would agree that, whatever command
+set they like, they would prefer to have to know only one command set rather
+than two, wherever possible. Regularity is a virtue when it comes to typing
+speed -- even slight differences slow one tremendously because he has to always
+be worried he will do that one thing wrong and be watching for it ... I find
+this phenomenon to be true even when going from H19's to VT52's to VT100's 
+where sending Ascii-0 (Ctrl-Space/Ctrl-@) is so inconsistent. The visual
+aspects (position in file info, etc) are of a less critical nature. Menus,
+good graphics, etc. can make up for a lot of irregularity ...
+-kmp
+
+    
+Date: 21 April 1981 21:05-EST
+From: Richard M. Stallman <RMS at MIT-AI>
+Subject: Editor compatibility questions
+To: INFO-LISPM at MIT-AI
+
+What is your opinion of making the standard ZWEI command set more
+compatible with EMACS?  Specifically, what do you think of these
+proposed changes:
+
+1) Make Altmode, C-C and C-^ always defined as bit prefixes.
+
+2) Making the names of M-X commands and option variables in ZWEI the
+same as those in EMACS whenever possible.
+
+3) Allow arguments to M-X commands to be delimited with Altmodes, in
+which case they would be read in the same minibuffer as the command
+name.
+This would not only be compatible, it would give faster response.
+The existing mode of operation with a separate minibuffer for each
+argument would still exist.
+
+4) Displaying some sort of position-in-file information,
+and the file version number, in the mode line.
+
+I will put all answers in LMDOC;ZWEI ANSWER.
+
+Date: 21 April 1981 22:35-EST
+From: Howard I. Cannon <HIC at MIT-MC>
+Subject:  Editor compatibility questions
+To: RMS at MIT-AI
+
+This is a terrible idea.  ZWEI is not EMACS.  I wish you'd figure this out.
+An EMACS mode would be ok with me.
+
+  
+Date: 21 April 1981 22:39-EST
+From: Howard I. Cannon <HIC at MIT-MC>
+To: RMS at MIT-AI
+
+    Date: 21 April 1981 22:37-EST
+    From: Richard M. Stallman <RMS at MIT-AI>
+    To:   HIC at MIT-AI
+
+    I don't agree with you.  I'm trying to find out how
+    many other people agree with me and not with you.
+    I'll record your opinion, but saying condescending things
+    like "I wish you'd figure this out" is not constructive
+    and only exercizes my capacity for holding onto my temper.  
+
+Yes, I know, why do you think I said it.  You are welcome to edit the
+reply.  You've been on this kick for as long as I can remember, and I'm
+god damned sick and tired of it and if you expect me to put up with
+this shit, then you'd better expect some back.
+    
+KLOTZ@MIT-AI 04/21/81 22:50:45 Re: zwei
+To: RMS at MIT-AI
+Personally, I'd like Zwei to have ^C mean control-meta, just because I used
+to use that a lot and still do sometimes, because it is easier to type
+on non-repeated commands.
+
+I don't like altmode being a bit-prefix on terminals with meta keys because
+I'm not used to that.  The same with control-uparrow.  But, I can see how
+people would want those in the same way I want C-C to do control-meta.
+
+Also, is there any documentation on customizing zwei other than the
+source?  The seriously read manual doesn't say much about it at all.
+
+Leigh.
+ 
+Moon@MIT-MC 04/21/81 22:51:48 Re: Editor compatibility questions
+To: RMS at MIT-AI
+    Date: 21 April 1981 21:05-EST
+    From: Richard M. Stallman <RMS at MIT-AI>
+    Subject: Editor compatibility questions
+    To: INFO-LISPM at MIT-AI
+    
+    What is your opinion of making the standard ZWEI command set more
+    compatible with EMACS?  Specifically, what do you think of these
+    proposed changes:
+    
+    1) Make Altmode, C-C and C-^ always defined as bit prefixes.
+I am very strongly opposed.  In fact I would like to see Emacs not turn
+these on by default on meta keyboards.  No reason to reduce everyone to
+the common denominator of mediocrity.  Of course, there should be an
+easily enabled mode to make the good keyboard simulate the bad one for
+people who usually use bad ones and only occasionally use good ones. 
+    
+    2) Making the names of M-X commands and option variables in ZWEI the
+    same as those in EMACS whenever possible.
+Yes.  Or vice versa.  The names should be the same when they mean the same
+thing.  I don't think either editor has a monopoly on good names, though.
+Most of the recent name changes in Emacs appear to be well thought out and
+should be incorporated into Zmacs.
+    
+    3) Allow arguments to M-X commands to be delimited with Altmodes, in
+    which case they would be read in the same minibuffer as the command
+    name.
+    This would not only be compatible, it would give faster response.
+    The existing mode of operation with a separate minibuffer for each
+    argument would still exist.
+I don't think this one makes much sense.  Altmode is already used as a
+command in this circumstance and I don't think it would be a good idea
+to move it to a different key.  This would disable a lot of helpful
+features, including completion, pointing with the mouse, help key, etc.
+and precisely because of that would be difficult to implement since it
+would involve a different modularity in the commands.  The extra
+compatibility would not be of major importance since these are not
+things you type all that often.  Also I don't believe that the response
+would be any faster since I don't think the main source of slowness is
+deexposing and reexposing the minibuffer window. 
+    
+    4) Displaying some sort of position-in-file information,
+    and the file version number, in the mode line.
+I agree that the file version number should be displayed.  The position
+in file is too expensive to compute and not sufficiently worthwhile. 
+    
+    I will put all answers in LMDOC;ZWEI ANSWER.
+
+
+   
+Henry@MIT-AI 04/21/81 23:42:09 Re: Editor compatibility questions
+To: RMS at MIT-AI
+I vote yes to your proposal.
+    
+Date: 22 April 1981 01:00-EST
+From: Robert W. Kerns <RWK at MIT-MC>
+Subject: Editor compatibility questions
+To: RMS at MIT-AI
+
+    Date: 21 April 1981 21:05-EST
+    From: Richard M. Stallman <RMS at MIT-AI>
+    Subject: Editor compatibility questions
+    To: INFO-LISPM at MIT-AI
+    
+    What is your opinion of making the standard ZWEI command set more
+    compatible with EMACS?  Specifically, what do you think of these
+    proposed changes:
+    
+    1) Make Altmode, C-C and C-^ always defined as bit prefixes.
+
+Altmode would help, but not the others.
+
+    2) Making the names of M-X commands and option variables in ZWEI the
+    same as those in EMACS whenever possible.
+    
+Not if it sacrafices completion functionality, but otherwise yes.
+
+    3) Allow arguments to M-X commands to be delimited with Altmodes, in
+    which case they would be read in the same minibuffer as the command
+    name.
+    This would not only be compatible, it would give faster response.
+    The existing mode of operation with a separate minibuffer for each
+    argument would still exist.
+
+I've wanted this on occasion.
+
+    4) Displaying some sort of position-in-file information,
+    and the file version number, in the mode line.
+
+Yes!!  (Also LINK-P)
+
+    I will put all answers in LMDOC;ZWEI ANSWER.
+
+Also make Control-I be the same as TAB, M-I be the same as Meta-Tab,
+etc.
+  
+Date:     22 April 1981 0214-est
+From:     Barry Margolin             <Margolin at MIT-Multics>
+Subject:  Re: Editor compatibility questions
+To:       RMS at MIT-AI
+
+1) Presumably, the only reason that the bit prefixes were defined was
+because there were terminals that were not capable of sending the meta
+and control bits for some or every character.  The LispMachine does not
+suffer from such troubles, as every one is defined to be able to send
+all the characters necessary.  We don't need kludges on the LispMachine
+just because they were needed on other systems.
+
+2) It seems as if the most common M-X commands ARE the same in ZWEI and
+EMACS.  This includes the major and minor modes and Apropos.  The option
+variables are not so similar, but the self-documentation and
+edit-variables modes seem to obviate this.
+
+3) Having the arguments in the same minibuffer is not too bad an idea.
+I hate waiting for the new window to pop up (although it is not really
+necessary to wait - and it will not pop it up if the answer has already
+been typed).  It is, however, useful to know whether I am trying to
+command-complete a command or an argument without necessarily having to
+look at the screen to see if there is a diamond; the way it is now, I
+hit RETURN and get feeped at if the command doesn't complete - it is not
+so deterministic if they are on the same line, as I don't know without
+looking what the machine didn't like.
+
+4) Extra information on the mode line never hurts.  I like EMACS' habit
+of keeping me informed about the state of my buffer and file, and I
+don't think I should have to type ^X-= every time I want to know where I
+am.
+   
+PGS@MIT-AI 04/22/81 04:02:55 Re: Editor compatibility questions
+To: RMS at MIT-AI
+I think that ZWEI should be as compatible as is easily possible with
+EMACS, mainly because I use both.
+  
+LEVITT@MIT-AI 04/22/81 05:03:23 Re: Editor compatibility questions
+To: RMS at MIT-AI
+Sounds reasonable to me, especially additional mode line information.
+Anything that doesn't slow things down.
+  
+TANG@MIT-AI 04/22/81 08:58:09 Re: Editor compatibility questions
+To: RMS at MIT-AI
+	I think that standardization
+(at least for the default mode) is a
+very good idea.
+    
+Date: 22 April 1981 1023-EST (Wednesday)
+From: Guy.Steele at CMU-10A
+To: Richard M. Stallman <RMS at MIT-AI> 
+Subject:  Re: Editor compatibility questions
+In-Reply-To:  Richard M. Stallman's message of 21 Apr 81 21:05-EST
+Message-Id: <22Apr81 102330 GS70@CMU-10A>
+
+In my opinion, making ZWEI and EMACS more alike can only help.
+(While I am not a LISPM user this year, I am using EMACS, and might
+use LISPMs in the next year if Symbolics or LMI gets in gear and
+CMU buys some.)
+ 
+RICH@MIT-AI 04/22/81 11:05:53 Re: Editor compatibility questions
+To: RMS at MIT-AI
+I am very much in favor of any changes which increase
+compatibility between Emacs and Zwei.
+  
+CARLF@MIT-AI 04/22/81 11:12:18 Re: emacs vs. zwei
+To: RMS at MIT-AI
+	The idea about delimiting arguments to meta-x with altmodes is nice,
+if it would speed things up. It's a drag waiting for the minibuffer to appear,	
+when all I want is the default.
+					-- Carl
+  
+KDF@MIT-AI 04/22/81 12:02:06 Re: Zwei & Emacs
+To: RMS at MIT-AI
+	Making changes to Zwei that make interacting with it more like
+EMACS is an excellent idea!!!  When I use cadrs the incompatability is one
+of the largest frustrations there is.  BTW, is the switch back and forth 
+between the editor and whatever still terribly slow?  Is there any fix at all?
+	Ken
+ 
+DLW@MIT-AI 04/22/81 12:13:41 Re: Editor compatibility questions
+To: RMS at MIT-AI
+Putting in the prefix commands and making Meta-X names compatible are
+fine with me.  Making altmode separate arguments in the completing
+reader doesn't sound like a good idea, mainly because the completing
+reader is alrady so hairy that I wold not like to make the definition
+of altmode even more complicated.  Instead we should concentrate on
+improving the performance of the mini-buffer.  Putting the version
+number in the mode line is fine, but putting position information like
+the percentage may be too expensive in terms of working-set usage from
+having to page in all the lines.  If having the percentage can be done
+inexpensively then we should do it.
+  
+DICK@MIT-AI 04/22/81 13:50:21
+To: RMS at MIT-AI
+I think that having zwei be just like emacs is a great idea!!!
+I think of any good reason for having them differ in any detail at all.
+
+			Dick Waters
+   
+ZVONA@MIT-AI 04/22/81 17:30:13 Re: Editor compatibility questions
+To: RMS at MIT-AI
+    Date: 21 April 1981 21:05-EST
+    From: Richard M. Stallman <RMS at MIT-AI>
+
+    What is your opinion of making the standard ZWEI command set more
+    compatible with EMACS?  Specifically, what do you think of these
+    proposed changes:
+
+    1) Make Altmode, C-C and C-^ always defined as bit prefixes.
+Ugh.  For people that never use emacs it would be an aggravation
+and it would not encourage emacs users to use winning keyboard features.
+    2) Making the names of M-X commands and option variables in ZWEI the
+    same as those in EMACS whenever possible.
+Fine.
+    3) Allow arguments to M-X commands to be delimited with Altmodes, in
+    which case they would be read in the same minibuffer as the command
+    name.
+    This would not only be compatible, it would give faster response.
+    The existing mode of operation with a separate minibuffer for each
+    argument would still exist.
+This is a good idea, but then you'd have to use a different char for
+completion.  Actually, I have often thought that giving args in the
+same string was a good idea.
+    4) Displaying some sort of position-in-file information,
+I think that this is impossible to compute in Zwei.  If it isn't it
+should be part of Where Am I and it isn't.
+    and the file version number, in the mode line.
+Version number would be flavorful.
+    I will put all answers in LMDOC;ZWEI ANSWER.
+

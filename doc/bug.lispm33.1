@@ -1,0 +1,4060 @@
+ 7-May-85 13:33:54-EDT,1389;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 7 May 85 13:33-EDT
+Received: from SCRC-STONY-BROOK.ARPA by MIT-MC.ARPA;  7 MAY 85 13:33:28 EDT
+Received: from PEACE.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 231855; Tue 7-May-85 13:28:46-EDT
+Date: Tue, 7 May 85 13:31 EDT
+From: Charles Hornig <Hornig@SCRC-STONY-BROOK.ARPA>
+Subject: Mailer loses on soml delivery option
+To: CJL%OZ@MIT-MC.ARPA, BUG-LISPM%OZ@MIT-MC.ARPA
+In-Reply-To: <850503144931.4.FILE-SERVER@MIT-REAGAN>
+Message-ID: <850507133154.4.HORNIG@PEACE.SCRC.Symbolics.COM>
+
+    Date: Fri, 3 May 85 14:49 EDT
+    From: CJL@OZ
+
+    In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 8.6, Mailer 43.0,
+    microcode TMC5-MIC 319, on Lisp Machine Ronald Reagan:
+
+    If mail is received destined for foo@reagan here on reagan, regardless
+    of who is logged in on the machine, send is assumed, and a window pops
+    up and displays the message, asking for response. This is not the right
+    thing. A send should only be done if user-id matches the destination of
+    the message. It's really annoying to get tons of messages from the dover
+    spooler aimed at people that aren't even in the building, but mail
+    address is on reagan.
+
+I'm not sure I understand this.  Do you mean if a SEND message is
+received?  The LispM SMTP doesn't implement the SAML and SOML commands.
+
+ 7-May-85 13:37:52-EDT,3453;000000000000
+Received: from MIT-REAGAN by MIT-OZ via Chaosnet; 7 May 85 13:35-EDT
+Received: from SCRC-STONY-BROOK.ARPA by MIT-REAGAN via INTERNET with SMTP id 4256; 7 May 85 13:37:26-EDT
+Received: from NEPONSET.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 231860; Tue 7-May-85 13:31:26-EDT
+Date: Tue, 7 May 85 13:36 EDT
+From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+Subject: CL:PUSHNEW loses on symbol macros.
+To: David A. Moon <Moon@SCRC-STONY-BROOK.ARPA>, Ken Haase <KWH@OZ.mit>
+cc: BUG-LISPM@OZ.mit
+In-Reply-To: <850423174808.3.MOON@EUPHRATES.SCRC.Symbolics.COM>
+References: <850423081705.6.KWH@JIMI.MIT>,
+            <850423153950.6.HORNIG@PEACE.SCRC.Symbolics.COM>,
+            <850423161001.9.NFEP@NEPONSET.SCRC.Symbolics.COM>,
+            <850423174808.3.MOON@EUPHRATES.SCRC.Symbolics.COM>,
+            <850424205657.5.MOON@EUPHRATES.SCRC.Symbolics.COM>
+File-References: Q:>Moon>Plans>zl-cl-setf-discrepancies.text
+Message-ID: <850507133600.8.NFEP@NEPONSET.SCRC.Symbolics.COM>
+
+    Date: Tuesday, 23 April 1985, 17:48-EST
+    From: David A. Moon <Moon at SCRC-STONY-BROOK>
+
+	Date: Tuesday, 23 April 1985, 08:17-EST
+	From: Ken Haase <KWH at OZ>
+
+	In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 8.4,
+	Experimental Meta Representation Langauge 2.18, microcode TMC5-MIC 319, on Lisp Machine Jimi Hendrix:
+
+	CL:PUSHNEW loses on symbol macros.  Try evaluating:
+	   (CL:PUSHNEW '(LOAD-EXPERIMENTAL-PATCH 2 1) ZWEI:*LISP-INDENT-OFFSET-ALIST*)
+
+	>>Error: No SETF method known for ZWEI:VARIABLE-VALUE forms (macroexpanded from ZWEI:*LISP-INDENT-OFFSET-ALIST*)
+	While in the function CL:GET-SETF-METHOD-MULTIPLE-VALUE  CL:GET-SETF-METHOD  LT::EXPAND-PUSH
+	While processing (CL:PUSHNEW '(LOAD-EXPERIMENTAL-PATCH 2 1) ZWEI:*LISP-INDENT-OFFSET-ALIST*)
+
+    Thank you for the report.  ZWEI:VARIABLE-VALUE is only understood by the Zetalisp SETF,
+    not by the Common Lisp one.  This is clearly a bug that we need to fix.  A possible
+    workaround is to evaluate:
+
+      (CL:DEFSETF ZWEI:VARIABLE-VALUE ZWEI:SET-VARIABLE-VALUE)
+
+    BUG-LISPM@SCRC: The referenced file lists the 326 functions in the almost-6.0 world
+    I was running that are known to the Zetalisp SETF and not to the Common Lisp SETF.
+    I generated the file using m-X List Matching Symbols and a little post-processing
+    (sorting, plus running a couple of little programs to annotate the listing).
+    Of these 326, there are four (flagged with exclamation points) that I think are bugs
+    (i.e. they are things that a Common Lisp program, using documented interfaces,
+    might need to SETF).  I think we ought to fix these in a near-term release.
+    There are also six, flagged "-- undefined", that shouldn't have Zetalisp
+    SETF methods either; they are all holdovers from the LM-2.  We should also consider
+    eliminating the Zetalisp SETF completely in a future major release; perhaps that
+    would be an unreasonably incompatible change though.
+
+Common Lisp 4.5 (which will be in Release 6.1) puts CL SETF properties
+on the following accessors:
+  SYS:%1D-AREF
+  ZL:GET
+  ZL:GETHASH
+  LDB-TEST
+  CHAR-BIT
+  SYS:FLOAT-OPERATING-MODE
+  SYS:FLOAT-OPERATION-STATUS
+  ZWEI:VARIABLE-VALUE
+These were the accessors I judged to be most user visible and worthy of
+fixing for 6.1.  Many of the 326 are internal to the system or from
+LMFS:DEFSTORAGE, and are therefore not user visible.
+
+ 7-May-85 13:56:34-EDT,1944;000000000000
+Received: from MIT-REAGAN by MIT-OZ via Chaosnet; 7 May 85 13:56-EDT
+Received: from SCRC-STONY-BROOK.ARPA by MIT-REAGAN via INTERNET with SMTP id 4257; 7 May 85 13:58:33-EDT
+Received: from NEPONSET.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 231887; Tue 7-May-85 13:52:22-EDT
+Date: Tue, 7 May 85 13:56 EDT
+From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+Subject: LET-IF not using the environment its called with....
+To: Ken Haase <KWH@OZ.mit>, BUG-LISPM@OZ.mit
+In-Reply-To: <850404231522.1.KWH@JANIS.MIT.EDU>
+Message-ID: <850507135655.0.NFEP@NEPONSET.SCRC.Symbolics.COM>
+
+    Date: Thursday, 4 April 1985, 23:15-EST
+    From: Ken Haase <KWH at OZ>
+
+    In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 7.8,
+    Experimental Meta Representation Langauge 2.10, microcode TMC5-MIC 319, on Lisp Machine Janis Joplin:
+
+    This happened in the midst of a macro-expansion which called
+    CONDITION-CASE, which called LET-IF inside of a stack list binding.  You
+    can see in the second frame that LET-IF is trying to bind
+    DBG:*BOUND-HANDLERS* to #:G0426, which it complains (and this is the
+    relevant bug) is unbound.  However, if we look in the environment handed
+    to the LET-IF (supposing that I am reading the environment correctly --
+    i.e. as an alist -- we see that it was indeed passed a value for
+    #:G0426, precisely the value:
+       (#<CASE-HANDLER 23273305> #<LEXICAL-CLOSURE ** 43440053>)
+    computed in the WITH-STACK-LIST* above it.
+
+    This bug can be reliably reproduced by trying to compile the file
+    "OZ:<LMLIB>PP-6.LISP".
+
+LET-IF didn't work very well interpreted at all, which another customer
+also found out.  A simple case is to EVALUATE
+	(defmacro me-maybe (cond form)
+	  (condition-case-if cond ()
+	      form
+	    (error form)))
+and then try to macro expand
+	(me-maybe t foo)
+Fixed in 271.51, which will be part of 6.1.
+
+ 7-May-85 14:17:09-EDT,1767;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 7 May 85 14:09-EDT
+Received: from MIT-OZ by MIT-MC via Chaosnet; 7 MAY 85  14:04:12 EDT
+Date: Tue, 7 May 1985  13:58 EDT
+Message-ID: <CJL.12109152061.BABYL@MIT-OZ>
+From: Chris Lindblad <CJL%MIT-OZ@MIT-MC.ARPA>
+To:   Charles Hornig <Hornig@SCRC-STONY-BROOK.ARPA>
+Cc:   BUG-LISPM%OZ@MIT-MC.ARPA, CJL%OZ@MIT-MC.ARPA
+Subject: Mailer loses on soml delivery option
+In-reply-to: Msg of 7 May 1985  13:31-EDT from Charles Hornig <Hornig at SCRC-STONY-BROOK.ARPA>
+
+    Date: Tuesday, 7 May 1985  13:31-EDT
+    From: Charles Hornig <Hornig at SCRC-STONY-BROOK.ARPA>
+
+        Date: Fri, 3 May 85 14:49 EDT
+        From: CJL@OZ
+
+        In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 8.6, Mailer 43.0,
+        microcode TMC5-MIC 319, on Lisp Machine Ronald Reagan:
+
+        If mail is received destined for foo@reagan here on reagan, regardless
+        of who is logged in on the machine, send is assumed, and a window pops
+        up and displays the message, asking for response. This is not the right
+        thing. A send should only be done if user-id matches the destination of
+        the message. It's really annoying to get tons of messages from the dover
+        spooler aimed at people that aren't even in the building, but mail
+        address is on reagan.
+
+    I'm not sure I understand this.  Do you mean if a SEND message is
+    received?  The LispM SMTP doesn't implement the SAML and SOML commands.
+
+You're right, I misunderstood what was going on. The mailers here
+first try to do a SEND to foo@MIT-REAGAN, and then mail if that failed.
+The problem is lisp machines accept sends to any name. Sigh. It would be
+nice if they only accepted sends to the person using the machine.
+ 7-May-85 15:14:19-EDT,1712;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 7 May 85 15:08-EDT
+Received: from SCRC-STONY-BROOK.ARPA by MIT-MC.ARPA;  7 MAY 85 15:07:28 EDT
+Received: from NEPONSET.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 231984; Tue 7-May-85 15:02:45-EDT
+Date: Tue, 7 May 85 15:07 EDT
+From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+Subject: hashtables
+To: allegra!sweet!kwc@mit-vax.mit, bug-lispm@MIT-MC.ARPA
+In-Reply-To: The message of 6 May 85 13:25-EDT from allegra!sweet!kwc@mit-vax
+Supersedes: <850507150708.5.NFEP@NEPONSET.SCRC.Symbolics.COM>
+Message-ID: <850507150720.6.NFEP@NEPONSET.SCRC.Symbolics.COM>
+
+    Date: Mon, 6 May 85 13:25:30 edt
+    From: allegra!sweet!kwc@mit-vax
+
+	Date: Fri, 3 May 85 13:50 EDT
+	From: David C. Plummer in disguise <allegra!mit-eddie!DCP@SCRC-QUABBIN.ARPA>
+	Subject: Possible problem with EQUAL hash tables interacting with the GC.
+
+	    <deleted to save space - kwc>
+
+	There is a known problem with the ephemeral GC and EQUAL-HASH-TABLES.
+	The problem comes up when the key is a list with an item someplace in
+	its structure that is ephemeral and an object that hashes using %pointer
+	(for example an instance or an array).  Your key is still in there (you
+	can find it with :MAP-HASH), but :GET-HASH, :PUT-HASH, :MODIFY-HASH,
+	etc, won't find it because the EGC will flip, will cause %pointer to
+	change, but WON'T tell the hash table to rehash.  We are still trying to
+	figure out the best, most compatible, least dangerous fix to this subtle
+	interaction.
+    
+	Does this sound like your problem?
+
+    My keys are almost always strings.
+
+Not helpful.  What are they when they DON'T happen to be strings?
+
+ 7-May-85 15:40:38-EDT,2754;000000000000
+Received: from MIT-HTVAX by MIT-OZ via Chaosnet; 7 May 85 15:24-EDT
+Received: from SCRC-STONY-BROOK.ARPA (scrc-stony-brook.arpa.ARPA) by MIT-HTVAX.ARPA (4.12/4.7) 
+	id AA04709; Tue, 7 May 85 15:23:36 edt
+Received: from NEPONSET.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 232007; Tue 7-May-85 15:17:00-EDT
+Date: Tue, 7 May 85 15:21 EDT
+From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+Subject: [QUAM at SRI-AI: Forwarded]
+To: Richard Lamson <rsl@RUSSIAN.SPA.Symbolics.COM>,
+        David A. Moon <Moon@SCRC-STONY-BROOK.ARPA>,
+        Ken Haase <KWH%OZ@MIT-HTVAX.ARPA>,
+        David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>,
+        allegra!sweet!kwc@mit-eddie.mit, QUAM@SRI-AI.ARPA,
+        BUG-LISPM%OZ@MIT-HTVAX.ARPA
+Cc: HOSS@SCRC-STONY-BROOK.ARPA
+In-Reply-To: <850322135433.6.RSL@RUSSIAN.SPA.Symbolics.COM>,
+             <850322183500.2.MOON@EUPHRATES.SCRC.Symbolics.COM>,
+             <850322163739.6.RSL@RUSSIAN.SPA.Symbolics.COM>,
+             <850322212623.8.MOON@EUPHRATES.SCRC.Symbolics.COM>,
+             <850503103229.1.KWH@MOON>,
+             <850503135025.8.NFEP@NEPONSET.SCRC.Symbolics.COM>,
+             <850410115225.9.NFEP@NEPONSET.SCRC.Symbolics.COM>,
+             The message of 3 May 85 20:53-EDT from allegra!sweet!kwc@mit-eddie,
+             The message of 6 May 85 13:25-EDT from allegra!sweet!kwc@mit-vax
+Message-Id: <850507152133.7.NFEP@NEPONSET.SCRC.Symbolics.COM>
+
+The referenced messages concern a problem interaction between the
+ephemeral garbarge collector and EQUAL hash tables.  A simple test
+program to show the problem is
+
+(defflavor foobar ()())
+
+(defvar *hash*)
+
+(defun foo ()
+  (setq *hash* (make-equal-hash-table))
+  (loop repeat 10.
+	as item = (list-in-area neti:network-cons-area (make-instance 'foobar))
+	do (send *hash* :put-hash item item))
+  (list (loop for entry being the hash-elements of *hash* with-key key
+	      always (eq (send *hash* :get-hash key) entry))
+	(loop with start = si:%gc-generation-number
+	      until ( start si:%gc-generation-number)
+	      do (make-array 1000.)
+	      finally (process-wait "GC finished" #'symeval 'si:%gc-flip-ready)
+		      (return "and after..."))
+	(loop for entry being the hash-elements of *hash* with-key key
+	      always (eq (send *hash* :get-hash key) entry))))
+
+(foo) in the buggy version returns (T "and after..." NIL) instead of
+(T "and after..." T). If you (describe *hash*) you will see all 10
+elements still there.  Patch System 271.51, which will be part of 6.1,
+fixes this problem.  Programs that keep track of the second value of
+SI:EQUAL-HASH will have to be changed slightly; new information about
+SI:EQUAL-HASH will be in the 6.1 release notes.
+
+ 7-May-85 16:43:47-EDT,1645;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 7 May 85 16:43-EDT
+Received: from SCRC-STONY-BROOK.ARPA by MIT-MC.ARPA;  7 MAY 85 15:07:23 EDT
+Received: from NEPONSET.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 231982; Tue 7-May-85 15:02:34-EDT
+Date: Tue, 7 May 85 15:07 EDT
+From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+Subject: hashtables
+To: allegra!sweet!kwc@mit-vax, bug-lispm@MIT-MC.ARPA
+In-Reply-To: The message of 6 May 85 13:25-EDT from allegra!sweet!kwc@mit-vax
+Message-ID: <850507150708.5.NFEP@NEPONSET.SCRC.Symbolics.COM>
+
+    Date: Mon, 6 May 85 13:25:30 edt
+    From: allegra!sweet!kwc@mit-vax
+
+	Date: Fri, 3 May 85 13:50 EDT
+	From: David C. Plummer in disguise <allegra!mit-eddie!DCP@SCRC-QUABBIN.ARPA>
+	Subject: Possible problem with EQUAL hash tables interacting with the GC.
+
+	    <deleted to save space - kwc>
+
+	There is a known problem with the ephemeral GC and EQUAL-HASH-TABLES.
+	The problem comes up when the key is a list with an item someplace in
+	its structure that is ephemeral and an object that hashes using %pointer
+	(for example an instance or an array).  Your key is still in there (you
+	can find it with :MAP-HASH), but :GET-HASH, :PUT-HASH, :MODIFY-HASH,
+	etc, won't find it because the EGC will flip, will cause %pointer to
+	change, but WON'T tell the hash table to rehash.  We are still trying to
+	figure out the best, most compatible, least dangerous fix to this subtle
+	interaction.
+    
+	Does this sound like your problem?
+
+    My keys are almost always strings.
+
+Not helpful.  What are they when they DON'T happen to be strings?
+
+ 7-May-85 17:06:17-EDT,2017;000000000000
+Received: from MIT-SPEECH by MIT-OZ via Chaosnet; 7 May 85 17:02-EDT
+Received: from SCRC-STONY-BROOK.ARPA by MIT-REAGAN via INTERNET with SMTP id 4305; 7 May 85 16:58:22-EDT
+Received: from NEPONSET.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 232136; Tue 7-May-85 16:44:07-EDT
+Date: Tue, 7 May 85 16:48 EDT
+From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+Subject: Common-Lisp Syntax
+To: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>,
+    Scott Cyphers <sr.ehpyc@MIT-SPEECH.mit>, BUG-LISPM@MIT-SPEECH.mit
+In-Reply-To: <850411164229.0.NFEP@NEPONSET.SCRC.Symbolics.COM>
+References: <850410162451.4.CYPHER@MIT-YOGI.MIT>,
+            <850411100643.0.SWM@THAMES.SCRC.Symbolics.COM>,
+            <850411100643.0.SWM@THAMES.SCRC.Symbolics.COM>,
+            <850411164229.0.NFEP@NEPONSET.SCRC.Symbolics.COM>
+Message-ID: <850507164844.7.NFEP@NEPONSET.SCRC.Symbolics.COM>
+
+    Date: Thursday, 11 April 1985, 16:42-EST
+    From: David C. Plummer in disguise <DCP at SCRC-QUABBIN>
+
+	Date: Wednesday, 10 April 1985, 16:24-EST
+	From: Scott Cyphers <sr.ehpyc at MIT-SPEECH>
+
+	In Symbolics 3670 Release 6.0, IP-TCP 29.0, Experimental ZOO 5.4,
+	Experimental Spire-Macros 5.1, Experimental Attribute 5.0,
+	Experimental Compute 5.2, Experimental Audio 4.0,
+	Experimental Speech-Attributes 4.0, Experimental Display 6.0,
+	Experimental Speech-Layouts 6.0, Experimental Prtout 4.0,
+	Experimental Versatec 5.0, Experimental Spire 16.0, ZOO-SPIRE 1.0,
+	microcode TMC5-IO4-FPA-MIC 319, on Lisp Machine Yogi:
+
+	I'm not really sure what the syntax is supposed to do for me, but when
+	I set the syntax to be common-lisp, Zmacs indents LOOP the old way.
+
+    Indeed.  SWM gave a magic incantation to somebody the other day, perhaps
+    it was only on the local mailing list.  The problem is that CL:LOOP is
+    not EQ to ZL:LOOP.  This incantation is probably good enough:
+	    (push '(cl:loop . zwei:indent-loop) zwei:*lisp-indent-offset-alist*)
+Fixed for 6.1.
+
+ 7-May-85 17:13:51-EDT,2080;000000000000
+Received: from MIT-SPEECH by MIT-OZ via Chaosnet; 7 May 85 17:03-EDT
+Received: from SCRC-STONY-BROOK.ARPA by MIT-REAGAN via INTERNET with SMTP id 4306; 7 May 85 16:58:39-EDT
+Received: from NEPONSET.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 232137; Tue 7-May-85 16:44:27-EDT
+Date: Tue, 7 May 85 16:49 EDT
+From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+Subject: Common-Lisp Syntax
+To: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>,
+    Scott Cyphers <sr.ehpyc@MIT-SPEECH.mit>, BUG-LISPM@MIT-SPEECH.mit
+In-Reply-To: <850411164229.0.NFEP@NEPONSET.SCRC.Symbolics.COM>
+References: <850410162451.4.CYPHER@MIT-YOGI.MIT>,
+            <850411100643.0.SWM@THAMES.SCRC.Symbolics.COM>,
+            <850411100643.0.SWM@THAMES.SCRC.Symbolics.COM>,
+            <850411164229.0.NFEP@NEPONSET.SCRC.Symbolics.COM>
+Supersedes: <850507164844.7.NFEP@NEPONSET.SCRC.Symbolics.COM>
+Message-ID: <850507164902.8.NFEP@NEPONSET.SCRC.Symbolics.COM>
+
+    Date: Thursday, 11 April 1985, 16:42-EST
+    From: David C. Plummer in disguise <DCP at SCRC-QUABBIN>
+
+	Date: Wednesday, 10 April 1985, 16:24-EST
+	From: Scott Cyphers <sr.ehpyc at MIT-SPEECH>
+
+	In Symbolics 3670 Release 6.0, IP-TCP 29.0, Experimental ZOO 5.4,
+	Experimental Spire-Macros 5.1, Experimental Attribute 5.0,
+	Experimental Compute 5.2, Experimental Audio 4.0,
+	Experimental Speech-Attributes 4.0, Experimental Display 6.0,
+	Experimental Speech-Layouts 6.0, Experimental Prtout 4.0,
+	Experimental Versatec 5.0, Experimental Spire 16.0, ZOO-SPIRE 1.0,
+	microcode TMC5-IO4-FPA-MIC 319, on Lisp Machine Yogi:
+
+	I'm not really sure what the syntax is supposed to do for me, but when
+	I set the syntax to be common-lisp, Zmacs indents LOOP the old way.
+
+    Indeed.  SWM gave a magic incantation to somebody the other day, perhaps
+    it was only on the local mailing list.  The problem is that CL:LOOP is
+    not EQ to ZL:LOOP.  This incantation is probably good enough:
+	    (push '(cl:loop . zwei:indent-loop) zwei:*lisp-indent-offset-alist*)
+Fixed for 6.1.
+
+ 7-May-85 17:30:50-EDT,1289;000000000000
+Received: from MIT-SARAH by MIT-OZ via Chaosnet; 7 May 85 17:13-EDT
+Date: Tuesday, 7 May 1985, 17:10-EDT
+From: Tom Cloney <Muse at MIT-OZ>
+To: BUG-LISPM at MIT-OZ
+
+In Experimental System 99.13, CADR 4.0, Experimental ZMail 54.3,
+MIT-Specific 23.0, Experimental Camera 5.0, microcode 320, GC@2,
+on Sarah Bernhardt:
+
+
+Insert your description of the circumstances here:
+
+I periodically get this error after doing (gc-on). I haven't the foggiest what it means.
+
+>>TRAP 80 (ARGTYP LOCATIVE PP 0)
+The first argument to %STORE-CONDITIONAL, NIL, was of the wrong type.
+The function expected a locative.
+Backtrace from the debugger:
+
+SI:GC-PROCESS (P.C. = 126)
+
+Local 0 (COMMITTED-FREE-SPACE): 9947677
+Local 1 (FREE-SPACE): 9781290
+Local 2 (POINTER): NIL
+Local 3 (ALREADY-MINE): NIL
+
+
+SI::PROCESS-TOP-LEVEL (P.C. = 115)
+
+   --Defaulted args:--
+ Arg 0 (IGNORE): NIL
+Local 0: ("Reset and arrest process ~A." "Garbage Collector")
+Local 1: (CONDITION ("Reset and arrest process ~A." "Garbage Collector") T ("Reset and arrest process ~A." "Garbage Collector") ...)
+Local 2: ("Restart process ~A." "Garbage Collector")
+Local 3: ((SYS:ABORT CONDITION) ("Restart process ~A." "Garbage Collector") T ("Restart process ~A." "Garbage Collector") ...)
+Local 4 (IGNORE): NIL
+ 7-May-85 17:59:44-EDT,9051;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 7 May 85 17:59-EDT
+Received: from MIT-OZ by MIT-MC via Chaosnet; 7 MAY 85  17:53:31 EDT
+Received: from MIT-MORRISON by MIT-OZ via Chaosnet; 7 May 85 17:44-EDT
+Date: Tue, 7 May 85 17:43 EDT
+From: Gavan Duffy <GAVAN@OZ>
+Subject: Can't dired Multics
+To: RWK@SCRC-YUKON.ARPA, GAVAN@OZ
+cc: BUG-LISPM@MIT-MC.ARPA
+In-Reply-To: <850507115207.7.RWK@CROW.SCRC.Symbolics.COM>
+Message-ID: <850507174332.2.GAVAN@MORRISON>
+
+    Date: Tue, 7 May 85 11:52 EDT
+    From: Robert W. Kerns <RWK@SCRC-YUKON.ARPA>
+
+	Date: Mon, 6 May 85 22:03 EDT
+	From: Gavan Duffy <GAVAN@OZ>
+
+	In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 9.0,
+	Experimental RELATUS 138.0, microcode TMC5-MIC 319, FEP 22, on Lisp Machine Jim Morrison:
+
+	    Date: Mon, 6 May 85 19:15 EDT
+	    From: Robert W. Kerns <RWK@SCRC-YUKON.ARPA>
+
+		Date: Sat, 4 May 85 19:01 EDT
+		From: Gavan Duffy <GAVAN@OZ>
+
+		How do I dired a Multics?
+
+	    This was noticed a few weeks ago here, so I have a quick answer for you:
+
+	    ; From file pathst.lisp >rel-6>sys>io Q: (395)
+	    #8R FILE-SYSTEM::(GLOBAL:COMPILER-LET ((GLOBAL:PACKAGE (GLOBAL:PKG-FIND-PACKAGE "FILE-SYSTEM")))
+   
+
+	    (DEFMETHOD (MULTICS-FAMILY-PATHNAME-MIXIN :VALID-NAME-P) (NAM)
+	      (OR (STRINGP NAM) (MEMQ NAM '(NIL :WILD))))
+
+	    (DEFMETHOD (MULTICS-FAMILY-PATHNAME-MIXIN :VALID-TYPE-P) (TYP)
+	      (OR (STRINGP TYP) (MEMQ TYP '(NIL :UNSPECIFIC :WILD))))
+
+	    )
+
+	Nice try.  I copmpiled your code, and here's what I got.
+
+    This is a different bug.  You'll need to keep the fix I gave you after
+    you apply Hornig's fix in his message.  BTW, to answer the question
+    you asked in a later message, Charlie meant "IP-TCP:", not "IP_TCP:".
+
+OK.  I did all that.  The connection was made and the directory list even
+started to happen.  But then I got the following error repeatedly.  Is this
+Multics screwing me, or is it the lispm?
+
+>>Error: Block mode stream closed unexpectedly.
+While in the function (:METHOD TCP::FTP-BLOCK-MODE-INPUT-MIXIN :NEXT-INPUT-BUFFER)  (:INTERNAL (:METHOD TCP::FTP-BLOCK-MODE-CHARACTER-INPUT-STREAM :COMBINED :NEXT-INPUT-BUFFER) 0)  (:METHOD SI:ASCII-TRANSLATING-BUFFERED-INPUT-STREAM-MIXIN :WHOPPER :NEXT-INPUT-BUFFER)
+
+(:METHOD TCP::FTP-BLOCK-MODE-INPUT-MIXIN :NEXT-INPUT-BUFFER):  (P.C. = 27)
+   Arg 0 (SELF): #<FTP-BLOCK-MODE-CHARACTER-INPUT-STREAM "MULTICS: >udd>Datanet>Duffy>**" 13460567>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor TCP::FTP-BLOCK-MODE-INPUT-MIXIN -- 2. IV's, 0. FL's 13456141>
+   Arg 2 (OPERATION): :NEXT-INPUT-BUFFER
+   Arg 3 (IGNORE): NIL
+   Local 4 (LEN): NIL
+   Local 5 (HEADER-LENGTH): 0
+   Local 6 (EOF): T
+
+(:INTERNAL (:METHOD TCP::FTP-BLOCK-MODE-CHARACTER-INPUT-STREAM :COMBINED :NEXT-INPUT-BUFFER) 0):  (P.C. = 11)
+   Arg 0 (SELF): #<FTP-BLOCK-MODE-CHARACTER-INPUT-STREAM "MULTICS: >udd>Datanet>Duffy>**" 13460567>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor TCP::FTP-BLOCK-MODE-CHARACTER-INPUT-STREAM -- 4. IV's, 7. FL's 36320406>
+   Arg 2 (.OPERATION.): :NEXT-INPUT-BUFFER
+   Rest arg (.DAEMON-CALLER-ARGS.): (NIL)
+
+(:METHOD SI:ASCII-TRANSLATING-BUFFERED-INPUT-STREAM-MIXIN :WHOPPER :NEXT-INPUT-BUFFER):  (P.C. = 14)
+   Arg 0 (SELF): #<FTP-BLOCK-MODE-CHARACTER-INPUT-STREAM "MULTICS: >udd>Datanet>Duffy>**" 13460567>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor SI:ASCII-TRANSLATING-BUFFERED-INPUT-STREAM-MIXIN -- 5. IV's, 0. FL's 36320431>
+   Arg 2 (.WHOPPER-CONTINUATION.): #<DTP-COMPILED-FUNCTION (:INTERNAL (:METHOD TCP::FTP-BLOCK-MODE-CHARACTER-INPUT-STREAM :COMBINED :NEXT-INPUT-BUFFER) 0) 76574656>
+   Arg 3 (.OLD-SELF-MAPPING-TABLE.): #<Map to flavor TCP::FTP-BLOCK-MODE-CHARACTER-INPUT-STREAM -- 4. IV's, 7. FL's 36320406>
+   Arg 4 (.OPERATION.): :NEXT-INPUT-BUFFER
+   Arg 5 (NO-WAIT-P): NIL
+
+(:METHOD TCP::FTP-BLOCK-MODE-CHARACTER-INPUT-STREAM :COMBINED :NEXT-INPUT-BUFFER):  (P.C. = 13)
+   Arg 0 (SELF): #<FTP-BLOCK-MODE-CHARACTER-INPUT-STREAM "MULTICS: >udd>Datanet>Duffy>**" 13460567>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor TCP::FTP-BLOCK-MODE-CHARACTER-INPUT-STREAM -- 4. IV's, 7. FL's 36320406>
+   Arg 2 (.OPERATION.): :NEXT-INPUT-BUFFER
+   Rest arg (.DAEMON-CALLER-ARGS.): (NIL)
+
+(:METHOD SI:BASIC-BUFFERED-INPUT-STREAM :SETUP-NEXT-INPUT-BUFFER):  (P.C. = 12)
+   Arg 0 (SELF): #<FTP-BLOCK-MODE-CHARACTER-INPUT-STREAM "MULTICS: >udd>Datanet>Duffy>**" 13460567>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor SI:BASIC-BUFFERED-INPUT-STREAM -- 3. IV's, 0. FL's 36320440>
+   Arg 2 (OPERATION): :SETUP-NEXT-INPUT-BUFFER
+   Arg 3 (NO-HANG-P): NIL
+   Arg 4 (EOF): NIL
+
+(:METHOD TCP::FTP-BLOCK-MODE-CHARACTER-INPUT-STREAM :COMBINED :SETUP-NEXT-INPUT-BUFFER):  (P.C. = 11)
+   Arg 0 (SELF): #<FTP-BLOCK-MODE-CHARACTER-INPUT-STREAM "MULTICS: >udd>Datanet>Duffy>**" 13460567>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor TCP::FTP-BLOCK-MODE-CHARACTER-INPUT-STREAM -- 4. IV's, 7. FL's 36320406>
+   Arg 2 (.OPERATION.): :SETUP-NEXT-INPUT-BUFFER
+   Rest arg (.DAEMON-CALLER-ARGS.): (NIL NIL)
+
+(:METHOD SI:BUFFERED-LINE-INPUT-MIXIN :LINE-IN):  (P.C. = 17)
+   Arg 0 (SELF): #<FTP-BLOCK-MODE-CHARACTER-INPUT-STREAM "MULTICS: >udd>Datanet>Duffy>**" 13460567>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor SI:BUFFERED-LINE-INPUT-MIXIN -- 3. IV's, 0. FL's 36320471>
+   Arg 2 (OPERATION): :LINE-IN
+   --Defaulted args:--
+   Arg 3 (LEADER): NIL
+
+(:METHOD FS:TCP-FTP-CONN :DIRECTORY-LIST):  (P.C. = 32)
+   Arg 0 (SELF): #<TCP-FTP-CONN 13455347>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor FS:TCP-FTP-CONN -- 8. IV's, 0. FL's 36304031>
+   Arg 2 (OPERATION): :DIRECTORY-LIST
+   Arg 3 (PATHNAME): #<MULTICS-PATHNAME "MULTICS: >udd>Datanet>Duffy>**">
+   Arg 4 (OPTIONS): (:SORTED :DELETED)
+
+(:METHOD FS:TCP-FTP-FILE-ACCESS-PATH :DIRECTORY-LIST):  (P.C. = 12)
+   Arg 0 (SELF): #<TCP-FTP-FILE-ACCESS-PATH MULTICS using TCP-FTP 13455336>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor FS:TCP-FTP-FILE-ACCESS-PATH -- 2. IV's, 2. FL's 36304014>
+   Arg 2 (OPERATION): :DIRECTORY-LIST
+   Rest arg (ARGS): (#<MULTICS-PATHNAME "MULTICS: >udd>Datanet>Duffy>**"> (:SORTED :DELETED))
+
+(:METHOD FS:ACTIVE-PATHNAME-MIXIN :DIRECTORY-LIST):  (P.C. = 12)
+   Arg 0 (SELF): #<MULTICS-PATHNAME "MULTICS: >udd>Datanet>Duffy>**">
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor FS:ACTIVE-PATHNAME-MIXIN -- 1. IV's, 0. FL's 105226543>
+   Arg 2 (OPERATION): :DIRECTORY-LIST
+   Arg 3 (OPTIONS): (:SORTED :DELETED)
+
+FS:DIRECTORY-LIST:  (P.C. = 114)
+   Arg 0 (FILENAME): #<MULTICS-PATHNAME "MULTICS: >udd>Datanet>Duffy>**">
+   Rest arg (OPTIONS): (:SORTED :DELETED)
+
+(:METHOD ZWEI:DIRED-NODE-MIXIN :REVERT):  (P.C. = 42)
+   Arg 0 (SELF): #<DIRED-BUFFER "*Dired-1*" 11202137>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor ZWEI:DIRED-NODE-MIXIN -- 4. IV's, 0. FL's 143215622>
+   Arg 2 (OPERATION): :REVERT
+
+(:METHOD ZWEI:DIRED-BUFFER :COMBINED :REVERT):  (P.C. = 11)
+   Arg 0 (SELF): #<DIRED-BUFFER "*Dired-1*" 11202137>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor ZWEI:DIRED-BUFFER -- 3. IV's, 4. FL's 143215610>
+   Arg 2 (.OPERATION.): :REVERT
+   Rest arg (.DAEMON-CALLER-ARGS.): NIL
+
+(:METHOD ZWEI:ZMACS-EDITOR :FIND-SPECIAL-BUFFER):  (P.C. = 45)
+   Arg 0 (SELF): #<ZMACS-TOP-LEVEL-EDITOR 121171573>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor ZWEI:ZMACS-EDITOR -- 3. IV's, 0. FL's 142345763>
+   Arg 2 (OPERATION): :FIND-SPECIAL-BUFFER
+   Arg 3 (TYPE): :DIRED
+   Arg 4 (NEW-P): T
+   Rest arg (SETS): (:SET-PATHNAME #<MULTICS-PATHNAME "MULTICS: >udd>Datanet>Duffy>**">)
+
+(:METHOD ZWEI:ZMACS-EDITOR :SELECT-SPECIAL-BUFFER):  (P.C. = 10)
+   Arg 0 (SELF): #<ZMACS-TOP-LEVEL-EDITOR 121171573>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor ZWEI:ZMACS-EDITOR -- 3. IV's, 0. FL's 142345763>
+   Arg 2 (OPERATION): :SELECT-SPECIAL-BUFFER
+   Arg 3 (TYPE): :DIRED
+   Arg 4 (NEW-P): T
+   Rest arg (SETS): (:SET-PATHNAME #<MULTICS-PATHNAME "MULTICS: >udd>Datanet>Duffy>**">)
+
+ZWEI:DIRECTORY-EDIT:  (P.C. = 22)
+   Arg 0 (PATHNAME): #<MULTICS-PATHNAME "MULTICS: >udd>Datanet>Duffy>**">
+
+ZWEI:COM-DIRED:  (P.C. = 5)
+
+ZWEI:COM-EXTENDED-COMMAND:  (P.C. = 27)
+
+ZWEI:COMMAND-EXECUTE:  (P.C. = 57)
+   Arg 0 (COMMAND): ZWEI:COM-EXTENDED-COMMAND
+   Arg 1 (CHAR): 600
+   Arg 2 (PREFIX-CHAR): NIL
+   Arg 3 (HOOK-LIST): NIL
+
+ZWEI:PROCESS-COMMAND-CHAR:  (P.C. = 14)
+   Arg 0 (CH): 600
+
+(:METHOD ZWEI:EDITOR :EDIT):  (P.C. = 233)
+   Arg 0 (SELF): #<ZMACS-TOP-LEVEL-EDITOR 121171573>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor ZWEI:EDITOR -- 12. IV's, 0. FL's 142346020>
+   Arg 2 (OPERATION): :EDIT
+   --Defaulted args:--
+   Arg 3 (TOP-LEVEL-P): T
+   Arg 4 (DESCRIPTION): NIL
+
+(:METHOD ZWEI:TOP-LEVEL-EDITOR :COMBINED :EDIT):  (P.C. = 60)
+   Arg 0 (SELF): #<ZMACS-TOP-LEVEL-EDITOR 121171573>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor ZWEI:TOP-LEVEL-EDITOR -- 13. IV's, 1. FL's 142345776>
+   Arg 2 (.OPERATION.): :EDIT
+   Rest arg (.DAEMON-CALLER-ARGS.): NIL
+
+ZWEI:ZMACS-WINDOW-TOP-LEVEL:  (P.C. = 51)
+
+SI:PROCESS-TOP-LEVEL:  (P.C. = 54)
+   Arg 0 (IGNORE): NIL
+ 7-May-85 19:14:16-EDT,1917;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 7 May 85 19:13-EDT
+Received: from SCRC-STONY-BROOK.ARPA by MIT-MC.ARPA;  7 MAY 85 19:13:53 EDT
+Received: from CUYAHOGA.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 232265; Tue 7-May-85 19:09:12-EDT
+Date: Tue, 7 May 85 19:14 EDT
+From: Robert A. Cassels <Cassels@TENEX.SCRC.Symbolics.COM>
+Subject: hashtables
+To: DCP@SCRC-QUABBIN.ARPA, allegra!sweet!kwc@mit-vax.mit,
+    bug-lispm@MIT-MC.ARPA
+In-Reply-To: <850507150720.6.NFEP@NEPONSET.SCRC.Symbolics.COM>
+Message-ID: <850507191405.2.CASSELS@CUYAHOGA.SCRC.Symbolics.COM>
+
+    Date: Tue, 7 May 85 15:07 EDT
+    From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+
+	Date: Mon, 6 May 85 13:25:30 edt
+	From: allegra!sweet!kwc@mit-vax
+
+	    Date: Fri, 3 May 85 13:50 EDT
+	    From: David C. Plummer in disguise <allegra!mit-eddie!DCP@SCRC-QUABBIN.ARPA>
+	    Subject: Possible problem with EQUAL hash tables interacting with the GC.
+
+		<deleted to save space - kwc>
+
+	    There is a known problem with the ephemeral GC and EQUAL-HASH-TABLES.
+	    The problem comes up when the key is a list with an item someplace in
+	    its structure that is ephemeral and an object that hashes using %pointer
+	    (for example an instance or an array).  Your key is still in there (you
+	    can find it with :MAP-HASH), but :GET-HASH, :PUT-HASH, :MODIFY-HASH,
+	    etc, won't find it because the EGC will flip, will cause %pointer to
+	    change, but WON'T tell the hash table to rehash.  We are still trying to
+	    figure out the best, most compatible, least dangerous fix to this subtle
+	    interaction.
+    
+	    Does this sound like your problem?
+
+	My keys are almost always strings.
+
+    Not helpful.  What are they when they DON'T happen to be strings?
+
+Hmm....  Are they simple strings, or are they possibly indirect arrays,
+like the result of NSUBSTRING?
+
+ 7-May-85 19:21:04-EDT,4806;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 7 May 85 19:20-EDT
+Received: from MIT-OZ by MIT-MC via Chaosnet; 7 MAY 85  19:19:20 EDT
+Received: from MIT-MORRISON by MIT-OZ via Chaosnet; 7 May 85 19:16-EDT
+Date: Tue, 7 May 85 19:16 EDT
+From: Gavan Duffy <GAVAN@OZ>
+Subject: Grinding bug?
+To: BUG-LISPM@MIT-MC.ARPA
+Message-ID: <850507191626.0.GAVAN@MORRISON>
+
+In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 9.1,
+Experimental RELATUS 138.1, microcode TMC5-MIC 319, FEP 22, on Lisp Machine Jim Morrison:
+
+What sort of thing can't be ground?  I'm trying to grind some form into a
+buffer here, but can't because of this error.  I can't look at the thing
+that's losing because when I do c-m-l, I get only <<Error printing value>>.
+What do you think this means.  I'm not trying to grind anything but lists
+here.
+
+>>Trap: The word #<DTP-NULL 30442470> was read from location 30442470 (in GAVAN-SHORT-TERM-AREA).
+While in the function SI:PRINT-OBJECT  PRIN1  SI:GRIND-ATOM
+
+SI:PRINT-OBJECT:  (P.C. = 417)
+   Arg 0 (EXP): <<Error printing value>>
+   Arg 1 (I-PRINDEPTH): 0
+   Arg 2 (SLASHIFY-P): T
+   Arg 3 (STREAM): #<DTP-COMPILED-FUNCTION SI:GRIND-COUNT-IO 14307152>
+   --Defaulted args:--
+   Arg 4 (WHICH-OPERATIONS): (:TYO)
+   Local 5: #<CASE-HANDLER 120405105>
+   Local 6: NIL
+   Local 7: (#<CASE-HANDLER 120405105>)
+
+PRIN1:  (P.C. = 10)
+   Arg 0 (EXP): <<Error printing value>>
+   Arg 1 (STREAM): #<DTP-COMPILED-FUNCTION SI:GRIND-COUNT-IO 14307152>
+
+SI:GRIND-ATOM:  (P.C. = 41)
+   Arg 0 (ATOM): <<Error printing value>>
+   Arg 1 (STREAM): #<DTP-COMPILED-FUNCTION SI:GRIND-COUNT-IO 14307152>
+   Arg 2 (LOC): #<DTP-LOCATIVE 16670217>
+
+SI:GRIND-LINEAR-FORM:  (P.C. = 21)
+   Arg 0 (EXP): <<Error printing value>>
+   Arg 1 (LOC): #<DTP-LOCATIVE 16670217>
+   --Defaulted args:--
+   Arg 2 (CHECK-FOR-MACROS): T
+
+SI:GRIND-TRY:  (P.C. = 66)
+   Arg 0 (FORM): #<DTP-COMPILED-FUNCTION SI:GRIND-LINEAR-FORM 14307350>
+   Arg 1 (EXP): <<Error printing value>>
+   Arg 2 (LOC): #<DTP-LOCATIVE 16670217>
+   Rest arg (ARGS): NIL
+
+SI:GRIND-AS-BLOCK:  (P.C. = 105)
+   Arg 0 (EXP): (<<Error printing value>>
+   Arg 1 (LOC): #<DTP-LOCATIVE 16670216>
+
+SI:GRIND-QUOTE:  (P.C. = 45)
+   Arg 0 (EXP): (QUOTE (<<Error printing value>>
+   Arg 1 (LOC): #<DTP-LOCATIVE 16670212>
+
+SI:GRIND-LINEAR-FORM:  (P.C. = 203)
+   Arg 0 (EXP): (QUOTE (<<Error printing value>>
+   Arg 1 (LOC): #<DTP-LOCATIVE 16670212>
+   --Defaulted args:--
+   Arg 2 (CHECK-FOR-MACROS): T
+
+Remainder of stack:
+SI:GRIND-LINEAR-TAIL:  (P.C. = 33)
+SI:GRIND-LINEAR-FORM:  (P.C. = 222)
+SI:GRIND-LINEAR-TAIL:  (P.C. = 33)
+SI:GRIND-LINEAR-FORM:  (P.C. = 222)
+SI:GRIND-TRY:  (P.C. = 66)
+SI:GRIND-AS-BLOCK:  (P.C. = 105)
+SI:GRIND-QUOTE:  (P.C. = 45)
+SI:GRIND-FORM:  (P.C. = 63)
+SI:GRIND-TRY:  (P.C. = 123)
+SI:GRIND-OPTI-MISER:  (P.C. = 30)
+SI:GRIND-REST-OF-LIST:  (P.C. = 50)
+SI:GRIND-MISER-FORM:  (P.C. = 24)
+SI:GRIND-OPTI-MISER:  (P.C. = 34)
+SI:GRIND-REST-OF-LIST:  (P.C. = 50)
+SI:GRIND-MISER-FORM:  (P.C. = 24)
+SI:GRIND-OPTI-MISER:  (P.C. = 34)
+SI:GRIND-REST-OF-LIST:  (P.C. = 15)
+SI:GRIND-MISER-FORM:  (P.C. = 24)
+SI:GRIND-OPTI-MISER:  (P.C. = 34)
+SI:GRIND-REST-OF-LIST:  (P.C. = 50)
+SI:GRIND-MISER-FORM:  (P.C. = 24)
+SI:GRIND-OPTI-MISER:  (P.C. = 34)
+SI:GRIND-REST-OF-LIST:  (P.C. = 50)
+SI:GRIND-MISER-FORM:  (P.C. = 24)
+SI:GRIND-OPTI-MISER:  (P.C. = 34)
+SI:GRIND-REST-OF-LIST:  (P.C. = 50)
+SI:GRIND-MISER-FORM:  (P.C. = 24)
+SI:GRIND-OPTI-MISER:  (P.C. = 34)
+SI:GRIND-REST-OF-LIST:  (P.C. = 50)
+SI:GRIND-MISER-FORM:  (P.C. = 24)
+SI:GRIND-OPTI-MISER:  (P.C. = 34)
+SI:GRIND-REST-OF-LIST:  (P.C. = 50)
+SI:GRIND-MISER-FORM:  (P.C. = 24)
+SI:GRIND-OPTI-MISER:  (P.C. = 34)
+SI:GRIND-REST-OF-LIST:  (P.C. = 50)
+SI:GRIND-MISER-FORM:  (P.C. = 24)
+SI:GRIND-OPTI-MISER:  (P.C. = 34)
+SI:GRIND-REST-OF-LIST:  (P.C. = 15)
+SI:GRIND-MISER-FORM:  (P.C. = 24)
+SI:GRIND-OPTI-MISER:  (P.C. = 34)
+GRIND-TOP-LEVEL:  (P.C. = 60)
+(:METHOD SI:TEXTUAL-DUMP-MIXIN :DUMP-TEXTUALLY-TO-BUFFER):  (P.C. = 52)  (from RL: UTILS; TEXTDUMP)
+(:INTERNAL (:METHOD BELIEF-SYSTEM :COMBINED :DUMP-TEXTUALLY-TO-BUFFER) 0):  (P.C. = 11)
+(:METHOD BELIEF-SYSTEM :WHOPPER :DUMP-TEXTUALLY-TO-BUFFER):  (P.C. = 110)  (from PIG:USRD$:[RELATUS.UTILS]TDUMPBSYS)
+(:METHOD BELIEF-SYSTEM :COMBINED :DUMP-TEXTUALLY-TO-BUFFER):  (P.C. = 12)  (from PIG:USRD$:[RELATUS.UTILS]TDUMPBSYS)
+SEND:  (P.C. = 6)
+SI:*EVAL:  (P.C. = 403)
+TV:MOUSE-SENSITIVE-EVAL-FOR-LISP-COMMAND-LOOP:  (P.C. = 35)  (from RL: UTILS; WMAGIC)
+(:INTERNAL SI:LISP-COMMAND-LOOP-INTERNAL 0):  (P.C. = 152)
+TV:WITH-NOTIFICATION-MODE-INTERNAL:  (P.C. = 16)
+SI:LISP-COMMAND-LOOP-INTERNAL:  (P.C. = 54)
+SI:LISP-COMMAND-LOOP:  (P.C. = 67)
+TV:RELATUS-LISTENER-TOP-LEVEL1:  (P.C. = 31)  (from RL: UTILS; WMAGIC)
+SI:PROCESS-TOP-LEVEL:  (P.C. = 54)
+ 7-May-85 19:32:00-EDT,1335;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 7 May 85 19:31-EDT
+Received: from SCRC-YUKON.ARPA by MIT-MC.ARPA;  7 MAY 85 19:30:57 EDT
+Received: from EUPHRATES.SCRC.Symbolics.COM by SCRC-YUKON.ARPA via CHAOS with CHAOS-MAIL id 124358; Tue 7-May-85 19:29:57-EDT
+Date: Tue, 7 May 85 19:29 EDT
+From: David A. Moon <Moon@SCRC-STONY-BROOK.ARPA>
+Subject: Grinding bug?
+To: Gavan Duffy <GAVAN@OZ>
+cc: BUG-LISPM@MIT-MC.ARPA
+In-Reply-To: <850507191626.0.GAVAN@MORRISON>
+Message-ID: <850507192945.5.MOON@EUPHRATES.SCRC.Symbolics.COM>
+
+    Date: Tue, 7 May 85 19:16 EDT
+    From: Gavan Duffy <GAVAN@OZ>
+
+    In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 9.1,
+    Experimental RELATUS 138.1, microcode TMC5-MIC 319, FEP 22, on Lisp Machine Jim Morrison:
+
+    What sort of thing can't be ground?  I'm trying to grind some form into a
+    buffer here, but can't because of this error.  I can't look at the thing
+    that's losing because when I do c-m-l, I get only <<Error printing value>>.
+    What do you think this means.  I'm not trying to grind anything but lists
+    here.
+
+    >>Trap: The word #<DTP-NULL 30442470> was read from location 30442470 (in GAVAN-SHORT-TERM-AREA).
+    While in the function SI:PRINT-OBJECT  PRIN1  SI:GRIND-ATOM
+
+You called RESET-TEMPORARY-AREA on GAVAN-SHORT-TERM-AREA, right?
+
+ 7-May-85 19:34:31-EDT,1351;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 7 May 85 19:32-EDT
+Received: from SCRC-QUABBIN.ARPA by MIT-MC.ARPA;  7 MAY 85 19:31:16 EDT
+Received: from EUPHRATES.SCRC.Symbolics.COM by SCRC-QUABBIN.ARPA via CHAOS with CHAOS-MAIL id 161593; Tue 7-May-85 19:27:23-EDT
+Date: Tue, 7 May 85 19:30 EDT
+From: David A. Moon <Moon@SCRC-STONY-BROOK.ARPA>
+Subject: Grinding bug?
+To: Gavan Duffy <GAVAN%OZ@MIT-MC.ARPA>
+cc: BUG-LISPM@MIT-MC.ARPA
+In-Reply-To: <850507191626.0.GAVAN@MORRISON>
+Message-ID: <850507193014.6.MOON@EUPHRATES.SCRC.Symbolics.COM>
+
+    Date: Tue, 7 May 85 19:16 EDT
+    From: Gavan Duffy <GAVAN@OZ>
+
+    In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 9.1,
+    Experimental RELATUS 138.1, microcode TMC5-MIC 319, FEP 22, on Lisp Machine Jim Morrison:
+
+    What sort of thing can't be ground?  I'm trying to grind some form into a
+    buffer here, but can't because of this error.  I can't look at the thing
+    that's losing because when I do c-m-l, I get only <<Error printing value>>.
+    What do you think this means.  I'm not trying to grind anything but lists
+    here.
+
+    >>Trap: The word #<DTP-NULL 30442470> was read from location 30442470 (in GAVAN-SHORT-TERM-AREA).
+    While in the function SI:PRINT-OBJECT  PRIN1  SI:GRIND-ATOM
+
+You called RESET-TEMPORARY-AREA on GAVAN-SHORT-TERM-AREA, right?
+
+ 7-May-85 19:38:56-EDT,1083;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 7 May 85 19:36-EDT
+Date: Tue,  7 May 85 19:34:57 EST
+From: Christopher C. Stacy <CSTACY@MIT-MC>
+Subject:  Mailer loses on soml delivery option
+To: CJL@MIT-OZ
+cc: Hornig@SCRC-STONY-BROOK, BUG-LISPM@MIT-OZ
+In-reply-to: Msg of Tue 7 May 1985  13:58 EDT from Chris Lindblad <CJL%MIT-OZ at MIT-MC.ARPA>
+Message-ID: <[MIT-MC].490659.850507.CSTACY>
+
+    Date: Tue, 7 May 1985  13:58 EDT
+    From: Chris Lindblad <CJL%MIT-OZ at MIT-MC.ARPA>
+
+    It would be nice if they only accepted sends to the person 
+    using the machine.
+
+I am not offhand convinced this restriction would be nice.
+LispMs are not like timesharing machines, because there is only one
+place an interactive message can be delivered to.  I frequently
+intentionally send to a LispM using a different name than the
+recipient is actually logged in as.  I am under the imporession
+that I am using the SEND or CONVERSE protocol though, and not SMTP.
+Someone needs to figure out the functional intent of implementing
+all these protocols on the Lisp Machine.
+ 7-May-85 19:43:23-EDT,1147;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 7 May 85 19:42-EDT
+Date: Tue,  7 May 85 19:40:15 EST
+From: Christopher C. Stacy <CSTACY@MIT-MC>
+Subject:  Mailer loses on soml delivery option
+To: CJL@MIT-OZ
+cc: Hornig@SCRC-STONY-BROOK, BUG-LISPM@MIT-OZ
+In-reply-to: Msg of Tue 7 May 1985  13:58 EDT from Chris Lindblad <CJL%MIT-OZ at MIT-MC.ARPA>
+Message-ID: <[MIT-MC].490667.850507.CSTACY>
+
+
+     Date: Fri, 3 May 85 14:49 EDT
+     From: CJL@OZ
+
+     In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 8.6,
+     Mailer 43.0, microcode TMC5-MIC 319, on Lisp Machine
+     Ronald Reagan:
+     
+     If mail is received destined for foo@reagan here on
+     reagan, regardless of who is logged in on the machine,
+     send is assumed, and a window pops up and displays the
+     message, asking for response.
+
+If I understand your message, maybe the real bug is that the mailer on
+Reagan turns MAIL into SEND.  Maybe if the user is unknown (no
+forwarding or whatever) then it should dump the mail into a mailbox in
+some dead-letters directory in LMFS and send an error receipt to
+the originator as specified by the return path.
+ 7-May-85 19:56:26-EDT,1331;000000000000
+Received: from MIT-GOLDILOCKS by MIT-OZ via Chaosnet; 7 May 85 19:54-EDT
+Received: from MIT-KOALA by GOLDILOCKS via CHAOS with CHAOS-MAIL id 1238; Tue 7-May-85 19:55:10-EDT
+Date: Tuesday, 7 May 1985, 19:54-EDT
+From: Scott Cyphers <sr.ehpyc at MIT-SPEECH>
+Subject: Mailer loses on soml delivery option
+To: CSTACY at MIT-MC, CJL at OZ
+cc: Hornig at SCRC-STONY-BROOK, BUG-LISPM at OZ
+In-Reply-To: <[MIT-MC].490659.850507.CSTACY>
+Message-ID: <850507195404.5.CYPHER@MIT-KOALA.MIT>
+
+I think of all of the lisp machines at a site as being one virtual
+processor, and think it would make sense to be able to do a converse to
+someone at a site, perhaps via the namespace server for that site or
+something, analagous to CJL's finger server.  Converse and finger do
+this for the local site, but it would be useful if they could do it for
+additional sites as well.
+
+I too do sends to names other than the logged in person, but it's always
+because I'm too lazy to see what they happened to be logged in as if I
+know who's on the machine.  Perhaps if any of the login names of the
+user, as well as the nickname of the user were considered acceptable as
+the person using the machine, CJL's idea would be good.  It could be
+useful on the occasion where who you thought was on machine A was on B
+and someone else was on A.
+
+ 8-May-85 09:13:02-EDT,1531;000000000001
+Received: from MIT-MC by MIT-OZ via Chaosnet; 8 May 85 09:12-EDT
+Received: from SCRC-STONY-BROOK.ARPA by MIT-MC.ARPA;  8 MAY 85 09:13:38 EDT
+Received: from CONCORD.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 232485; Wed 8-May-85 09:08:50-EDT
+Date: Wed, 8 May 85 09:14 EDT
+From: Bernard S. Greenberg <BSG@STONY-BROOK.SCRC.Symbolics.COM>
+Subject: Mailer loses on soml delivery option
+To: CSTACY@MIT-MC.ARPA, CJL%OZ@MIT-MC.ARPA
+cc: Hornig@STONY-BROOK.SCRC.Symbolics.COM, BUG-LISPM%OZ@MIT-MC.ARPA
+In-Reply-To: <[MIT-MC].490667.850507.CSTACY>
+Message-ID: <850508091436.8.BSG@CONCORD.SCRC.Symbolics.COM>
+
+    Date: Tue,  7 May 85 19:40:15 EST
+    From: Christopher C. Stacy <CSTACY@MIT-MC>
+
+
+	 Date: Fri, 3 May 85 14:49 EDT
+	 From: CJL@OZ
+
+	 In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 8.6,
+	 Mailer 43.0, microcode TMC5-MIC 319, on Lisp Machine
+	 Ronald Reagan:
+     
+	 If mail is received destined for foo@reagan here on
+	 reagan, regardless of who is logged in on the machine,
+	 send is assumed, and a window pops up and displays the
+	 message, asking for response.
+
+    If I understand your message, maybe the real bug is that the mailer on
+    Reagan turns MAIL into SEND.  Maybe if the user is unknown (no
+    forwarding or whatever) then it should dump the mail into a mailbox in
+    some dead-letters directory in LMFS and send an error receipt to
+    the originator as specified by the return path.
+
+Machines are not required to have a LMFS.   Most don't.
+
+ 8-May-85 10:08:46-EDT,1895;000000000001
+Received: from MIT-MC by MIT-OZ via Chaosnet; 8 May 85 10:08-EDT
+Received: from HARLEM.SCRC.Symbolics.COM by MIT-MC.ARPA;  8 MAY 85 10:08:35 EDT
+Date: Wed, 8 May 85 10:08 EDT
+From: Joseph R Goldstone <joseph@SCRC-QUABBIN.ARPA>
+Subject: Mailer loses on soml delivery option
+To: Bernard S. Greenberg <BSG@SCRC-STONY-BROOK.ARPA>, CSTACY@MIT-MC.ARPA,
+    CJL%OZ@MIT-MC.ARPA
+cc: Hornig@SCRC-STONY-BROOK.ARPA, BUG-LISPM%OZ@MIT-MC.ARPA
+In-Reply-To: <850508091436.8.BSG@CONCORD.SCRC.Symbolics.COM>
+Message-ID: <850508100806.2.JOSEPH@HARLEM.SCRC.Symbolics.COM>
+
+    Date: Wed, 8 May 85 09:14 EDT
+    From: Bernard S. Greenberg <BSG@STONY-BROOK.SCRC.Symbolics.COM>
+
+	Date: Tue,  7 May 85 19:40:15 EST
+	From: Christopher C. Stacy <CSTACY@MIT-MC>
+
+
+	     Date: Fri, 3 May 85 14:49 EDT
+	     From: CJL@OZ
+
+	     In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 8.6,
+	     Mailer 43.0, microcode TMC5-MIC 319, on Lisp Machine
+	     Ronald Reagan:
+     
+	     If mail is received destined for foo@reagan here on
+	     reagan, regardless of who is logged in on the machine,
+	     send is assumed, and a window pops up and displays the
+	     message, asking for response.
+
+	If I understand your message, maybe the real bug is that the mailer on
+	Reagan turns MAIL into SEND.  Maybe if the user is unknown (no
+	forwarding or whatever) then it should dump the mail into a mailbox in
+	some dead-letters directory in LMFS and send an error receipt to
+	the originator as specified by the return path.
+
+    Machines are not required to have a LMFS.   Most don't.
+
+
+All Symbolics computers (urrk-ptuui!  LispMs!) that run our Mailer software
+must have a local LMFS.  The logical place to put failed MAILs as described
+above would be with the rest of the rubbish in local:>Mail>Static>failed.mail.
+
+I'll try to think about the issues behind this conversation later today.
+
+ 8-May-85 10:35:26-EDT,3392;000000000001
+Received: from MIT-MC by MIT-OZ via Chaosnet; 8 May 85 10:35-EDT
+Received: from MIT-OZ by MIT-MC via Chaosnet; 8 MAY 85  10:34:25 EDT
+Date: Wed, 8 May 1985  10:33 EDT
+Message-ID: <CJL.12109376756.BABYL@MIT-OZ>
+From: Chris Lindblad <CJL%MIT-OZ@MIT-MC.ARPA>
+To:   BUG-COMSAT@MIT-MC
+Cc:   Joseph R Goldstone <joseph@SCRC-QUABBIN.ARPA>,
+      "Bernard S. Greenberg" <BSG@SCRC-STONY-BROOK.ARPA>,
+      BUG-LISPM%OZ@MIT-MC.ARPA, CJL%OZ@MIT-MC.ARPA, CSTACY@MIT-MC.ARPA,
+      Hornig@SCRC-STONY-BROOK.ARPA
+Subject: Mailer loses on soml delivery option
+In-reply-to: Msg of 8 May 1985  10:08-EDT from Joseph R Goldstone <joseph at SCRC-QUABBIN.ARPA>
+
+    Date: Wednesday, 8 May 1985  10:08-EDT
+    From: Joseph R Goldstone <joseph at SCRC-QUABBIN.ARPA>
+    To:   Bernard S. Greenberg <BSG at SCRC-STONY-BROOK.ARPA>,
+          CSTACY at MIT-MC.ARPA, CJL%OZ at MIT-MC.ARPA
+    cc:   Hornig at SCRC-STONY-BROOK.ARPA, BUG-LISPM%OZ at MIT-MC.ARPA
+    Re:   Mailer loses on soml delivery option
+
+    Date: Wed, 8 May 85 09:14 EDT
+    From: Bernard S. Greenberg <BSG@STONY-BROOK.SCRC.Symbolics.COM>
+
+    Date: Tue,  7 May 85 19:40:15 EST
+    From: Christopher C. Stacy <CSTACY@MIT-MC>
+
+
+         Date: Fri, 3 May 85 14:49 EDT
+         From: CJL@OZ
+
+         In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 8.6,
+         Mailer 43.0, microcode TMC5-MIC 319, on Lisp Machine
+         Ronald Reagan:
+         
+         If mail is received destined for foo@reagan here on
+         reagan, regardless of who is logged in on the machine,
+         send is assumed, and a window pops up and displays the
+         message, asking for response.
+
+    If I understand your message, maybe the real bug is that the mailer on
+    Reagan turns MAIL into SEND.  Maybe if the user is unknown (no
+    forwarding or whatever) then it should dump the mail into a mailbox in
+    some dead-letters directory in LMFS and send an error receipt to
+    the originator as specified by the return path.
+
+    Machines are not required to have a LMFS.   Most don't.
+
+
+    All Symbolics computers (urrk-ptuui!  LispMs!) that run our Mailer software
+    must have a local LMFS.  The logical place to put failed MAILs as described
+    above would be with the rest of the rubbish in local:>Mail>Static>failed.mail.
+
+    I'll try to think about the issues behind this conversation later today.
+
+From COMSAT's log file on MC:
+
+200854	inreq: 1 > 1;  specs:{j:dvrspl}{dvrspl}{claims-to-be:the-dover-spooler}{tl=68.} id=<[mit-mc].490690.850507.dvrspl> exp->lsi.yew@40700013065
+200855	  icp->mit-reagan (chaos-send)
+
+If my reading of COMSAT's log file on MC is correct, it is MC that is
+turning mail into sends, just like OZ's does. This once again results in
+the screw case: 
+
+User foo logged into lisp machine X sends a file to the dover, giving
+his mail address foo@Y, because that indeed it his mail address. After
+printing foo's file, the dover spooler sends gives a message to
+comsat, which proceeds to invoke chaos-send, not chaos-mail to deliver a
+message to Y that the file has been printed on the dover, but foo is
+logged into X. 
+
+If this is indeed what is happening, why is comsat doing a SEND going to
+somebody's mail address? It's supposed to go to a logged in user. Just
+because somebody get's mail in the machine doesn't mean he'll ever log
+in on it.
+
+
+
+ 8-May-85 10:38:55-EDT,1150;000000000001
+Received: from MIT-MC by MIT-OZ via Chaosnet; 8 May 85 10:38-EDT
+Received: from MIT-OZ by MIT-MC via Chaosnet; 8 MAY 85  10:38:37 EDT
+Received: from MIT-MORRISON by MIT-OZ via Chaosnet; 8 May 85 10:37-EDT
+Date: Wed, 8 May 85 10:36 EDT
+From: Gavan Duffy <GAVAN@OZ>
+Subject: Grinding bug?
+To: Moon@SCRC-STONY-BROOK.ARPA, GAVAN@OZ
+cc: BUG-LISPM@MIT-MC.ARPA
+In-Reply-To: <850507192945.5.MOON@EUPHRATES.SCRC.Symbolics.COM>
+Message-ID: <850508103641.1.GAVAN@MORRISON>
+
+    Date: Tue, 7 May 85 19:29 EDT
+    From: David A. Moon <Moon@SCRC-STONY-BROOK.ARPA>
+
+	Date: Tue, 7 May 85 19:16 EDT
+	From: Gavan Duffy <GAVAN@OZ>
+
+	In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 9.1,
+	Experimental RELATUS 138.1, microcode TMC5-MIC 319, FEP 22, on Lisp Machine Jim Morrison:
+
+	>>Trap: The word #<DTP-NULL 30442470> was read from location 30442470 (in GAVAN-SHORT-TERM-AREA).
+	While in the function SI:PRINT-OBJECT  PRIN1  SI:GRIND-ATOM
+
+    You called RESET-TEMPORARY-AREA on GAVAN-SHORT-TERM-AREA, right?
+
+Right.  There shouldn't be any pointers into there, but there's obviously
+at least one.  Time for some detective work.  Thanks.
+ 8-May-85 10:45:09-EDT,2243;000000000001
+Received: from MIT-MC by MIT-OZ via Chaosnet; 8 May 85 10:45-EDT
+Received: from SCRC-STONY-BROOK.ARPA by MIT-MC.ARPA;  8 MAY 85 10:45:16 EDT
+Received: from CONCORD.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 232575; Wed 8-May-85 10:40:27-EDT
+Date: Wed, 8 May 85 10:46 EDT
+From: Bernard S. Greenberg <BSG@STONY-BROOK.SCRC.Symbolics.COM>
+Subject: Mailer loses on soml delivery option
+To: joseph@QUABBIN.SCRC.Symbolics.COM, CSTACY@MIT-MC.ARPA,
+    CJL%OZ@MIT-MC.ARPA
+cc: Hornig@STONY-BROOK.SCRC.Symbolics.COM, BUG-LISPM%OZ@MIT-MC.ARPA
+In-Reply-To: <850508100806.2.JOSEPH@HARLEM.SCRC.Symbolics.COM>
+Message-ID: <850508104608.5.BSG@CONCORD.SCRC.Symbolics.COM>
+
+    Date: Wed, 8 May 85 10:08 EDT
+    From: Joseph R Goldstone <joseph@SCRC-QUABBIN.ARPA>
+
+	Date: Wed, 8 May 85 09:14 EDT
+	From: Bernard S. Greenberg <BSG@STONY-BROOK.SCRC.Symbolics.COM>
+
+	    Date: Tue,  7 May 85 19:40:15 EST
+	    From: Christopher C. Stacy <CSTACY@MIT-MC>
+
+
+		 Date: Fri, 3 May 85 14:49 EDT
+		 From: CJL@OZ
+
+		 In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 8.6,
+		 Mailer 43.0, microcode TMC5-MIC 319, on Lisp Machine
+		 Ronald Reagan:
+     
+		 If mail is received destined for foo@reagan here on
+		 reagan, regardless of who is logged in on the machine,
+		 send is assumed, and a window pops up and displays the
+		 message, asking for response.
+
+	    If I understand your message, maybe the real bug is that the mailer on
+	    Reagan turns MAIL into SEND.  Maybe if the user is unknown (no
+	    forwarding or whatever) then it should dump the mail into a mailbox in
+	    some dead-letters directory in LMFS and send an error receipt to
+	    the originator as specified by the return path.
+
+	Machines are not required to have a LMFS.   Most don't.
+
+
+    All Symbolics computers (urrk-ptuui!  LispMs!) that run our Mailer software
+    must have a local LMFS.  The logical place to put failed MAILs as described
+    above would be with the rest of the rubbish in local:>Mail>Static>failed.mail.
+Oh I see.  For some reason, I thought he was talking about client machines,
+not server machines.  That still leaves the issue open of what happens
+when you send mail to, say BSG@CONCORD....
+
+ 8-May-85 11:02:52-EDT,2778;000000000001
+Received: from MIT-MC by MIT-OZ via Chaosnet; 8 May 85 11:02-EDT
+Received: from SCRC-STONY-BROOK.ARPA by MIT-MC.ARPA;  8 MAY 85 11:02:51 EDT
+Received: from CONCORD.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 232596; Wed 8-May-85 10:57:57-EDT
+Date: Wed, 8 May 85 11:03 EDT
+From: Bernard S. Greenberg <BSG@STONY-BROOK.SCRC.Symbolics.COM>
+Subject: Mailer loses on soml delivery option
+To: CJL%MIT-OZ@MIT-MC.ARPA, BUG-COMSAT@MIT-MC.ARPA
+cc: joseph@QUABBIN.SCRC.Symbolics.COM, BUG-LISPM%OZ@MIT-MC.ARPA,
+    CJL%OZ@MIT-MC.ARPA, CSTACY@MIT-MC.ARPA,
+    Hornig@STONY-BROOK.SCRC.Symbolics.COM
+In-Reply-To: <CJL.12109376756.BABYL@MIT-OZ>
+Message-ID: <850508110339.6.BSG@CONCORD.SCRC.Symbolics.COM>
+
+    Date: Wed, 8 May 1985  10:33 EDT
+    From: Chris Lindblad <CJL%MIT-OZ@MIT-MC.ARPA>
+
+    From COMSAT's log file on MC:
+
+    200854	inreq: 1 > 1;  specs:{j:dvrspl}{dvrspl}{claims-to-be:the-dover-spooler}{tl=68.} id=<[mit-mc].490690.850507.dvrspl> exp->lsi.yew@40700013065
+    200855	  icp->mit-reagan (chaos-send)
+
+    If my reading of COMSAT's log file on MC is correct, it is MC that is
+    turning mail into sends, just like OZ's does. This once again results in
+    the screw case: 
+
+    User foo logged into lisp machine X sends a file to the dover, giving 
+    his mail address foo@Y, because that indeed it his mail address. After
+    printing foo's file, the dover spooler sends gives a message to
+    comsat, which proceeds to invoke chaos-send, not chaos-mail to deliver a
+    message to Y that the file has been printed on the dover, but foo is
+    logged into X. 
+
+    If this is indeed what is happening, why is comsat doing a SEND going to
+    somebody's mail address? It's supposed to go to a logged in user. Just
+    because somebody get's mail in the machine doesn't mean he'll ever log
+    in on it.
+Oh I understand.  Among possibilities for the right answers are
+ 1) Fix Dover Spooler to send mail, obviously not the right solution.
+ 2) Say "this is what spooler documentably does", and give your
+    local-machine address to it instead of your mail address.  Why
+    do we give it our mail address, anyway?
+ 3) This is hard, but maybe any machine that you claim as posessing your
+    mail address, should declare itself open for SEND's to you as well,
+    knowing how to find your interactive self,
+    and know how to forward the SENDs or convert them into mail.  Obviously,
+    this requires either a "semi-permanent" association, which can be
+    temporarily wrong (someone else uses your machine), but it could
+    check if you're logged in, or a "dynamic association", whereby
+    you report your whereabouts when you log in, which has serious
+    problems of too-easy subversion.
+
+ 8-May-85 17:00:17-EDT,2863;000000000001
+Received: from MIT-MC by MIT-OZ via Chaosnet; 8 May 85 16:55-EDT
+Received: from SCRC-STONY-BROOK.ARPA by MIT-MC.ARPA;  8 MAY 85 16:53:02 EDT
+Received: from ANNISQUAM.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 232875; Wed 8-May-85 15:35:00-EDT
+Date: Wed, 8 May 85 15:39 EDT
+From: Doug Dodds <DODDS@TENEX.SCRC.Symbolics.COM>
+Subject: Profile problems with hosts
+To: PARKER%mit-OZ@MIT-MC.ARPA
+cc: BUG-LISPM%mit-OZ@MIT-MC.ARPA, bug-zmail%mit-OZ@MIT-MC.ARPA
+In-Reply-To: <850506224655.3.PARKER@CROSBY>
+Message-ID: <850508153942.8.DODDS@ANNISQUAM.SCRC.Symbolics.COM>
+
+    Date: Mon, 6 May 85 22:46 EDT
+    From: Randy Parker <PARKER@OZ>
+
+    In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 9.1,
+    microcode TMC5-MIC 319, FEP 17, on Lisp Machine Bing Crosby:
+    Warm booted from: ZMACS-WINDOWS.
+
+    Awhile back I edited my profile and typed "Randy Parker <parker@oz>" to the choose
+    variables window in Edit profile for the value of *default-cc-list*.  ZMAIL inserted
+    the following form in my zmail init file:
+
+    (LOGIN-SETQ zwei:*DEFAULT-CC-LIST* '((:PERSONAL-NAME "Randy Parker"
+						    :NAME
+						    "PARKER"
+						    :HOST
+						    (:OBJECT "OZ"))))
+
+    When I check *default-cc-list*, it reads as follows:
+    ((:PERSONAL-NAME "Randy Parker" :NAME "PARKER" :HOST (:OBJECT #<TOPS20-HOST OZ 1400364>)))
+
+    All this is fine (and has been since that time), but recently, after selecting other
+    options in the profile variable windows, clicking on EDIT, and then evaling the profile
+    buffer (this has been repeated several times), any attempt to Reply or Mail generates
+    this error.  
+
+    Of course, *default-cc-list* gives this:
+    ((:PERSONAL-NAME "Randy Parker" :NAME "PARKER" :HOST (:OBJECT "OZ")))
+
+    It is clear which is right and how to get the host object, but both are being
+    generated by the system. I haven't had a chance to look at ZWEI:STRING-FROM-HEADER.
+
+
+
+    >>Error: The array, "OZ", is not a valid function except when
+	     given a valid subscript as its argument.
+    While in the function "OZ"  ZWEI:STRING-FROM-HEADER  ZWEI:PRINT-ADDRESS-HEADER
+
+    "OZ":
+       Arg 0: :DEFAULT-MAIL-NAMING-CONVENTION
+
+    ZWEI:STRING-FROM-HEADER:  (P.C. =223)  (from 1AISITE: AISITE; NETWORK0)   What's this?!?
+       Arg 0 (HEADER): (:PERSONAL-NAME "Randy Parker" :NAME "PARKER" :HOST (:OBJECT "OZ"))
+       Arg 1 (FORMAT): NIL
+       Arg 2 (NAMING-CONVENTION): :DEFAULT
+
+The bug is clearly in the hacked-up version of ZWEI:STRING-FROM-HEADER
+that you are using.  I infer that it has been altered to attempt to deal
+better with the new state of host namespaces.  It probably assumes that
+the :HOST in the parsed header is a Host object; likely it needs to
+allow for the string case, and parse it into a host object.
+
+ 8-May-85 17:37:12-EDT,8694;000000000000
+Received: from MIT-BUDDY by MIT-OZ via Chaosnet; 8 May 85 17:36-EDT
+Date: Wed, 8 May 85 17:35 EDT
+From: Chris Lindblad <CJL@OZ>
+Subject: Profile problems with hosts
+To: DODDS%TENEX@SCRC-STONY-BROOK
+cc: BUG-LISPM@OZ, BUG-ZMAIL@OZ, PARKER@OZ
+In-Reply-To: <850508153942.8.DODDS@ANNISQUAM.SCRC.Symbolics.COM>
+Message-ID: <850508173549.1.CJL@BUDDY>
+
+    Date: Wed, 8 May 85 15:39 EDT
+    From: Doug Dodds <DODDS@TENEX.SCRC.Symbolics.COM>
+	Date: Mon, 6 May 85 22:46 EDT
+	From: Randy Parker <PARKER@OZ>
+	In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 9.1,
+	microcode TMC5-MIC 319, FEP 17, on Lisp Machine Bing Crosby:
+	Warm booted from: ZMACS-WINDOWS.
+
+	Awhile back I edited my profile and typed "Randy Parker <parker@oz>" to the choose
+	variables window in Edit profile for the value of *default-cc-list*.  ZMAIL inserted
+	the following form in my zmail init file:
+
+	(LOGIN-SETQ zwei:*DEFAULT-CC-LIST* '((:PERSONAL-NAME "Randy Parker"
+							:NAME
+							"PARKER"
+							:HOST
+							(:OBJECT "OZ"))))
+
+	When I check *default-cc-list*, it reads as follows:
+	((:PERSONAL-NAME "Randy Parker" :NAME "PARKER" :HOST (:OBJECT #<TOPS20-HOST OZ 1400364>)))
+
+	All this is fine (and has been since that time), but recently, after selecting other
+	options in the profile variable windows, clicking on EDIT, and then evaling the profile
+	buffer (this has been repeated several times), any attempt to Reply or Mail generates
+	this error.  
+
+	Of course, *default-cc-list* gives this:
+	((:PERSONAL-NAME "Randy Parker" :NAME "PARKER" :HOST (:OBJECT "OZ")))
+
+	It is clear which is right and how to get the host object, but both are being
+	generated by the system. I haven't had a chance to look at ZWEI:STRING-FROM-HEADER.
+
+
+
+	>>Error: The array, "OZ", is not a valid function except when
+		 given a valid subscript as its argument.
+	While in the function "OZ"  ZWEI:STRING-FROM-HEADER  ZWEI:PRINT-ADDRESS-HEADER
+
+	"OZ":
+	   Arg 0: :DEFAULT-MAIL-NAMING-CONVENTION
+
+	ZWEI:STRING-FROM-HEADER:  (P.C. =223)  (from 1AISITE: AISITE; NETWORK0)   What's this?!?
+	   Arg 0 (HEADER): (:PERSONAL-NAME "Randy Parker" :NAME "PARKER" :HOST (:OBJECT "OZ"))
+	   Arg 1 (FORMAT): NIL
+	   Arg 2 (NAMING-CONVENTION): :DEFAULT
+
+    The bug is clearly in the hacked-up version of ZWEI:STRING-FROM-HEADER
+    that you are using.  I infer that it has been altered to attempt to deal
+    better with the new state of host namespaces.  It probably assumes that
+    the :HOST in the parsed header is a Host object; likely it needs to
+    allow for the string case, and parse it into a host object.
+
+The version of ZWEI:STRING-FROM-HEADER was supplied to us from Hornig to
+fix interaction problems with mailers here at MIT. It's too hairy for
+me to figure out:
+
+;;; -*- Mode: LISP; Syntax: Zetalisp; Package: ZWEI; Base: 10; Patch-file: T -*-
+;;; Patch file for Zmail version 107.3
+;;; Reason: Function (:METHOD NET:HOST :MAIL-NAME):  Don't use made-up domain name.
+;;; Function MAILER:ARPANET-MAIL-GATEWAY-HOST:  Search correct sites for gateway.
+;;; Function (:METHOD NET:HOST :DEFAULT-MAIL-NAMING-CONVENTION):  Always use Internet domain names in headers.
+;;; Function ZWEI:PRINT-DATE-HEADER:  Always use RFC 822 format.
+;;; Function ZWEI:STRING-FROM-HEADER:  Always use @'s.
+;;; Allow ZMail user to try hosts believed to be unavailable.
+;;; Function MAILER:SMTP-SERVER:  Better management of paths.
+;;; Function (:METHOD MAILER:SMTP-USER :INIT):  Don't use :ARPANET kludges.
+;;; Function (:METHOD MAILER:SMTP-USER :START-MESSAGE):  More path management.
+;;; Function MAILER:ADD-HOST-TO-ROUTE:  COmmon routine.
+;;; Written by File-Server, 4/23/85 10:44:02
+;;; while running on Riverside from FEP0:>rel6-server-mmpt-ns-fixed.load.1
+;;; with Release 6.0, System 271.33, Zmail 107.2, LMFS 57.2, Tape 41.1, Basic Sage 15.9, Documentation Database 3.2, Common Lisp 4.2, Experimental Writer Tools 12.23, SCRC 5.5, Print 38.0, Mailer 43.3, IP-TCP 29.3, File Server stuff 1.5, microcode TMC5-MIC 319, Automatic server bug reporter, Namespace Server, MMPT fix.
+
+...
+
+; From file headers.lisp >rel-6>sys>zmail Q: (90)
+#8R ZWEI::(GLOBAL:COMPILER-LET ((GLOBAL:PACKAGE (GLOBAL:PKG-FIND-PACKAGE "ZWEI")))
+
+;;; NAMING-CONVENTION is one of :INTERNET, :LOCALNET, or :ARPANET.
+;;;  :INTERNET means the whole internet with hierarchical domains.
+;;;  :LOCALNET means a local network which probably doesn't understand domains.
+;;;  :ARPANET means the current turd that only understands the .ARPA domain, doesn't
+;;;   allow path routing, etc.
+;;; :DEFAULT means pick it so as to make it parsable.  Note that :LOCALNET is not always
+;;; re-parsable.
+(DEFUN STRING-FROM-HEADER (HEADER FORMAT &OPTIONAL (NAMING-CONVENTION ':DEFAULT)
+					 &AUX (PLIST (LOCF HEADER)) TEM)
+  (COND ((AND (EQ FORMAT ':USE-ORIGINAL)
+	      (SETQ TEM (GET PLIST ':INTERVAL)))
+	 (STRING-INTERVAL (FIRST TEM) (SECOND TEM) T))
+	((SETQ TEM (GETL PLIST '(:INFERIORS)))
+	 (LOOP WITH STR = (MAKE-EMPTY-STRING 20.)
+	       WITH (SUP-START SUP-END) = (CADR (GETL PLIST '(:INTERVAL :ORIGINAL-INTERVAL)))
+	       FOR START FIRST SUP-START THEN (SECOND INF-INT)
+	       FOR INF IN (CADR TEM)
+	       AS INF-INT = (CADR (GETL (LOCF INF) '(:INTERVAL :ORIGINAL-INTERVAL)))
+	       DO (SETQ STR (STRING-NCONC STR (STRING-INTERVAL START (FIRST INF-INT))))
+		  (LET ((SUBHEAD (STRING-FROM-HEADER INF FORMAT NAMING-CONVENTION)))
+		    (WHEN SUBHEAD
+		      (SETQ STR (STRING-NCONC STR SUBHEAD))))
+	       FINALLY (RETURN (STRING-NCONC STR (STRING-INTERVAL START SUP-END)))))
+	(T
+	 (LET ((USER (GET PLIST ':USER))
+	       (STRING (GET PLIST ':NAME)))
+	   (UNLESS (AND (NULL USER) (NULL STRING))
+	     (LET ((HOST (GET PLIST ':HOST)))
+	       (WHEN (NOT (NULL USER))
+		 (SETF `(,STRING ,HOST) (SEND USER ':MAIL-ADDRESS))
+		 (SETQ HOST `(:OBJECT ,HOST)))
+	       (SETQ STRING (RFC822-QUOTE-IF-NECESSARY STRING))
+	       (WHEN (AND (EQ FORMAT ':LOCAL-DEFAULT-HOST)
+			  (GET PLIST ':HOST-DEFAULTED))
+		 (SETQ HOST NIL))
+	       (SELECTQ (CAR HOST)
+		 (:OBJECT
+		  (WHEN (EQ NAMING-CONVENTION ':DEFAULT)
+		    (SETQ NAMING-CONVENTION (SEND (SECOND HOST)
+						  ':DEFAULT-MAIL-NAMING-CONVENTION)))
+		  (UNLESS (AND (EQ FORMAT ':ONLY-PERSONAL)
+			       (SUMMARY-SUPPRESS-HOST-P (SECOND HOST)))
+		    ;; Use the "standard" name for this host.
+		    (MULTIPLE-VALUE-BIND (HOST-NAME %-KLUDGE)
+			(SEND (SECOND HOST) :MAIL-NAME :NAMING-CONVENTION NAMING-CONVENTION
+			      :%-ROUTING-KLUDGE T)
+		      (SETQ STRING (STRING-APPEND STRING (IF %-KLUDGE #/% #/@) HOST-NAME)))))
+		 (:DOMAIN
+		  (WHEN (EQ NAMING-CONVENTION ':DEFAULT)
+		    (SETQ NAMING-CONVENTION ':INTERNET))
+		  (SETQ STRING (STRING-APPEND STRING #/@))
+		  (LOOP FOR FIRST-P FIRST T THEN NIL
+			FOR STR IN (CDR HOST)
+			UNLESS FIRST-P DO (SETQ STRING (STRING-APPEND STRING #/.))
+			DO (SETQ STRING (STRING-APPEND STRING STR))))
+		 (OTHERWISE
+		  (WHEN (EQ NAMING-CONVENTION ':DEFAULT)
+		    (SETQ NAMING-CONVENTION ':LOCALNET))
+		  (DOLIST (HOST (CDR HOST))
+		    (SETQ STRING (STRING-APPEND STRING #/@ HOST))))))
+	     (SELECTQ FORMAT
+	       ((:USE-ORIGINAL :INCLUDE-PERSONAL :ONLY-PERSONAL)
+		(LET ((PERSONAL-NAME (IF USER
+					 (SEND USER ':PERSONAL-NAME-FIRST-NAME-FIRST)
+					 (GET PLIST ':PERSONAL-NAME)))
+		      (ROUTE-SPEC (GET PLIST ':ROUTE)))
+		  (WHEN (OR PERSONAL-NAME ROUTE-SPEC)
+		    (WHEN ROUTE-SPEC
+		      (SETQ STRING (STRING-APPEND
+				     (ROUTE-SPEC-STRING ROUTE-SPEC NAMING-CONVENTION)
+				     STRING)))
+		    (SETQ STRING (STRING-APPEND #/< STRING #/>))
+		    (WHEN PERSONAL-NAME
+		      (IF (EQ FORMAT ':ONLY-PERSONAL)
+			  (SETQ STRING PERSONAL-NAME)
+			  (SETQ PERSONAL-NAME (RFC822-QUOTE-IF-NECESSARY PERSONAL-NAME))
+			  (SETQ STRING (STRING-APPEND PERSONAL-NAME #\SP STRING)))))))
+	       ((:HOST :LOCAL-DEFAULT-HOST)
+		;; For now, turn a route specification into multiple @'s when
+		;; talking to the mail server.
+		(LET ((ROUTE-SPEC (GET PLIST ':ROUTE)))
+		  (WHEN ROUTE-SPEC
+		    (IF (MEMQ NAMING-CONVENTION '(:INTERNET :ARPANET))
+			(SETQ STRING (STRING-APPEND
+				       (ROUTE-SPEC-STRING ROUTE-SPEC NAMING-CONVENTION)
+				       STRING))
+			(SETQ STRING (STRING-APPEND
+				       STRING
+				       (WITH-OUTPUT-TO-STRING (STREAM)
+					 (LOOP FOR DOMAIN IN (REVERSE ROUTE-SPEC)
+					       DO (SEND STREAM ':TYO #/@)
+					       ;; Also only output the most specific
+					       ;; part of the domain, since it tends
+					       ;; to confuse existing mailers.
+					       (SEND STREAM ':STRING-OUT
+						     (STRING-FROM-HOST DOMAIN
+								       NAMING-CONVENTION)))
+					 ))))))))
+	     STRING)))))
+
+)
+ 8-May-85 19:48:30-EDT,9347;000000000000
+Received: from MIT-SINATRA by MIT-OZ via Chaosnet; 8 May 85 19:48-EDT
+Date: Wed, 8 May 85 19:48 EDT
+From: Randy Parker <PARKER@OZ>
+Subject: Profile problems with hosts
+To: Chris Lindblad <CJL@OZ>
+cc: DODDS%TENEX@SCRC-STONY-BROOK, BUG-LISPM@OZ, BUG-ZMAIL@OZ,
+    Randy Parker <PARKER@OZ>
+Message-ID: <850508194812.1.PARKER@SINATRA>
+
+    Date: Wed, 8 May 85 17:35 EDT
+    From: Chris Lindblad <CJL@OZ>
+
+	Date: Wed, 8 May 85 15:39 EDT
+	From: Doug Dodds <DODDS@TENEX.SCRC.Symbolics.COM>
+
+	    Date: Mon, 6 May 85 22:46 EDT
+	    From: Randy Parker <PARKER@OZ>
+	    In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 9.1,
+	    microcode TMC5-MIC 319, FEP 17, on Lisp Machine Bing Crosby:
+	    Warm booted from: ZMACS-WINDOWS.
+
+	    Awhile back I edited my profile and typed "Randy Parker <parker@oz>" to the choose
+	    variables window in Edit profile for the value of *default-cc-list*.  ZMAIL inserted
+	    the following form in my zmail init file:
+
+	    (LOGIN-SETQ zwei:*DEFAULT-CC-LIST* '((:PERSONAL-NAME "Randy Parker"
+							    :NAME
+							    "PARKER"
+							    :HOST
+							    (:OBJECT "OZ"))))
+
+	    When I check *default-cc-list*, it reads as follows:
+	    ((:PERSONAL-NAME "Randy Parker" :NAME "PARKER" :HOST (:OBJECT #<TOPS20-HOST OZ 1400364>)))
+
+	    All this is fine (and has been since that time), but recently, after selecting other
+	    options in the profile variable windows, clicking on EDIT, and then evaling the profile
+	    buffer (this has been repeated several times), any attempt to Reply or Mail generates
+	    this error.  
+
+	    Of course, *default-cc-list* gives this:
+	    ((:PERSONAL-NAME "Randy Parker" :NAME "PARKER" :HOST (:OBJECT "OZ")))
+
+	    It is clear which is right and how to get the host object, but both are being
+	    generated by the system. I haven't had a chance to look at ZWEI:STRING-FROM-HEADER.
+
+
+
+	    >>Error: The array, "OZ", is not a valid function except when
+		     given a valid subscript as its argument.
+	    While in the function "OZ"  ZWEI:STRING-FROM-HEADER  ZWEI:PRINT-ADDRESS-HEADER
+
+	    "OZ":
+	       Arg 0: :DEFAULT-MAIL-NAMING-CONVENTION
+
+	    ZWEI:STRING-FROM-HEADER:  (P.C. =223)  (from 1AISITE: AISITE; NETWORK0)   What's this?!?
+	       Arg 0 (HEADER): (:PERSONAL-NAME "Randy Parker" :NAME "PARKER" :HOST (:OBJECT "OZ"))
+	       Arg 1 (FORMAT): NIL
+	       Arg 2 (NAMING-CONVENTION): :DEFAULT
+
+	The bug is clearly in the hacked-up version of ZWEI:STRING-FROM-HEADER
+	that you are using.  I infer that it has been altered to attempt to deal
+	better with the new state of host namespaces.  It probably assumes that
+	the :HOST in the parsed header is a Host object; likely it needs to
+	allow for the string case, and parse it into a host object.
+
+Right. See below.
+
+    The version of ZWEI:STRING-FROM-HEADER was supplied to us from Hornig to
+    fix interaction problems with mailers here at MIT. It's too hairy for
+    me to figure out:
+
+    ;;; -*- Mode: LISP; Syntax: Zetalisp; Package: ZWEI; Base: 10; Patch-file: T -*-
+    ;;; Patch file for Zmail version 107.3
+    ;;; Reason: Function (:METHOD NET:HOST :MAIL-NAME):  Don't use made-up domain name.
+    ;;; Function MAILER:ARPANET-MAIL-GATEWAY-HOST:  Search correct sites for gateway.
+    ;;; Function (:METHOD NET:HOST :DEFAULT-MAIL-NAMING-CONVENTION):  Always use Internet domain names in headers.
+    ;;; Function ZWEI:PRINT-DATE-HEADER:  Always use RFC 822 format.
+    ;;; Function ZWEI:STRING-FROM-HEADER:  Always use @'s.
+    ;;; Allow ZMail user to try hosts believed to be unavailable.
+    ;;; Function MAILER:SMTP-SERVER:  Better management of paths.
+    ;;; Function (:METHOD MAILER:SMTP-USER :INIT):  Don't use :ARPANET kludges.
+    ;;; Function (:METHOD MAILER:SMTP-USER :START-MESSAGE):  More path management.
+    ;;; Function MAILER:ADD-HOST-TO-ROUTE:  COmmon routine.
+    ;;; Written by File-Server, 4/23/85 10:44:02
+    ;;; while running on Riverside from FEP0:>rel6-server-mmpt-ns-fixed.load.1
+    ;;; with Release 6.0, System 271.33, Zmail 107.2, LMFS 57.2, Tape 41.1, Basic Sage 15.9, Documentation Database 3.2, Common Lisp 4.2, Experimental Writer Tools 12.23, SCRC 5.5, Print 38.0, Mailer 43.3, IP-TCP 29.3, File Server stuff 1.5, microcode TMC5-MIC 319, Automatic server bug reporter, Namespace Server, MMPT fix.
+
+    ...
+
+    ; From file headers.lisp >rel-6>sys>zmail Q: (90)
+    #8R ZWEI::(GLOBAL:COMPILER-LET ((GLOBAL:PACKAGE (GLOBAL:PKG-FIND-PACKAGE "ZWEI")))
+
+    ;;; NAMING-CONVENTION is one of :INTERNET, :LOCALNET, or :ARPANET.
+    ;;;  :INTERNET means the whole internet with hierarchical domains.
+    ;;;  :LOCALNET means a local network which probably doesn't understand domains.
+    ;;;  :ARPANET means the current turd that only understands the .ARPA domain, doesn't
+    ;;;   allow path routing, etc.
+    ;;; :DEFAULT means pick it so as to make it parsable.  Note that :LOCALNET is not always
+    ;;; re-parsable.
+    (DEFUN STRING-FROM-HEADER (HEADER FORMAT &OPTIONAL (NAMING-CONVENTION ':DEFAULT)
+					     &AUX (PLIST (LOCF HEADER)) TEM)
+      (COND ((AND (EQ FORMAT ':USE-ORIGINAL)
+		  (SETQ TEM (GET PLIST ':INTERVAL)))
+	     (STRING-INTERVAL (FIRST TEM) (SECOND TEM) T))
+	    ((SETQ TEM (GETL PLIST '(:INFERIORS)))
+	     (LOOP WITH STR = (MAKE-EMPTY-STRING 20.)
+		   WITH (SUP-START SUP-END) = (CADR (GETL PLIST '(:INTERVAL :ORIGINAL-INTERVAL)))
+		   FOR START FIRST SUP-START THEN (SECOND INF-INT)
+		   FOR INF IN (CADR TEM)
+		   AS INF-INT = (CADR (GETL (LOCF INF) '(:INTERVAL :ORIGINAL-INTERVAL)))
+		   DO (SETQ STR (STRING-NCONC STR (STRING-INTERVAL START (FIRST INF-INT))))
+		      (LET ((SUBHEAD (STRING-FROM-HEADER INF FORMAT NAMING-CONVENTION)))
+			(WHEN SUBHEAD
+			  (SETQ STR (STRING-NCONC STR SUBHEAD))))
+		   FINALLY (RETURN (STRING-NCONC STR (STRING-INTERVAL START SUP-END)))))
+	    (T
+	     (LET ((USER (GET PLIST ':USER))
+		   (STRING (GET PLIST ':NAME)))
+	       (UNLESS (AND (NULL USER) (NULL STRING))
+		 (LET ((HOST (GET PLIST ':HOST)))
+		   (WHEN (NOT (NULL USER))
+		     (SETF `(,STRING ,HOST) (SEND USER ':MAIL-ADDRESS))
+		     (SETQ HOST `(:OBJECT ,HOST)))
+		   (SETQ STRING (RFC822-QUOTE-IF-NECESSARY STRING))
+		   (WHEN (AND (EQ FORMAT ':LOCAL-DEFAULT-HOST)
+			      (GET PLIST ':HOST-DEFAULTED))
+		     (SETQ HOST NIL))
+;;;************************************************
+;;; This seems to fix the error reported above.
+    ;;; 
+    ;;; Replaced (SECOND HOST) with host-object
+    ;;;
+		   (SELECTQ (CAR HOST)
+		     (:OBJECT
+		      (let ((host-object (neti:parse-host (second host))))  ; guarantees you have a parsed host
+			(WHEN (EQ NAMING-CONVENTION ':DEFAULT)
+			  (SETQ NAMING-CONVENTION (SEND host-object
+							':DEFAULT-MAIL-NAMING-CONVENTION)))
+			(UNLESS (AND (EQ FORMAT ':ONLY-PERSONAL)
+				     (SUMMARY-SUPPRESS-HOST-P host-object))
+			  ;; Use the "standard" name for this host.
+			  (MULTIPLE-VALUE-BIND (HOST-NAME %-KLUDGE)
+			      (SEND host-object :MAIL-NAME :NAMING-CONVENTION NAMING-CONVENTION
+				    :%-ROUTING-KLUDGE T)
+			    (SETQ STRING (STRING-APPEND STRING (IF %-KLUDGE #/% #/@) HOST-NAME))))))
+;;;************************************************
+		     (:DOMAIN
+		      (WHEN (EQ NAMING-CONVENTION ':DEFAULT)
+			(SETQ NAMING-CONVENTION ':INTERNET))
+		      (SETQ STRING (STRING-APPEND STRING #/@))
+		      (LOOP FOR FIRST-P FIRST T THEN NIL
+			    FOR STR IN (CDR HOST)
+			    UNLESS FIRST-P DO (SETQ STRING (STRING-APPEND STRING #/.))
+			    DO (SETQ STRING (STRING-APPEND STRING STR))))
+		     (OTHERWISE
+		      (WHEN (EQ NAMING-CONVENTION ':DEFAULT)
+			(SETQ NAMING-CONVENTION ':LOCALNET))
+		      (DOLIST (HOST (CDR HOST))
+			(SETQ STRING (STRING-APPEND STRING #/@ HOST))))))
+		 (SELECTQ FORMAT
+		   ((:USE-ORIGINAL :INCLUDE-PERSONAL :ONLY-PERSONAL)
+		    (LET ((PERSONAL-NAME (IF USER
+					     (SEND USER ':PERSONAL-NAME-FIRST-NAME-FIRST)
+					     (GET PLIST ':PERSONAL-NAME)))
+			  (ROUTE-SPEC (GET PLIST ':ROUTE)))
+		      (WHEN (OR PERSONAL-NAME ROUTE-SPEC)
+			(WHEN ROUTE-SPEC
+			  (SETQ STRING (STRING-APPEND
+					 (ROUTE-SPEC-STRING ROUTE-SPEC NAMING-CONVENTION)
+					 STRING)))
+			(SETQ STRING (STRING-APPEND #/< STRING #/>))
+			(WHEN PERSONAL-NAME
+			  (IF (EQ FORMAT ':ONLY-PERSONAL)
+			      (SETQ STRING PERSONAL-NAME)
+			      (SETQ PERSONAL-NAME (RFC822-QUOTE-IF-NECESSARY PERSONAL-NAME))
+			      (SETQ STRING (STRING-APPEND PERSONAL-NAME #\SP STRING)))))))
+		   ((:HOST :LOCAL-DEFAULT-HOST)
+		    ;; For now, turn a route specification into multiple @'s when
+		    ;; talking to the mail server.
+		    (LET ((ROUTE-SPEC (GET PLIST ':ROUTE)))
+		      (WHEN ROUTE-SPEC
+			(IF (MEMQ NAMING-CONVENTION '(:INTERNET :ARPANET))
+			    (SETQ STRING (STRING-APPEND
+					   (ROUTE-SPEC-STRING ROUTE-SPEC NAMING-CONVENTION)
+					   STRING))
+			    (SETQ STRING (STRING-APPEND
+					   STRING
+					   (WITH-OUTPUT-TO-STRING (STREAM)
+					     (LOOP FOR DOMAIN IN (REVERSE ROUTE-SPEC)
+						   DO (SEND STREAM ':TYO #/@)
+						   ;; Also only output the most specific
+						   ;; part of the domain, since it tends
+						   ;; to confuse existing mailers.
+						   (SEND STREAM ':STRING-OUT
+							 (STRING-FROM-HOST DOMAIN
+									   NAMING-CONVENTION)))
+					     ))))))))
+		 STRING)))))
+
+    )
+ 8-May-85 22:27:10-EDT,1120;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 8 May 85 22:27-EDT
+Date: Wed,  8 May 85 22:25:33 EST
+From: Christopher C. Stacy <CSTACY@MIT-MC>
+Subject:  Mailer loses on soml delivery option
+To: BSG@SCRC-STONY-BROOK
+cc: BUG-COMSAT@MIT-MC, Hornig@SCRC-STONY-BROOK,
+    joseph@SCRC-STONY-BROOK, BUG-LISPM@MIT-OZ
+Message-ID: <[MIT-MC].492500.850508.CSTACY>
+
+    Date: Wed, 8 May 85 11:03 EDT
+    From: Bernard S. Greenberg <BSG at STONY-BROOK.SCRC.Symbolics.COM>
+    In-Reply-To: <CJL.12109376756.BABYL@MIT-OZ>
+
+     2) Say "this is what spooler documentably does", and give your
+        local-machine address to it instead of your mail address.  Why
+        do we give it our mail address, anyway?
+
+This is what the spooler documentably does.
+Why are you giving it your mail address anyway?
+
+COMSAT is not changing mail into sends; DVRSPL it to do an interactive
+send. Actually, I think it probably ordered it to SOML.  If not, it
+should. The LispM ought to accept SOML somehow.)
+
+Maybe the interface to the dover spooler needs rethinking.
+Maybe the dover spooler needs additional functionality.
+
+ 9-May-85 08:44:26-EDT,6478;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 9 May 85 08:44-EDT
+Received: from 40700015427 by MIT-MC via Chaosnet; 9 MAY 85  08:44:57 EDT
+Date: Wednesday, 8 May 1985, 18:25-EDT
+From: Cory Myers <cory at MIT-BUGS-BUNNY>
+Subject: Scheduler Died
+To: BUG-LISPM at OZ
+Message-ID: <850508182502.1.CORY@DAFFY-DUCK.MIT>
+
+In Symbolics 3670 Release 6.0, IP-TCP 29.0,
+microcode TMC5-IO4-FPA-MIC 319, FEP 22, with UTIL, on Lisp Machine Daffy Duck:
+
+I left my machine on last night - not running any jobs.  I cam in this
+morning and found it this way.
+
+>>Trap: The argument given to the SYS:MOVEM-LOCAL instruction, 0 (from local variable SI:PRI), was not a locative, or a list.
+While in the function SI:PROCESS-SCHEDULER
+
+SI:PROCESS-SCHEDULER:  (P.C. = 204)
+   Local 0: #<DTP-LOCATIVE 14700006>
+   Local 1: #<DTP-COMPILED-FUNCTION (:INTERNAL SI:PROCESS-SCHEDULER 1) 6743031>
+   Local 2: #<DTP-LOCATIVE 14700006>
+   Local 3: #<DTP-COMPILED-FUNCTION (:INTERNAL SI:PROCESS-SCHEDULER 0) 6743042>
+   Local 4: "Error in the scheduler"
+   Local 5: (DBG:SCHEDULER-DEBUGGER-HANDLER)
+   Local 6 (REMAINING-QUANTUM): 0
+   Local 7 (NEXT-PROCESS): NIL
+   Local 8 (OLD-CURRENT-PROCESS): NIL
+   Local 9 (THIS-TIME): 3162767
+   Local 10 (LAST-TIME): 3162767
+   Local 11 (DELTA-TIME): 0
+   Local 12 (NEXT-WHO-TIME): 56
+   Local 13 (PROCS): ((#<COROUTINING-PROCESS ZMACS-WINDOWS 120371310> #<DTP-COMPILED-FUNCTION (:INTERNAL TV:KBD-IO-BUFFER-INPUT-WAIT 0) 22405612> (#<IO-BUFFER 121156015: empty, State: NIL> #<DTP-COMPILED-FUNCTION (:INTERNAL ZWEI:EDITOR-INPUT 0) 31515510> (#<DTP-LOCATIVE 43240772> NIL NIL)) 0 NIL NIL #<IO-BUFFER 121156015: empty, State: NIL> #<DTP-COMPILED-FUNCTION (:INTERNAL ZWEI:EDITOR-INPUT 0) 31515510> (#<DTP-LOCATIVE 43240772> NIL NIL)) (#<PROCESS Main Zmail Window 120350602> #<DTP-COMPILED-FUNCTION (:INTERNAL TV:KBD-IO-BUFFER-INPUT-WAIT 0) 22405612> (#<IO-BUFFER 120602772: empty, State: NIL> #<DTP-COMPILED-FUNCTION (:INTERNAL ZWEI:EDITOR-INPUT 0) 31515510> (#<DTP-LOCATIVE 43203220> #<DTP-COMPILED-FUNCTION TV:IO-BUFFER-NOT-EMPTY-P 22316710> **)) 0 NIL NIL #<IO-BUFFER 120602772: empty, State: NIL> #<DTP-COMPILED-FUNCTION (:INTERNAL ZWEI:EDITOR-INPUT 0) 31515510> (#<DTP-LOCATIVE 43203220> #<DTP-COMPILED-FUNCTION TV:IO-BUFFER-NOT-EMPTY-P 22316710> (#<IO-BUFFER 120572214: empty, State: NIL>))) (#<PROCESS Screen Manager Background 120360603> #<DTP-COMPILED-FUNCTION (:INTERNAL TV:SCREEN-MANAGE-BACKGROUND-TOP-LEVEL 0) 22334271> (NIL 2641499 NIL) 0 NIL NIL NIL 2641499 NIL) (#<PROCESS NFILE Response Reader 120360632> #<DTP-COMPILED-FUNCTION FS:NFILE-RESPONSE-READER-CONDITION 14202726> NIL 0 NIL NIL NIL NIL NIL) (#<PROCESS Lisp Listener 1 120336526> #<DTP-COMPILED-FUNCTION (:INTERNAL TV:KBD-IO-BUFFER-INPUT-WAIT 0) 22405612> (#<IO-BUFFER 120673433: empty, State: NIL> #<DTP-COMPILED-FUNCTION (:INTERNAL ** 0) 14331024> (#<DTP-LOCATIVE 43200314>)) 0 NIL NIL #<IO-BUFFER 120673433: empty, State: NIL> #<DTP-COMPILED-FUNCTION (:INTERNAL (:DEFUN-METHOD SI:IE-INPUT-WAIT) 0) 14331024> (#<DTP-LOCATIVE 43200314>)) (#<PROCESS Alarm Background 657127> #<DTP-COMPILED-FUNCTION TIME-ELAPSED-P 2213023> (7200 3161776) -1 NIL NIL NIL 7200 3161776) (#<ZMAIL-BACKGROUND-PROCESS Zmail background 120350546> #<DTP-COMPILED-FUNCTION ZWEI:ZMAIL-BACKGROUND-PAUSE 47464347> (3162396 1800 NIL #<DTP-LOCATIVE 120350575> NIL #<DTP-LOCATIVE 120350577>) -1 NIL NIL NIL NIL NIL) (NIL NIL NIL NIL NIL NIL NIL NIL NIL) (NIL NIL NIL NIL NIL NIL NIL NIL NIL) (NIL NIL NIL NIL NIL NIL NIL NIL NIL) ...)
+   Local 14 (THIS-PROCESS-WANTS-TO-RUN-BUTS-ITS-QUANTUM-HAS-EXPIRED): NIL
+   Local 15 (FIRST-OF-THIS-PRIORITY): ((#<SIMPLE-PROCESS File Connection Scavenger 120360661> #<DTP-COMPILED-FUNCTION FS:FILE-CONNECTION-SCAVENGE-CONDITION 11576311> NIL 0 NIL NIL NIL NIL NIL) (#<COROUTINING-PROCESS ZMACS-WINDOWS 120371310> #<DTP-COMPILED-FUNCTION (:INTERNAL TV:KBD-IO-BUFFER-INPUT-WAIT 0) 22405612> (#<IO-BUFFER 121156015: empty, State: NIL> #<DTP-COMPILED-FUNCTION (:INTERNAL ZWEI:EDITOR-INPUT 0) 31515510> (#<DTP-LOCATIVE 43240772> NIL NIL)) 0 NIL NIL #<IO-BUFFER 121156015: empty, State: NIL> #<DTP-COMPILED-FUNCTION (:INTERNAL ZWEI:EDITOR-INPUT 0) 31515510> (#<DTP-LOCATIVE 43240772> NIL NIL)) (#<PROCESS Main Zmail Window 120350602> #<DTP-COMPILED-FUNCTION (:INTERNAL TV:KBD-IO-BUFFER-INPUT-WAIT 0) 22405612> (#<IO-BUFFER 120602772: empty, State: NIL> #<DTP-COMPILED-FUNCTION (:INTERNAL ZWEI:EDITOR-INPUT 0) 31515510> (#<DTP-LOCATIVE 43203220> #<DTP-COMPILED-FUNCTION TV:IO-BUFFER-NOT-EMPTY-P 22316710> **)) 0 NIL NIL #<IO-BUFFER 120602772: empty, State: NIL> #<DTP-COMPILED-FUNCTION (:INTERNAL ZWEI:EDITOR-INPUT 0) 31515510> (#<DTP-LOCATIVE 43203220> #<DTP-COMPILED-FUNCTION TV:IO-BUFFER-NOT-EMPTY-P 22316710> (#<IO-BUFFER 120572214: empty, State: NIL>))) (#<PROCESS Screen Manager Background 120360603> #<DTP-COMPILED-FUNCTION (:INTERNAL TV:SCREEN-MANAGE-BACKGROUND-TOP-LEVEL 0) 22334271> (NIL 2641499 NIL) 0 NIL NIL NIL 2641499 NIL) (#<PROCESS NFILE Response Reader 120360632> #<DTP-COMPILED-FUNCTION FS:NFILE-RESPONSE-READER-CONDITION 14202726> NIL 0 NIL NIL NIL NIL NIL) (#<PROCESS Lisp Listener 1 120336526> #<DTP-COMPILED-FUNCTION (:INTERNAL TV:KBD-IO-BUFFER-INPUT-WAIT 0) 22405612> (#<IO-BUFFER 120673433: empty, State: NIL> #<DTP-COMPILED-FUNCTION (:INTERNAL ** 0) 14331024> (#<DTP-LOCATIVE 43200314>)) 0 NIL NIL #<IO-BUFFER 120673433: empty, State: NIL> #<DTP-COMPILED-FUNCTION (:INTERNAL (:DEFUN-METHOD SI:IE-INPUT-WAIT) 0) 14331024> (#<DTP-LOCATIVE 43200314>)) (#<PROCESS Alarm Background 657127> #<DTP-COMPILED-FUNCTION TIME-ELAPSED-P 2213023> (7200 3161776) -1 NIL NIL NIL 7200 3161776) (#<ZMAIL-BACKGROUND-PROCESS Zmail background 120350546> #<DTP-COMPILED-FUNCTION ZWEI:ZMAIL-BACKGROUND-PAUSE 47464347> (3162396 1800 NIL #<DTP-LOCATIVE 120350575> NIL #<DTP-LOCATIVE 120350577>) -1 NIL NIL NIL NIL NIL) (NIL NIL NIL NIL NIL NIL NIL NIL NIL) (NIL NIL NIL NIL NIL NIL NIL NIL NIL) ...)
+   Local 16 (CURRENT-PRIORITY): 0
+   Local 17 (APE): (#<COROUTINING-PROCESS ZMACS-WINDOWS 120371310> #<DTP-COMPILED-FUNCTION (:INTERNAL TV:KBD-IO-BUFFER-INPUT-WAIT 0) 22405612> (#<IO-BUFFER 121156015: empty, State: NIL> #<DTP-COMPILED-FUNCTION (:INTERNAL ZWEI:EDITOR-INPUT 0) 31515510> (#<DTP-LOCATIVE 43240772> NIL NIL)) 0 NIL NIL #<IO-BUFFER 121156015: empty, State: NIL> #<DTP-COMPILED-FUNCTION (:INTERNAL ZWEI:EDITOR-INPUT 0) 31515510> (#<DTP-LOCATIVE 43240772> NIL NIL))
+   Local 18 (PRI): 0
+   Local 19 (PROC): #<COROUTINING-PROCESS ZMACS-WINDOWS 120371310>
+ 9-May-85 10:41:11-EDT,3575;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 9 May 85 10:41-EDT
+Received: from SCRC-STONY-BROOK.ARPA by MIT-MC.ARPA;  9 MAY 85 10:40:26 EDT
+Received: from ANNISQUAM.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 233424; Thu 9-May-85 10:30:37-EDT
+Date: Thu, 9 May 85 10:35 EDT
+From: Doug Dodds <DODDS@TENEX.SCRC.Symbolics.COM>
+Subject: Profile problems with hosts
+To: PARKER%MIT-OZ@MIT-MC.ARPA
+cc: CJL%MIT-OZ@MIT-MC.ARPA, DODDS@TENEX, BUG-LISPM%MIT-OZ@MIT-MC.ARPA,
+    BUG-ZMAIL%MIT-OZ@MIT-MC.ARPA
+In-Reply-To: <850508194812.1.PARKER@SINATRA>
+Message-ID: <850509103521.8.DODDS@ANNISQUAM.SCRC.Symbolics.COM>
+
+    Date: Wed, 8 May 85 19:48 EDT
+    From: Randy Parker <PARKER@OZ>
+	From: Chris Lindblad <CJL@OZ>
+	    From: Doug Dodds <DODDS@TENEX.SCRC.Symbolics.COM>
+		From: Randy Parker <PARKER@OZ>
+		In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 9.1,
+		microcode TMC5-MIC 319, FEP 17, on Lisp Machine Bing Crosby:
+		Warm booted from: ZMACS-WINDOWS.
+
+		Awhile back I edited my profile and typed "Randy Parker <parker@oz>" to the choose
+		variables window in Edit profile for the value of *default-cc-list*.  ZMAIL inserted
+		the following form in my zmail init file:
+
+		(LOGIN-SETQ zwei:*DEFAULT-CC-LIST* '((:PERSONAL-NAME "Randy Parker"
+								:NAME
+								"PARKER"
+								:HOST
+								(:OBJECT "OZ"))))
+
+		When I check *default-cc-list*, it reads as follows:
+		((:PERSONAL-NAME "Randy Parker" :NAME "PARKER" :HOST (:OBJECT #<TOPS20-HOST OZ 1400364>)))
+
+		All this is fine (and has been since that time), but recently, after selecting other
+		options in the profile variable windows, clicking on EDIT, and then evaling the profile
+		buffer (this has been repeated several times), any attempt to Reply or Mail generates
+		this error.  
+
+		>>Error: The array, "OZ", is not a valid function except when
+			 given a valid subscript as its argument.
+		While in the function "OZ"  ZWEI:STRING-FROM-HEADER  ZWEI:PRINT-ADDRESS-HEADER
+
+	    The bug is clearly in the hacked-up version of ZWEI:STRING-FROM-HEADER
+	    that you are using.  I infer that it has been altered to attempt to deal
+	    better with the new state of host namespaces.  It probably assumes that
+	    the :HOST in the parsed header is a Host object; likely it needs to
+	    allow for the string case, and parse it into a host object.
+
+    Right. See below.
+
+	The version of ZWEI:STRING-FROM-HEADER was supplied to us from Hornig to
+	fix interaction problems with mailers here at MIT. It's too hairy for
+	me to figure out:
+
+      ...
+
+    ;;;************************************************
+    ;;; This seems to fix the error reported above.
+	;;; 
+	;;; Replaced (SECOND HOST) with host-object
+	;;;
+		       (SELECTQ (CAR HOST)
+			 (:OBJECT
+			  (let ((host-object (neti:parse-host (second host))))  ; guarantees you have a parsed host
+			    (WHEN (EQ NAMING-CONVENTION ':DEFAULT)
+			      (SETQ NAMING-CONVENTION (SEND host-object
+							    ':DEFAULT-MAIL-NAMING-CONVENTION)))
+			    (UNLESS (AND (EQ FORMAT ':ONLY-PERSONAL)
+					 (SUMMARY-SUPPRESS-HOST-P host-object))
+			      ;; Use the "standard" name for this host.
+			      (MULTIPLE-VALUE-BIND (HOST-NAME %-KLUDGE)
+				  (SEND host-object :MAIL-NAME :NAMING-CONVENTION NAMING-CONVENTION
+					:%-ROUTING-KLUDGE T)
+				(SETQ STRING (STRING-APPEND STRING (IF %-KLUDGE #/% #/@) HOST-NAME))))))
+    ;;;************************************************
+
+    ...
+
+Thanks.  It hasn't been reported here, but it looks like we need this
+fix also.
+
+ 9-May-85 11:57:50-EDT,2486;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 9 May 85 11:57-EDT
+Received: from SCRC-STONY-BROOK.ARPA by MIT-MC.ARPA;  9 MAY 85 11:41:31 EDT
+Received: from PEACE.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 233502; Thu 9-May-85 11:36:25-EDT
+Date: Thu, 9 May 85 11:40 EDT
+From: Charles Hornig <Hornig@SCRC-STONY-BROOK.ARPA>
+Subject: Mailer loses on soml delivery option
+To: Joseph R Goldstone <joseph@SCRC-QUABBIN.ARPA>,
+    Bernard S. Greenberg <BSG@SCRC-STONY-BROOK.ARPA>, CSTACY@MIT-MC.ARPA,
+    CJL%OZ@MIT-MC.ARPA
+cc: Hornig@SCRC-STONY-BROOK.ARPA, BUG-LISPM%OZ@MIT-MC.ARPA
+In-Reply-To: <850508100806.2.JOSEPH@HARLEM.SCRC.Symbolics.COM>
+Message-ID: <850509114008.2.HORNIG@PEACE.SCRC.Symbolics.COM>
+
+    Date: Wed, 8 May 85 10:08 EDT
+    From: Joseph R Goldstone <joseph@SCRC-QUABBIN.ARPA>
+
+	Date: Wed, 8 May 85 09:14 EDT
+	From: Bernard S. Greenberg <BSG@STONY-BROOK.SCRC.Symbolics.COM>
+
+	    Date: Tue,  7 May 85 19:40:15 EST
+	    From: Christopher C. Stacy <CSTACY@MIT-MC>
+
+		 Date: Fri, 3 May 85 14:49 EDT
+		 From: CJL@OZ
+
+		 In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 8.6,
+		 Mailer 43.0, microcode TMC5-MIC 319, on Lisp Machine
+		 Ronald Reagan:
+     
+		 If mail is received destined for foo@reagan here on
+		 reagan, regardless of who is logged in on the machine,
+		 send is assumed, and a window pops up and displays the
+		 message, asking for response.
+
+	    If I understand your message, maybe the real bug is that the mailer on
+	    Reagan turns MAIL into SEND.  Maybe if the user is unknown (no
+	    forwarding or whatever) then it should dump the mail into a mailbox in
+	    some dead-letters directory in LMFS and send an error receipt to
+	    the originator as specified by the return path.
+
+	Machines are not required to have a LMFS.   Most don't.
+
+    All Symbolics computers (urrk-ptuui!  LispMs!) that run our Mailer software
+    must have a local LMFS.  The logical place to put failed MAILs as described
+    above would be with the rest of the rubbish in local:>Mail>Static>failed.mail.
+
+    I'll try to think about the issues behind this conversation later today.
+
+Before this goes too far, remember that CJL's problem above had nothing
+to do with MAIL.  He was confused.  In fact, the Dover server was doing
+a SEND to Reagan (using SMTP).  The fact that Converse pays no attention
+to the recipient of the message is longstanding and I have been told
+that it is a feature.
+
+ 9-May-85 12:22:52-EDT,3333;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 9 May 85 12:22-EDT
+Received: from SCRC-STONY-BROOK.ARPA by MIT-MC.ARPA;  9 MAY 85 12:22:16 EDT
+Received: from PEACE.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 233543; Thu 9-May-85 12:17:10-EDT
+Date: Thu, 9 May 85 12:20 EDT
+From: Charles Hornig <Hornig@SCRC-STONY-BROOK.ARPA>
+Subject: Profile problems with hosts
+To: Chris Lindblad <CJL%OZ@MIT-MC.ARPA>, DODDS@SCRC-STONY-BROOK.ARPA
+cc: BUG-LISPM%OZ@MIT-MC.ARPA, BUG-ZMAIL%OZ@MIT-MC.ARPA,
+    PARKER%oz@MIT-MC.ARPA
+In-Reply-To: <850508173549.1.CJL@BUDDY>
+Message-ID: <850509122056.4.HORNIG@PEACE.SCRC.Symbolics.COM>
+
+    Date: Wed, 8 May 85 17:35 EDT
+    From: Chris Lindblad <CJL@OZ>
+	Date: Wed, 8 May 85 15:39 EDT
+	From: Doug Dodds <DODDS@TENEX.SCRC.Symbolics.COM>
+	    Date: Mon, 6 May 85 22:46 EDT
+	    From: Randy Parker <PARKER@OZ>
+	    In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 9.1,
+	    microcode TMC5-MIC 319, FEP 17, on Lisp Machine Bing Crosby:
+	    Warm booted from: ZMACS-WINDOWS.
+
+	    Awhile back I edited my profile and typed "Randy Parker <parker@oz>" to the choose
+	    variables window in Edit profile for the value of *default-cc-list*.  ZMAIL inserted
+	    the following form in my zmail init file:
+
+	    (LOGIN-SETQ zwei:*DEFAULT-CC-LIST* '((:PERSONAL-NAME "Randy Parker"
+							    :NAME
+							    "PARKER"
+							    :HOST
+							    (:OBJECT "OZ"))))
+
+The problem is here!  "OZ" isn't a host object, it's a string.  ZMail
+shouldn't be putting it there.
+
+	    When I check *default-cc-list*, it reads as follows:
+	    ((:PERSONAL-NAME "Randy Parker" :NAME "PARKER" :HOST (:OBJECT #<TOPS20-HOST OZ 1400364>)))
+
+	    All this is fine (and has been since that time), but recently, after selecting other
+	    options in the profile variable windows, clicking on EDIT, and then evaling the profile
+	    buffer (this has been repeated several times), any attempt to Reply or Mail generates
+	    this error.  
+
+	    Of course, *default-cc-list* gives this:
+	    ((:PERSONAL-NAME "Randy Parker" :NAME "PARKER" :HOST (:OBJECT "OZ")))
+
+	    It is clear which is right and how to get the host object, but both are being
+	    generated by the system. I haven't had a chance to look at ZWEI:STRING-FROM-HEADER.
+
+
+
+	    >>Error: The array, "OZ", is not a valid function except when
+		     given a valid subscript as its argument.
+	    While in the function "OZ"  ZWEI:STRING-FROM-HEADER  ZWEI:PRINT-ADDRESS-HEADER
+
+	    "OZ":
+	       Arg 0: :DEFAULT-MAIL-NAMING-CONVENTION
+
+	    ZWEI:STRING-FROM-HEADER:  (P.C. =223)  (from 1AISITE: AISITE; NETWORK0)   What's this?!?
+	       Arg 0 (HEADER): (:PERSONAL-NAME "Randy Parker" :NAME "PARKER" :HOST (:OBJECT "OZ"))
+	       Arg 1 (FORMAT): NIL
+	       Arg 2 (NAMING-CONVENTION): :DEFAULT
+
+	The bug is clearly in the hacked-up version of ZWEI:STRING-FROM-HEADER
+	that you are using.  I infer that it has been altered to attempt to deal
+	better with the new state of host namespaces.  It probably assumes that
+	the :HOST in the parsed header is a Host object; likely it needs to
+	allow for the string case, and parse it into a host object.
+
+There is no "string case".  If you say :OBJECT, there should be an
+object.  If you want an arbitrary string, use :SINGLE.
+
+ 9-May-85 12:36:05-EDT,1590;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 9 May 85 12:35-EDT
+Received: from SCRC-STONY-BROOK.ARPA by MIT-MC.ARPA;  9 MAY 85 12:30:34 EDT
+Received: from PEACE.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 233554; Thu 9-May-85 12:25:16-EDT
+Date: Thu, 9 May 85 12:29 EDT
+From: Charles Hornig <Hornig@SCRC-STONY-BROOK.ARPA>
+Subject: Can't dired Multics
+To: Gavan Duffy <GAVAN@OZ>, RWK@SCRC-YUKON.ARPA
+cc: BUG-LISPM@MIT-MC.ARPA, c.c@MIT-MULTICS.ARPA
+In-Reply-To: <850507174332.2.GAVAN@MORRISON>
+Message-ID: <850509122902.7.HORNIG@PEACE.SCRC.Symbolics.COM>
+
+    Date: Tue, 7 May 85 17:43 EDT
+    From: Gavan Duffy <GAVAN@OZ>
+    ...
+    OK.  I did all that.  The connection was made and the directory list even
+    started to happen.  But then I got the following error repeatedly.  Is this
+    Multics screwing me, or is it the lispm?
+
+    >>Error: Block mode stream closed unexpectedly.
+    While in the function (:METHOD TCP::FTP-BLOCK-MODE-INPUT-MIXIN :NEXT-INPUT-BUFFER)  (:INTERNAL (:METHOD TCP::FTP-BLOCK-MODE-CHARACTER-INPUT-STREAM :COMBINED :NEXT-INPUT-BUFFER) 0)  (:METHOD SI:ASCII-TRANSLATING-BUFFERED-INPUT-STREAM-MIXIN :WHOPPER :NEXT-INPUT-BUFFER)
+
+This is Multics screwing you.  They use the wrong bit to indicate Block
+Mode EOF.  Sigh.  That's one of the special checks that the
+MULTICS-TCP-FTP-FILE-ACCESS-PATH code did.  You just can't win.  Next
+hack is to hack out the whole part of the :LOGIN method that sends the
+"MODE B" command and pretend that it failed.  It should be clear what is
+going on from the source.
+
+ 9-May-85 12:37:57-EDT,1664;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 9 May 85 12:36-EDT
+Received: from SCRC-STONY-BROOK.ARPA by MIT-MC.ARPA;  9 MAY 85 12:31:06 EDT
+Received: from PEACE.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 233556; Thu 9-May-85 12:25:36-EDT
+Date: Thu, 9 May 85 12:29 EDT
+From: Charles Hornig <Hornig@SCRC-STONY-BROOK.ARPA>
+Subject: Can't dired Multics
+To: Gavan Duffy <GAVAN%OZ@MIT-MC.ARPA>, RWK@SCRC-YUKON.ARPA
+cc: BUG-LISPM@MIT-MC.ARPA, c.c@MIT-MULTICS.ARPA
+In-Reply-To: <850507174332.2.GAVAN@MORRISON>
+Supersedes: <850509122902.7.HORNIG@PEACE.SCRC.Symbolics.COM>
+Message-ID: <850509122921.8.HORNIG@PEACE.SCRC.Symbolics.COM>
+
+    Date: Tue, 7 May 85 17:43 EDT
+    From: Gavan Duffy <GAVAN@OZ>
+    ...
+    OK.  I did all that.  The connection was made and the directory list even
+    started to happen.  But then I got the following error repeatedly.  Is this
+    Multics screwing me, or is it the lispm?
+
+    >>Error: Block mode stream closed unexpectedly.
+    While in the function (:METHOD TCP::FTP-BLOCK-MODE-INPUT-MIXIN :NEXT-INPUT-BUFFER)  (:INTERNAL (:METHOD TCP::FTP-BLOCK-MODE-CHARACTER-INPUT-STREAM :COMBINED :NEXT-INPUT-BUFFER) 0)  (:METHOD SI:ASCII-TRANSLATING-BUFFERED-INPUT-STREAM-MIXIN :WHOPPER :NEXT-INPUT-BUFFER)
+
+This is Multics screwing you.  They use the wrong bit to indicate Block
+Mode EOF.  Sigh.  That's one of the special checks that the
+MULTICS-TCP-FTP-FILE-ACCESS-PATH code did.  You just can't win.  Next
+hack is to hack out the whole part of the :LOGIN method that sends the
+"MODE B" command and pretend that it failed.  It should be clear what is
+going on from the source.
+
+ 9-May-85 14:03:25-EDT,2856;000000000000
+Received: from MIT-REAGAN by MIT-OZ via Chaosnet; 9 May 85 13:59-EDT
+Received: from SCRC-QUABBIN.ARPA by MIT-REAGAN via INTERNET with SMTP id 4412; 9 May 85 13:59:31-EDT
+Received: from NEPONSET.SCRC.Symbolics.COM by SCRC-QUABBIN.ARPA via CHAOS with CHAOS-MAIL id 162153; Thu 9-May-85 13:55:08-EDT
+Date: Thu, 9 May 85 13:59 EDT
+From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+Subject: Scheduler Died
+To: Cory Myers <cory@MIT-BUGS-BUNNY.mit>, BUG-LISPM@OZ.mit
+In-Reply-To: <850508182502.1.CORY@DAFFY-DUCK.MIT>
+Message-ID: <850509135930.2.NFEP@NEPONSET.SCRC.Symbolics.COM>
+
+    Date: Wednesday, 8 May 1985, 18:25-EDT
+    From: Cory Myers <cory at MIT-BUGS-BUNNY>
+
+    In Symbolics 3670 Release 6.0, IP-TCP 29.0,
+    microcode TMC5-IO4-FPA-MIC 319, FEP 22, with UTIL, on Lisp Machine Daffy Duck:
+
+    I left my machine on last night - not running any jobs.  I cam in this
+    morning and found it this way.
+
+My guess is that the MOVEM-LOCAL instruction at PC 204 actually
+reexecuted the CAR instruction at PC 203.  The disassembly looks like it
+is executing
+	(setq pri (cadddr ape))
+Well, (cadddr ape) is indeed 0.  My first guess is the TMC board, second
+guess is SQ.  If this isn't very repeatable, we may never know for sure.
+
+    >>Trap: The argument given to the SYS:MOVEM-LOCAL instruction, 0 (from local variable SI:PRI), was not a locative, or a list.
+    While in the function SI:PROCESS-SCHEDULER
+
+    SI:PROCESS-SCHEDULER:  (P.C. = 204)
+       Local 0: #<DTP-LOCATIVE 14700006>
+       Local 1: #<DTP-COMPILED-FUNCTION (:INTERNAL SI:PROCESS-SCHEDULER 1) 6743031>
+       Local 2: #<DTP-LOCATIVE 14700006>
+       Local 3: #<DTP-COMPILED-FUNCTION (:INTERNAL SI:PROCESS-SCHEDULER 0) 6743042>
+       Local 4: "Error in the scheduler"
+       Local 5: (DBG:SCHEDULER-DEBUGGER-HANDLER)
+       Local 6 (REMAINING-QUANTUM): 0
+       Local 7 (NEXT-PROCESS): NIL
+       Local 8 (OLD-CURRENT-PROCESS): NIL
+       Local 9 (THIS-TIME): 3162767
+       Local 10 (LAST-TIME): 3162767
+       Local 11 (DELTA-TIME): 0
+       Local 12 (NEXT-WHO-TIME): 56
+       Local 13 (PROCS): (...many...)
+       Local 14 (THIS-PROCESS-WANTS-TO-RUN-BUTS-ITS-QUANTUM-HAS-EXPIRED): NIL
+       Local 15 (FIRST-OF-THIS-PRIORITY): (...many...)
+       Local 16 (CURRENT-PRIORITY): 0
+       Local 17 (APE): (#<COROUTINING-PROCESS ZMACS-WINDOWS 120371310> #<DTP-COMPILED-FUNCTION (:INTERNAL TV:KBD-IO-BUFFER-INPUT-WAIT 0) 22405612> (#<IO-BUFFER 121156015: empty, State: NIL> #<DTP-COMPILED-FUNCTION (:INTERNAL ZWEI:EDITOR-INPUT 0) 31515510> (#<DTP-LOCATIVE 43240772> NIL NIL)) 0 NIL NIL #<IO-BUFFER 121156015: empty, State: NIL> #<DTP-COMPILED-FUNCTION (:INTERNAL ZWEI:EDITOR-INPUT 0) 31515510> (#<DTP-LOCATIVE 43240772> NIL NIL))
+       Local 18 (PRI): 0
+       Local 19 (PROC): #<COROUTINING-PROCESS ZMACS-WINDOWS 120371310>
+
+
+ 9-May-85 16:19:39-EDT,1712;000000000000
+Received: from MIT-SID by MIT-OZ via Chaosnet; 9 May 85 15:49-EDT
+Date: Thu, 9 May 85 15:48 EDT
+From: Chris Lindblad <CJL@OZ>
+Subject: Mailer loses on soml delivery option
+To: CSTACY@MIT-MC, BSG@SCRC-STONY-BROOK
+cc: BUG-COMSAT@MIT-MC, Hornig@SCRC-STONY-BROOK, joseph@SCRC-STONY-BROOK,
+    BUG-LISPM@OZ
+In-Reply-To: <[MIT-MC].492500.850508.CSTACY>
+Message-ID: <850509154830.1.CJL@SID>
+
+    Date: Wed,  8 May 85 22:25:33 EST
+    From: Christopher C. Stacy <CSTACY@MIT-MC>
+	Date: Wed, 8 May 85 11:03 EDT
+	From: Bernard S. Greenberg <BSG at STONY-BROOK.SCRC.Symbolics.COM>
+	 2) Say "this is what spooler documentably does", and give your
+	    local-machine address to it instead of your mail address.  Why
+	    do we give it our mail address, anyway?
+
+    This is what the spooler documentably does.
+    Why are you giving it your mail address anyway?
+
+    COMSAT is not changing mail into sends; DVRSPL it to do an interactive
+    send. Actually, I think it probably ordered it to SOML.  If not, it
+    should. The LispM ought to accept SOML somehow.)
+
+Wait. Does the dover do a send, or a soml? If it's a send, then
+person@logged-in-machine is what it wants. If its a soml,
+person's-mailbox@mail-machine is what it wants. There is a difference.
+The dover should not send mail to person@logged-in-machine, nor do a
+send to person's-mailbox@mail-machine.
+
+My impression is there is two marginal-but-works-most-of-the-time
+things going on here. 
+
+1. Comsat does a chaos-send to a mail address.
+2. Lisp Machines accept sends to people that aren't even logged into
+   them.
+
+I don't expect either of these things to be changed.
+
+I added (zwei:qsends-off) to reagan's init file.
+ 9-May-85 17:17:17-EDT,2087;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 9 May 85 17:08-EDT
+Date: Thu,  9 May 85 17:02:07 EST
+From: Christopher C. Stacy <CSTACY@MIT-MC>
+Subject:  Mailer loses on soml delivery option
+To: CJL@MIT-OZ
+cc: BUG-COMSAT@MIT-MC, BSG@SCRC-STONY-BROOK,
+    Hornig@SCRC-STONY-BROOK, joseph@SCRC-STONY-BROOK,
+    BUG-LISPM@MIT-OZ
+In-reply-to: Msg of Thu 9 May 85 15:48 EDT from Chris Lindblad <CJL at OZ>
+Message-ID: <[MIT-MC].493903.850509.CSTACY>
+
+    Date: Thu, 9 May 85 15:48 EDT
+    From: Chris Lindblad <CJL at OZ>
+    To:   CSTACY at MIT-MC.ARPA, BSG at SCRC-STONY-BROOK.ARPA
+    cc:   BUG-COMSAT at MIT-MC.ARPA, Hornig at SCRC-STONY-BROOK.ARPA,
+          joseph at SCRC-STONY-BROOK.ARPA, BUG-LISPM at OZ
+    Re:   Mailer loses on soml delivery option
+    In-Reply-To: <[MIT-MC].492500.850508.CSTACY>
+
+        Date: Wed,  8 May 85 22:25:33 EST
+        From: Christopher C. Stacy <CSTACY@MIT-MC>
+    	Date: Wed, 8 May 85 11:03 EDT
+    	From: Bernard S. Greenberg <BSG at STONY-BROOK.SCRC.Symbolics.COM>
+    	 2) Say "this is what spooler documentably does", and give your
+    	    local-machine address to it instead of your mail address.  Why
+    	    do we give it our mail address, anyway?
+
+        This is what the spooler documentably does.
+        Why are you giving it your mail address anyway?
+
+        COMSAT is not changing mail into sends; DVRSPL it to do an interactive
+        send. Actually, I think it probably ordered it to SOML.  If not, it
+        should. The LispM ought to accept SOML somehow.)
+
+    Wait. Does the dover do a send, or a soml? If it's a send, then
+
+The DVRSPL program is either telling COMSAT to SEND or to SOML, I am
+not sure which but it should probably be the latter.  The DVRSPL
+does not tell COMSAT to MAIL things.  COMSAT is *not* randomly
+changing mail into sends or anythign like that.
+
+This problem is that this stuff was not designed to work with personal
+machines.  It assumes that people are queuing things from a machine
+where they receive mail, although they may be logged in there sometimes.
+ 9-May-85 18:39:18-EDT,1440;000000000000
+Received: from MIT-REAGAN by MIT-OZ via Chaosnet; 9 May 85 18:38-EDT
+Received: from SCRC-QUABBIN.ARPA by MIT-REAGAN via INTERNET with SMTP id 4602; 9 May 85 18:37:43-EDT
+Received: from NEPONSET.SCRC.Symbolics.COM by SCRC-QUABBIN.ARPA via CHAOS with CHAOS-MAIL id 162307; Thu 9-May-85 17:48:35-EDT
+Date: Thu, 9 May 85 17:52 EDT
+From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+Subject: Mailer loses on soml delivery option
+To: Chris Lindblad <CJL@OZ>, CSTACY@MIT-MC.ARPA,
+    BSG@SCRC-STONY-BROOK.ARPA
+cc: BUG-COMSAT@MIT-MC.ARPA, Hornig@SCRC-STONY-BROOK.ARPA,
+    joseph@SCRC-STONY-BROOK.ARPA, BUG-LISPM@OZ.mit
+In-Reply-To: <850509154830.1.CJL@SID>
+Supersedes: <850509175250.4.NFEP@NEPONSET.SCRC.Symbolics.COM>
+Message-ID: <850509175259.5.NFEP@NEPONSET.SCRC.Symbolics.COM>
+
+    Date: Thu, 9 May 85 15:48 EDT
+    From: Chris Lindblad <CJL@OZ>
+
+    My impression is there is two marginal-but-works-most-of-the-time
+    things going on here. 
+
+    1. Comsat does a chaos-send to a mail address.
+    2. Lisp Machines accept sends to people that aren't even logged into
+       them.
+
+    I don't expect either of these things to be changed.
+Being DCP logged in these days as NFEP, I consider (2) a feature.
+
+    I added (zwei:qsends-off) to reagan's init file.
+Sigh.  I hope nobody ever needs to legitimately send a qsend to
+File-Server@Reagan.  Maybe it would be better to hack up (2) just for
+Reagan?
+
+ 9-May-85 18:43:42-EDT,1508;000000000000
+Received: from MIT-REAGAN by MIT-OZ via Chaosnet; 9 May 85 18:38-EDT
+Received: from SCRC-QUABBIN.ARPA by MIT-REAGAN via INTERNET with SMTP id 4603; 9 May 85 18:37:49-EDT
+Received: from NEPONSET.SCRC.Symbolics.COM by SCRC-QUABBIN.ARPA via CHAOS with CHAOS-MAIL id 162309; Thu 9-May-85 17:48:41-EDT
+Date: Thu, 9 May 85 17:53 EDT
+From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+Subject: Mailer loses on soml delivery option
+To: Chris Lindblad <CJL@OZ.mit>, CSTACY@MIT-MC.ARPA,
+    BSG@SCRC-STONY-BROOK.ARPA
+cc: BUG-COMSAT@MIT-MC.ARPA, Hornig@SCRC-STONY-BROOK.ARPA,
+    joseph@SCRC-STONY-BROOK.ARPA, BUG-LISPM@OZ.mit
+In-Reply-To: <850509154830.1.CJL@SID>
+Supersedes: <850509175250.4.NFEP@NEPONSET.SCRC.Symbolics.COM>,
+            <850509175259.5.NFEP@NEPONSET.SCRC.Symbolics.COM>
+Message-ID: <850509175305.6.NFEP@NEPONSET.SCRC.Symbolics.COM>
+
+    Date: Thu, 9 May 85 15:48 EDT
+    From: Chris Lindblad <CJL@OZ>
+
+    My impression is there is two marginal-but-works-most-of-the-time
+    things going on here. 
+
+    1. Comsat does a chaos-send to a mail address.
+    2. Lisp Machines accept sends to people that aren't even logged into
+       them.
+
+    I don't expect either of these things to be changed.
+Being DCP logged in these days as NFEP, I consider (2) a feature.
+
+    I added (zwei:qsends-off) to reagan's init file.
+Sigh.  I hope nobody ever needs to legitimately send a qsend to
+File-Server@Reagan.  Maybe it would be better to hack up (2) just for
+Reagan?
+
+ 9-May-85 18:53:45-EDT,1397;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 9 May 85 18:53-EDT
+Received: from MIT-OZ by MIT-MC via Chaosnet; 9 MAY 85  18:51:25 EDT
+Received: from MIT-MORRISON by MIT-OZ via Chaosnet; 9 May 85 18:41-EDT
+Date: Thu, 9 May 85 18:40 EDT
+From: Gavan Duffy <GAVAN@OZ>
+Subject: Can't dired Multics
+To: Hornig@SCRC-STONY-BROOK.ARPA, GAVAN@OZ, RWK@SCRC-YUKON.ARPA
+cc: BUG-LISPM@MIT-MC.ARPA, c.c@MIT-MULTICS.ARPA
+In-Reply-To: <850509122902.7.HORNIG@PEACE.SCRC.Symbolics.COM>
+Message-ID: <850509184024.2.GAVAN@MORRISON>
+
+    Date: Thu, 9 May 85 12:29 EDT
+    From: Charles Hornig <Hornig@SCRC-STONY-BROOK.ARPA>
+
+    This is Multics screwing you.  They use the wrong bit to indicate Block
+    Mode EOF.  Sigh.  That's one of the special checks that the
+    MULTICS-TCP-FTP-FILE-ACCESS-PATH code did.  You just can't win.  Next
+    hack is to hack out the whole part of the :LOGIN method that sends the
+    "MODE B" command and pretend that it failed.  It should be clear what is
+    going on from the source.
+
+OK, I was successful.  Thanks.  Someone should force Multics to do the right
+thing.  Either that, or pull the plug.  Will this be fixed by 6.1 do you
+think, or should I try to remember all this procedure in case I ever again
+need to dired Multics?
+
+Also, how do I close the connection on Multics' end so that my account is not
+charged even when I've finished direding?
+10-May-85 20:08:35-EDT,1339;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 10 May 85 20:08-EDT
+Received: from MIT-OZ by MIT-MC via Chaosnet; 10 MAY 85  20:03:32 EDT
+Received: from MIT-MORRISON by MIT-OZ via Chaosnet; 10 May 85 20:02-EDT
+Date: Fri, 10 May 85 20:01 EDT
+From: Gavan Duffy <GAVAN@OZ>
+Subject: Declarations after doc-strings in macros. 
+To: DCP@QUABBIN.SCRC.Symbolics.COM, GAVAN@OZ, BUG-LISPM@MIT-MC.ARPA
+In-Reply-To: <850501183311.1.NFEP@NEPONSET.SCRC.Symbolics.COM>
+Message-ID: <850510200123.6.GAVAN@MORRISON>
+
+    Date: Wed, 1 May 85 18:33 EDT
+    From: David C. Plummer in disguise <DCP@QUABBIN.SCRC.Symbolics.COM>
+
+	Date: Mon, 29 Apr 85 05:43 EDT
+	From: Gavan Duffy <GAVAN@OZ>
+
+	In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 8.6,
+	microcode TMC5-MIC 319, FEP 22, on Lisp Machine Jim Morrison:
+
+	Declarations in macros work just fine, unless they follow doc-strings.
+	This form compiles just fine.
+
+	(DEFMACRO FOO (BAR)
+	  (DECLARE (VALUES FOOBAR))
+	  `(INTERN (STRING-APPEND "FOO" ,BAR)))
+
+	However, the compiler issues a warning that the declaration in
+	this next form is illegal and will be ignored.
+
+	(DEFMACRO BAR (FOO)
+	  "Similar to FOO."
+	  (DECLARE (VALUES BARFOO))
+	  `(INTERN (STRING-APPEND "BAR" ,FOO)))
+
+    This has already been fixed for 6.1.
+
+Great.  Any way to make them work in the meantime?
+11-May-85 05:27:48-EDT,298;000000000000
+Mail-From: KLOTZ created at 11-May-85 05:27:38
+Date: Sat 11 May 85 05:27-EDT
+From: Leigh L. Klotz <KLOTZ@MIT-OZ>
+To: bug-symbolics-hardware@MIT-OZ, bug-lispm@MIT-OZ
+
+Reagan stopped dead in its tracks.  No response to kbd input.
+The red fault light is on.  JCMA tried to boot it once anyway.
+11-May-85 16:13:03-EDT,4093;000000000001
+Received: from MIT-BUDDY by MIT-OZ via Chaosnet; 11 May 85 16:12-EDT
+Date: Sat, 11 May 85 16:12 EDT
+From: Henry Lieberman <HENRY@OZ>
+Subject: Namespace lossage while namespace server down
+To: BUG-LISPM@OZ
+Message-ID: <"850511161235.1.Henry@OZ"@BUDDY>
+
+In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 9.1,
+Experimental COLOR 135.1, Experimental COLOR-DEMO 68.0,
+Experimental COLOR-EDITOR 4.0, Experimental COLOR-PALETTE 2.0,
+microcode TMC5-MIC 319, on Lisp Machine Buddy Holly:
+
+When I logged into this machine, it said "User Henry not known. Log in to some
+host?" to which I replied "Oz". Then, trying to read a file off Oz got stuck
+in "TCP connect" in the who line, then this. Investigation showed namespace
+server Reagan in the middle of cold booting.
+
+>>Error: REAGAN (at Internet address 128.52.22.53) did not respond to a 104659(:NEW-FILE) request.
+While in the function TCP::CHECK-CONNECTION-STATE  TCP::COMPLETE-OPEN-TCB  TCP::OPEN-TCB
+
+TCP::CHECK-CONNECTION-STATE:  (P.C. = 32)
+   Arg 0 (TCB): #<TCP connection to REAGAN 59 (:NEW-FILE), local port 1046 6007416>
+   Local 1 (STATE): :SYN-SENT
+   Local 2 (SUBSTATE): :ACTIVE
+
+TCP::COMPLETE-OPEN-TCB:  (P.C. = 13)
+   Arg 0 (TCB): #<TCP connection to REAGAN 59 (:NEW-FILE), local port 1046 6007416>
+   Arg 1 (TIMEOUT): 1200
+
+TCP::OPEN-TCB:  (P.C. = 156)
+   Arg 0 (ACTIVE-P): T
+   Arg 1 (HOST): #<LISPM-HOST REAGAN 1400000>
+   Arg 2 (PORT): 59
+   Arg 3 (LOCAL-PORT): NIL
+   Local 3 (LOCAL-PORT): 1046
+   Rest arg: (:TIMEOUT 1200)
+
+TCP:OPEN-TCP-STREAM:  (P.C. = 263)
+   Arg 0 (HOST): #<LISPM-HOST REAGAN 1400000>
+   Arg 1 (PORT): 59
+   Arg 2 (LOCAL-PORT): NIL
+   Rest arg: NIL
+
+NETI:|MEDIUM-TCP-((NETWORK INTERNET))-G0663|:  (P.C. = 21)
+   Arg 0 (SERVICE-ACCESS-PATH): #<SERVICE-ACCESS-PATH FILE (NEW-FILE) -- REAGAN on INTERNET 20036741>
+   Rest arg (CONNECTION-ARGS): NIL
+
+NETI:GET-CONNECTION-FOR-SERVICE-TO-HOST:  (P.C. = 12)
+   Arg 0 (SERVICE-ACCESS-PATH): #<SERVICE-ACCESS-PATH FILE (NEW-FILE) -- REAGAN on INTERNET 20036741>
+   Arg 1 (NETWORK): #<INTERNET-NETWORK INTERNET 1400023>
+   Arg 2 (IMPLEMENTATION): #<MEDIUM-IMPLEMENTATION 17217560>
+   Arg 3 (CONNECTION-ARGS): NIL
+
+NETI:GET-CONNECTION-FOR-SERVICE-ON-MEDIUM:  (P.C. = 262)
+   Arg 0 (MEDIUM): #<MEDIUM-DESCRIPTION on INTERNET 20036557>
+   Arg 1 (SERVICE-ACCESS-PATH): #<SERVICE-ACCESS-PATH FILE (NEW-FILE) -- REAGAN on INTERNET 20036741>
+   Arg 2 (CONNECTION-ARGS): NIL
+
+NETI:GET-CONNECTION-FOR-SERVICE-ON-MEDIUM:  (P.C. = 174)
+   Arg 0 (MEDIUM): #<MEDIUM-DESCRIPTION on INTERNET 20036735>
+   Arg 1 (SERVICE-ACCESS-PATH): #<SERVICE-ACCESS-PATH FILE (NEW-FILE) -- REAGAN on INTERNET 20036741>
+   Arg 2 (CONNECTION-ARGS): (:TOKEN-LIST T)
+
+Rest of stack:
+NET:GET-CONNECTION-FOR-SERVICE:  (P.C. = 7)
+(:METHOD FS:NFILE-SERVER-UNIT :VALIDATE-CONTROL-STREAM):  (P.C. = 66)
+(:METHOD FS:NFILE-ACCESS-PATH :GET-DATA-CHANNEL):  (P.C. = 17)
+(:METHOD FS:NFILE-ACCESS-PATH :OPEN):  (P.C. = 300)
+(:METHOD FS:ACTIVE-PATHNAME-MIXIN :OPEN):  (P.C. = 14)
+(:DEFUN-METHOD FS:LOGICAL-PATHNAME-PASS-ON):  (P.C. = 10)
+(:METHOD FS:LOGICAL-PATHNAME :OPEN):  (P.C. = 10)
+FS:COMMON-LISP-OPEN:  (P.C. = 450)
+OPEN:  (P.C. = 257)
+FED:FIND-AND-LOAD-BFD:  (P.C. = 53)
+FED:FIND-AND-LOAD-FONT:  (P.C. = 10)
+ZWEI:GET-FONT-ALIST-ATTRIBUTE:  (P.C. = 50)
+ZWEI:SET-BUFFER-FONT-ATTRIBUTES-FROM-GENERIC-PATHNAME:  (P.C. = 10)
+ZWEI:REPARSE-ATTRIBUTE-LIST-INTERNAL:  (P.C. = 177)
+(:DEFUN-METHOD ZWEI:REVERT-FROM-STREAM):  (P.C. = 52)
+(:METHOD ZWEI:FILE-BUFFER-MIXIN :REVERT):  (P.C. = 114)
+ZWEI:FIND-FILE:  (P.C. = 155)
+ZWEI:COM-FIND-FILE:  (P.C. = 13)
+ZWEI:COM-FIND-FILE-AND-ABBREVS:  (P.C. = 2)  (from HENRYS-INIT: HENRY; ZWEI)
+ZWEI:COMMAND-EXECUTE:  (P.C. = 57)
+ZWEI:MAKE-EXTENDED-COMMAND-INTERNAL:  (P.C. = 107)
+Closure of ZWEI:MAKE-EXTENDED-COMMAND-INTERNAL:
+ZWEI:COMMAND-EXECUTE:  (P.C. = 57)
+ZWEI:PROCESS-COMMAND-CHAR:  (P.C. = 14)
+(:METHOD ZWEI:EDITOR :EDIT):  (P.C. = 233)
+(:METHOD ZWEI:TOP-LEVEL-EDITOR :COMBINED :EDIT):  (P.C. = 60)
+ZWEI:ZMACS-WINDOW-TOP-LEVEL:  (P.C. = 51)
+SI:PROCESS-TOP-LEVEL:  (P.C. = 54)
+11-May-85 16:32:18-EDT,791;000000000000
+Received: from MIT-XX by MIT-OZ via Chaosnet; 11 May 85 16:31-EDT
+Date: Sat 11 May 85 16:33:19-EDT
+From: Michael J. Beckerle <BECKERLE@MIT-XX>
+Subject: running out of storage
+To: bug-lispm@MIT-OZ
+
+
+dear bug-lispm,
+
+Is it possible to set up a garbage-collected area for compiled
+functions? I realize that the truly static system code etc. belongs
+in a static area, but during program development, compiled code
+arrays are quite ephemeral.
+
+The reason I'm asking is that my machine is currently telling me
+that I'm past the point where incremental gc will work, but I 
+just did a gc-immediate. the only thing that has been going
+on of note is compilation of lisp functions, and I've noticed
+that the compiled function area is quite large now.
+
+
+...mike beckerle
+-------
+12-May-85 00:38:09-EDT,1978;000000000000
+Received: from MIT-LENNON by MIT-OZ via Chaosnet; 12 May 85 00:37-EDT
+Date: Sun, 12 May 85 00:37 EDT
+From: Gavan Duffy <GAVAN@OZ>
+Subject: ZMAIL Save all files "file owned by ... Save anyway?" query
+To: hukee@SCRC-QUABBIN, GAVAN@MIT-MC, DCP@SCRC-STONY-BROOK, BUG-LISPM@OZ
+In-Reply-To: <850511082929.0.HUKEE@NUBONUSIT.SCRC.Symbolics.COM>
+Message-ID: <850512003720.1.GAVAN@LENNON>
+
+    Date: Sat, 11 May 85 08:29 EDT
+    From: Joanne Hukee <hukee@SCRC-QUABBIN.ARPA>
+
+	Date: Fri, 10 May 85 19:56 EDT
+	From: Gavan Duffy <GAVAN@OZ>
+
+	    Date: Tue, 30 Apr 85 09:20 EDT
+	    From: Joanne Hukee <hukee@SCRC-QUABBIN.ARPA>
+
+		Date: Mon, 29 Apr 85 03:32 EDT
+		From: Gavan Duffy <GAVAN@OZ>
+
+		A while back, DCP said that ZMAIL sources were to be withheld only for sites
+		with very limited disk space.  This is clearly not MIT.  He said the ZMAIL
+		sources should be propagated to MIT pronto.  They're still not here.  Can we
+		get them soon, please?	
+
+	    Hi. Somebody will get back to you soon with the answer to this.
+
+	Well, it's been a couple of weeks now.
+
+    Sorry, I guess our communications link didn't work too well. Jim Roche
+    should be contacting you about either buying them or working out some
+    other kind of deal.
+
+Hello?  As I recall, DCP said that MIT did not receive the ZMAIL sources
+because Symbolics has some sort of policy not to send them to people who have
+limited disk space.  Some sort of oversight must have been made in MIT's case.
+MIT's disk space is finite, but I'm sure there's room somewhere for the ZMAIL
+sources.
+
+I am certainly not in a position to buy these sources, neither for myself nor
+for MIT.  I don't think you'll want to approach MIT officialdom with such a
+deal.  MIT might bristle just a little at having to buy them. 
+
+In general, sources are helpful for people who like to customize their
+environments.  Without them, you might as well toss these useless machines
+right down the stairs.
+12-May-85 04:14:08-EDT,1241;000000000000
+Received: from MIT-MORRISON by MIT-OZ via Chaosnet; 12 May 85 04:14-EDT
+Date: Sun, 12 May 85 04:14 EDT
+From: jcma@MIT-MC
+Subject: &Key In Macros
+To: BUG-LISPM@OZ
+Message-ID: <850512041434.4.JCMA@MORRISON>
+
+In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 9.1,
+Experimental RELATUS 138.18, microcode TMC5-MIC 319, FEP 22, on Lisp Machine Jim Morrison:
+
+Given the definition below,  if I evaluate
+
+(WITH-FORM-TIMED (PRINT 'FOO)) 
+
+it blows out claiming the arguments did not match the pattern.  Well, there
+were no keywords, so that's the pattern.  Use the defaults.
+
+(DEFMACRO WITH-FORM-TIMED (&KEY (OPERATION '"The operation")
+			   (STREAM 'STANDARD-OUTPUT)
+			   &BODY BODY)
+  "A macro that is useful for quick timings of things." 
+  `(LET ((STREAM ,STREAM)
+	 (OPERATION ,OPERATION)
+	 EUTIME EMTIME UDIFF
+	 (UTIME (TIME:GET-UNIVERSAL-TIME))
+	 (MTIME (TIME:FIXNUM-MICROSECOND-TIME)))
+     ,@BODY
+     (SETQ EMTIME (TIME:FIXNUM-MICROSECOND-TIME)
+	   EUTIME (TIME:GET-UNIVERSAL-TIME))
+     (COND ((ZEROP (SETQ UDIFF (TIME:DIFFERENCE EUTIME UTIME)))
+	    (FORMAT STREAM "~&~A took ~D microseconds."
+		    OPERATION (- EMTIME MTIME)))
+	   (T (FORMAT STREAM "~&~A took ~\time-interval\" OPERATION UDIFF)))))
+
+12-May-85 12:36:52-EDT,2926;000000000000
+Received: from MIT-SID by MIT-OZ via Chaosnet; 12 May 85 12:36-EDT
+Date: Sun, 12 May 85 12:36 EDT
+From: Daniel Weise <DANIEL@MIT-MC>
+Subject: blowout during M-X Compile Changed Definitions
+To: BUG-LISPM@OZ
+Message-ID: <850512123610.1.DANIEL@SID>
+
+In Symbolics 3670 Release 6.0, IP-TCP 29.0, AISite 9.1,
+microcode TMC5-IO4-MIC 319, FEP 22, on Lisp Machine Sid Vicious:
+
+Don't know if this is reproducible at all.  After massive surgery to my
+code I did M-X Compile Changed Definitions.  It blew up after a couple
+of functions had been compiled.  The function it was trying to read when
+it died has no paren errors.  Even if this bug is caused by the buffer
+being bogus (maybe some earlier stray parens have thrown off the buffer
+sectionizing?) it shouldn't blow out.
+
+>>Trap: The first argument given to the ARRAY-LEADER instruction, NIL, was not an array.
+While in the function (:METHOD ZWEI:INTERVAL-STREAM :TYI)  SI:XR-XRTYI  SI:XR-XRTYI-WHITE-OUT
+
+(:METHOD ZWEI:INTERVAL-STREAM :TYI):  (P.C. = 75)
+   Arg 0 (SELF): #<INTERVAL-STREAM 57265053>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor ZWEI:INTERVAL-STREAM -- 8. IV's, 1. FL's 105172005>
+   Arg 2 (OPERATION): :TYI
+   --Defaulted args:--
+   Arg 3 (EOF): NIL
+   Local 4 (CH): NIL
+
+SI:XR-XRTYI:  (P.C. = 6)
+   Arg 0 (STREAM): #<INTERVAL-STREAM 57265053>
+   Arg 1 (WHITE-OUT?): T
+
+SI:XR-XRTYI-WHITE-OUT:  (P.C. = 4)
+   Arg 0 (STREAM): #<INTERVAL-STREAM 57265053>
+
+SI:XR-READ-THING:  (P.C. = 15)
+   Arg 0 (STREAM): #<INTERVAL-STREAM 57265053>
+
+(:INTERNAL SI:READ-INTERNAL 0):  (P.C. = 15)
+   Arg 0 (.LEXICAL-ENVIRONMENT-POINTER.): #<DTP-LOCATIVE 43440525>
+
+SI:WITH-INPUT-EDITING-INTERNAL:  (P.C. = 25)
+   Arg 0 (STREAM): #<INTERVAL-STREAM 57265053>
+   Arg 1 (CONTINUATION): #<LEXICAL-CLOSURE (:INTERNAL SI:READ-INTERNAL 0) 43440527>
+   Arg 2 (ACTIVATORS): (148)
+   Arg 3 (LINE-P): NIL
+   Arg 4 (INPUT-EDITOR-OPTIONS): NIL
+
+SI:READ-INTERNAL:  (P.C. = 34)
+   Arg 0 (FUNCTION): READ
+   Rest arg (READ-ARGS): (#<INTERVAL-STREAM 57265053> (NIL))
+
+READ:  (P.C. = 6)
+   Rest arg (READ-ARGS): (#<INTERVAL-STREAM 57265053> (NIL))
+
+Rest of stack:
+(:INTERNAL COMPILER:COMPILE-PROCESS-DEFAULT 5 (:READ)):  (P.C. = 4)
+COMPILER:COMPILE-PROCESS-DEFAULT:  (P.C. = 66)
+COMPILER:COMPILE-TO-CORE:  (P.C. = 67)
+COMPILER:PROCESS-FORMS-FROM-STREAM:  (P.C. = 102)
+COMPILER:COMPILE-FROM-STREAM:  (P.C. = 237)
+ZWEI:COMPILE-INTERVAL:  (P.C. = 142)
+ZWEI:COMPILE-PRINT-INTERVAL:  (P.C. = 121)
+(:METHOD ZWEI:MAJOR-MODE :DEFAULT :COMPILE-BUFFER-CHANGED-DEFINITIONS):  (P.C. = 76)
+ZWEI:COM-COMPILE-CHANGED-DEFINITIONS:  (P.C. = 114)
+ZWEI:COM-EXTENDED-COMMAND:  (P.C. = 27)
+ZWEI:COMMAND-EXECUTE:  (P.C. = 57)
+ZWEI:PROCESS-COMMAND-CHAR:  (P.C. = 14)
+(:METHOD ZWEI:EDITOR :EDIT):  (P.C. = 233)
+(:METHOD ZWEI:TOP-LEVEL-EDITOR :COMBINED :EDIT):  (P.C. = 60)
+ZWEI:ZMACS-WINDOW-TOP-LEVEL:  (P.C. = 51)
+SI:PROCESS-TOP-LEVEL:  (P.C. = 54)
+12-May-85 13:51:48-EDT,1776;000000000001
+Received: from MIT-MC by MIT-OZ via Chaosnet; 12 May 85 13:51-EDT
+Received: from SCRC-STONY-BROOK.ARPA by MIT-MC.ARPA; 12 May 85 13:51:50 EST
+Received: from NEPONSET.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 235110; Sun 12-May-85 13:46:24-EDT
+Date: Sun, 12 May 85 13:51 EDT
+From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+Subject: Declarations after doc-strings in macros. 
+To: Gavan Duffy <GAVAN@OZ>, DCP@SCRC-QUABBIN.ARPA, BUG-LISPM@MIT-MC.ARPA
+In-Reply-To: <850510200123.6.GAVAN@MORRISON>
+Message-ID: <850512135134.0.NFEP@NEPONSET.SCRC.Symbolics.COM>
+
+    Date: Fri, 10 May 85 20:01 EDT
+    From: Gavan Duffy <GAVAN@OZ>
+
+	Date: Wed, 1 May 85 18:33 EDT
+	From: David C. Plummer in disguise <DCP@QUABBIN.SCRC.Symbolics.COM>
+
+	    Date: Mon, 29 Apr 85 05:43 EDT
+	    From: Gavan Duffy <GAVAN@OZ>
+
+	    In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 8.6,
+	    microcode TMC5-MIC 319, FEP 22, on Lisp Machine Jim Morrison:
+
+	    Declarations in macros work just fine, unless they follow doc-strings.
+	    This form compiles just fine.
+
+	    (DEFMACRO FOO (BAR)
+	      (DECLARE (VALUES FOOBAR))
+	      `(INTERN (STRING-APPEND "FOO" ,BAR)))
+
+	    However, the compiler issues a warning that the declaration in
+	    this next form is illegal and will be ignored.
+
+	    (DEFMACRO BAR (FOO)
+	      "Similar to FOO."
+	      (DECLARE (VALUES BARFOO))
+	      `(INTERN (STRING-APPEND "BAR" ,FOO)))
+
+	This has already been fixed for 6.1.
+
+    Great.  Any way to make them work in the meantime?
+
+You can either have your program suppress the things that don't work, or
+swap the declare and documentation string (which drops the doc string,
+but keeps the declaration [the fix fixes both of these]).
+
+12-May-85 13:52:52-EDT,1848;000000000001
+Received: from MIT-MC by MIT-OZ via Chaosnet; 12 May 85 13:52-EDT
+Received: from SCRC-STONY-BROOK.ARPA by MIT-MC.ARPA; 12 May 85 13:52:15 EST
+Received: from NEPONSET.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 235112; Sun 12-May-85 13:46:32-EDT
+Date: Sun, 12 May 85 13:51 EDT
+From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+Subject: Declarations after doc-strings in macros. 
+To: Gavan Duffy <GAVAN@OZ.mit>, DCP@SCRC-QUABBIN.ARPA,
+    BUG-LISPM@MIT-MC.ARPA
+In-Reply-To: <850510200123.6.GAVAN@MORRISON>
+Supersedes: <850512135134.0.NFEP@NEPONSET.SCRC.Symbolics.COM>
+Message-ID: <850512135142.1.NFEP@NEPONSET.SCRC.Symbolics.COM>
+
+    Date: Fri, 10 May 85 20:01 EDT
+    From: Gavan Duffy <GAVAN@OZ>
+
+	Date: Wed, 1 May 85 18:33 EDT
+	From: David C. Plummer in disguise <DCP@QUABBIN.SCRC.Symbolics.COM>
+
+	    Date: Mon, 29 Apr 85 05:43 EDT
+	    From: Gavan Duffy <GAVAN@OZ>
+
+	    In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 8.6,
+	    microcode TMC5-MIC 319, FEP 22, on Lisp Machine Jim Morrison:
+
+	    Declarations in macros work just fine, unless they follow doc-strings.
+	    This form compiles just fine.
+
+	    (DEFMACRO FOO (BAR)
+	      (DECLARE (VALUES FOOBAR))
+	      `(INTERN (STRING-APPEND "FOO" ,BAR)))
+
+	    However, the compiler issues a warning that the declaration in
+	    this next form is illegal and will be ignored.
+
+	    (DEFMACRO BAR (FOO)
+	      "Similar to FOO."
+	      (DECLARE (VALUES BARFOO))
+	      `(INTERN (STRING-APPEND "BAR" ,FOO)))
+
+	This has already been fixed for 6.1.
+
+    Great.  Any way to make them work in the meantime?
+
+You can either have your program suppress the things that don't work, or
+swap the declare and documentation string (which drops the doc string,
+but keeps the declaration [the fix fixes both of these]).
+
+12-May-85 14:01:12-EDT,5130;000000000000
+Received: from MIT-REAGAN by MIT-OZ via Chaosnet; 12 May 85 14:01-EDT
+Received: from SCRC-STONY-BROOK.ARPA by MIT-REAGAN via INTERNET with SMTP id 4904; 12 May 85 14:01:42-EDT
+Received: from NEPONSET.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 235117; Sun 12-May-85 13:56:15-EDT
+Date: Sun, 12 May 85 14:01 EDT
+From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+Subject: Namespace lossage while namespace server down
+To: Henry Lieberman <HENRY@OZ.mit>, BUG-LISPM@OZ.mit
+In-Reply-To: <"850511161235.1.Henry@OZ"@BUDDY>
+Message-ID: <850512140124.4.NFEP@NEPONSET.SCRC.Symbolics.COM>
+
+    Date: Sat, 11 May 85 16:12 EDT
+    From: Henry Lieberman <HENRY@OZ>
+
+    In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 9.1,
+    Experimental COLOR 135.1, Experimental COLOR-DEMO 68.0,
+    Experimental COLOR-EDITOR 4.0, Experimental COLOR-PALETTE 2.0,
+    microcode TMC5-MIC 319, on Lisp Machine Buddy Holly:
+
+    When I logged into this machine, it said "User Henry not known. Log in to some
+    host?" to which I replied "Oz". Then, trying to read a file off Oz got stuck
+    in "TCP connect" in the who line, then this. Investigation showed namespace
+    server Reagan in the middle of cold booting.
+
+There was an earlier report that REAGAN was down.  From the backtrace,
+you were in the editor trying to load a file that had font
+specifications that weren't loaded on your machine.  You machine then
+tried to load the font, which is stored on REAGAN, which lost because
+REAGAN was down.
+
+    >>Error: REAGAN (at Internet address 128.52.22.53) did not respond to a 104659(:NEW-FILE) request.
+    While in the function TCP::CHECK-CONNECTION-STATE  TCP::COMPLETE-OPEN-TCB  TCP::OPEN-TCB
+
+    TCP::CHECK-CONNECTION-STATE:  (P.C. = 32)
+       Arg 0 (TCB): #<TCP connection to REAGAN 59 (:NEW-FILE), local port 1046 6007416>
+       Local 1 (STATE): :SYN-SENT
+       Local 2 (SUBSTATE): :ACTIVE
+
+    TCP::COMPLETE-OPEN-TCB:  (P.C. = 13)
+       Arg 0 (TCB): #<TCP connection to REAGAN 59 (:NEW-FILE), local port 1046 6007416>
+       Arg 1 (TIMEOUT): 1200
+
+    TCP::OPEN-TCB:  (P.C. = 156)
+       Arg 0 (ACTIVE-P): T
+       Arg 1 (HOST): #<LISPM-HOST REAGAN 1400000>
+       Arg 2 (PORT): 59
+       Arg 3 (LOCAL-PORT): NIL
+       Local 3 (LOCAL-PORT): 1046
+       Rest arg: (:TIMEOUT 1200)
+
+    TCP:OPEN-TCP-STREAM:  (P.C. = 263)
+       Arg 0 (HOST): #<LISPM-HOST REAGAN 1400000>
+       Arg 1 (PORT): 59
+       Arg 2 (LOCAL-PORT): NIL
+       Rest arg: NIL
+
+    NETI:|MEDIUM-TCP-((NETWORK INTERNET))-G0663|:  (P.C. = 21)
+       Arg 0 (SERVICE-ACCESS-PATH): #<SERVICE-ACCESS-PATH FILE (NEW-FILE) -- REAGAN on INTERNET 20036741>
+       Rest arg (CONNECTION-ARGS): NIL
+
+    NETI:GET-CONNECTION-FOR-SERVICE-TO-HOST:  (P.C. = 12)
+       Arg 0 (SERVICE-ACCESS-PATH): #<SERVICE-ACCESS-PATH FILE (NEW-FILE) -- REAGAN on INTERNET 20036741>
+       Arg 1 (NETWORK): #<INTERNET-NETWORK INTERNET 1400023>
+       Arg 2 (IMPLEMENTATION): #<MEDIUM-IMPLEMENTATION 17217560>
+       Arg 3 (CONNECTION-ARGS): NIL
+
+    NETI:GET-CONNECTION-FOR-SERVICE-ON-MEDIUM:  (P.C. = 262)
+       Arg 0 (MEDIUM): #<MEDIUM-DESCRIPTION on INTERNET 20036557>
+       Arg 1 (SERVICE-ACCESS-PATH): #<SERVICE-ACCESS-PATH FILE (NEW-FILE) -- REAGAN on INTERNET 20036741>
+       Arg 2 (CONNECTION-ARGS): NIL
+
+    NETI:GET-CONNECTION-FOR-SERVICE-ON-MEDIUM:  (P.C. = 174)
+       Arg 0 (MEDIUM): #<MEDIUM-DESCRIPTION on INTERNET 20036735>
+       Arg 1 (SERVICE-ACCESS-PATH): #<SERVICE-ACCESS-PATH FILE (NEW-FILE) -- REAGAN on INTERNET 20036741>
+       Arg 2 (CONNECTION-ARGS): (:TOKEN-LIST T)
+
+    Rest of stack:
+    NET:GET-CONNECTION-FOR-SERVICE:  (P.C. = 7)
+    (:METHOD FS:NFILE-SERVER-UNIT :VALIDATE-CONTROL-STREAM):  (P.C. = 66)
+    (:METHOD FS:NFILE-ACCESS-PATH :GET-DATA-CHANNEL):  (P.C. = 17)
+    (:METHOD FS:NFILE-ACCESS-PATH :OPEN):  (P.C. = 300)
+    (:METHOD FS:ACTIVE-PATHNAME-MIXIN :OPEN):  (P.C. = 14)
+    (:DEFUN-METHOD FS:LOGICAL-PATHNAME-PASS-ON):  (P.C. = 10)
+    (:METHOD FS:LOGICAL-PATHNAME :OPEN):  (P.C. = 10)
+    FS:COMMON-LISP-OPEN:  (P.C. = 450)
+    OPEN:  (P.C. = 257)
+    FED:FIND-AND-LOAD-BFD:  (P.C. = 53)
+    FED:FIND-AND-LOAD-FONT:  (P.C. = 10)
+    ZWEI:GET-FONT-ALIST-ATTRIBUTE:  (P.C. = 50)
+    ZWEI:SET-BUFFER-FONT-ATTRIBUTES-FROM-GENERIC-PATHNAME:  (P.C. = 10)
+    ZWEI:REPARSE-ATTRIBUTE-LIST-INTERNAL:  (P.C. = 177)
+    (:DEFUN-METHOD ZWEI:REVERT-FROM-STREAM):  (P.C. = 52)
+    (:METHOD ZWEI:FILE-BUFFER-MIXIN :REVERT):  (P.C. = 114)
+    ZWEI:FIND-FILE:  (P.C. = 155)
+    ZWEI:COM-FIND-FILE:  (P.C. = 13)
+    ZWEI:COM-FIND-FILE-AND-ABBREVS:  (P.C. = 2)  (from HENRYS-INIT: HENRY; ZWEI)
+    ZWEI:COMMAND-EXECUTE:  (P.C. = 57)
+    ZWEI:MAKE-EXTENDED-COMMAND-INTERNAL:  (P.C. = 107)
+    Closure of ZWEI:MAKE-EXTENDED-COMMAND-INTERNAL:
+    ZWEI:COMMAND-EXECUTE:  (P.C. = 57)
+    ZWEI:PROCESS-COMMAND-CHAR:  (P.C. = 14)
+    (:METHOD ZWEI:EDITOR :EDIT):  (P.C. = 233)
+    (:METHOD ZWEI:TOP-LEVEL-EDITOR :COMBINED :EDIT):  (P.C. = 60)
+    ZWEI:ZMACS-WINDOW-TOP-LEVEL:  (P.C. = 51)
+    SI:PROCESS-TOP-LEVEL:  (P.C. = 54)
+
+
+12-May-85 14:08:38-EDT,2042;000000000000
+Received: from MIT-REAGAN by MIT-OZ via Chaosnet; 12 May 85 14:08-EDT
+Received: from SCRC-STONY-BROOK.ARPA by MIT-REAGAN via INTERNET with SMTP id 4905; 12 May 85 14:09:13-EDT
+Received: from NEPONSET.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 235122; Sun 12-May-85 14:03:46-EDT
+Date: Sun, 12 May 85 14:08 EDT
+From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+Subject: running out of storage
+To: Michael J. Beckerle <BECKERLE@MIT-XX.ARPA>, bug-lispm@MIT-OZ.mit
+In-Reply-To: The message of 11 May 85 16:33-EDT from Michael J. Beckerle <BECKERLE@MIT-XX>
+Message-ID: <850512140856.6.NFEP@NEPONSET.SCRC.Symbolics.COM>
+
+    Date: Sat 11 May 85 16:33:19-EDT
+    From: Michael J. Beckerle <BECKERLE@MIT-XX>
+
+
+    dear bug-lispm,
+
+    Is it possible to set up a garbage-collected area for compiled
+    functions? I realize that the truly static system code etc. belongs
+    in a static area, but during program development, compiled code
+    arrays are quite ephemeral.
+
+    The reason I'm asking is that my machine is currently telling me
+    that I'm past the point where incremental gc will work, but I 
+    just did a gc-immediate. the only thing that has been going
+    on of note is compilation of lisp functions, and I've noticed
+    that the compiled function area is quite large now.
+
+There are several problems.  There is a :PREVIOUS-DEFINITION property on
+the symbol which is the function's name.  This lets you do UNDEFUN (it
+should probably be called REVERT-FDEFINITION).  Methods can get tucked
+away in many other hidey-holes.  One very large problem is that a large
+part of the garbage collector (most of it on the 3600) is in Lisp.  This
+means the GC would trip over itself and get infinite oldspace traps.
+The Release 5.2 method of GCing compiled functions implied GCing for
+system release, which is not a sanctioned thing for customers to do.
+
+I understand what you are trying to do, and I'll keep this suggestion
+around in case some inspiration stikes.
+
+12-May-85 14:18:03-EDT,1990;000000000000
+Received: from MIT-REAGAN by MIT-OZ via Chaosnet; 12 May 85 14:17-EDT
+Received: from SCRC-STONY-BROOK.ARPA by MIT-REAGAN via INTERNET with SMTP id 4906; 12 May 85 14:18:14-EDT
+Received: from NEPONSET.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 235125; Sun 12-May-85 14:12:44-EDT
+Date: Sun, 12 May 85 14:17 EDT
+From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+Subject: &Key In Macros
+To: jcma@MIT-MC.ARPA, BUG-LISPM@OZ.mit
+In-Reply-To: <850512041434.4.JCMA@MORRISON>
+Message-ID: <850512141754.7.NFEP@NEPONSET.SCRC.Symbolics.COM>
+
+    Date: Sun, 12 May 85 04:14 EDT
+    From: jcma@MIT-MC
+
+    In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 9.1,
+    Experimental RELATUS 138.18, microcode TMC5-MIC 319, FEP 22, on Lisp Machine Jim Morrison:
+
+    Given the definition below,  if I evaluate
+
+    (WITH-FORM-TIMED (PRINT 'FOO)) 
+
+    it blows out claiming the arguments did not match the pattern.  Well, there
+    were no keywords, so that's the pattern.  Use the defaults.
+
+It was really complaining about wrong number of args (&KEY assumes an
+even number).
+
+    (DEFMACRO WITH-FORM-TIMED (&KEY (OPERATION '"The operation")
+			       (STREAM 'STANDARD-OUTPUT)
+			       &BODY BODY)
+
+This arglist is illegal.  Unfortunately DEFMACRO didn't tell you (on the
+bug-list).  &KEY cannot coexist with &BODY.  &KEY can coexist with
+&WHOLE, but I shudder to think of a reasonable application.
+
+Also, the prefered syntax on this side of the railroad tracks is to have
+the first form be an environment modifier, instead of having it all
+inline.  Therefore, I would suggest
+
+    (DEFMACRO WITH-FORM-TIMED ((&KEY (OPERATION '"The operation")
+				     (STREAM 'STANDARD-OUTPUT))
+			       &BODY BODY)
+and
+    (WITH-FORM-TIMED ()
+      (PRINT 'FOO))
+    (WITH-FORM-TIMED
+      (:OPERATION "Printing FOO") (PRINT 'FOO))
+    (WITH-FORM-TIMED (:STREAM ERROR-OUTPUT
+		      :OPERATION "Printing FOO")
+      (PRINT 'FOO))
+
+12-May-85 14:47:51-EDT,1097;000000000000
+Received: from MIT-SPEECH by MIT-OZ via Chaosnet; 12 May 85 14:47-EDT
+Date: 12 May 1985  14:49 EDT (Sun)
+Message-ID: <SR.EHPYC.12110471970.BABYL@MIT-SPEECH>
+From: Scott Cyphers <SR.EHPYC@MIT-SPEECH>
+To:   "David C. Plummer in disguise" <DCP@SCRC-QUABBIN.ARPA>
+Cc:   "Michael J. Beckerle" <BECKERLE@MIT-XX.ARPA>, bug-lispm@MIT-OZ
+Subject: running out of storage
+In-reply-to: Msg of 12 May 1985  14:08-EDT from David C. Plummer in disguise <DCP at SCRC-QUABBIN.ARPA>
+
+He's only asking that HIS functions, not the system's, go to somewhere
+not static.  (si:full-gc) could then copy things to static storage
+(and probably safely flush previous definitions).  It shouldn't be
+hard to cause the GC code to go into a static area as it is loaded for
+the first time.  Maybe it even makes sense to have loaded code go into
+a static area, and compiler generated code go into dynamic (unless
+declared static), or to have a make-system option.  All of these would
+solve problems of it tripping over itself.  When you're developing
+code, it's hardly static, so I think his idea is a good one.
+12-May-85 16:16:52-EDT,5424;000000000000
+Received: from MIT-REAGAN by MIT-OZ via Chaosnet; 12 May 85 16:16-EDT
+Received: from SCRC-STONY-BROOK.ARPA by MIT-REAGAN via INTERNET with SMTP id 4908; 12 May 85 16:17:25-EDT
+Received: from NEPONSET.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 235205; Sun 12-May-85 16:11:48-EDT
+Date: Sun, 12 May 85 16:16 EDT
+From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+Subject: running out of storage
+To: Scott Cyphers <SR.EHPYC@MIT-SPEECH>,
+    Michael J. Beckerle <BECKERLE@MIT-XX.ARPA>,
+    David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+cc: bug-lispm@MIT-OZ.mit
+In-Reply-To: <SR.EHPYC.12110471970.BABYL@MIT-SPEECH>,
+             The message of 12 May 85 14:56-EDT from Michael J. Beckerle <BECKERLE@MIT-XX.ARPA>
+Supersedes: <850512161643.9.NFEP@NEPONSET.SCRC.Symbolics.COM>
+Message-ID: <850512161659.0.NFEP@NEPONSET.SCRC.Symbolics.COM>
+
+    Date: 12 May 1985  14:49 EDT (Sun)
+    From: Scott Cyphers <SR.EHPYC@MIT-SPEECH>
+
+    He's only asking that HIS functions, not the system's, go to somewhere
+    not static.  (si:full-gc) could then copy things to static storage
+    (and probably safely flush previous definitions).  It shouldn't be
+    hard to cause the GC code to go into a static area as it is loaded for
+    the first time.  Maybe it even makes sense to have loaded code go into
+    a static area, and compiler generated 
+You mean compiled-to-core code, right?
+    code go into dynamic (unless
+    declared static), or to have a make-system option.  All of these would
+    solve problems of it tripping over itself.  When you're developing
+    code, it's hardly static, so I think his idea is a good one.
+Indeed, for most users this is sufficient.  (It's a good way to shaft
+me, though, since I recompile parts of the GC every few weeks!)  More
+below.
+
+
+    Date: Sun 12 May 85 14:56:28-EDT
+    From: Michael J. Beckerle <BECKERLE@MIT-XX.ARPA>
+
+    The problem with putting compiled funtions in an ephemeral region
+    that you have identified is that code may try to transport itself,
+    i.e., if the garbage collection code was in an ephemeral region.
+I said more than that.
+
+    I am not suggesting that the entire of the system source code
+    including garbage collector, zmacs, etc be put in the garbage 
+    collected heap. The idea is that a system would be compiled
+    as it is now, with the code all put into a static region. Once
+    the system is released, users could arrange for the 
+    compiler to put THEIR CODE into an ephemeral region to avoid
+    cluttering up static space. The system code would not budge.
+What about loading system patches?  You also haven't addressed the issue
+of UNDEFUN?  Another issue I didn't bring up is that dynamic space
+(potentially) takes up twice as much space as static.  This is because
+you have to copy (surviving) dynamic objects.  It also causes the system
+to flip more often and the GC takes longer because it has to copy more.
+
+    The snafu is of course what if you inadvertantly re-compile
+    the garbage collector. However, the source for GC is not 
+    available in release 6, so there is really no way a user
+    could do that. On the other hand, one could write a program 
+    which moves objects around in storage by using the pointers,
+    and hacking the type bits, etc., and such a program might move
+    itself around, but if you're doing that you deserve to lose
+    anyway if you don't understand storage areas.
+
+    I tried just binding the variable compiled-function-area
+    to working-storage-area, and the system seemed to work,
+    but I'd like to know if I'm going to lose eventually.
+
+I assume you really mean you SETQed it, unless you found the right part
+of the compiler to put the binding around.  I'm don't know if you will
+lose (in the machine-crash sense) or not.  I do know that you won't
+reclaim as much as you would wish until you fix the UNDEFUN problem.  I
+also think that if you DO want to experiment you should make a new area
+(EPHEMERAL-COMPILED-FUNCTION-AREA) and bind compiled-function-area to
+that.  Program development will often cons data in working-storage-area
+which will accelerate migration, so your compiled code will migrate
+faster than you would like.
+
+    Finally, if this can be done for the compiled function area,
+    why not for many other of the static areas? 
+Because there are REASONS they are static.  One, as I state above, is
+that dynamic objects take up more room and cause flipping more often and
+slows the system down by transporting more data.
+    Property lists for all the code atoms ought not hang around the heap
+    forever either,  
+The cons cells for the indicator and value go away only if you do a
+REMPROP.  There are surprising few users of REMPROP.  Therefore, the
+properties tend to stay around forever (i.e., they are static).
+    etc., 
+You will have to be more specific.
+    also namespace objects, 
+The nature of namespace objects is that they exist until you cold boot.
+Additionally, NETI:*NAMESPACE-OBJECT-AREA* in my machine is consuming a
+trivial amount of space.
+    and so on.
+Like what?
+
+As I said before, I know what you are trying to do and I know the
+reasons why.  "Easier said than done" is appropriate; Cyphers mumbles
+some possible routes toward a solution, but I haven't seen nor thought
+of any definite possibilities.
+
+12-May-85 16:17:54-EDT,5492;000000000000
+Received: from MIT-REAGAN by MIT-OZ via Chaosnet; 12 May 85 16:17-EDT
+Received: from SCRC-STONY-BROOK.ARPA by MIT-REAGAN via INTERNET with SMTP id 4909; 12 May 85 16:17:51-EDT
+Received: from NEPONSET.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 235207; Sun 12-May-85 16:12:02-EDT
+Date: Sun, 12 May 85 16:17 EDT
+From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+Subject: running out of storage
+To: Scott Cyphers <SR.EHPYC@MIT-SPEECH.mit>,
+    Michael J. Beckerle <BECKERLE@MIT-XX.ARPA>,
+    David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+cc: bug-lispm@MIT-OZ.mit
+In-Reply-To: <SR.EHPYC.12110471970.BABYL@MIT-SPEECH>,
+             The message of 12 May 85 14:56-EDT from Michael J. Beckerle <BECKERLE@MIT-XX.ARPA>
+Supersedes: <850512161643.9.NFEP@NEPONSET.SCRC.Symbolics.COM>,
+            <850512161659.0.NFEP@NEPONSET.SCRC.Symbolics.COM>
+Message-ID: <850512161710.1.NFEP@NEPONSET.SCRC.Symbolics.COM>
+
+    Date: 12 May 1985  14:49 EDT (Sun)
+    From: Scott Cyphers <SR.EHPYC@MIT-SPEECH>
+
+    He's only asking that HIS functions, not the system's, go to somewhere
+    not static.  (si:full-gc) could then copy things to static storage
+    (and probably safely flush previous definitions).  It shouldn't be
+    hard to cause the GC code to go into a static area as it is loaded for
+    the first time.  Maybe it even makes sense to have loaded code go into
+    a static area, and compiler generated 
+You mean compiled-to-core code, right?
+    code go into dynamic (unless
+    declared static), or to have a make-system option.  All of these would
+    solve problems of it tripping over itself.  When you're developing
+    code, it's hardly static, so I think his idea is a good one.
+Indeed, for most users this is sufficient.  (It's a good way to shaft
+me, though, since I recompile parts of the GC every few weeks!)  More
+below.
+
+
+    Date: Sun 12 May 85 14:56:28-EDT
+    From: Michael J. Beckerle <BECKERLE@MIT-XX.ARPA>
+
+    The problem with putting compiled funtions in an ephemeral region
+    that you have identified is that code may try to transport itself,
+    i.e., if the garbage collection code was in an ephemeral region.
+I said more than that.
+
+    I am not suggesting that the entire of the system source code
+    including garbage collector, zmacs, etc be put in the garbage 
+    collected heap. The idea is that a system would be compiled
+    as it is now, with the code all put into a static region. Once
+    the system is released, users could arrange for the 
+    compiler to put THEIR CODE into an ephemeral region to avoid
+    cluttering up static space. The system code would not budge.
+What about loading system patches?  You also haven't addressed the issue
+of UNDEFUN?  Another issue I didn't bring up is that dynamic space
+(potentially) takes up twice as much space as static.  This is because
+you have to copy (surviving) dynamic objects.  It also causes the system
+to flip more often and the GC takes longer because it has to copy more.
+
+    The snafu is of course what if you inadvertantly re-compile
+    the garbage collector. However, the source for GC is not 
+    available in release 6, so there is really no way a user
+    could do that. On the other hand, one could write a program 
+    which moves objects around in storage by using the pointers,
+    and hacking the type bits, etc., and such a program might move
+    itself around, but if you're doing that you deserve to lose
+    anyway if you don't understand storage areas.
+
+    I tried just binding the variable compiled-function-area
+    to working-storage-area, and the system seemed to work,
+    but I'd like to know if I'm going to lose eventually.
+
+I assume you really mean you SETQed it, unless you found the right part
+of the compiler to put the binding around.  I'm don't know if you will
+lose (in the machine-crash sense) or not.  I do know that you won't
+reclaim as much as you would wish until you fix the UNDEFUN problem.  I
+also think that if you DO want to experiment you should make a new area
+(EPHEMERAL-COMPILED-FUNCTION-AREA) and bind compiled-function-area to
+that.  Program development will often cons data in working-storage-area
+which will accelerate migration, so your compiled code will migrate
+faster than you would like.
+
+    Finally, if this can be done for the compiled function area,
+    why not for many other of the static areas? 
+Because there are REASONS they are static.  One, as I state above, is
+that dynamic objects take up more room and cause flipping more often and
+slows the system down by transporting more data.
+    Property lists for all the code atoms ought not hang around the heap
+    forever either,  
+The cons cells for the indicator and value go away only if you do a
+REMPROP.  There are surprising few users of REMPROP.  Therefore, the
+properties tend to stay around forever (i.e., they are static).
+    etc., 
+You will have to be more specific.
+    also namespace objects, 
+The nature of namespace objects is that they exist until you cold boot.
+Additionally, NETI:*NAMESPACE-OBJECT-AREA* in my machine is consuming a
+trivial amount of space.
+    and so on.
+Like what?
+
+As I said before, I know what you are trying to do and I know the
+reasons why.  "Easier said than done" is appropriate; Cyphers mumbles
+some possible routes toward a solution, but I haven't seen nor thought
+of any definite possibilities.
+
+12-May-85 16:52:05-EDT,3071;000000000000
+Received: from MIT-SPEECH by MIT-OZ via Chaosnet; 12 May 85 16:51-EDT
+Date: 12 May 1985  16:53 EDT (Sun)
+Message-ID: <SR.EHPYC.12110494629.BABYL@MIT-SPEECH>
+From: Scott Cyphers <SR.EHPYC@MIT-SPEECH>
+To:   "David C. Plummer in disguise" <DCP@SCRC-QUABBIN.ARPA>
+Cc:   "Michael J. Beckerle" <BECKERLE@MIT-XX.ARPA>, bug-lispm@MIT-OZ
+Subject: running out of storage
+In-reply-to: Msg of 12 May 1985  16:16-EDT from David C. Plummer in disguise <DCP at SCRC-QUABBIN.ARPA>
+
+    Date: Sunday, 12 May 1985  16:16-EDT
+    From: David C. Plummer in disguise <DCP at SCRC-QUABBIN.ARPA>
+    To:   Scott Cyphers <SR.EHPYC>,
+          Michael J. Beckerle <BECKERLE at MIT-XX.ARPA>,
+          David C. Plummer in disguise <DCP at SCRC-QUABBIN.ARPA>
+    cc:   bug-lispm at MIT-OZ.mit
+    Re:   running out of storage
+    Supersedes: <850512161643.9.NFEP@NEPONSET.SCRC.Symbolics.COM>
+
+        Date: 12 May 1985  14:49 EDT (Sun)
+        From: Scott Cyphers <SR.EHPYC@MIT-SPEECH>
+
+        He's only asking that HIS functions, not the system's, go to somewhere
+        not static.  (si:full-gc) could then copy things to static storage
+        (and probably safely flush previous definitions).  It shouldn't be
+        hard to cause the GC code to go into a static area as it is loaded for
+        the first time.  Maybe it even makes sense to have loaded code go into
+        a static area, and compiler generated 
+    You mean compiled-to-core code, right?
+        code go into dynamic (unless
+        declared static), or to have a make-system option.  All of these would
+        solve problems of it tripping over itself.  When you're developing
+        code, it's hardly static, so I think his idea is a good one.
+    Indeed, for most users this is sufficient.  (It's a good way to shaft
+    me, though, since I recompile parts of the GC every few weeks!)  More
+    below.
+
+That's why I had that thing in about "unless declared static".
+
+Maybe if compiled to ram code started ephemeral and then went right to
+static, things would work better.  Usually (in my style), a small
+number of functions will get compiled about N times, and then they'll
+work, and I'll go on to a different set of functions (so it is okay
+for them to become static, which should happen as they get pushed out
+of the ephemeral regions by the new set of code being developed).  If
+this is a typical model of programming, then maybe that would work.
+
+In fact, the same scheme might work for loading system patches too,
+although I think it makes more sense to send them straight to static,
+since they're going there anyways.
+
+I don't see how undefun relates to this -- you only keep one previous
+definition, don't you?  There's a pointer to it, so the GC won't eat
+it.
+
+There is only one other area that is static that I think shouldn't be
+as static -- the pathnames.  Why not intern them only when someone
+mungs their property list, and then make them static?  It means EQ
+won't work on the result of parsing a pathname - I don't know how
+serious this is.
+
+13-May-85 12:16:44-EDT,3111;000000000000
+Received: from MIT-REAGAN by MIT-OZ via Chaosnet; 13 May 85 12:16-EDT
+Received: from SCRC-STONY-BROOK.ARPA by MIT-REAGAN via INTERNET with SMTP id 4913; 13 May 85 12:15:47-EDT
+Received: from NEPONSET.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 235638; Mon 13-May-85 12:08:58-EDT
+Date: Mon, 13 May 85 12:14 EDT
+From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+Subject: running out of storage
+To: Scott Cyphers <SR.EHPYC@MIT-SPEECH.mit>,
+    David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+cc: Michael J. Beckerle <BECKERLE@MIT-XX.ARPA>, bug-lispm@MIT-OZ.mit
+In-Reply-To: <SR.EHPYC.12110494629.BABYL@MIT-SPEECH>
+Supersedes: <850513121407.6.NFEP@NEPONSET.SCRC.Symbolics.COM>
+Message-ID: <850513121422.7.NFEP@NEPONSET.SCRC.Symbolics.COM>
+
+    Date: 12 May 1985  16:53 EDT (Sun)
+    From: Scott Cyphers <SR.EHPYC@MIT-SPEECH>
+
+    Maybe if compiled to ram code started ephemeral and then went right to
+    static, things would work better.  Usually (in my style), a small
+    number of functions will get compiled about N times, and then they'll
+    work, and I'll go on to a different set of functions (so it is okay
+    for them to become static, which should happen as they get pushed out
+    of the ephemeral regions by the new set of code being developed).  If
+    this is a typical model of programming, then maybe that would work.
+
+    In fact, the same scheme might work for loading system patches too,
+    although I think it makes more sense to send them straight to static,
+    since they're going there anyways.
+
+Right, which is why a mechanism is needed to say "put this in static
+regardless."  I don't now know what that mechanism could look like.
+
+    I don't see how undefun relates to this -- you only keep one previous
+    definition, don't you?  There's a pointer to it, so the GC won't eat
+    it.
+
+That could be considered a problem.  Suppose you compile a buffer.  All
+your code is in ephemeral space.  You test it a bit.  You do some
+incremental recompilations.  You flip your ephemeral compiled function
+area and your ephemeral code goes into the next level.  You munge around
+for a while and recompile the buffer again.  Current code goes on
+:PREVIOUS-DEFINITION, and suppose you flip again.  Your OLD code,
+because it is pointed to by :PREVIOUS-DEFINITION goes to the third
+level.  If you only have two levels you have just succeeded in putting
+your FIRST compilation into static space.  "Senator, we need a verb."
+
+    There is only one other area that is static that I think shouldn't be
+    as static -- the pathnames.  Why not intern them only when someone
+    mungs their property list, and then make them static?  It means EQ
+    won't work on the result of parsing a pathname - I don't know how
+    serious this is.
+In today's system, quite serious.
+
+Look, I've said I understand what you want to do.  I've said I'll think
+about it.  How much more can I agree with you?  I need a CONCRETE
+proposal (an "algorithm", not a hand-wave) that can be implemented and
+addresses the issues.
+
+13-May-85 16:26:59-EDT,3016;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 13 May 85 16:26-EDT
+Date: Mon, 13 May 85 16:25:15 EST
+From: David Vinayak Wallace <GUMBY@MIT-MC>
+Subject:  running out of storage
+To: DCP@SCRC-QUABBIN
+cc: BECKERLE@MIT-XX, bug-lispm@MIT-OZ, SR.EHPYC@MIT-SPEECH
+In-reply-to: Msg of Mon 13 May 85 12:14 EDT from David C. Plummer in disguise <DCP at SCRC-QUABBIN.ARPA>
+Message-ID: <[MIT-MC].501304.850513.GUMBY>
+
+    Date: Mon, 13 May 85 12:14 EDT
+    From: David C. Plummer in disguise <DCP at SCRC-QUABBIN>
+
+        Date: 12 May 1985  16:53 EDT (Sun)
+        From: Scott Cyphers <SR.EHPYC at SPEECH>
+
+        Maybe if compiled to ram code started ephemeral and then went right to
+        static, things would work better.  Usually (in my style), a small
+        number of functions will get compiled about N times, and then they'll
+        work, and I'll go on to a different set of functions (so it is okay
+        for them to become static, which should happen as they get pushed out
+        of the ephemeral regions by the new set of code being developed).  If
+        this is a typical model of programming, then maybe that would work.
+
+        In fact, the same scheme might work for loading system patches too,
+        although I think it makes more sense to send them straight to static,
+        since they're going there anyways.
+
+    Right, which is why a mechanism is needed to say "put this in static
+    regardless."  I don't now know what that mechanism could look like.
+
+Well, when you load a file the forms have to go somewhere.  In essence all
+you should have to do is bind *FUNCTION-CONSING-AREA* (or whatever) to your
+static space.  LOAD could be tought to load files with a PATCH-FILE
+attribute into the static area.  And MAKE-SYSTEM by default should do this too.
+
+                                        ...Suppose you compile a buffer.  All
+    your code is in ephemeral space.  You test it a bit.  You do some
+    incremental recompilations.  You flip your ephemeral compiled function
+    area and your ephemeral code goes into the next level.  You munge around
+    for a while and recompile the buffer again.  Current code goes on
+    :PREVIOUS-DEFINITION, and suppose you flip again.  Your OLD code,
+    because it is pointed to by :PREVIOUS-DEFINITION goes to the third
+    level.  If you only have two levels you have just succeeded in putting
+    your FIRST compilation into static space.
+
+Can't you make your ephemeral migration have three levels?  I know it would
+only delay the problem, but it might be enough.
+
+Personally, I only use UNDEFUN with system functions I redefine; with my
+own the change is usually small enough that I can reconstruct the old
+version if necessary (I usually keep an unedited copy around anyway).  So
+actually, were there a switch to tell the compiler only to record the
+previous-definition when it was already in static space, I would run with
+it on (otherwise it should set the previous definition to nil).
+13-May-85 17:57:36-EDT,5200;000000000000
+Received: from MIT-BUDDY by MIT-OZ via Chaosnet; 13 May 85 17:56-EDT
+Date: Mon, 13 May 85 17:55 EDT
+From: David M. J. Saslav <saz@OZ>
+Subject: color demo error
+To: BUG-LISPM@OZ
+Message-ID: <850513175502.1.SAZ@BUDDY>
+
+In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 9.1,
+Experimental COLOR 135.1, Experimental COLOR-DEMO 68.0,
+Experimental COLOR-EDITOR 4.0, Experimental COLOR-PALETTE 2.0,
+microcode TMC5-MIC 319, on Lisp Machine Buddy Holly:
+
+I'd killed the color demo window and was attempting to 
+start a fresh demo.
+
+>>Trap: The AR-1 microcode ran into an ARRAY-INDIRECT-POINTER that was not an array.
+While in the function (:METHOD COLOR:STD-COLOR-CONTROL-MIXIN :VIDEO-ON)  (:METHOD COLOR:STD-COLOR-CONTROL-MIXIN :SET-VIDEO-ON)  (:METHOD COLOR:FIX-SELECTED-WINDOWS-ON-DEACTIVATE-MIXIN :BEFORE :DEACTIVATE)
+
+(:METHOD COLOR:STD-COLOR-CONTROL-MIXIN :VIDEO-ON):  (P.C. = 7)
+   Arg 0 (SELF): #<MANAGED-SC-SCREEN 24-bit standard direct color screen 1140000 deexposed>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor COLOR:STD-COLOR-CONTROL-MIXIN -- 13. IV's, 0. FL's 26117166>
+   Arg 2 (OPERATION): :VIDEO-ON
+   Arg 3 (CONT): #<ART-Q-11 10010325>
+
+(:METHOD COLOR:STD-COLOR-CONTROL-MIXIN :SET-VIDEO-ON):  (P.C. = 36)
+   Arg 0 (SELF): #<MANAGED-SC-SCREEN 24-bit standard direct color screen 1140000 deexposed>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor COLOR:STD-COLOR-CONTROL-MIXIN -- 13. IV's, 0. FL's 26117166>
+   Arg 2 (OPERATION): :SET-VIDEO-ON
+   Arg 3 (T-OR-NIL): NIL
+   Local 3 (T-OR-NIL): 0
+   --Defaulted args:--
+   Arg 4 (CONT): #<ART-Q-11 10010325>
+
+(:METHOD COLOR:FIX-SELECTED-WINDOWS-ON-DEACTIVATE-MIXIN :BEFORE :DEACTIVATE):  (P.C. = 25)
+   Arg 0 (SELF): #<MANAGED-SC-SCREEN 24-bit standard direct color screen 1140000 deexposed>
+   Arg 1 (SELF-MAPPING-TABLE): COLOR:FIX-SELECTED-WINDOWS-ON-DEACTIVATE-MIXIN
+   Arg 2 (OPERATION): :DEACTIVATE
+   Rest arg (IGNORE): NIL
+
+(:METHOD COLOR:MANAGED-SC-SCREEN :COMBINED :DEACTIVATE):  (P.C. = 32)
+   Arg 0 (SELF): #<MANAGED-SC-SCREEN 24-bit standard direct color screen 1140000 deexposed>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor COLOR:MANAGED-SC-SCREEN -- 1. IV's, 16. FL's 26122256>
+   Arg 2 (.OPERATION.): :DEACTIVATE
+   Rest arg (.DAEMON-CALLER-ARGS.): NIL
+
+(:METHOD COLOR:COMMON-CONTROL-MIXIN :BEFORE :EXPOSE):  (P.C. = 47)
+   Arg 0 (SELF): #<MANAGED-SC-SCREEN 24-bit standard direct color screen 1140776 deexposed>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor COLOR:COMMON-CONTROL-MIXIN -- 11. IV's, 0. FL's 26117221>
+   Arg 2 (OPERATION): :EXPOSE
+   Rest arg (IGNORE): (NIL NIL 0 0)
+
+(:INTERNAL (:INTERNAL (:METHOD COLOR:MANAGED-SC-SCREEN :COMBINED :EXPOSE) 0) 0):  (P.C. = 11)
+   Arg 0 (SELF): #<MANAGED-SC-SCREEN 24-bit standard direct color screen 1140776 deexposed>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor COLOR:MANAGED-SC-SCREEN -- 1. IV's, 16. FL's 26122256>
+   Arg 2 (.OPERATION.): :EXPOSE
+   Rest arg (.DAEMON-CALLER-ARGS.): (NIL NIL 0 0)
+
+(:METHOD TV:SHEET :WHOPPER :EXPOSE):  (P.C. = 63)
+   Arg 0 (SELF): #<MANAGED-SC-SCREEN 24-bit standard direct color screen 1140776 deexposed>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor TV:SHEET -- 0. IV's, 1. FL's 26117114>
+   Arg 2 (.WHOPPER-CONTINUATION.): #<DTP-COMPILED-FUNCTION (:INTERNAL (:INTERNAL (:METHOD COLOR:MANAGED-SC-SCREEN :COMBINED :EXPOSE) 0) 0) 76677236>
+   Arg 3 (.OLD-SELF-MAPPING-TABLE.): #<Map to flavor COLOR:MANAGED-SC-SCREEN -- 1. IV's, 16. FL's 26122256>
+   Arg 4 (.OPERATION.): :EXPOSE
+   --Defaulted args:--
+   Arg 5 (TURN-ON-BLINKERS): NIL
+   Arg 6 (BITS-ACTION): NIL
+   Arg 7 (X): 0
+   Arg 8 (Y): 0
+
+(:INTERNAL (:METHOD COLOR:MANAGED-SC-SCREEN :COMBINED :EXPOSE) 0):  (P.C. = 13)
+   Arg 0 (SELF): #<MANAGED-SC-SCREEN 24-bit standard direct color screen 1140776 deexposed>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor COLOR:MANAGED-SC-SCREEN -- 1. IV's, 16. FL's 26122256>
+   Arg 2 (.OPERATION.): :EXPOSE
+   Rest arg (.DAEMON-CALLER-ARGS.): NIL
+
+(:METHOD COLOR:COMMON-CONTROL-MIXIN :WHOPPER :EXPOSE):  (P.C. = 14)
+   Arg 0 (SELF): #<MANAGED-SC-SCREEN 24-bit standard direct color screen 1140776 deexposed>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor COLOR:COMMON-CONTROL-MIXIN -- 11. IV's, 0. FL's 26117221>
+   Arg 2 (.WHOPPER-CONTINUATION.): #<DTP-COMPILED-FUNCTION (:INTERNAL (:METHOD COLOR:MANAGED-SC-SCREEN :COMBINED :EXPOSE) 0) 76677220>
+   Arg 3 (.OLD-SELF-MAPPING-TABLE.): #<Map to flavor COLOR:MANAGED-SC-SCREEN -- 1. IV's, 16. FL's 26122256>
+   Arg 4 (.OPERATION.): :EXPOSE
+   Rest arg (ARGS): NIL
+
+(:METHOD COLOR:MANAGED-SC-SCREEN :COMBINED :EXPOSE):  (P.C. = 13)
+   Arg 0 (SELF): #<MANAGED-SC-SCREEN 24-bit standard direct color screen 1140776 deexposed>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor COLOR:MANAGED-SC-SCREEN -- 1. IV's, 16. FL's 26122256>
+   Arg 2 (.OPERATION.): :EXPOSE
+   Rest arg (.DAEMON-CALLER-ARGS.): NIL
+
+COLOR:MAKE-COLOR-SCREEN:  (P.C. = 447)
+   Rest arg (KEYS): (:SETUP :STANDARD :BITS-PER-PIXEL 24)
+
+COLOR:CREATE-COLOR-SCREEN:  (P.C. = 207)
+
+COLOR:DEMO:  (P.C. = 117)
+   --Defaulted args:--
+   Arg 0 (WINDOW): #<COLOR-DEMO-WINDOW Color Demo Window 1 1140114 deactivated>
+   Arg 1 (SCREEN): NIL
+13-May-85 19:26:22-EDT,2417;000000000000
+Received: from MIT-GOLDILOCKS by MIT-OZ via Chaosnet; 13 May 85 19:26-EDT
+Received: from KOALA by GOLDILOCKS via CHAOS with CHAOS-MAIL id 1308; Mon 13-May-85 19:24:01-EDT
+Date: Monday, 13 May 1985, 19:23-EDT
+From: Scott Cyphers <sr.ehpyc at MIT-SPEECH>
+Subject: running out of storage
+To: GUMBY at MIT-MC, DCP at SCRC-QUABBIN
+cc: BECKERLE at MIT-XX, bug-lispm at OZ, SR.EHPYC at MIT-SPEECH
+In-Reply-To: <[MIT-MC].501304.850513.GUMBY>
+Message-ID: <850513192336.1.CYPHER@KOALA.MIT>
+
+
+    Personally, I only use UNDEFUN with system functions I redefine; with my
+    own the change is usually small enough that I can reconstruct the old
+    version if necessary (I usually keep an unedited copy around anyway).  So
+    actually, were there a switch to tell the compiler only to record the
+    previous-definition when it was already in static space, I would run with
+    it on (otherwise it should set the previous definition to nil).
+
+Maybe undefun is the wrong mechanism for what it is trying to do.
+Suppose there were something like a kill ring for functions.  You
+compile your buffer, all your code is in ephemeral space.  you test it a
+bit.  You do some incremental recompilations, the last N redefinitions
+of which are kept in the kill ring, the others getting flushed.  Along
+comes an ephemeral flip, leaving latest definitions and the last N in
+the kill ring in level 2.  You recompile the buffer again, leaving the
+last N redefined things in the kill ring, in level 1.  The older
+redefinitions, in level 2, are no longer pointed at.  How's that sound?
+
+The previous definition facility is good for when you redefine things
+that are going to give you a warning, like when you define your own
+version of something in another file.  Then a previous definition
+facility is good, since you might not even have the sources for that
+file.  But, if you are redefining, say, SI:HAIRY-FUNCTION, and trying to
+debug it too, you don't want to lose the original version -- that one
+you want on the previous definition.  But your own redefinitions go on
+the kill ring.
+
+So, the algorithm is:
+If the source file of the new definition is the same as the old
+definition, the old definition goes into the function kill ring, which
+has a fixed maximum size.
+
+If the source of the new definition is different than the old
+definition, then the old definition goes on :PREVIOUS-DEFINITION.
+14-May-85 04:03:24-EDT,1763;000000000001
+Received: from MIT-MC by MIT-OZ via Chaosnet; 14 May 85 04:03-EDT
+Received: from MIT-OZ by MIT-MC via Chaosnet; 14 MAY 85  04:01:29 EDT
+Received: from MIT-MORRISON by MIT-OZ via Chaosnet; 14 May 85 04:01-EDT
+Date: Tue, 14 May 85 04:00 EDT
+From: Gavan Duffy <GAVAN@OZ>
+Subject: Declarations after doc-strings in macros. 
+To: DCP@SCRC-QUABBIN.ARPA, GAVAN@OZ, BUG-LISPM@MIT-MC.ARPA
+In-Reply-To: <850512135142.1.NFEP@NEPONSET.SCRC.Symbolics.COM>
+Message-ID: <850514040029.6.GAVAN@MORRISON>
+
+    Date: Sun, 12 May 85 13:51 EDT
+    From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+
+	Date: Fri, 10 May 85 20:01 EDT
+	From: Gavan Duffy <GAVAN@OZ>
+
+	    Date: Wed, 1 May 85 18:33 EDT
+	    From: David C. Plummer in disguise <DCP@QUABBIN.SCRC.Symbolics.COM>
+
+		Date: Mon, 29 Apr 85 05:43 EDT
+		From: Gavan Duffy <GAVAN@OZ>
+
+		In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 8.6,
+		microcode TMC5-MIC 319, FEP 22, on Lisp Machine Jim Morrison:
+
+		Declarations in macros work just fine, unless they follow doc-strings.
+		This form compiles just fine.
+
+		(DEFMACRO FOO (BAR)
+		  (DECLARE (VALUES FOOBAR))
+		  `(INTERN (STRING-APPEND "FOO" ,BAR)))
+
+		However, the compiler issues a warning that the declaration in
+		this next form is illegal and will be ignored.
+
+		(DEFMACRO BAR (FOO)
+		  "Similar to FOO."
+		  (DECLARE (VALUES BARFOO))
+		  `(INTERN (STRING-APPEND "BAR" ,FOO)))
+
+	    This has already been fixed for 6.1.
+
+	Great.  Any way to make them work in the meantime?
+
+    You can either have your program suppress the things that don't work, or
+    swap the declare and documentation string (which drops the doc string,
+    but keeps the declaration [the fix fixes both of these]).
+
+That's not much help.  
+14-May-85 14:46:52-EDT,4954;000000000000
+Received: from MIT-SPEECH by MIT-OZ via Chaosnet; 14 May 85 14:46-EDT
+Date: 14 May 1985  14:46 EDT (Tue)
+Message-ID: <SR.EHPYC.12110995800.BABYL@MIT-SPEECH>
+From: Scott Cyphers <SR.EHPYC@MIT-SPEECH>
+To:   "David C. Plummer in disguise" <DCP@SCRC-QUABBIN.ARPA>
+Cc:   BUG-LISPM@MIT-OZ
+Subject: What might cause this?
+In-reply-to: Msg of 6 May 1985  10:52-EDT from David C. Plummer in disguise <DCP at SCRC-QUABBIN.ARPA>
+
+
+The datapath board has been replaced to fix an occasional B-mem parity
+error.  I recopied the world load just in case it had gotten copied
+wrong somehow.  The error only happens on Koala, and it's not
+completely deterministic.  However, it always happens in the same way
+when it happens.  Here's the information you asked for.  Restarting
+the patch loading worked, but restarting loop-translate gave the error
+again.
+
+(si:%region-number #o1177775)
+6
+(si:%area-number #o1177775)
+32
+(describe-area *)
+Area #40: ZWEI:ZMAIL-MSG-LINE-AREA has 1 region, max size 2000000000, region size 200000 (octal):
+    Region #6: Origin 1100000, Length 200000, Free 77144, GC 0, New Structure, NoScav
+  New Structure space: 65,536 allocated, 32,356 used.
+  Total for ZWEI:ZMAIL-MSG-LINE-AREA: 65,536 allocated, 32,356 used.
+T
+(si:%region-number #o1737775)
+15
+(si:%area-number #o1737775)
+5
+(describe-area *)
+Area #5: PERMANENT-STORAGE-AREA has 5 regions, max size 2000000000, region size 40000 (octal):
+    Region #17: Origin 1600000, Length 140000, Free 104010, GC 104010, Static Structure, Scav
+    Region #240: Origin 56140000, Length 100000, Free 77761, GC 77761, Static Structure, Scav
+    Region #275: Origin 76300000, Length 100000, Free 66776, GC 66776, Static Structure, Scav
+  Static Structure space: 114,688 allocated, 95,735 used.
+    Region #246: Origin 75640000, Length 240000, Free 240000, GC 240000, Static List, Scav
+    Region #302: Origin 143700000, Length 240000, Free 62377, GC 61153, Static List, Scav
+  Static List space: 163,840 allocated, 107,775 used.
+  Total for PERMANENT-STORAGE-AREA: 278,528 allocated, 203,510 used.
+T
+
+>>Trap: The word #<DTP-NULL 1177775> was read from location 1737775 (in PERMANENT-STORAGE-AREA).
+While in the function NIL  SI:LOOP-TRANSLATE  FUNCALL
+
+NIL:
+   Arg 0: (LOOP SPIRE:FOR SPIRE:I SPIRE:FROM 0 SPIRE:BELOW 32 SPIRE:BY 4 SPIRE:DOING ...)
+
+SI:LOOP-TRANSLATE:  (P.C. = 5)
+   Arg 0 (X): (LOOP SPIRE:FOR SPIRE:I SPIRE:FROM 0 SPIRE:BELOW 32 SPIRE:BY 4 SPIRE:DOING ...)
+   Arg 1 (IGNORE): NIL
+
+FUNCALL:  (P.C. = 5)
+   Arg 0 (FN): SI:LOOP-TRANSLATE
+   Rest arg (ARGS): ((LOOP SPIRE:FOR SPIRE:I SPIRE:FROM 0 SPIRE:BELOW 32 SPIRE:BY 4 SPIRE:DOING ...) NIL)
+
+SI:MACROEXPAND-1-INTERNAL:  (P.C. = 206)
+   Arg 0 (MACRO-CALL): (LOOP SPIRE:FOR SPIRE:I SPIRE:FROM 0 SPIRE:BELOW 32 SPIRE:BY 4 SPIRE:DOING ...)
+   Arg 1 (ENV): NIL
+   Arg 2 (RUN-STYLE-CHECKERS-P): NIL
+   Arg 3 (DONT-EXPAND-SPECIAL-FORMS): T
+
+MACROEXPAND:  (P.C. = 11)
+   Arg 0 (MACRO-CALL): (LOOP SPIRE:FOR SPIRE:I SPIRE:FROM 0 SPIRE:BELOW 32 SPIRE:BY 4 SPIRE:DOING ...)
+   Arg 1 (ENV): NIL
+   Arg 2 (DONT-EXPAND-SPECIAL-FORMS): T
+
+SI:PARSE-BODY-DECLARATIONS:  (P.C. = 35)
+   Arg 0 (BODY): ((LOOP SPIRE:FOR SPIRE:I SPIRE:FROM 0 SPIRE:BELOW 32 SPIRE:BY 4 SPIRE:DOING ...) ARRAY)
+   Arg 1 (ENV): NIL
+   --Defaulted args:--
+   Arg 2 (LAMBDA-LIST): NIL
+
+LET:  (P.C. = 21)
+   Arg 0 (FORM): (LET ((ARRAY (MAKE-ARRAY ** :TYPE ART-1B))) (LOOP SPIRE:FOR SPIRE:I SPIRE:FROM 0 SPIRE:BELOW 32 SPIRE:BY 4 SPIRE:DOING ...) ARRAY)
+   Arg 1 (ENV): NIL
+
+SI:*EVAL:  (P.C. = 165)
+   Arg 0 (FORM): (LET ((ARRAY (MAKE-ARRAY ** :TYPE ART-1B))) (LOOP SPIRE:FOR SPIRE:I SPIRE:FROM 0 SPIRE:BELOW 32 SPIRE:BY 4 SPIRE:DOING ...) ARRAY)
+   --Defaulted args:--
+   Arg 1 (ENV): NIL
+   Arg 2 (HOOK): NIL
+
+Rest of stack:
+SI:LOAD-BIN-OP-FORM:  (P.C. = 4)
+SI:BIN-LOAD-NEXT-COMMAND:  (P.C. = 24)
+SI:BIN-NEXT-VALUE:  (P.C. = 5)
+SI:BIN-DEFCONST-1:  (P.C. = 15)
+SI:LOAD-BIN-OP-DEFCONST:  (P.C. = 5)
+SI:BIN-LOAD-NEXT-COMMAND:  (P.C. = 21)
+SI:BIN-LOAD-TOP-LEVEL:  (P.C. = 6)
+(:METHOD ZWEI:MAJOR-MODE :DEFAULT :LOAD-BINARY-FILE):  (P.C. = 4)
+SI:BIN-LOAD-FILE-INTERNAL:  (P.C. = 147)
+SI:LOAD-PATCH:  (P.C. = 64)
+LOAD-PATCHES:  (P.C. = 554)
+SI:*EVAL:  (P.C. = 403)
+IF:  (P.C. = 45)
+SI:*EVAL:  (P.C. = 165)
+COND:  (P.C. = 46)
+SI:*EVAL:  (P.C. = 165)
+SI:LOAD-BIN-OP-FORM:  (P.C. = 4)
+SI:BIN-LOAD-NEXT-COMMAND:  (P.C. = 24)
+SI:BIN-LOAD-TOP-LEVEL:  (P.C. = 6)
+(:METHOD ZWEI:MAJOR-MODE :DEFAULT :LOAD-BINARY-FILE):  (P.C. = 4)
+SI:BIN-LOAD-FILE-INTERNAL:  (P.C. = 147)
+FS:LOAD-STREAM:  (P.C. = 16)
+LOGIN:  (P.C. = 604)
+(:PROPERTY SI:COM-LOGIN SI:CP-FUNCTION):  (P.C. = 22)
+SI:COM-LOGIN:  (P.C. = 24)
+SI:*EVAL:  (P.C. = 403)
+(:INTERNAL SI:LISP-COMMAND-LOOP-INTERNAL 0):  (P.C. = 152)
+TV:WITH-NOTIFICATION-MODE-INTERNAL:  (P.C. = 16)
+SI:LISP-COMMAND-LOOP-INTERNAL:  (P.C. = 54)
+SI:LISP-COMMAND-LOOP:  (P.C. = 67)
+SI:LISP-TOP-LEVEL1:  (P.C. = 5)
+SI:LISP-TOP-LEVEL:  (P.C. = 7)
+14-May-85 21:59:29-EDT,1301;000000000000
+Received: from MIT-MORRISON by MIT-OZ via Chaosnet; 14 May 85 21:59-EDT
+Date: Tue, 14 May 85 21:58 EDT
+From: jcma@MIT-MC
+Subject: Input Editor
+To: BUG-LISPM@OZ
+Message-ID: <850514215823.5.JCMA@MORRISON>
+
+In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 9.1,
+Experimental RELATUS 138.23, microcode TMC5-MIC 319, FEP 22, on Lisp Machine Jim Morrison:
+
+The input editor needs comtabs.  These comtabs should be compatible with the
+command processor.  The reason for this is that you want to be able to control
+what commands keys are bound to in particular contexts.  Some contexts
+shouldn't have certain commands which will not work properly in them.
+
+One approach is to have a comtab that is shared by both the command processor
+and the input editor.  Alternatively, it might be better to provide a key
+binding facility for the command processor so that people don't have to use
+the input editor for this function.  
+
+I could do something like this but not without the sources to the CP which are
+being withheld (because the command processor is a valuable trade secret of
+Symbolics (Gee, if that is a valuable one, I would hate to see one that isn't
+valuable)).  Incidently, I never heard more from my request for sources to the
+command processor.  What about it? (Yes or No)
+15-May-85 10:25:26-EDT,5160;000000000000
+Received: from MIT-SPEECH by MIT-OZ via Chaosnet; 15 May 85 10:25-EDT
+Received: from KOALA by GOLDILOCKS via CHAOS with CHAOS-MAIL id 1406; Wed 15-May-85 10:20:19-EDT
+Date: Wednesday, 15 May 1985, 10:19-EDT
+From: David H. Kaufman <Sr.Kaufman at MIT-SPEECH>
+Subject: ZMail bug?
+To: BUG-LISPM at MIT-SPEECH
+Message-ID: <850515101947.1.QUX@KOALA.MIT>
+
+In Symbolics 3600 Release 6.0, IP-TCP 29.0, Spire-Macros 5.1,
+Attribute 5.4, Compute 5.2, Audio 4.0, Speech-Attributes 4.0,
+Display 6.13, Speech-Layouts 6.1, Prtout 4.0, Versatec 5.0, Spire 16.0,
+ZOO 6.5, ZOO-SPIRE 2.0, microcode TMC5-MIC 319, FEP 18, on Lisp Machine Koala:
+
+This is in a fresh ZMail on a freshly booted machine.  A copy of the
+dastardly _ZMAIL_TXT file is in Speech:PS:<SR.KAUFMAN>ZMAIL-TROUBLE._ZMAIL_TXT
+(I was able to read my mail with Babyl instead).
+
+>>Error: The negative array length -1 is illegal.
+While in the function MAKE-ARRAY  (:METHOD ZWEI:TENEX-BUFFER-MIXIN :LINE-END-OF-MSG-P)  (:METHOD ZWEI:MSG-BUFFER :READ-NEXT-MSG)
+
+MAKE-ARRAY:  (P.C. = 166)
+   Arg 0 (DIMENSIONS): -1
+   Rest arg (OPTIONS): (:TYPE ART-STRING :AREA 32 :LEADER-LENGTH 9)
+   Local 2 (TYPE): ART-STRING
+   Local 3 (AREA): 32
+   Local 4 (LEADER-LIST): NIL
+   Local 5 (LEADER-LENGTH): 9
+   Local 6 (FILL-POINTER): NIL
+   Local 7 (DISPLACED-TO): NIL
+   Local 8 (DISPLACED-INDEX-OFFSET): NIL
+   Local 9 (NAMED-STRUCTURE-SYMBOL): NIL
+   Local 10 (INITIAL-VALUE): NIL
+   Local 11 (DISPLACED-CONFORMALLY): NIL
+   Local 12 (N-ELEMS): NIL
+   Local 13 (ARRAY): NIL
+   Local 14 (INDEX-P): NIL
+   Local 15 (Q-P): NIL
+   Local 16 (N-WORDS): NIL
+   Local 17 (N-DIMS): NIL
+   Local 18 (TOTAL-SIZE): NIL
+
+(:METHOD ZWEI:TENEX-BUFFER-MIXIN :LINE-END-OF-MSG-P):  (P.C. = 22)
+   Arg 0 (SELF): #<TENEX-INBOX-BUFFER "SPEECH:PS:<SR.KAUFMAN>MAIL._ZMAIL_TXT.1" 7264053>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor ZWEI:TENEX-BUFFER-MIXIN -- 2. IV's, 0. FL's 142672530>
+   Arg 2 (OPERATION): :LINE-END-OF-MSG-P
+   Arg 3 (LINE): ""
+   Arg 4 (LENGTH): 0
+   Arg 5 (STATE): 1
+   Arg 6 (IGNORE): T
+
+(:METHOD ZWEI:MSG-BUFFER :READ-NEXT-MSG):  (P.C. = 230)
+   Arg 0 (SELF): #<TENEX-INBOX-BUFFER "SPEECH:PS:<SR.KAUFMAN>MAIL._ZMAIL_TXT.1" 7264053>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor ZWEI:MSG-BUFFER -- 15. IV's, 0. FL's 142672514>
+   Arg 2 (OPERATION): :READ-NEXT-MSG
+   Arg 3 (NMSGS): 65535
+
+(:INTERNAL (:METHOD ZWEI:TENEX-INBOX-BUFFER :COMBINED :READ-NEXT-MSG) 0):  (P.C. = 11)
+   Arg 0 (SELF): #<TENEX-INBOX-BUFFER "SPEECH:PS:<SR.KAUFMAN>MAIL._ZMAIL_TXT.1" 7264053>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor ZWEI:TENEX-INBOX-BUFFER -- 1. IV's, 5. FL's 142672563>
+   Arg 2 (.OPERATION.): :READ-NEXT-MSG
+   Rest arg (.DAEMON-CALLER-ARGS.): (65535)
+
+(:METHOD ZWEI:MSG-BUFFER :WHOPPER :READ-NEXT-MSG):  (P.C. = 162)
+   Arg 0 (SELF): #<TENEX-INBOX-BUFFER "SPEECH:PS:<SR.KAUFMAN>MAIL._ZMAIL_TXT.1" 7264053>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor ZWEI:MSG-BUFFER -- 15. IV's, 0. FL's 142672514>
+   Arg 2 (.WHOPPER-CONTINUATION.): #<DTP-COMPILED-FUNCTION (:INTERNAL (:METHOD ZWEI:TENEX-INBOX-BUFFER :COMBINED :READ-NEXT-MSG) 0) 47715403>
+   Arg 3 (.OLD-SELF-MAPPING-TABLE.): #<Map to flavor ZWEI:TENEX-INBOX-BUFFER -- 1. IV's, 5. FL's 142672563>
+   Arg 4 (.OPERATION.): :READ-NEXT-MSG
+   Rest arg (ARGLIST): (65535)
+
+(:METHOD ZWEI:TENEX-INBOX-BUFFER :COMBINED :READ-NEXT-MSG):  (P.C. = 13)
+   Arg 0 (SELF): #<TENEX-INBOX-BUFFER "SPEECH:PS:<SR.KAUFMAN>MAIL._ZMAIL_TXT.1" 7264053>
+   Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor ZWEI:TENEX-INBOX-BUFFER -- 1. IV's, 5. FL's 142672563>
+   Arg 2 (.OPERATION.): :READ-NEXT-MSG
+   Rest arg (.DAEMON-CALLER-ARGS.): (65535)
+
+ZWEI:LOAD-ALL-MSGS:  (P.C. = 62)
+   Arg 0 (BUFFER): #<TENEX-INBOX-BUFFER "SPEECH:PS:<SR.KAUFMAN>MAIL._ZMAIL_TXT.1" 7264053>
+
+ZWEI:START-LOADING-BUFFER:  (P.C. = 36)
+   Arg 0 (BUFFER): #<TENEX-INBOX-BUFFER "SPEECH:PS:<SR.KAUFMAN>MAIL._ZMAIL_TXT.1" 7264053>
+   Arg 1 (STREAM): #<FILE-INPUT-CHARACTER-STREAM "SPEECH:PS:<SR.KAUFMAN>MAIL._ZMAIL_TXT.1" 7264400>
+   Arg 2 (BACKGROUND-P): NIL
+   Arg 3 (TRUENAME): NIL
+
+Rest of stack:
+(:METHOD ZWEI:INBOX-BUFFER :START-NEXT-INBOX):  (P.C. = 73)
+ZWEI:GET-INBOX-FOR-BUFFER:  (P.C. = 145)
+ZWEI:COM-GET-INBOX-INTERNAL:  (P.C. = 253)
+ZWEI:STARTUP-MAIL-FILE:  (P.C. = 176)
+ZWEI:COM-GET-INBOX-INTERNAL:  (P.C. = 37)
+ZWEI:COM-GET-NEW-MAIL-FROM-INBOX:  (P.C. = 7)
+ZWEI:COMMAND-EXECUTE:  (P.C. = 57)
+ZWEI:ZMAIL-COMMAND-EXECUTE:  (P.C. = 6)
+(:METHOD ZWEI:ZMAIL-FRAME :PROCESS-COMMAND-CHAR):  (P.C. = 7)
+(:INTERNAL (:INTERNAL (:METHOD ZWEI:ZMAIL-FRAME :COMBINED :PROCESS-COMMAND-CHAR) 0) 0):  (P.C. = 10)
+(:METHOD ZWEI:ZMAIL-COMMAND-LOOP-MIXIN :WHOPPER :PROCESS-COMMAND-CHAR):  (P.C. = 21)
+(:INTERNAL (:METHOD ZWEI:ZMAIL-FRAME :COMBINED :PROCESS-COMMAND-CHAR) 0):  (P.C. = 13)
+(:METHOD ZWEI:ZMAIL-FRAME :WHOPPER :PROCESS-COMMAND-CHAR):  (P.C. = 21)
+(:METHOD ZWEI:ZMAIL-FRAME :COMBINED :PROCESS-COMMAND-CHAR):  (P.C. = 12)
+(:METHOD ZWEI:ZMAIL-FRAME :COMMAND-LOOP):  (P.C. = 143)
+(:METHOD ZWEI:ZMAIL-FRAME :COMBINED :COMMAND-LOOP):  (P.C. = 70)
+ZWEI:ZMAIL-PROCESS-TOP-LEVEL:  (P.C. = 105)
+SI:PROCESS-TOP-LEVEL:  (P.C. = 54)
+15-May-85 11:52:33-EDT,1687;000000000001
+Received: from MIT-MC by MIT-OZ via Chaosnet; 15 May 85 11:52-EDT
+Received: from SCRC-QUABBIN.ARPA by MIT-MC.ARPA; 15 May 85 11:46:14 EST
+Received: from NEPONSET.SCRC.Symbolics.COM by SCRC-QUABBIN.ARPA via CHAOS with CHAOS-MAIL id 163869; Wed 15-May-85 11:40:51-EDT
+Date: Wed, 15 May 85 11:45 EDT
+From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+Subject: Declarations after doc-strings in macros. 
+To: Gavan Duffy <GAVAN@OZ>, DCP@SCRC-QUABBIN.ARPA, BUG-LISPM@MIT-MC.ARPA
+In-Reply-To: <850514040029.6.GAVAN@MORRISON>
+Message-ID: <850515114558.4.NFEP@NEPONSET.SCRC.Symbolics.COM>
+
+    Date: Tue, 14 May 85 04:00 EDT
+    From: Gavan Duffy <GAVAN@OZ>
+
+	Date: Sun, 12 May 85 13:51 EDT
+	From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+
+	    Date: Fri, 10 May 85 20:01 EDT
+	    From: Gavan Duffy <GAVAN@OZ>
+
+		Date: Wed, 1 May 85 18:33 EDT
+		From: David C. Plummer in disguise <DCP@QUABBIN.SCRC.Symbolics.COM>
+
+		This has already been fixed for 6.1.
+
+	    Great.  Any way to make them work in the meantime?
+
+	You can either have your program suppress the things that don't work, or
+	swap the declare and documentation string (which drops the doc string,
+	but keeps the declaration [the fix fixes both of these]).
+
+    That's not much help.  
+
+What kind of answer do you want (on the Bug-LispM mailing list)?  I
+don't have the time, energy, desire, OR AUTHORITY to send you, MIT (or
+anybody for that matter) any individual patch or collection of patches
+that solve your immediate problems.  
+
+The one option I didn't say, which I assumed you already knew, is to
+contact your FOSS/HOSS and make arrangements to privately get patches.
+
+15-May-85 11:53:08-EDT,1759;000000000001
+Received: from MIT-MC by MIT-OZ via Chaosnet; 15 May 85 11:53-EDT
+Received: from SCRC-QUABBIN.ARPA by MIT-MC.ARPA; 15 May 85 11:46:34 EST
+Received: from NEPONSET.SCRC.Symbolics.COM by SCRC-QUABBIN.ARPA via CHAOS with CHAOS-MAIL id 163871; Wed 15-May-85 11:41:07-EDT
+Date: Wed, 15 May 85 11:46 EDT
+From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+Subject: Declarations after doc-strings in macros. 
+To: Gavan Duffy <GAVAN@OZ.mit>, DCP@SCRC-QUABBIN.ARPA,
+    BUG-LISPM@MIT-MC.ARPA
+In-Reply-To: <850514040029.6.GAVAN@MORRISON>
+Supersedes: <850515114558.4.NFEP@NEPONSET.SCRC.Symbolics.COM>
+Message-ID: <850515114614.5.NFEP@NEPONSET.SCRC.Symbolics.COM>
+
+    Date: Tue, 14 May 85 04:00 EDT
+    From: Gavan Duffy <GAVAN@OZ>
+
+	Date: Sun, 12 May 85 13:51 EDT
+	From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+
+	    Date: Fri, 10 May 85 20:01 EDT
+	    From: Gavan Duffy <GAVAN@OZ>
+
+		Date: Wed, 1 May 85 18:33 EDT
+		From: David C. Plummer in disguise <DCP@QUABBIN.SCRC.Symbolics.COM>
+
+		This has already been fixed for 6.1.
+
+	    Great.  Any way to make them work in the meantime?
+
+	You can either have your program suppress the things that don't work, or
+	swap the declare and documentation string (which drops the doc string,
+	but keeps the declaration [the fix fixes both of these]).
+
+    That's not much help.  
+
+What kind of answer do you want (on the Bug-LispM mailing list)?  I
+don't have the time, energy, desire, OR AUTHORITY to send you, MIT (or
+anybody for that matter) any individual patch or collection of patches
+that solve your immediate problems.  
+
+The one option I didn't say, which I assumed you already knew, is to
+contact your FOSS/HOSS and make arrangements to privately get patches.
+
+15-May-85 12:14:42-EDT,6402;000000000001
+Received: from MIT-REAGAN by MIT-OZ via Chaosnet; 15 May 85 12:14-EDT
+Received: from SCRC-QUABBIN.ARPA (QUABBIN) by MIT-REAGAN via INTERNET with SMTP id 4948; 15 May 85 12:14:53-EDT
+Received: from NEPONSET.SCRC.Symbolics.COM by SCRC-QUABBIN.ARPA via CHAOS with CHAOS-MAIL id 163885; Wed 15-May-85 12:08:21-EDT
+Date: Wed, 15 May 85 12:13 EDT
+From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+Subject: What might cause this?
+To: Scott Cyphers <SR.EHPYC@MIT-SPEECH.mit>,
+    David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+cc: BUG-LISPM@MIT-OZ.mit
+In-Reply-To: <SR.EHPYC.12110995800.BABYL@MIT-SPEECH>
+Message-ID: <850515121328.1.NFEP@NEPONSET.SCRC.Symbolics.COM>
+
+    Date: 14 May 1985  14:46 EDT (Tue)
+    From: Scott Cyphers <SR.EHPYC@MIT-SPEECH>
+
+    The datapath board has been replaced to fix an occasional B-mem parity
+    error.  I recopied the world load just in case it had gotten copied
+    wrong somehow.  The error only happens on Koala, and it's not
+    completely deterministic.  However, it always happens in the same way
+    when it happens.  Here's the information you asked for.  Restarting
+    the patch loading worked, but restarting loop-translate gave the error
+    again.
+
+As far as I can tell, both regions have been created since Release 6.0
+time, so it is all new storage.  Note also that 1177775 is beyond the
+limit (1177144) of region 6, and 1737775 is beyong the limit (1704010)
+of region #o17.  Instruction 5 of SI:LOOP-TRANSLATE is
+  4  CALL-1-STACK #'SI:LOOP-TRANSLATE-1
+  5  CALL-2-RETURN #'DISPLACE
+thought it is possible this happened during the return of
+SI:LOOP-TRANSLATE-1, especially since the call to displace is a
+CALL-2-RETURN and NIL is being passed one argument.  The only other
+thing I can suggest is to c-N one or two frames and start doing c-<n>
+c-m-L for <n> from 0 to something big.  This will show you the stack,
+from which you might be able to find out what it thought it was doing.
+
+    (si:%region-number #o1177775)
+    6
+    (si:%area-number #o1177775)
+    32
+    (describe-area *)
+    Area #40: ZWEI:ZMAIL-MSG-LINE-AREA has 1 region, max size 2000000000, region size 200000 (octal):
+	Region #6: Origin 1100000, Length 200000, Free 77144, GC 0, New Structure, NoScav
+      New Structure space: 65,536 allocated, 32,356 used.
+      Total for ZWEI:ZMAIL-MSG-LINE-AREA: 65,536 allocated, 32,356 used.
+    T
+    (si:%region-number #o1737775)
+    15
+    (si:%area-number #o1737775)
+    5
+    (describe-area *)
+    Area #5: PERMANENT-STORAGE-AREA has 5 regions, max size 2000000000, region size 40000 (octal):
+	Region #17: Origin 1600000, Length 140000, Free 104010, GC 104010, Static Structure, Scav
+	Region #240: Origin 56140000, Length 100000, Free 77761, GC 77761, Static Structure, Scav
+	Region #275: Origin 76300000, Length 100000, Free 66776, GC 66776, Static Structure, Scav
+      Static Structure space: 114,688 allocated, 95,735 used.
+	Region #246: Origin 75640000, Length 240000, Free 240000, GC 240000, Static List, Scav
+	Region #302: Origin 143700000, Length 240000, Free 62377, GC 61153, Static List, Scav
+      Static List space: 163,840 allocated, 107,775 used.
+      Total for PERMANENT-STORAGE-AREA: 278,528 allocated, 203,510 used.
+    T
+
+    >>Trap: The word #<DTP-NULL 1177775> was read from location 1737775 (in PERMANENT-STORAGE-AREA).
+    While in the function NIL  SI:LOOP-TRANSLATE  FUNCALL
+
+    NIL:
+       Arg 0: (LOOP SPIRE:FOR SPIRE:I SPIRE:FROM 0 SPIRE:BELOW 32 SPIRE:BY 4 SPIRE:DOING ...)
+
+    SI:LOOP-TRANSLATE:  (P.C. = 5)
+       Arg 0 (X): (LOOP SPIRE:FOR SPIRE:I SPIRE:FROM 0 SPIRE:BELOW 32 SPIRE:BY 4 SPIRE:DOING ...)
+       Arg 1 (IGNORE): NIL
+
+    FUNCALL:  (P.C. = 5)
+       Arg 0 (FN): SI:LOOP-TRANSLATE
+       Rest arg (ARGS): ((LOOP SPIRE:FOR SPIRE:I SPIRE:FROM 0 SPIRE:BELOW 32 SPIRE:BY 4 SPIRE:DOING ...) NIL)
+
+    SI:MACROEXPAND-1-INTERNAL:  (P.C. = 206)
+       Arg 0 (MACRO-CALL): (LOOP SPIRE:FOR SPIRE:I SPIRE:FROM 0 SPIRE:BELOW 32 SPIRE:BY 4 SPIRE:DOING ...)
+       Arg 1 (ENV): NIL
+       Arg 2 (RUN-STYLE-CHECKERS-P): NIL
+       Arg 3 (DONT-EXPAND-SPECIAL-FORMS): T
+
+    MACROEXPAND:  (P.C. = 11)
+       Arg 0 (MACRO-CALL): (LOOP SPIRE:FOR SPIRE:I SPIRE:FROM 0 SPIRE:BELOW 32 SPIRE:BY 4 SPIRE:DOING ...)
+       Arg 1 (ENV): NIL
+       Arg 2 (DONT-EXPAND-SPECIAL-FORMS): T
+
+    SI:PARSE-BODY-DECLARATIONS:  (P.C. = 35)
+       Arg 0 (BODY): ((LOOP SPIRE:FOR SPIRE:I SPIRE:FROM 0 SPIRE:BELOW 32 SPIRE:BY 4 SPIRE:DOING ...) ARRAY)
+       Arg 1 (ENV): NIL
+       --Defaulted args:--
+       Arg 2 (LAMBDA-LIST): NIL
+
+    LET:  (P.C. = 21)
+       Arg 0 (FORM): (LET ((ARRAY (MAKE-ARRAY ** :TYPE ART-1B))) (LOOP SPIRE:FOR SPIRE:I SPIRE:FROM 0 SPIRE:BELOW 32 SPIRE:BY 4 SPIRE:DOING ...) ARRAY)
+       Arg 1 (ENV): NIL
+
+    SI:*EVAL:  (P.C. = 165)
+       Arg 0 (FORM): (LET ((ARRAY (MAKE-ARRAY ** :TYPE ART-1B))) (LOOP SPIRE:FOR SPIRE:I SPIRE:FROM 0 SPIRE:BELOW 32 SPIRE:BY 4 SPIRE:DOING ...) ARRAY)
+       --Defaulted args:--
+       Arg 1 (ENV): NIL
+       Arg 2 (HOOK): NIL
+
+    Rest of stack:
+    SI:LOAD-BIN-OP-FORM:  (P.C. = 4)
+    SI:BIN-LOAD-NEXT-COMMAND:  (P.C. = 24)
+    SI:BIN-NEXT-VALUE:  (P.C. = 5)
+    SI:BIN-DEFCONST-1:  (P.C. = 15)
+    SI:LOAD-BIN-OP-DEFCONST:  (P.C. = 5)
+    SI:BIN-LOAD-NEXT-COMMAND:  (P.C. = 21)
+    SI:BIN-LOAD-TOP-LEVEL:  (P.C. = 6)
+    (:METHOD ZWEI:MAJOR-MODE :DEFAULT :LOAD-BINARY-FILE):  (P.C. = 4)
+    SI:BIN-LOAD-FILE-INTERNAL:  (P.C. = 147)
+    SI:LOAD-PATCH:  (P.C. = 64)
+    LOAD-PATCHES:  (P.C. = 554)
+    SI:*EVAL:  (P.C. = 403)
+    IF:  (P.C. = 45)
+    SI:*EVAL:  (P.C. = 165)
+    COND:  (P.C. = 46)
+    SI:*EVAL:  (P.C. = 165)
+    SI:LOAD-BIN-OP-FORM:  (P.C. = 4)
+    SI:BIN-LOAD-NEXT-COMMAND:  (P.C. = 24)
+    SI:BIN-LOAD-TOP-LEVEL:  (P.C. = 6)
+    (:METHOD ZWEI:MAJOR-MODE :DEFAULT :LOAD-BINARY-FILE):  (P.C. = 4)
+    SI:BIN-LOAD-FILE-INTERNAL:  (P.C. = 147)
+    FS:LOAD-STREAM:  (P.C. = 16)
+    LOGIN:  (P.C. = 604)
+    (:PROPERTY SI:COM-LOGIN SI:CP-FUNCTION):  (P.C. = 22)
+    SI:COM-LOGIN:  (P.C. = 24)
+    SI:*EVAL:  (P.C. = 403)
+    (:INTERNAL SI:LISP-COMMAND-LOOP-INTERNAL 0):  (P.C. = 152)
+    TV:WITH-NOTIFICATION-MODE-INTERNAL:  (P.C. = 16)
+    SI:LISP-COMMAND-LOOP-INTERNAL:  (P.C. = 54)
+    SI:LISP-COMMAND-LOOP:  (P.C. = 67)
+    SI:LISP-TOP-LEVEL1:  (P.C. = 5)
+    SI:LISP-TOP-LEVEL:  (P.C. = 7)
+
+
+15-May-85 12:19:57-EDT,2526;000000000001
+Received: from MIT-MC by MIT-OZ via Chaosnet; 15 May 85 12:19-EDT
+Received: from MIT-OZ by MIT-MC via Chaosnet; 15 MAY 85  12:16:07 EDT
+Received: from MIT-MORRISON by MIT-OZ via Chaosnet; 15 May 85 12:14-EDT
+Date: Wed, 15 May 85 12:12 EDT
+From: Gavan Duffy <GAVAN@OZ>
+Subject: Declarations after doc-strings in macros. 
+To: DCP@SCRC-QUABBIN.ARPA, GAVAN@OZ, BUG-LISPM@MIT-MC.ARPA
+In-Reply-To: <850515114614.5.NFEP@NEPONSET.SCRC.Symbolics.COM>
+Message-ID: <850515121218.8.GAVAN@MORRISON>
+
+    Date: Wed, 15 May 85 11:46 EDT
+    From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+
+	Date: Tue, 14 May 85 04:00 EDT
+	From: Gavan Duffy <GAVAN@OZ>
+
+	    Date: Sun, 12 May 85 13:51 EDT
+	    From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+
+		Date: Fri, 10 May 85 20:01 EDT
+		From: Gavan Duffy <GAVAN@OZ>
+
+		    Date: Wed, 1 May 85 18:33 EDT
+		    From: David C. Plummer in disguise <DCP@QUABBIN.SCRC.Symbolics.COM>
+
+		    This has already been fixed for 6.1.
+
+		Great.  Any way to make them work in the meantime?
+
+	    You can either have your program suppress the things that don't work, or
+	    swap the declare and documentation string (which drops the doc string,
+	    but keeps the declaration [the fix fixes both of these]).
+
+	That's not much help.  
+
+    What kind of answer do you want (on the Bug-LispM mailing list)?  I
+    don't have the time, energy, desire, OR AUTHORITY to send you, MIT (or
+    anybody for that matter) any individual patch or collection of patches
+    that solve your immediate problems.  
+
+First of all, you may not realize it, and this may hurt your feelings, but
+people on this side of the railroad tracks (to use your terminology) generally
+DON'T spend all their time at seminars on the inner workings of Symbolics'
+bureaucracy.
+
+Second of all, if YOUR code is broken, you should see it as YOUR problem, not
+mine.
+
+    The one option I didn't say, which I assumed you already knew, is to
+    contact your FOSS/HOSS and make arrangements to privately get patches.
+
+Great.  Now, what's a FOSS/HOSS?  Yes, I've heard of these before (about two
+years ago RWK mentioned something about them) but how do I recognize one when
+I see one?  Is Mark Robbins one?  What about that woman who wants to sell me
+the ZMAIL sources?  Is she one?
+
+Hmmm... Maybe there should be something in the document examiner about FOSSes
+and HOSSes.  I checked.  There ain't.  Hey, is HOSS that guy on Bonanza?  And
+FOSS, wasn't he in `All That Jazz'?
+15-May-85 15:23:11-EDT,2233;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 15 May 85 15:22-EDT
+Received: from SCRC-QUABBIN.ARPA by MIT-MC.ARPA; 15 May 85 15:19:19 EST
+Received: from WHITE.SWW.Symbolics.COM by SCRC-QUABBIN.ARPA via CHAOS with CHAOS-MAIL id 163962; Wed 15-May-85 15:13:58-EDT
+Received: from SWW-PURPLE by SWW-WHITE via CHAOS with CHAOS-MAIL id 109394; Wed 15-May-85 12:19:02-PDT
+Date: Wed, 15 May 85 12:18 PDT
+From: DDYER@SCRC-RIVERSIDE.ARPA
+Subject: color demo error
+To: David M. J. Saslav <saz%OZ@MIT-MC.ARPA>, BUG-LISPM%OZ@MIT-MC.ARPA
+cc: bug-color@WHITE
+Fcc: W:>ddyer>mail.sent
+In-Reply-To: <850513175502.1.SAZ@BUDDY>
+Supersedes: <850515120837.6.DDYER@PURPLE.SWW.Symbolics.COM>,
+            <850515120854.7.DDYER@PURPLE.SWW.Symbolics.COM>,
+            <850515121022.8.DDYER@PURPLE.SWW.Symbolics.COM>,
+            <850515121036.9.DDYER@PURPLE.SWW.Symbolics.COM>
+Message-ID: <850515121817.0.DDYER@PURPLE.SWW.Symbolics.COM>
+Fonts: CPTFONT, CPTFONTB, CPTFONTI
+
+    Date: Mon, 13 May 85 17:55 EDT
+    From: David M. J. Saslav <saz@OZ>
+
+    In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 9.1,
+    Experimental COLOR 135.1, Experimental COLOR-DEMO 68.0,
+    Experimental COLOR-EDITOR 4.0, Experimental COLOR-PALETTE 2.0,
+    microcode TMC5-MIC 319, on Lisp Machine Buddy Holly:
+
+    I'd killed the color demo window and was attempting to 
+    start a fresh demo.
+
+    >>Trap: The AR-1 microcode ran into an ARRAY-INDIRECT-POINTER that was not an array.
+    While in the function (:METHOD COLOR:STD-COLOR-CONTROL-MIXIN :VIDEO-ON)  ...
+
+    (:METHOD COLOR:STD-COLOR-CONTROL-MIXIN :VIDEO-ON):  (P.C. = 7)
+       Arg 0 (SELF): #<MANAGED-SC-SCREEN 24-bit standard direct 1color screen 1140000 deexposed0>
+       Arg 1 (SELF-MAPPING-TABLE): #<Map to flavor COLOR:STD-COLOR-CONTROL-MIX...
+       Arg 2 (OPERATION): :VIDEO-ON
+       Arg 3 (CONT): #<ART-Q-11 10010325>
+
+This was caused by a bug in the EXPOSE logic - the color system automatically deeactivates
+previous screens, but you confused it by manually deactivating it.   You won't have this
+problem if you let the automatic mechanism get rid of the old screen.
+
+This problem was fixed a while ago by patch 135.7.  The current pach level is 135.13.
+
+15-May-85 16:32:18-EDT,1145;000000000001
+Received: from MIT-MC by MIT-OZ via Chaosnet; 15 May 85 16:32-EDT
+Received: from SCRC-STONY-BROOK.ARPA by MIT-MC.ARPA; 15 May 85 16:30:28 EST
+Received: from NEPONSET.SCRC.Symbolics.COM by SCRC-STONY-BROOK.ARPA via CHAOS with CHAOS-MAIL id 237412; Wed 15-May-85 16:24:57-EDT
+Date: Wed, 15 May 85 16:30 EDT
+From: David C. Plummer in disguise <DCP@SCRC-QUABBIN.ARPA>
+Subject: Declarations after doc-strings in macros. 
+To: Gavan Duffy <GAVAN@OZ.mit>, DCP@SCRC-QUABBIN.ARPA,
+    BUG-LISPM@MIT-MC.ARPA
+In-Reply-To: <850515121218.8.GAVAN@MORRISON>
+Message-ID: <850515163001.9.NFEP@NEPONSET.SCRC.Symbolics.COM>
+
+    Date: Wed, 15 May 85 12:12 EDT
+    From: Gavan Duffy <GAVAN@OZ>
+
+    Second of all, if YOUR code is broken, you should see it as YOUR problem, not
+    mine.
+
+Yes, it is OUR problem; and the technical problem of your bug report has
+been fixed, and it will be in 6.1.  Everything else you talk about is
+administration.  Bug-LispM is for technical reports and correspondence.
+If you don't want to learn about our administration (which is
+reasonable), I suggest you have your (MIT's) administration deal with
+ours.
+
+15-May-85 16:49:51-EDT,426;000000000001
+Received: from MIT-MC by MIT-OZ via Chaosnet; 15 May 85 16:48-EDT
+Date: Wed, 15 May 85 16:46:35 EST
+From: Glenn S. Burke <GSB@MIT-MC>
+Subject: administration
+To: DCP@SCRC-QUABBIN
+cc: "GAVAN@OZ.MIT"@MIT-MC, BUG-LISPM@MIT-MC
+Message-ID: <[MIT-MC].504810.850515.GSB>
+
+anyone out there remember a famous piece of computer mail which read in
+part (something like) "Please have your lawyer call my lawyer to tell me ..."?
+16-May-85 12:40:48-EDT,766;000000000000
+Received: from MIT-JANIS by MIT-OZ via Chaosnet; 16 May 85 12:40-EDT
+Date: Thu, 16 May 85 12:39 EDT
+From: Ken Haase <KWH@OZ>
+Subject: Sources request.
+To: BUG-LISPM@OZ
+Message-ID: <850516123927.4.KWH@JANIS>
+
+In Symbolics 3600 Release 6.0, IP-TCP 29.0, AISite 9.1,
+Experimental Meta Representation Langauge 3.1, microcode TMC5-MIC 319, on Lisp Machine Janis Joplin:
+
+I would like the sources to the TIME-DIFFERENCE function; I have some
+automatic timing tools which use MICROSECOND-TIME and would like to see
+if TIME-DIFFERENCE does the right things about wraparound for
+microsecond time bignums.  (I know it won't let me win for computations
+which take longer than an hour, but I would like to win for evaluations
+which go over the edge.)  
+
+Ken
+

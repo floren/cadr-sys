@@ -1,0 +1,620 @@
+;;; -*- Mode:LISP; Package:FILE-SYSTEM; Base:8; Lowercase:T -*-
+
+;This file, IO, transfers between the disk and core.
+;It knows that files are sequences of words, but does not know
+;the structure of what is contained in files.
+;IO maintains file maps, in FILE-OBJECTs,
+;but does not know about storing maps in files.
+
+;The entry points in this file are
+;ARRAY-LOCATION-OF-WORD, CORE-ADDRESS-OF-WORD, WRITE-MODIFIED-RECORDS,
+;ASSIGN-DISK-SPACE, DEASSIGN-DISK-SPACE,
+;ATOMIC-UPDATE-WORD, and ATOMIC-UPDATE-RECORDS,
+;plus the functions to operate on the modified-map.
+;They all use NODE-FILE.
+
+;(FILE-CORE-MAP NODE-FILE) is the map which says which records of the
+;file are in core, and where.
+;(FILE-DISK-MAP NODE-FILE) is the map which says which records of the file
+;have disk space assigned, and where.
+;(FILE-MODIFIED-MAP NODE-FILE) is a vector which says which records
+;of the file have modifications in them in core and need to be written to disk.
+
+;(validate-record-range x y z)
+;gives an error unless x, y and z are positive, in increasing order,
+;and less that the number of records in the file.
+(defmacro validate-record-range (&rest record-numbers)
+  (let (conditions)
+    (setq record-numbers (append `(0) record-numbers '((file-n-records node-file))))
+    (do ((l record-numbers (cdr l)))
+	((null (cdr l)))
+      (push `( ,(car l) ,(cadr l)) conditions))
+    `(progn (or (and . ,conditions)
+		(ferror nil "Arguments out of range or out of order")))))
+
+;Functions to operate on modified map
+
+(defun records-modified-p (start end)
+  (do ((i start (1+ i))) ((= i end) nil)
+    (and (record-modified-p i) (return t))))
+
+(defun records-not-modified (start end)
+  (do ((i start (1+ i))) ((= i end))
+    (record-not-modified i)))
+
+(defun records-modified (start end)
+  (do ((i start (1+ i))) ((= i end))
+    (record-modified i)))
+
+(defun record-modified-p (record)
+  (plusp (aref (file-modified-map node-file) record)))
+
+(defun record-modified (record)
+  (setf (aref (file-modified-map node-file) record) 1))
+
+(defun record-not-modified (record)
+  (setf (aref (file-modified-map node-file) record) 0))
+
+(defun word-modified (word-number)
+  (setf (aref (file-modified-map node-file) (truncate word-number (file-record-size)))
+	1))
+
+;Functions to operate on the disk and core maps.
+
+;Return the record number of the first record not consecutive
+;with the specified one, or the end of the file,
+;or the argument if that record number is not present in this map.
+(defun next-nonconsecutive (recordnum map)
+  (do ((m map (cdr m)))
+      ((or (null m) ( (mapelt-start (car m)) recordnum))
+       recordnum)
+    (and (> (mapelt-end (car m)) recordnum)
+	 (return (mapelt-end (car m))))))
+
+;Return the record number of the first record consecutive with
+;(and before) the specified one.
+(defun prev-nonconsecutive+1 (recordnum map)
+  (do ((m map (cdr m)))
+      ((or (null m) ( (mapelt-start (car m)) recordnum))
+       recordnum)
+    ;; If we find an elt that includes spec'd record, return first one in it.
+    (and (> (mapelt-end (car m)) recordnum)
+	 (return (mapelt-start (car m))))))
+
+;Return the record number of the first record at or after recordnum
+;which is out of core, or has no disk space.
+(defun next-absent (recordnum map)
+  (dolist (mapelt map)
+    (and (> (mapelt-start mapelt) recordnum) (return))
+    (setq recordnum (max recordnum (mapelt-end mapelt))))
+  recordnum)
+
+;Return 1+ the record number of the last record before
+;recordnum which is not in the map.
+(defun prev-absent+1 (recordnum map)
+  (do ((m map (cdr m))) ((null m) recordnum)
+    (let ((mapelt (car m)))
+      (and ( (mapelt-start mapelt) recordnum)
+	   (return recordnum))
+      (and ( (mapelt-end mapelt) recordnum)
+	   (return (prev-absent+1 (mapelt-start mapelt) map))))))
+
+;Return the record number of the first record at or after recordnum
+;which is in core, or has disk space.
+;Return nil if there is no such later record.
+(defun next-present (recordnum map)
+  (dolist (mapelt map)
+    (and ( (mapelt-start mapelt) recordnum)
+	 (return (mapelt-start mapelt)))
+    (and (> (mapelt-end mapelt) recordnum)
+	 (return recordnum))))
+
+;Return one plus the record number of the previous
+;record existing in the map (last one before the specified one).
+;Return nil if there is no such earlier record in the map.
+;If the record before the specified one exists,
+;then the value equals the argument.
+(defun prev-present+1 (recordnum map)
+  (let (value)
+    (dolist (mapelt map)
+      (cond (( (mapelt-start mapelt) recordnum)
+	     (return))
+	    (( (mapelt-end mapelt) recordnum)
+	     (return (setq value recordnum)))
+	    (t (setq value (mapelt-start mapelt)))))
+    value))
+
+;Make an entry in the file's core map describing
+;records start to (not incl) end, with data as the description.
+;First argument is locative pointer to place where map is stored.
+(defun insert-in-map (maploc start end data)
+  (do ((l maploc (cdr l)))
+      ((null l) (ferror nil "File map not correctly ordered"))
+    (and (or (null (cdr l))
+	     (> (mapelt-start (cadr l)) start))
+	 (return (rplacd l
+			 (cons (list start end data)
+			       (cdr l)))))))
+
+;; Delete from the map stored where maploc points
+;; the entries whose maploc-start and maploc-end fall within
+;; the specified range.
+;; The return-function is called on the data items of the entries we delete.
+(defun delete-from-map (maploc start end &optional return-function)
+  (rplacd maploc
+	  (mapcan #'(lambda (mapelt)
+		      (cond (( (mapelt-end mapelt) start) (cons mapelt nil))
+			    (( end (mapelt-start mapelt)) (cons mapelt nil))
+			    ((and ( start (mapelt-start mapelt))
+				  ( end (mapelt-end mapelt)))
+			     (and return-function
+				  (funcall return-function (mapelt-data mapelt)))
+			     nil)
+			    (t (ferror nil "Map entry ~S crosses edge of range to be deleted"
+				       mapelt))))
+		  (cdr maploc))))
+
+;Return info on the array that a word of a file is stored in.
+;First value is the rqb, second the index into the rqb buffer,
+;third the number of elements (16 bit) following in the same rqb.
+;If before-flag is set, then if the word specified is on the boundary
+;between two rqbs, we return a description of the rqb which ends
+;just before the specified word, instead of the one which starts with it.
+;If the specified word is off the end of the file records that exist,
+;we return nil.
+(defun array-location-of-word (word-number &optional before-flag
+			       &aux recordnum)
+  (declare (return-list rqb array-index n-elts-following))
+  (cond (before-flag (setq word-number (1- word-number))))
+  (setq recordnum (truncate word-number (file-record-size node-file)))
+  (cond ((< recordnum (file-n-records node-file))
+	 (let ((mapelt
+		 (or (dolist (mapelt (file-core-map node-file))
+		       (and (> (mapelt-end mapelt) recordnum)
+			    (return (and ( recordnum (mapelt-start mapelt))
+					 mapelt))))
+		     (progn (get-in-core recordnum)
+			    (dolist (mapelt (file-core-map node-file))
+			      (and (> (mapelt-end mapelt) recordnum)
+				   (return (and ( recordnum (mapelt-start mapelt))
+						mapelt)))))
+		     (ferror nil "Lossage: record ~D can't be got in core" recordnum))))
+	   (values (mapelt-data mapelt)
+		   (* (+ (\ word-number (file-record-size node-file))
+			 (cond (before-flag 1) (t 0))
+			 (* (file-record-size node-file)
+			    (- recordnum (mapelt-start mapelt))))
+		      2)
+		   (* (- (* (file-record-size node-file)
+			    (- (mapelt-end mapelt) recordnum))
+			 (cond (before-flag 1) (t 0))
+			 (\ word-number (file-record-size node-file)))
+		      2))))))
+
+;Return the core address of a word of the file,
+;and the number of consecutive words found there (including the requested one).
+;You should keep interrupts off as long as you are using the value returned.
+(defun core-address-of-word (word-number &aux recordnum (recsize (file-record-size)))
+  (declare (return-list core-address number-following-words))
+  (setq recordnum (truncate word-number recsize))
+  (cond ((< recordnum (file-n-records node-file))
+	 (let ((remainder (\ word-number recsize))
+	       (mapelt
+		 (or (dolist (mapelt (file-core-map node-file))
+		       (and (> (mapelt-end mapelt) recordnum)
+			    (return (and ( recordnum (mapelt-start mapelt))
+					 mapelt))))
+		     (progn (get-in-core recordnum)
+			    (dolist (mapelt (file-core-map node-file))
+			      (and (> (mapelt-end mapelt) recordnum)
+				   (return (and ( recordnum (mapelt-start mapelt))
+						mapelt)))))
+		     (ferror nil "Lossage: record ~D can't be got in core" recordnum))))
+	   (values
+	     (%24-bit-plus (logand (- page-size)
+				   (%24-bit-plus (%pointer (mapelt-data mapelt)) page-size))
+			   (+ remainder
+			      (* recsize
+				 (- recordnum (mapelt-start mapelt)))))
+	     (- recsize remainder))))))
+
+;Make sure that logical records start to (not incl) end of the current file are in core.
+;Additional consecutive records before and after can be read in too
+;if we are not discarding the data.
+(defun get-in-core (start &optional (end (1+ start)) discard-old-data &aux start1 end1 max-records)
+  (validate-record-range start end)
+  (setq start1 start end1 end)
+  (setq max-records (truncate max-transfer-size (truncate (file-record-size) page-size)))
+  (cond ((not discard-old-data)
+	 (cond ((= (1- end1) (next-absent (1- end1) (file-disk-map)))
+		;; If last desired block doesn't exist on disk,
+		;; include consecutive blocks that also don't.
+		(setq end1 (min (or (next-present end1 (file-disk-map))
+				    (file-n-records))
+				(+ (max (or (prev-present+1 end1 (file-disk-map)) 0)
+					(or (prev-present+1 end1 (file-core-map)) 0)
+					(- end1 max-records))
+				   max-records))))
+	       (t
+		;; Include some number of extra records consecutive on disk
+		;; and not in core.
+		(setq end1
+		      (min (+ end1 consec-records-include-max)
+;			   (next-absent end1 (file-core-map))
+			   (or (next-present end1 (file-core-map node-file))
+			       (file-n-records))
+			   (next-nonconsecutive end1 (file-disk-map node-file))))))
+	 (setq start1 (max (- start1 consec-records-include-max)
+;			   (prev-absent+1 start1 (file-core-map node-file))
+			   (or (prev-present+1 start1 (file-core-map node-file))
+			       0)
+			   (prev-nonconsecutive+1 start1 (file-disk-map node-file))))))
+  (do (tem no-disk-space) (( start1 end1))
+    ;; Skip to next record that isn't already in core.
+    (setq start1 (next-absent start1 (file-core-map node-file)))
+    (and ( start1 end1) (return))
+    ;; Find next record that is in core.  We may read up that far.
+    (setq tem (min end1 (or (next-present start1 (file-core-map node-file)) end1)))
+    (setq no-disk-space nil)
+    (cond (discard-old-data)
+	  ((= start1 (next-absent start1 (file-disk-map)))
+	   ;; If no disk space, stop before next record that does have disk space.
+	   ;; But don't allow this RQB to be bigger than MAX-TRANSFER-SIZE pages.
+	   (setq no-disk-space t)
+	   (setq tem (min tem
+			  (+ start1 max-records)
+			  (or (next-present start1 (file-disk-map node-file)) tem))))
+	  ;; If record has disk space, read only records consecutive with it.
+	  (t (setq tem (min tem (next-nonconsecutive (1+ start1)
+						     (file-disk-map node-file))))))
+    ;; Read in the next bunch of records and pass them by.
+    (bring-into-core start1 tem (or discard-old-data no-disk-space))
+    (setq start1 tem)))
+
+;Allocate space in core the records from start to (not incl) end,
+;and read them in assuming that they are consecutive on disk.
+(defun bring-into-core (start end &optional dont-read-data)
+  (let* ((n-pages (truncate (* (- end start) (file-record-size node-file)) page-size))
+	 ;; Round n-pages up to multiple of 4 to reduce number
+	 ;; of different sizes of RQBs we use.
+	 (array (get-disk-rqb (cond ((< n-pages 5) n-pages)
+				    (t
+				     (* 10 (ceiling n-pages 10)))))))
+    (insert-in-map (locf (file-core-map node-file))
+		   start end array)
+    (or dont-read-data (disk-read array (pack-unit-number (file-pack node-file))
+				  (+ (pack-first-abs-page-number (file-pack node-file))
+				     (* (truncate (file-record-size node-file)
+					    page-size)
+					(block-number-of-record start)))))))
+
+;write out any changed records from start to but not incl end,
+;Write-consec-before, if t, means also write any records
+;before the range which are consecutive with the range.
+;Write-consec-after says the same thing about records consecutive after.
+;It is an error if any blocks in the range do not have disk space assigned.
+(defun write-modified-records (start end
+			       &optional (write-consec-before t) (write-consec-after t)
+			       &aux start1 end1)
+  (validate-record-range start end)
+  (setq start1 start end1 end)
+  ;; Maybe include some extra records consecutive both in core and on disk
+  (and write-consec-after
+       (setq end1 (min (+ end1 consec-records-include-max)
+		       (next-nonconsecutive end1 (file-core-map node-file))
+		       (next-nonconsecutive end1 (file-disk-map node-file)))))
+  (and write-consec-before
+       (setq start1 (max (- start1 consec-records-include-max)
+			 (prev-nonconsecutive+1 start1 (file-core-map node-file))
+			 (prev-nonconsecutive+1 start1 (file-disk-map node-file)))))
+  ;; Make sure all the records we may want to write out have disk spacel assigned.
+  (cond ((< (next-absent start1 (file-disk-map)) end1)
+	 (ferror nil "No disk space for record ~S"
+		 (next-absent start1 (file-disk-map)))
+	 (assign-disk-space start1 end1)))
+  ;; Find each bunch of consecutive core pages.
+  (dolist (mapelt (file-core-map node-file))
+    (and ( (mapelt-start mapelt) end1) (return))
+    (and (> (mapelt-end mapelt) start1)
+	 ;; If one overlaps our range, divide it into bunches
+	 ;; of consecutive disk pages.
+	 (do ((xfer-start (max (mapelt-start mapelt) start1)
+			  xfer-end)
+	      (xfer-stop (min (mapelt-end mapelt) end1))
+	      (xfer-end))
+	     (( xfer-start xfer-stop))
+	   (setq xfer-end
+		 (min xfer-stop
+		      (next-nonconsecutive (1+ xfer-start) (file-disk-map node-file))))
+	   ;; Given pages consec on disk and in core, write them if nec.
+	   (cond ((records-modified-p xfer-start xfer-end)
+		  (disk-xfer t xfer-start xfer-end
+			     (mapelt-data mapelt)
+			     (* (- xfer-start (mapelt-start mapelt))
+				(file-record-size)))
+		  (records-not-modified xfer-start xfer-end)))))))
+
+;Discard any core used for records start thru end.
+;All records consecutive with them in core are also pushed out
+;but are always written out.
+(defun push-out-of-core (start end &optional dont-write-out &aux start1 end1)
+  (validate-record-range start end)
+  ;; Write out either all the records if nec.
+  ;; If not writing out, split any rqbs that cross start or end
+  ;; so we can push out start up to end without any other records.
+  (cond (dont-write-out
+	 (split-core-map start 0)
+	 (split-core-map end 0)
+	 (records-not-modified start end)
+	 (setq start1 start end1 end))
+	(t
+	 (do ((i start (1+ i))) ((= i end))
+	   (and (record-modified-p i)
+		(= i (next-absent i (file-core-map)))
+		(ferror nil "Modified record ~S not in core" i)))
+	 (setq start1 (prev-nonconsecutive+1 start (file-core-map node-file)))
+	 (setq end1 (next-nonconsecutive end (file-core-map node-file)))
+	 (assign-disk-space start1 end1)
+	 (write-modified-records start1 end1)))
+  (delete-from-map (locf (file-core-map node-file))
+		    start1 end1 'si:return-disk-rqb))
+
+(defun split-core-map (at-record &optional (n-records 0))
+  ;; Split any core map element that crosses the insertion point.
+  ;; Relocate any that follow it.
+  (do ((maptail (file-core-map) (cdr maptail)))
+      ((null maptail))
+    (let ((mapelt (car maptail)) new-rqb)
+      (cond (( (mapelt-start mapelt) at-record)
+	     (incf (mapelt-start mapelt) n-records)
+	     (incf (mapelt-end mapelt) n-records))
+	    ((> (mapelt-end mapelt) at-record)
+	     ;; Splitting a core map entry requires making
+	     ;; a new rqb for the second half, and copying the data into it.
+	     (setq new-rqb (get-disk-rqb (* (- (mapelt-end mapelt) at-record)
+					    (truncate (file-record-size) page-size))))
+	     (copy-array-portion (rqb-buffer (mapelt-data mapelt))
+				 (- (array-length
+				      (rqb-buffer (mapelt-data mapelt)))
+				    (array-length (rqb-buffer new-rqb)))
+				 (array-length
+				   (rqb-buffer (mapelt-data mapelt)))
+				 (rqb-buffer new-rqb)
+				 0
+				 (array-length (rqb-buffer new-rqb)))
+	     (push (list (+ at-record n-records)
+			 (+ (mapelt-end mapelt) n-records)
+			 new-rqb)
+		   (cdr maptail))
+	     (setf (mapelt-end mapelt) at-record))))))
+
+;; Remove from core all RQBs except the one that contains
+;; record RECORDNUM (if any).
+;; WRITING, if T, says don't remove record 0 either
+;; (since we will be updating the map).
+(defun push-out-of-core-all-but-record (recordnum writing)
+  (dolist (mapelt (file-core-map))
+    (and (or (not writing)
+	     (not (zerop (mapelt-start mapelt))))
+	 (or (< recordnum (mapelt-start mapelt))
+	     ( recordnum (mapelt-end mapelt)))
+	 (progn
+	   (assign-disk-space (mapelt-start mapelt) (mapelt-end mapelt))
+	   ;; Don't bother to look for consec records; we know there are none.
+	   (write-modified-records (mapelt-start mapelt) (mapelt-end mapelt) nil nil)
+	   (return-disk-rqb (mapelt-data mapelt))
+	   (setf (file-core-map)
+		 (delq mapelt (file-core-map)))))))
+
+;Assign disk space to any records of the file which exist only in core.
+;This should not be done on a file which is being atomic-updated
+;until the atomic update is complete.
+(defun assign-disk-space (&optional (start 0) (end (file-n-records node-file)))
+  (validate-record-range start end)
+  (do ()
+      (( start end))
+    (setq start (next-absent start (file-disk-map node-file)))
+    (and (zerop start) (> (file-n-records) 1)
+	 (ferror nil "Serious lossage!  Record 0 deallocated.  Do not continue"))
+    (assign-disk-space-1 start
+			 (setq start
+			       (or (next-present start (file-disk-map node-file))
+				   end)))))
+
+;Assign disk space to range start to (not incl) end,
+;assuming that those records have no space assigned.
+(defun assign-disk-space-1 (start end &aux max-records)
+  (do ()
+      (( start end))
+    (multiple-value-bind (first-block n-allocated)
+			 (allocate-disk-blocks (file-pack node-file) (- end start))
+      (cond ((zerop n-allocated)
+	     (cerror ':no-action nil 'no-more-room "Disk full on ~A-~D."
+		     (pack-volume-name (file-pack))
+		     (pack-number-within-volume (file-pack)))
+	     (process-wait "DISK FULL"
+			   #'(lambda (pack)
+			       (cond ((or (not (file-top-level-node node-file))
+					  (not (funcall (file-top-level-node node-file)
+							':always-allow-disk-allocation)))
+				      (not (zerop (pack-number-of-available-blocks pack))))
+				     (t (> (pack-number-of-available-blocks pack)
+					   (pack-danger-available-blocks pack)))))
+			   (file-pack node-file))
+	     (signal 'more-room "Disk no longer full."))
+	    (t
+	     (setq max-records (truncate max-transfer-size
+					 (truncate (file-record-size) page-size)))
+	     ;; Don't put more than MAX-TRANSFER-SIZE pages
+	     ;; into a single element of the disk map.
+	     (cond ((> n-allocated max-records)
+		    (free-disk-blocks (file-pack)
+				      (+ first-block max-records)
+				      (- n-allocated max-records))
+		    (setq n-allocated max-records)))
+	     (insert-in-map (locf (file-disk-map node-file))
+			    start (+ start n-allocated) first-block)
+	     (setf (file-header-changed-p) t)
+	     (setq start (+ start n-allocated)))))))
+
+;; Deassign any disk space allocated to records start to (not incl) end.
+;; Read the records in first, unless discard-data is set.
+;; Modify the disk map not to include disk space for
+;; records start to (not incl) end,
+;; and put any disk blocks that were assigned to them
+;; on the file-blocks-to-be-freed list.
+(defun deassign-disk-space (start end &optional discard-data)
+  (validate-record-range start end)
+  (and (zerop start) (> (file-n-records) 1)
+       (ferror nil "Serious lossage!  Record 0 deallocated.  Do not continue"))
+  (cond (discard-data (push-out-of-core start end t))
+	(t (get-in-core start end)))
+  (do ((m (file-disk-map node-file) (cdr m))) ((null m))
+    (let ((mapelt (car m)))
+      (and ( (mapelt-start mapelt) end) (return))
+      (cond ((> (mapelt-end mapelt) start)
+	     (let ((free-start (max start (mapelt-start mapelt)))
+		   (free-end (min end (mapelt-end mapelt))))
+	       (push (list (file-pack node-file)
+			   (+ (mapelt-data mapelt)
+			      (- free-start (mapelt-start mapelt)))
+			   (- free-end free-start))
+		     (file-blocks-to-be-freed node-file)))
+	     (setf (file-header-changed-p) t)
+	     (cond ((< (mapelt-start mapelt) start)
+		    ;; The front of this map elt is not being deleted.
+		    (let ((tem (mapelt-end mapelt)))
+		      ;; Set it to describe what we want to keep at the front.
+		      (setf (mapelt-end mapelt) start)
+		      ;; And if the tail end also has stuff we want to keep
+		      (cond ((> (mapelt-end mapelt) end)
+			     ;; then make a new map elt for that.
+			     (rplacd m (cons (list end tem (+ (mapelt-data mapelt)
+							      (- end (mapelt-start mapelt))))
+					     (cdr m)))))))
+		   ((> (mapelt-end mapelt) end)
+		    ;; Only the tail end of this mapelt is still wanted.
+		    (setf (mapelt-data mapelt)
+			  (+ (mapelt-data mapelt)
+			     (- end (mapelt-start mapelt))))
+		    (setf (mapelt-start mapelt) end))
+		   ;; This map element is all going away => make car nil.
+		   (t (rplaca mapelt nil)))))))
+  ;; Nw copy discarding all map elements whose car is nil.
+  (setf (file-disk-map node-file)
+	(subset #'car (file-disk-map node-file))))
+
+(defun atomic-update-word (word-number)
+  (atomic-update-records (truncate word-number (file-record-size node-file))
+			 (1+ (truncate word-number (file-record-size node-file)))))
+
+;Ask for atomic update processing on the records from start to (not incl.) end.
+;An atomic update means that the contents of a set of records changes "instantly".
+;If it's only one record, this is trivial.  Otherwise we must assign new blocks
+;for those records, and then write the file map to put the new blocks
+;into the file in place of the old ones.
+;If atomic update processing has been requested only within one record,
+;the file-atomic-update-record of the file says which record.
+;When a second record gets involved, both records get their disk space
+;deassigned.
+(defun atomic-update-records (start end &optional discard-old-data &aux aub)
+  (validate-record-range start end)
+  (setq aub (file-atomic-update-record node-file))
+  ;; If, including these records, only one record is included in the change,
+  ;; there is no need to deassign any disk space.
+  ;; But remember what record in the file it is
+  ;; so that, if another record is changed, we can deassign both of them.
+  (cond (( end start))
+	;; Is it only one record, counting record(s) reported now
+	;; and record(s) reported previously?
+	((and (= end (1+ start))
+	      (neq aub t)
+	      (or (null aub)
+		  (= aub start)))
+	 ;; Yes => just remember which record.
+	 (setf (file-atomic-update-record node-file) start))
+	(t
+	 ;; Changes now affect more than one record.
+	 ;; So we must now deassign the disk space of all records involved.
+	 ;; However, do not deassign the space for record 0!
+	 (deassign-disk-space (max 1 start) end discard-old-data)
+	 (and aub (neq aub t)
+	      (not (zerop aub))
+	      (deassign-disk-space aub (1+ aub) discard-old-data))
+	 ;; Set to T because there is no record
+	 ;; included in the update but not yet having had its disk space flushed.
+	 (setf (file-atomic-update-record node-file) t))))
+
+;Transfer records start to (not incl) end from core to the file or vice versa.
+;Assumes that they are consecutive on disk and in core.
+;Array is the array they are contained in; but the first
+;offset words of array are skipped.
+(defun disk-xfer (write start end array offset
+			&aux (ccwx 0) (ccwp %disk-rq-ccw-list))
+  (without-interrupts
+    (unwind-protect
+      (let ((unit (pack-unit-number (file-pack node-file))))
+	(si:wire-page-rqb)
+	(si:wire-disk-rqb array)
+	;; Loop over all the pages we are hacking,
+	;; and put their physical addresses into the RQB.
+	;; Turn on the chain bit in each ccw.
+	(do ((vadr (%24-bit-plus (logand (%24-bit-plus (%pointer array) page-size)
+					 (- page-size))
+				 offset)
+		   (%24-bit-plus vadr page-size))
+	     (n-pages (* (- end start) (truncate (file-record-size node-file) page-size))
+		      (1- n-pages)))
+	    ((zerop n-pages))
+	  (let ((padr (si:%physical-address vadr)))
+	    (aset (1+ padr) si:page-rqb ccwp)
+	    (aset (lsh padr -16.) si:page-rqb (1+ ccwp)))
+	    (setq ccwx (1+ ccwx)
+		  ccwp (+ 2 ccwp)))
+	;; Turn off chain bit in last ccw.
+	(aset (logand (aref si:page-rqb (- ccwp 2)) -2)
+	      si:page-rqb (- ccwp 2))
+	(funcall (if write 'si:disk-write-wired 'si:disk-read-wired)
+		 si:page-rqb unit
+		 (+ (pack-first-abs-page-number (file-pack node-file))
+		    (* (block-number-of-record start)
+		       (truncate (file-record-size node-file) page-size)))))
+      ;; unwind-protect forms
+      (si:unwire-disk-rqb array)
+      (si:unwire-page-rqb))))
+
+;Return the block number of the specified record of the file.
+(defun block-number-of-record (recordnum)
+  (dolist (mapelt (file-disk-map node-file))
+    (and (> (mapelt-end mapelt) recordnum)
+	 (cond (( recordnum (mapelt-start mapelt))
+		(return (+ (- recordnum (mapelt-start mapelt))
+			   (mapelt-data mapelt))))
+	       (t (ferror nil "No disk space for record ~D" recordnum))))))
+
+;For debugging.  Prints the disk-map and core-map for a file.
+;Must be called within the closure bindings for the file, not directly by the user.
+(defun print-file-map (&aux (core-map (file-core-map node-file))
+			    (record-size (file-record-size node-file))
+			    (disk-map (file-disk-map node-file)))
+  (format t "~%Record size ~D~%" record-size)
+  (format t "Record number  core-last-consec  block number  last-consec~%~%")
+  (do () ((and (null core-map) (null disk-map)))
+    (let ((next-interesting (min (mapelt-start (car core-map)) (mapelt-start (car disk-map)))))
+      (format t "~8d       " next-interesting)
+      (cond ((= (mapelt-start (car core-map)) next-interesting)
+	     (format t "~8d          " (mapelt-end (car core-map)))
+	     (pop core-map))
+	    (t (princ "                  ")))
+      (cond ((= (mapelt-start (car disk-map)) next-interesting)
+	     (format t "~10d   ~4d"
+		     (mapelt-data (car disk-map))
+		     (mapelt-end (car disk-map)))
+	     (pop disk-map)))
+      (terpri)))
+  (format t "~%File length in records ~d~%" (file-n-records node-file))
+  (terpri))
+
+(defun print-modified-map ()
+  (dotimes (i (file-n-records))
+    (format t "~%~S -- ~S" i (record-modified-p i))))

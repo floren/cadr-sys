@@ -1,0 +1,290 @@
+-*- Mode:Text; Fonts:(TR12 CPTFONT TR12I HL12B TR12B) -*-
+4Notes on the improved 3DEFSTRUCT.**
+This describes changes to the 1DEFSTRUCT* feature as implemented in system 98 and after.
+
+4Compatible Changes to 3DEFSTRUCT.**
+     1A]* New Options.
+4     1B]** Documentation for Structures.
+     1C]* Slot Options.
+     1D]* Changes to the 1:INCLUDE* option.
+     1E]* Defstruct Tries to Determine an Appropriate Array Type.
+4   *  1F]* New Predefined Structure Types.
+4     1G]** Common Lisp Supported.
+
+1A]4 New options.**
+
+The following are now accepted by 1DEFSTRUCT* in addition to the options described in the
+manual.
+
+1:CALLABLE-CONSTRUCTORS*
+   Giving this option a value of 1T* (ie by writing 1(:CALLABLE-CONSTRUCTORS T)*)
+   causes constructors for this structure to be functions, rather than macros,
+   as they used to be.  This, however, means that code like the following, which
+   works with a macro-defined constructor, will usually cause an error if it is a function:
+   1(MAKE-FOO A 1 B 'BEE)*
+   The syntax to use for callable constructors is like that for &key functions
+   (which is actually how they are defined):  1(MAKE-FOO :A 1* 1:B 'BEE)*
+   Macro-defined constructors now accept keywords for slot-names also.
+   Just to facilitate changing the kind of constructor you use,
+   it is probably best always to use this syntax.
+   There is, however, an irresolvable incompatibility in the way the two types of constructors
+   handle the constructor options such as 1:TIMES* and 1:MAKE-ARRAY*. When 1:CALLABLE-CONSTRUCTORS*
+   is1 NIL*, they should not be quoted, and when it is1 T*, they must not be.
+   For example, in the first case we would say
+   1(MAKE-FROBBOZ :SLOT-1 'FOO :MAKE-ARRAY (:LEADER-LENGTH 2))*,
+   with callable constructors the1 :MAKE-ARRAY* argument must be quoted:
+   (1MAKE-FROBBOZ :SLOT-1 'FOO :MAKE-ARRAY '(:LEADER-LENGTH 2))*.
+
+1:SUBTYPE*
+   This option is valid only when used with structure-types which include 1:SUBTYPE*
+   among their 1:DEFSTRUCT-KEYWORD* keywords (see below).  Such types include things like
+   1:ARRAY* and 1:ARRAY-LEADER*, for which a subtype of the primary array-type is a meaningful
+   concept (in the case of arrays, this could be used to make a structure of this type use a
+   specific array-type, rather than the default 1ART-Q*).  The subtype can also be implicitly specified
+   through the 1:TYPE* option.  Types such as 1:LIST* or 1:FIXNUM-ARRAY*
+   do not have any any meaningful subtypes, and hence do not support the 1:SUBTYPE* option.
+   It is an error to use 1:SUBTYPE* with such types.
+
+1:TYPE*
+   This is by no means a new option, but its syntax has been extended.  Previously,
+   this option could only be used in the form 1(:TYPE 2defstruct-type*)* It is now possible to
+   write 1(:TYPE (2defstruct-type subtype*))*, the effect being like specifying both
+   1(:TYPE 2defstruct-type*)* and 1(:SUBTYPE2 subtype*)*. 
+   For example:  1(DEFSTRUCT (FOO (:TYPE (:ARRAY ART-4B))) A B)*
+   [or 1(DEFSTRUCT (FOO (:TYPE (:VECTOR (MOD 16)))) A B)*, using a Common Lisp type]
+   defines a structure with two slots, each of which can contain only fixnums in the range [0,15]
+   This is a Common Lisp change, but is worthwhile to use in any case as this syntax is
+   more transparent and cleaner than the present technique of writing
+   1(DEFSTRUCT (FOO (:TYPE :ARRAY) (:MAKE-ARRAY (:TYPE ART-4B))) A B)
+
+:PRINT-FUNCTION*
+   The argument to this option is a function of three arguments, which will print
+   an object of the type being defined. This function will be called with three arguments --
+   the structure to be printed, the stream to print it on, and the current printing depth
+   (which should be compared with 1*PRINT-LEVEL*)*.
+   The function is expected to observe the values of the various printer-control variables.
+   Example:
+1  (DEFSTRUCT (BAR :NAMED*
+		1      (:PRINT-FUNCTION*
+			1  (LAMBDA (STRUCT STREAM DEPTH)*
+			1     (FORMAT STREAM "#<This is a BAR, with ring-ding index ~S>"*
+								1   (ZAP STRUCT)))))*
+		 1"The famous bar structure with no known use."*
+	1       (ZAP 'YOW) RANDOM-SLOT)*
+   1(MAKE-BAR) => #<This is a BAR, with ring-ding index YOW>*
+   This option is similar in application to the existing option 1:PRINT*.
+   Its introduction is a Common Lisp change.
+
+1B]4 Documentation for Structures.*
+
+DEFSTRUCT* now interprets a string occurring after the structure name and options
+as documentation for this structure.  The documentation can be accessed by
+1(DOCUMENTATION 2structure-name* 'STRUCTURE)* and changed by 1SETF*ing such a form.
+
+1C]4 Slot Options.**
+
+Slots within a structure may now include one or more slot options.
+The extended syntax for defining slots is either:
+                 2slot-name*
+	     or: 1(2slot-name **{2default-init1 {*slot-option-1 option-value-1*
+					       2slot-option-2 option-value-2 ...*}}1)*
+	     or: 1((2slot-name-1 byte-spec-1 **{2default-init-1 *{2slot-option-1-1 option-value-1-1 ...*}}1)*
+		  1(2slot-name-2 byte-spec-2* *{2default-init-1 *{2slot-option-2-1 option-value-2-1 ...*}}1)*
+				      1... )*
+Currently-defined slot-options are 1:READ-ONLY*,1 :TYPE *and 1:DOCUMENTATION*.
+
+1:READ-ONLY* 2flag*
+   specifies that this slot mat not be 1SETF*ed if 2flag* is non-1NIL*.
+   The contents of this slot are not supposed to be changed after you construct the structure.
+
+1:TYPE 2type**
+  2 *declares that this slot is expected to be of a given type.
+   The Lisp machine compiler does not use this for any assumptions,
+   but sometimes the information enables 1DEFSTRUCT* to deduce that it
+   can pack the structure into less space by using a numeric array type.
+
+1:DOCUMENTATION 2documentation-string**
+   makes 2documentation-string* the documentation for the slot's accessor function.
+   It also goes in the 1DEFSTRUCT-SLOT-DESCRIPTION-DOCUMENTATION* for this slot.
+
+Example:
+  1(DEFSTRUCT (EGGSAMPLE :NAMED :CONC-NAME* 
+				1(:PRINT-FUNCTION #'(LAMBDA (S STREAM IGNORE)* 
+				        1(FORMAT* 1STREAM "#<Eggsample ~S ~S ~S>"* 
+						  1(EGGSAMPLE-YOLK S)* 
+						  1(EGGSAMPLE-GRADE S)* 
+						  1(EGGSAMPLE-ALBUMEN S)))))* 
+	  1(YOLK 'A :TYPE SYMBOL :DOCUMENTATION "First thing you need in an eggsample.")* 
+	  1(GRADE 3 :TYPE (MOD 4))* 
+	  1(ALBUMEN NIL :READ-ONLY* 1T))* 
+  1=>* 1EGGSAMPLE* 
+  1(SETQ EGG (MAKE-EGGSAMPLE :ALBUMEN 'WHITE))* 
+  1=> #<Eggsample A 3 WHITE>* 
+  1(SETF (EGGSAMPLE-YOLK *<2c-sh-d*> 
+   1  EGGSAMPLE-YOLK: (EGGSAMPLE)* 
+   1  "First things you need in an eggsample."* 
+  1(SETF (EGGSAMPLE-YOLK EGG) 19.5)* 
+  1=> 19.5*				1;no type checking!* 
+  1EGG* 
+  1=> #<Eggsample 19.5 3 WHITE>* 
+  1(SETF (EGGSAMPLE-ALBUMEN EGG) 'EGGSISTENTIAL)* 
+  1=> >>ERROR: SETF is explicitly forbidden on  (EGGSAMPLE-ALBUMEN EGG)* 
+  1   While in the function SI#:UNSETFABLE  SI#:LOCF-APPLY  SI#:SETF-1* 
+1    ...* 
+
+1D]* 4Changes to the 3:INCLUDE* option.*
+
+(a) 1DEFSTRUCT* now accepts slot-options in the specification for included slots.
+    This extended syntax is illustrated here:
+    1(DEFSTRUCT ONE :CONC-NAME* 1:NAMED* 
+    1  (SLOT-1 0 :TYPE FIXNUM :DOCUMENTATION "The very first" :READ-ONLY T)* 
+    1  (SLOT-2 'BAR)* 
+    1  SLOT-3)* 
+    1(DEFSTRUCT (TWO :CONC-NAME :NAMED* 
+		1       (:INCLUDE ONE (SLOT-1 6 :DOCUMENTATION "The second first")* 
+				1  *	    1(SLOT-3 '(A B) :TYPE CONS :READ-ONLY T)))* 
+    1  (SLOT-3 5))* 
+    1TWO *will be a structure whose first slot has default value 6, has the documenation, and
+    is read-only and of type 1FIXNUM*, these last two attributes being inherited from the
+    included structure. The third slot will have a default value of 1'(A B)*, should be a cons,
+    and is read-only
+
+    The following example will cause an error:
+    1(DEFSTRUCT (LOSER :NAMED :CONC-NAME* 
+			    1(:INCLUDE ONE (SLOT-1 0 :READ-ONLY NIL :TYPE SYMBOL))))* 
+    This is because (i) the slot is specified to be not read-only, when the included slot
+    was, and         (ii) the slot was given a type which is not a subtype of the included
+    slot type.
+
+(b) New slot-accessor functions are generated.
+    Previously no accessor called 1TWO-SLOT-1* would have been generated in the example above,
+    and you had to access that slot using the function 1ONE-SLOT-1*.
+    Now such accessors are generated for all the included slots, using the conc-name of the
+    including structure.
+    Note that the accessors need not necessarily be the same as the accessors used in the
+    included structure. Eg they may have different documentation, or be read-only.
+
+1E]4 3DEFSTRUCT* Tries to Determine an Appropriate Array Type.**
+
+If all the slots to 1DEFSTRUCT* are given 1:TYPE* slot-options and the structure is based on
+an array which can be of arbitrary type (such as 1:ARRAY*,1 :TYPED-ARRAY*,1 :GROUPED-ARRAY* or1 :VECTOR*)
+and no 1:SUBTYPE* is explicitly given, then 1DEFSTRUCT* will attempt to find the most storage-efficient
+array-type (subtype) for the structure.
+
+Example:
+1  (DEFSTRUCT (FOO)
+      (EH 3 :TYPE (MOD 7))
+      (BE 0 :TYPE (MOD 1)))*
+will define a structure which makes arrays of type 1ART-4B*.
+This feature can be overridden by explicitly giving a 1:SUBTYPE*,
+or by just not giving all the slot-types.
+
+1F]4 New Predefined Structure Types.**
+
+The system now has a number of new predefined structure types:
+1:TYPED-ARRAY*		same as 1:ARRAY* -- for use with 1:NAMED-TYPED-ARRAY
+:NAMED-TYPED-ARRAY*	this is an named array type with which you can specify
+				a subtype restricting the type of elements.
+				The named structure symbol is always put in leader slot 1.
+1:NAMED-FIXNUM-ARRAY*	Named 1:FIXNUM-ARRAY*, with the named-structure-symbol stored in the leader
+1:NAMED-FLONUM-ARRAY*	Named 1:FLONUM-ARRAY*, with the named-structure-symbol stored in the leader
+1:VECTOR*			Same as 1:TYPED-ARRAY*.  This is used for Common Lisp.
+1:NAMED-VECTOR*		Same as 1:NAMED-TYPED-ARRAY*
+				This is the default for Common Lisp structures.
+1:PHONY-NAMED-VECTOR*	This is what you get in Common Lisp if you say
+				1(:TYPE :VECTOR)* and 1:NAMED*.
+
+Examples:
+1(DEFSTRUCT (FOO (:TYPE (:VECTOR (MOD 4)))) A)
+(DEFSTRUCT (FOO (:TYPE (:VECTOR ART-FAT-STRING))) A)
+(DEFSTRUCT (BAR (:TYPE :FIXNUM-ARRAY) :NAMED) X Y Z)
+
+G] 4Common Lisp Supported.**
+
+There now exists a macro 1CLI:DEFSTRUCT* to support the Common Lisp defstruct feature.
+The only difference between 1CLI:DEFSTRUCT* and regular 1DEFSTRUCT* is that the
+Common Lisp version has different defaults for certain options:
+
+1:CONC-NAME* defaults to 2name1-**, where 2name* is the defstruct being defined.
+  (Normally, it is 1NIL* by default.)
+1:PREDICATE* defaults to 1T*, producing a predicate called 2name1-P**,
+  if no predicate name is requested by the user.  (Default is normally 1NIL*.)
+1:CALLABLE-CONSTRUCTORS* defaults to 1T* (normally 1NIL*).
+1:ALTERANT* defaults to 1NIL*, i.e. no alterant macro is defined 
+  (normally a macro called 1ALTER-2name** is defined).
+
+If you do not specify 1:TYPE*, you get 1:NAMED-VECTOR*, which makes a named structure.
+You get a predicate by default.  You may specify how to print the structure.
+
+If you do specify 1:TYPE*, you never get a named structure.
+You either get a plain list or a plain vector.  You do not get a predicate
+by default, and you may not request one.  You may not specify how to print.
+
+If you specify 1:NAMED* along with 1:TYPE*, then you 2do not* get a named structure.
+You get either type 1:NAMED-LIST* or type 1:PHONY-NAMED-VECTOR.*
+Both of these types store the structure type in the structure somewhere,
+and both of them allow you to define a predicate which looks there to
+see whether an object appears to be a structure of the sort you defined.
+Both of them are 2not* recognizable by 1TYPEP*, and anyone randomly creating
+a list or vector with the right thing in it at the right place will find that
+it satisfies the predicate.
+1
+4Changes to 3DEFSTRUCT-DEFINE-TYPE* Options.**
+     1A]* New per-type method of declaring defstuct options.
+     1B]* 1:KEYWORDS* option renamed 1:CONS-KEYWORDS
+
+A] 4New Per-Type Method of Declaring 3DEFSTRUCT* Options.*
+
+DEFSTRUCT* used to check whether a keyword appearing as an option was valid by
+checking whether the keyword had a non-nil 1SI:DEFSTRUCT-DESCRIPTION*
+property.  The problem with this technique is that keywords which which are
+appropriate to only one type of structure are accepted by 1defstruct* as options
+for other structures for which they are meaningless.  (Eg the 1:TIMES* option for
+grouped arrays, which has no meaning for other currently-defined structure
+types.)  The new way to achieve this functionality is via the
+1:DEFSTRUCT-KEYWORDS* 1option to DEFSTRUCT-DEFINE-TYPE*, which has the same
+syntax as the old 1:KEYWORDS* option.  ie 1(:DEFSTRUCT-KEYWORDS 2keyword-1
+keyword-2 *...)* A typical use is as follows: (This is the actual definition of the
+1:GROUPED-ARRAY* type)
+
+1(DEFSTRUCT-DEFINE-TYPE :GROUPED-ARRAY
+  (:CONS-KEYWORDS :MAKE-ARRAY :TIMES :SUBTYPE)
+  (:DEFSTRUCT-KEYWORDS :MAKE-ARRAY :TIMES :SUBTYPE)
+  (:DEFSTRUCT (DESCRIPTION)
+    (DEFSTRUCT-HACK-ARRAY-SUPERTYPE DESCRIPTION))
+  (:CONS (ARG DESCRIPTION ETC) :ALIST
+    (LISPM-ARRAY-FOR-DEFSTRUCT
+      ARG
+      #'(LAMBDA (V A I) `(ASET ,V ,A ,I))
+      DESCRIPTION ETC NIL NIL NIL
+      (OR (CDR (OR (ASSQ ':TIMES ETC)*
+		1   (ASSQ ':TIMES (DEFSTRUCT-DESCRIPTION-PROPERTY-ALIST))))*
+	1  1)
+      NIL))
+  (:REF (N DESCRIPTION INDEX ARG)
+    DESCRIPTION*		1;ignored
+    (COND ((NUMBERP INDEX)*
+	1   `(AREF ,ARG ,(+ N INDEX)))*
+	1  ((ZEROP N)*
+	1   `(AREF ,ARG ,INDEX))*
+	1  (T `(AREF ,ARG (+ ,N ,INDEX))))))*
+
+The 1:CONS-KEYWORDS* specifies the valid keywords which can be supplied to a constructor for
+this type.  1:DEFSTRUCT-KEYWORDS* (which happens to be the same in this case) specifies valid
+keywords to appear in the structure definition of a grouped array, making
+1(DEFSTRUCT (FOO (:TYPE :GROUPED-ARRAY) :TIMES 7) A B)* a valid defstruct, whilst
+1(DEFSTRUCT (FOO (:TYPE :GROUPED-ARRAY) :TYPO 7) A B)* 1 *and
+1(DEFSTRUCT (FOO (:TYPE :ARRAY) :TIMES 7) A B)* 1        *signal an error.
+
+The old type-independent method of saying 1(DEFPROP :MAKE-ARRAY T :DEFSTRUCT-OPTION)*
+is obsolete, although still supported so that programs using this continue to work.
+
+3B] :KEYWORDS4 Option to *DEFSTRUCT-DEFINE-TYPE4 Renamed *:CONS-KEYWORDS*
+
+This has been done since 1DEFSTRUCT-DEFINE-TYPE* now knows about more than
+one type of keyword relevant to the structure, namely 1:CONS-KEYWORDS* and
+1:DEFSTRUCT-KEYWORDS*, which are relevant to the construction and definition
+respectively of structures of a given type.  Previously, there were no
+1:DEFSTRUCT-KEYWORDS*, and so there was no ambiguity in calling this option plain
+1:KEYWORDS*. As this is largely a change for consistency's sake, the old syntax
+naturally continues to be supported.

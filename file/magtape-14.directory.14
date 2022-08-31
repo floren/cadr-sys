@@ -1,0 +1,15 @@
+;;; -*- Mode: Lisp; Package: User; Base: 10.; Patch-File: T -*-
+;;; Patch directory for MagTape version 14
+;;; Written 10/26/83 14:40:22 by LMFile,
+;;; while running on Lisp Machine Filecomputer from band 4
+;;; with MIT-Specific 19.5, System 94.41, ZMail 50.17, Experimental Local-File 44.3, FILE-Server 6.6, MagTape 14.4, Experimental LFS 2.4, microcode 238, FC.
+
+(RELEASED
+ ((0 "MagTape Loaded" "RMS")
+  (1 "Bug fixes." "Dulcey")
+  (2 "Fix bug in reporting end of tape." "LMFILE")
+  (3 "get-rqb-array" "LMFILE" NIL)
+  (4 "Writing files to MagTape now writes filenames correctly.
+Fixed bugs in RESTORE-MAGTAPE." "LMFile" NIL)
+  (5 "Restore files with structured directories correctly." "LMFile" NIL)
+  ))
