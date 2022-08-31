@@ -1,0 +1,686 @@
+Booting the Filecomputer
+
+  If you cold-boot the file computer, it will ask you "Bring up LMFILE?".
+Normally, you should type Y, and everything will happen automatically.
+You should only type N if you do not want LMFILE to be run; such as, if
+your purpose is to load updates and dump a new band.
+
+  When you type Y, the filecomputer will see if AI is up.  If so, it
+will load all patches and all new QFASL files of LMFILE, automatically,
+logging in as LMFILE first.  If AI is down, it will go ahead using the
+versions of the code present in the band that you cold booted.  This may
+mean that a few recently fixed bugs will reappear, but should not lead
+to any disasters.
+
+  When AI is down, a message to that effect will be printed, telling you
+to do (BRING-UP-SERVER) when AI is up again.  Doing this will stop the
+file system, load the latest changes from AI, and start the file system
+again.  It is highly recommended to do this.
+
+  After the recent updates have been loaded if possible, LMFILE will be
+started.  This is done by calling CONSIDER-UNIT on the standard set of
+disk partitions, and then doing (START-FILE-SYSTEM).  More information
+on these functions, which you can also call by hand, appears below.
+
+  Finally, (ENABLE-FILE-SERVER) and (ENABLE-MAIL-SERVER) are done, to
+begin accepting net connections.  This happens after LMFILE is already
+up for local use.
+
+Controlling Network Servers
+
+  You can cause network connections to be accepted by calling
+ENABLE-FILE-SERVER and ENABLE-MAIL-SERVER.  These enable two different
+kinds of servers for different protocols.
+
+  To turn off net connections, call DISABLE-FILE-SERVER and
+DISABLE-MAIL-SERVER.
+
+  You can see a record of connections since the machine was booted by
+doing (PRINT-SERVER-CONNECTIONS).  It lists the user names and the
+machines they came from.  Unfortunately, you cannot tell which ones were
+using LMFILE via REMOTE/SERVER and which were using LMFS via QFILE.
+
+  (FILE-QSEND minutes) sends a message to all people who connected to
+the filecomputer within that many minutes of the present time.  It reads
+the message from the terminal.
+
+  (TV:CLOSE-ALL-SERVERS string-saying-why) kills all servers that
+currently exist, and sends the string-saying-why to the remote machines
+as an error message.
+
+  When a server gets an error, a notification will be printed or will
+pop up in a small window.  In either case, you can begin debugging the
+server by typing Terminal 0 S.  This causes a window labeled
+"LMFILE Server Background Window" to appear.  In that window you will be
+running the error handler on the dead server.  Be sure not to simply
+abort the server if it was in the middle of a node operation and you are
+not SURE that important data bases were half-updated.  See below under
+"nodes".
+
+  Note that any other processes without windows, or whose windows are
+not exposed, that get errors, go into the list together with the dead
+servers, and Terminal 0 S goes through them oldest first.
+
+Volumes and Packs in LMFILE 
+
+  LMFILE can use more than one partition.  Partitions in use in LMFILE
+are referred to as "packs" because the purpose of supporting more than
+one was to be able to use more than one disk; but in fact each "pack"
+can be any partition and two can be on the same disk.
+
+  Packs are grouped into volumes.  The volume is the unit which can be
+mounted or dismounted.  Each volume has a name, and each pack in the
+volume has a number.  The volume name and pack number of the pack are
+stored in the header block of the partition.  The number of packs in
+the volume is also stored there, so that it is impossible to
+accidentally mount only pack 0 of a volume and omit pack 1.
+
+  Each pack has its own set of storage allocation tables and its own bad
+block map, and files do not cross packs.
+
+  In order to make it possible to salvage the file system without
+having all volumes mounted, volumes are arranged in a tree structure
+and subnode pointers can only go down in the tree.  One volume is the
+root volume.  Every other volume has a parent volume, and cannot be
+mounted unless its parent volume is also mounted.  The volume of a
+directory must either be the same as, or the parent of, the volume of
+any file in the directory.  Files in that directory are not allowed to
+be on any other volumes.  This guarantees that there are no files on
+any mounted volumes which can only be reached through files on
+unmounted volumes.  The tree structure is specified by having each
+pack remember its parent volume name.
+
+
+Initializing a Pack
+
+  To initialize a pack for LMFILE use, call INIT-FILE-PARTITION.
+The first two args are the disk unit number and partition name.
+You should specify the keyword arguments :VOLUME-NAME and :PACK-NUMBER
+(default is 0).  If there is more than one pack total in the volume,
+specify :PACKS-IN-VOLUME.
+
+  You can also specify :COMMENT, giving a string to describe what this
+pack or volume is for, and :PAGES-PER-BLOCK (default is 1), which
+controls the size of the unit of allocation and i/o on this pack.
+
+  :PARENT-VOLUME-NAME specifies the name of the volume that is allowed
+to have pointers to this volume.  For the root volume, this should be
+nil.
+
+
+  To modify any of the pack parameters, use REINIT-FILE-PARTITION.  The
+first two args are the disk unit number and partition name.  Remaining
+args are keyword args, but specify only those you wish to change.
+REINIT-FILE-PARTITION is also useful if you make a partition bigger (or
+copy the data into a bigger partition); it reallocates the bit maps to
+handle the increased number of blocks.
+
+  You cannot change the number of pages per block!
+
+Mounting Packs
+
+  At any time the file system is running, there is a set of mounted
+packs.  There may also be some tentative packs.
+
+  (CONSIDER-UNIT unit-number partition-name) puts the specified
+partition into the list of tentative packs.  (MOUNT-TENTATIVE-UNITS)
+considers mounting all the tentative packs.  It checks that those packs,
+together with the ones already mounted, form a consistent set: each
+volume has all its packs, and its parent volume.  If this is so, all the
+tentative packs become mounted in addition to the previously mounted
+packs.  If the condition is not met, the tentative packs remain
+tentative.
+
+  If the file system is not yet running, (MOUNT-TENTATIVE-UNITS) is
+insufficient.  You must do (START-FILE-SYSTEM) instead.  It has the
+additional effect of marking the file system as "running".
+
+  To dismount a pack, do (DISMOUNT-UNIT unit-number partition-name) or
+(DISMOUNT-VOLUME volume-name).  In either case, a whole volume is
+dismounted at once, and so are any other volumes which are its children,
+so that the set of mounted packs remains consistent.  If you cause the
+root volume to be dismounted, the file system stops.  Use the function
+(STOP-FILE-SYSTEM) to do this.  When you dismount a pack, all data
+structures on the pack are written out and files are closed.
+
+  DISMOUNT-UNIT can also be used to remove a pack from the tentative
+list.  In this case, file system operation is not directly affected.
+
+  PACK-LIST contains a list of mounted packs.
+
+Catastrophically Removing Packs
+
+  (DIKE-OUT-UNIT unit-number partition-name) removes a pack from service
+instantly, without writing out maps or files.  Use it if the data
+structures in core are sufficiently wedged.  Because LMFILE is designed
+to maintain partial consistency, diking out a unit in this way will
+never in itself destroy the data in the partition, though it may lose
+some of the most recent output.
+
+  Each pack's header block contains a flag saying whether the pack was
+diked out.  This flag is set when a pack is mounted and is cleared when
+the pack is dismounted cleanly.  Diking the pack out leaves the flag
+set.
+
+  (CLEAR-FILE-SYSTEM) is an even more drastic way of discarding all of
+the file system's in-core state.  It is like diking out all packs.
+If the file system in-core data is sufficiently wedged, this is the
+right way to prevent the bad data from replacing any good data remaining
+on disk.  Continuing from an error in a file server process may produce
+more garbage from existing garbage, if you do not know what you are
+doing.
+
+Pack Data Structures
+
+  Every file server partition has general information (volume name, pack
+number, block size, etc.) in its first page, which is called the header.
+
+  All other data in the partition is reached from addresses in the
+header.  These data include three bit maps and the root directory (if
+this is the root pack).  On the root pack, all files are reached from
+the root directory.  On other packs, all files are reached ultimately
+through directories on other packs.
+
+  The pack's bit maps are the block free map, the block starts file map,
+and the bad block map.  Each contains one bit per block (where a block
+is some number of pages, as specified during the initialization of the
+pack).  The free map contains a 1 for each block that is not in use.
+The block starts file map contains a 1 for each block that is the first
+one of a file.  The bad block map contains a 1 for each block that
+should not be used (because it is likely to cause disk errors if used).
+
+Free Storage Allocation
+
+  When a pack is not in use and clean, its free map correctly indicates
+which blocks are in use.  When a pack is in use, an "available table" is
+created in core, and some number of free blocks are put into it.  Those
+blocks are marked "in use" in the free map on disk.  Then blocks are
+allocated for use in files by removing them from the available table.
+Freed blocks go into the available table, and if that table gets full,
+some are transfered to the free map.  This technique reduces disk access
+to the free map itself.
+
+  If the file system crashes, the blocks in the available table are
+lost, but the next time the pack is used, it will be garbage collected
+and the blocks will be recovered.  If you dismount a volume, the
+available blocks are put back into the free map, and a garbage
+collection will not be needed when you next use the pack.
+
+  (PRINT-FREE-MAP unit-number partition-name) prints the free map of the
+pack, and (PRINT-AVAILABLE-TABLE ...) prints the available blocks.
+
+The Block-Starts-File Map
+
+  In LMFILE it is possible to refer to a file safely with its pack and
+its first block number.  This is how directories point to the files they
+contain.  It is always possible to tell whether a block is really the
+start of a file, and to find all blocks that start files, without
+independent of the directory hierarchy, by means of the
+block-starts-file map.  This map contains a 1 for every block that
+starts a file.  This map is read into core when the pack is mounted, and
+any attempt to access a file verifies the map bit for consistency.
+
+Files on Disk
+
+  A file in LMFILE is a low-level object that the user does not deal
+with.  It is a sequence of disk blocks, usable for storing data for
+all sorts of purposes.  The object which a user opens is called a
+node.  Most nodes actually use a file to hold their data, but not all
+nodes do.
+
+  A file is identified by its pack and the block number of its first
+block.  (All block numbers are relative to the beginning of the
+partition.)  The other blocks in the file are listed in the file's
+disk map, which is contained in the file itself.  The first block of
+the file contains the beginning of the disk map, but there is no limit
+to its size.  This may look risky, but in fact it is always the case
+that any record in the file is pointed to from a part of the map that
+resides in an earlier record in the file.
+
+  The first block of a file contains other special information in its
+first few words.  Word 0 of a valid file always contains the number
+6969. decimal.  Word 1 is the superfile pointer which explains where
+to find the file of the directory containing the node in this file;
+see below for details.  Word 2 is the FILE-CONTENTS-OFFSET, the index
+of the word in the file where the actual contents begin.
+
+  Word 3 is the FILE-MAP-OFFSET, which is the index of the word in the
+file where begins the map which describes the other blocks in the
+file.  This word is always in the first record!  Word 4 is the
+FILE-MAP-LENGTH which gives the number of words of map data.
+
+  The superfile pointer makes it possible to actually open a node
+knowing nothing except its first block number and pack.  This is done
+by the function OPEN-NODE-GIVEN-FIRST-BLOCK.  It looks in the first
+block to find the superfile pointer, calls itself recursively to open
+that, then asks the supernode to open any subnode whose first block
+and pack are the desired ones.  The recursion stops at the root node.
+The superfile pointer is also used for error checking whenever a node is opened.
+
+  The low 24 bits of the superfile pointer word are the first block
+number of the superfile.  The top 8 bits specify volume and pack; the
+low seven of them are the pack number, and the sign bit is set if the
+superfile is on this volume's parent volume (otherwise it must be on
+the same volume as this file).
+
+  Word 5 is the redundant name length, in characters.  The redundant
+name is a string, stored starting in the word after the end of the
+map, which gives this file's node's pathname.  Word 6 encodes the
+node's byte size, flavor code number and flags.  Word 7 is the
+redundant data length in bytes.  These three words (and the name
+string pointed to by them) are redundant with information in the
+directory which points to this file.  They are provided so that the
+salvager can reinsert this file's node in its directory accurately.
+See LMFILE;DEFS for more information on them.
+
+  In some very old files, the map starts at word 5, and the
+redundant information words are not present.  These files can be
+identified by the value of the map offset, in the third word.
+
+  The file map is stored so that each word describes one or more
+consecutive disk blocks.  The bottom 24 bits of the word contain the
+number of the first of the blocks.  The top 8 bits give the number of
+consecutive blocks starting there.
+
+  When files are created and deleted, they go through a transient
+state called "half-dead".  Half dead files are identified by the
+number 5454. decimal in the first word.  No other words in a half dead
+file mean anything.
+
+Files in Core
+
+  In order to access the records of a file, LMFILE creates a
+FILE-OBJECT, which is a named structure.  The actual blocks of the
+file itself are accessed through DISK-RQBs.
+
+  Here are the components of a FILE-OBJECT:
+
+   The FILE-DISK-MAP, which records disk addresses for all records.
+       Each element looks like (first-record-num last-record-num block).
+       <block> is the block number of record <first-record-num>.
+       The other records up to but not including <last-record-num>
+       are consecutive with the first one.
+   The FILE-CORE-MAP, which records core-locations for records in core,
+       Each element looks like (first-record-num last-record-num rqb).
+       The rqb contains the entire specified range of records.
+   The FILE-MODIFIED-MAP, an ART-1B array
+       containing 1 for modified records.
+   The FILE-PACK, which is the pack object for the pack the file is on,
+   The FILE-BLOCKS-TO-BE-FREED, which is a list describing blocks
+       which should be freed when this file's contents are written
+       out.  When a file is deleted, its first block is put onto the
+       directory node's file's FILE-BLOCKS-TO-BE-FREED so that the
+       block can be freed once the file is no longer pointed to.
+       When a file is truncated, the blocks removed from it are put
+       on the file's own FILE-BLOCKS-TO-BE-FREED so they will not be
+       freed until the file's map on disk no longer mentions them.
+       Elements are of the form (pack-object first-block n-block).
+   The FILE-TOP-LEVEL-NODE, which points to the node-object for
+       the node which occupies this file.
+   The FILE-RECORD-SIZE, which is the size in words of records in this file.
+       It is the same as the size of blocks on the pack this file is on.
+   The FILE-N-RECORDS, which is the number of records in the file.
+       Not all of the records which the file "has" need actually exist
+       in either of the maps.  This is the length of the file-modified-map,
+       however.
+   The FILE-CONTENTS-LENGTH, which is the length of the contents of
+       the file, in words.  The length in records must be big enough
+       to accomodate this many words, but there can be extra records.
+       "Contents" means the data in the file that is not given a special
+       meaning at the level of files.  It may be given special meanings
+       by the node which resides in the file.  For example, contents does
+       not include the file header words, map, or redundant name.
+   The FILE-ATOMIC-UPDATE-RECORD, which holds data on the status of any
+       atomic update transaction in progress on this file.  See below.
+   The FILE-HEADER-CHANGED-P, which is T if the map, node pathname or
+       node's directory entry has changed, and must be updated on disk.
+
+  All manipulation is done on the file-object which is the value of
+NODE-FILE.  Normally this is bound as an instance variable by the
+node.
+
+  To access an arbitrary word of the file in NODE-FILE, do
+(FILE-FETCH-WORD n).  It returns two values; the low 24 bits and the
+top 8 bits.  To store, do (FILE-STORE-WORD n bottom-24 top-8).  If
+either of the last two args is nil or omitted, that part of the word
+is not changed.
+
+Garbage Collection and Salvaging
+
+  Garbage collection is designed to find the blocks which were in the
+available table when the file system crashed, and which are therefore
+marked as in use in the free map although they are not really in use.
+The LMFILE garbage collector is designed to be able to run in parallel
+with file system operation, though it is not currently used in that
+mode.  It does not examine the directory hierarchy; it finds all files
+on each pack using that pack's block-starts-file map.  If the first
+block of a file appears valid, then its file map is extracted and the
+blocks in it are marked as "correct on disk" (in the free map).  Also,
+all blocks that the file system frees or allocates during garbage
+collection are marked as "correct on disk".  Finally, all blocks not
+marked as "correct on disk", and not marked as bad in the bad block map,
+are made free in the free map.
+
+  Garbage collection is done automatically whenever you mount a pack
+that was not dismounted cleanly the last time it was in use.  If it
+finds invalid files, it will print warnings, but will not get errors or
+ask questions.
+
+  Because garbage collection does not use the directory hierarchy, it
+does not detect that the pointer to a file from its directory has been
+lost.  On the other hand, it also does not discard such files.  As long
+as their first blocks are properly marked in the block-starts-file map,
+they are preserved until the next salvage is done.
+
+  Salvaging is a more powerful operation than garbage collection.
+It does use the directory hierarchy, and it checks the entire file
+system completely for consistency.  It will detect any file that is not
+pointed to, and offer to reinsert the file in its proper directory if
+the file appears consistent and its redundant pathname information is
+readable.  It will also detect pointers to blocks that are marked as not
+starting files; but you must fix this yourself.  See below.  Overlapping
+files, and files in more than one place in the hierarchy, are also
+detected.  So are files whose supernode pointers do not point properly
+at the directories they are found via.
+
+  To salvage, do (SALVAGE-FILE-SYSTEM).  It will ask whether to find
+files overlapping the files from the previous salvage.  Answer "N".
+Then it will print warnings about any invalid files, or overlapping
+files.
+
+  Finally, it will deal with any files not pointed to.  If the file's
+proper pathname can be determined, that pathname will be printed, and
+you will be asked whether to reinsert the file.  If the pathname cannot
+be determined (such as, if the file is invalid), an appropriate warning
+will be printed and you will be asked whether to flush the file.  In
+either case, if you answer "N", nothing will be done to the file.  It
+will remain in its current state.  Half dead files are flushed without
+questions.
+
+  If you say "Y" to reinsert a file that is not pointed to, and the
+file's directory does not exist, you will get a warning.  Continue
+through the list of files not pointed to; perhaps one of them is the
+desired directory.  If so, reinserting the file in that directory will
+automatically cause the file to be pointed to again.  Do another salvage
+to make sure.  If the file's directory is not reinserted later, you can
+create the directory and then do
+(FIX-FILES-NOT-POINTED-TO).
+This will reconsider the list of files not pointed to, and offer to
+reinsert or flush them again.  Once the directory exists, reinsertion
+should work.
+
+  If any overlapping files, or files pointed to in two places, were
+found, then you will only be told of one of the overlapping files, or
+one of the two ways the file is reachable.  The error condition is only
+detected when the second pointer is looked at.  To find the other
+overlapping file or the other path, run the salvager again and answer
+"Y" when it asks whether to find the overlapping files.  If you want to
+do this, and the first salvage is asking you about files that are not
+pointed to, it is safe to abort.  The second salvage will find all the
+overlapping files, or all the ways a given file is pointed to.  Then, to
+fix the file system, you will have to "dike out" all but one.  If you do
+not wish to try to determine which overlapping file is still valid, you
+can dike out all of them.
+
+  To dike out a file from the directory hierarchy, first open the
+directory node by doing (OPEN "directory pathname") and then
+(SETQ D1 (FUNCALL * ':NODE)) and (CLOSE **).  Then you can do the actual
+diking out with (FUNCALL D1 'FS:DIKE-OUT-SUBNODE pathstep).
+<pathstep> is a list of the form '(:VERSION "nodename" node-version)
+This causes the subnode pointer to be dropped from the directory.
+The file storage itself is not touched.
+
+  Diking out will probably ask you whether to clear the
+block-starts-file bit of the file's first block.  Normally, you should
+answer "Y".  The exception is if you are flushing all but one pointer to
+a file pointed to from more than one place.  Then you should answer "N".
+
+  Which file or file pointer should you dike out?
+
+  When files overlap, if the header of one or both is included in the
+overlap, then probably the one file's header was clobbered by
+data from the other file.  If this is so, you will have got a warning
+about that file's header.  If you got such a warning about a file, dike
+out that file. 
+
+  If you do not get a warning about an invalid header in any of the
+overlapping files, the case is more difficult.  But you should then be
+able to OPEN all the files and see which, if any, still contains
+anything useful.  (You may get errors due to subtle inconsistencies in
+the file maps, however).  If one of the files provides something useful
+when you open it, keep that one and dike out the rest.  Otherwise dike
+them all out.  If one of the overlapping files is a directory, you will
+get an error of some sort in trying to open it, when its directory data
+is parsed and turned into an in-core structure.  If you do not get such
+an error, the directory is almost surely unclobbered and is the file you
+should not dike out.
+
+  Because of the validation provided by the block-starts-file map, it is
+impossible for damage to result from reading in a directory that
+contains garbage data which happens to look just enough like a real
+directory.  At worst, you will get files pointed to from two places.
+If it points to places that do not start files, you will only get an
+error if you try to open those files.
+
+  If two files' headers overlap, this is reported as one file pointed to
+from two places.  Then you will get an "invalid superfile pointer"
+warning from at least one of the two.  Chances are that one is the one
+to dike out; but you can try opening the other one to see if it looks
+reasonable before you simply decide to keep it.  As said above, if you
+want to keep one of the pointers, answer "N" to clearing the
+block-starts-file bit when you dike out the others.
+
+Nodes
+
+  Although LMFILE deals internally with objects called files, these
+objects are not visible to the user of LMFILE.  The LMFILE objects
+that users create, open and delete are "nodes".  A node may have a
+file which stores on disk the data of the node, or it may be stored in
+some other fashion.
+
+  Each node has a flavor which is instantiated to produce an object in
+core to refer to the node, when the node is opened.  Directories and
+links are special flavors of nodes, just as an ordinary "user file" is
+a flavor of node.
+
+  The directory hierarchy exists at the level of nodes.  Each entry in
+a directory describes a node.  It specifies the node's flavor, and
+auxiliary data called the "pointer-info" which the specific flavor of
+subnode uses to find its data.  For nodes stored in files, the
+pointer-info will include the pack number, first block number, and if
+necessary the volume name, but this information is interpreted only by
+the specific node flavor.
+
+  When a node is being referred to for any purpose, it must be "open".
+This means that an instance of the appropriate flavor actually exists
+in core.  All operations on the node are done with message passing.
+
+  Each time some use requests that a node be open, the node is
+given a "reason" for being open.  The reason is a lisp object.  The
+node remembers all its reasons and does not normally cease to be open
+as long as any reasons are still active.  Directories normally stay
+open even if they cease to have reasons.  The operations :ADD-REASON
+and :REMOVE-REASON are used to add and remove reasons from an open
+node object.
+
+  A directory node's purpose is to associate names with subnodes.
+Directories support the operations :OPEN-SUBNODE and :CREATE-SUBNODE
+which take various arguments including names and return node objects.
+(Other nodes support these operations also, but do not have subnodes
+and refuse to create any.  However, you could implement a type of node
+which did support them).
+
+  A node object is not actually just a flavor instance.  It is an
+instance encapsulated in an entity.  The entity is a kind of closure;
+its purpose is to provide interlocking on all messages, which are then
+passed on to the flavor instance.  So only one process can operate on
+a node at one time, unless special hair is used.  In all methods of
+node flavors, SELF refers to the instance and NODE-CLOSURE refers to
+the entity.  So NODE-CLOSURE should always be used whenever pointers
+to the node are being given out (consed onto lists, etc).  The only
+use for SELF is in FUNCALL-SELF.
+
+  Each node records a SUPERNODE and some SUPERNODE-INFO.  The
+supernode is the directory node whose subnode this is.  SUPERNODE-INFO
+is an object which the supernode can understand to identify which
+subnode this is.  Many operations on this node work by sending a
+message to the supernode and asking it to do the work.  These
+operations also pass SUPERNODE-INFO so the supernode can tell which of
+its subnodes to operate on.  For most purposes, only the supernode
+need understand SUPERNODE-INFO, and it can be any object that the
+supernode wishes to set it up as when it creates its subnodes.  In
+fact, the SUPERNODE-INFO is the directory entry object for this node
+in the supernode.  This way, no searching needs to be done in order to
+handle messages forwarded from the subnode.
+
+  A node whose data are stored in a file has an instance variable
+NODE-FILE which points to the file.  Since all operations on files use
+NODE-FILE free, the node's methods can easily access the file.
+
+Access to Data of Nodes
+
+  The data in a node is normally accessed by streams using the
+operations :FILL-ARRAY-LISPM-FORMAT and :OUTPUT-ARRAY-LISPM-FORMAT.
+These operations take an array, and information describing a position
+in the file; they copy data into or out of the array, and return
+updated position information.
+
+  There are also operations :FILL-ARRAY-PDP10-FORMAT and
+:FILL-ARRAY-BYTE-FORMAT (and matching output operations).  The three
+types of i/o operations differ according to what data format is used
+in the array.  LISPM format means the Lisp machine character set;
+PDP10 format means the PDP10 character set, with every fifth character
+having the PDP10-word's low bit in its bit 7.  Each node flavor
+implements appropriate format translation in its definition of these
+operations.  The BYTE format operations exist only for nodes which
+actually store their data in PDP10 format.  They extract bytes of any
+size, PDP10-style, from the PDP10 words virtually present in the file.
+
+  The precise calling conventions of these operations are not all the
+same, for specific reasons.  See their uses in LMFILE;STREAM.
+
+Directories
+
+  A directory is a node whose purpose is to identify subnodes by name.
+It supports an operation :OPEN-SUBNODE which, given name information
+and a reason for opening, returns a node object for a subnode.
+
+  Directories actually implemented are subflavors of FS:DIR-NODE.
+This flavor of node uses a file to store information about the
+subnodes.  On being opened, it reads all the data in the file and
+produces a data structure in core which is actually used for opening
+subnodes and all other directory operations.  When :FINISHed, it
+writes the data structure into the file again.  The data structure
+lives in the instance variable DIRECTORY-LIST.
+
+  The precise format of the data structure, and the format used in the
+disk file, is up to the particular flavor of directory.  But somewhere
+within the structure, it must contain a DIR-ENTRY object (a named
+structure) for each subnode.  What can vary is the higher levels of
+list structure used to organize them.
+
+  Actual directories are of flavor FS:NAME-AND-VERSION-DIR-NODE or its
+subflavors.  For them, DIRECTORY-LIST is a list of name-entries.  Each
+name-entry has a name (a string) as its first element.  Its second
+element is unused.  Remaining elements are any number of
+version-entries.  Each version-entry's first element is a version (a
+fixnum).  The remaining elements are dir-entries for individual
+subnodes.  The format used on disk is documented in LMFILE;DIREAD
+which contains the code for reading and writing directory files.
+
+Node Property Lists
+
+  Each node has a property list on which properties can be stored
+under arbitrary indicators.  The property list lives in core in the
+dir-entry for the node in its directory, which is the node's
+SUPERFILE-INFO.  All property list operations are forwarded to the
+supernode for handling.
+
+  On disk, the property list is also stored in the supernode, as part
+of the node's dir-entry.
+
+  However, the properties which appear uniform to the user when
+accessed through node operations are not all stored uniformly.  A few,
+such as :DELETED and :CREATION-DATE, live in special places in the
+dir-entry object and are also stored specially on disk.  This is done
+because all nodes have them.
+
+Locking Discipline
+
+  Since sending a message to a node normally locks that node so that
+no other process can access it, special care is required to avoid
+deadly embraces where each of two processes has one node locked and
+wishes to lock another.
+
+  The primary technique used for this is to order the nodes.  A
+subnode can send a message to its supernode at any time; a supernode
+cannot send a message to a subnode without care.  Each place where the
+supernode sends a message to a subnode, it is necessary to show that
+no deadly embrace can result.  This can be done in any of these ways:
+ 1) show that the subnode has no REASONS-WHY-OPEN, so nobody
+    else is currently sending it any messages.
+ 2) send the message with 'DONT-LOCK.
+    That is, do (FUNCALL subnode 'DONT-LOCK operation args..)
+    DONT-LOCK is an operation recognized by the entity which
+    encapsulates the subnode; it passes on the rest of the message
+    without locking.
+    It is necessary to show that use of 'DONT-LOCK causes no lossage.
+ 3) show that the subnode is already locked.
+    This is so if we are processing a message sent by the subnode itself,
+    which is a common case.
+
+  If a node needs to send a message to another node which is neither
+its superior nor its inferior, other techniques are required.  One is
+to use GOBBLE-ANOTHER-LOCK.  This unlocks the node that is using
+it, locks another node, then relocks the node using it.  If at this
+time the node using it has become locked by someone else, it unlocks
+the other node, waits for this node to be free, and tries again.
+See the definition of (NODE RENAME-INTERNAL) in LMFILE;ANYDIR for a
+use of this.
+
+  Another technique used with opening links is to avoid having to lock
+both nodes at once.  The :OPEN-SUBNODE which opens the link node locks
+the directory which the link is in, but opening the node which the
+link points to is not done until after the :OPEN-SUBNODE returns.
+
+  There are still possibilities for deadly embraces in connection with
+hard links, because of the need to update the back pointers.
+Unfortunately, there is no easy way to get rid of the problem.
+Luckily, it cannot happen unless the disk is full, because nothing
+else can cause LMFILE to wait in the middle of a node operation.
+If it does happen, clearing and restarting the file system will
+certainly fix it.
+
+  Another kind of locking problem which does arise in practice is that
+an error happens in a server while a node is locked.  Then that node
+is inaccessible to other servers.  This is especially bad if the root
+node is the one locked.  When connections to the file computer are
+being accepted but hang forever no matter what you try to do, this is
+probably the reason.  Often the problem does not lie in anything you
+tried to do, but in some other operation possibly done by some other
+user which ran into a bug having locked the node you are trying to
+use.
+
+  To repair this problem, the best technique is to clean up whatever
+is wrong with the dead server and continue it.  Then everything will
+proceed cleanly.
+
+  Aborting the file server works if it is safe.  It is not safe if
+done in the middle of closing or finishing a node, or if within
+low level i/o functions such as WRITE-MODIFIED-BLOCKS, GET-INTO-CORE,
+PUSH-OUT-OF-CORE, ASSIGN-DISK-SPACE, DEASSIGN-DISK-SPACE, or the
+STORE-DIR operation.  It is safe most other times, but think about
+what data structures are being operated on.  As an aside, if a server
+gets an error and is not inside a node operation, it is always safe to
+abort it.
+
+  It is safe to clear and restart the file system, though this is
+drastic.  If it is not safe to abort the dead server and you don't
+know how to clean it up, DO THIS.  DO NOT abort the server.
+If this seems unrobust, remember that an error in a server within a
+node operation corresponds to a timesharing system halting or going to
+DDT for failing a consistency check.  All errors in invoking node
+operations, which are "the user's fault", call FILE-ERROR-HANDLER
+which in servers sends an error message across the net.  In local
+operation, they cause continuable errors and you can see CERROR on the
+stack if you look.  It is safe to abort from these errors.

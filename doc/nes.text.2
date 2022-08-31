@@ -1,0 +1,2679 @@
+(.c -*- Mode:Bolio -*- 
+
+.c Long term tasks:
+.c When done, send to Rees@Yale and MLB and Common-Lisp and RWG.
+.c Rename EH to DEBUG?  Eliminate need for EH-ARG?  Document EH?
+
+.c Note: this document only explains system conditions that we expect
+.c you to HANDLE.  If you want to SIGNAL them, you have to know about
+.c init-options and so on; also, you have to know about internal condition
+.c names that users should NOT be handling, so this is really a separate
+.c thing to document.  It's hard for us to do and not too useful for people,
+.c so this document does not undertake to do it.
+
+.c It would be nice to have a concept index here, particularly if the index,
+.c could list all the pages on which a concept is referenced, putting the
+.c page on which it is defined in boldface in the index.
+
+.c This document could use a lot of examples.  I just don't have time to
+.c create them.  --DLW 9/23/82
+
+(c) Copyright 1982 Symbolics, Inc.
+
+.chapter Conditions
+
+Zetalisp handles errors through a system of 2conditions*.  A program
+can establish a 2handler* that gains control when an error occurs.  A
+program can also 2signal* a condition when it wants to report an
+error.  When the system or a user function detects an error it signals
+an appropriate condition and some handler established for that condition
+can deal with it.
+
+Every condition is named by a symbol, e.g. 3sys:unbound-variable*,
+3sys:divide-by-zero*, 3fs:file-not-found*.  These symbols are
+actually the names of flavors.  When a condition is signalled, a
+2condition object* of the appropriate flavor is created.  The
+condition object contains information about the condition, such as a
+textual message to report, and various parameters of the condition.  For
+example, a condition object of flavor 3fs:file-not-found* contains the
+pathname that was not found in the file system.
+
+Handlers are established with dynamic scope, so the most recently
+established handler for the condition will be invoked.  When a condition
+is signalled, all of the currently-established handlers are searched,
+starting with the innermost handler, for one that can handle the flavor
+of condition that has been signalled.  When an appropriate handler is
+found, it can access the condition object to learn more about the error.
+
+One simple form that establishes a handler is 3condition-case*.
+Here is a simple example:
+
+.lisp
+(condition-case ()
+    (// a b)
+  (sys:divide-by-zero *infinity*))
+.end_lisp
+
+This form evaluates 3(// a b)* and returns the result.  However,
+during the evaluation of 3(// a b)*, it establishes a handler for the
+3sys:divide-by-zero* condition.  If this condition is signalled during
+the evaluation of 3(// a b)* (that is, if a division by zero happens,
+presumably because 3b* is zero), the form will return the value of
+3*infinity** instead.  If any other error occurs, it is treated as if
+no condition handler been established.
+
+You can also establish a handler for a pre-defined 2set* of conditions.  For
+example, the symbol 3fs:file-operation-failure* refers to the set of all
+error conditions in file system operations, such as "file not found" or
+"directory not found" or "link to non-existent file", but 2not* such
+errors as "network connection closed" or "invalid arguments to 3open*"
+(these errors are members of different sets).
+
+Some conditions are 2error* conditions, and some are not.  The
+distinction is that if an error condition is signalled but there is no
+handler, the interactive debugger is entered, whereas if a non-error
+condition is signalled but there is no handler, 3signal* (see below)
+returns 3nil*.  The symbol 3error* refers to the set of all error
+conditions; the symbol 3condition* refers to all conditions, including
+both error and non-error conditions.
+
+You can signal a condition by calling either 3signal* or 3error*.
+The first argument is a symbol that names a condition; the rest are
+keyword arguments that let you provide extra information about the
+error.  3signal* is the most general signalling function; it can
+signal any condition, and allow a handler, or the user, to 2proceed*
+from the error.  3error* is a more restrictive version that only
+accepts error conditions, and does not allow proceeding.  3error* is
+guaranteed to never to return its caller.  There are also simpler
+functions called 3ferror* and 3fsignal* which are useful when you
+don't want to define a new condition.
+
+The symbols that name sets of conditions are also the names of flavors.
+In fact, the sets are defined by the flavor inheritance mechanism.  For
+example, the flavor 3fs:file-not-found* is built on the flavor 
+3fs:file-operation-failure*, which is in turn built on the flavor 3error*.
+In general, if a handler is established for flavor 3a*, and a
+condition object of flavor 3b* is signalled, then the handlers is
+invoked if 3(typep b 'a)* is true; that is, if 3a* is one of the
+flavors that 3b*'s flavor is built out of.
+
+Each flavor of error can provide various ways for the handler to try to
+2proceed* from the error.  A set of special forms allows programs to
+establish 2restart* points to continue execution in the face of
+errors.  User programs can define their own flavors of errors.  Simple
+forms are provided for programs that don't want to deal with conditions.
+The condition mechanism can also be used for occurances that are not
+actually errors.  All this is described in more detail below.
+
+It is very important to understand that signalling a condition is not
+the same thing as throwing to a tag.  3*throw* is a primitive
+control-structure mechanism allowing control to escape from an inner
+form to an outer form.  Signalling is really a convention for finding
+and executing a piece of user-supplied code at certain times.  A
+condition handler might do a 3*throw*, but it is under no obligation
+to do so.
+
+.section Establishing Handlers
+
+There are two basic forms for establishing handlers.  3condition-bind*
+is the most general form, because it allows the handler to run in the
+dynamic environment in which the error was signalled, and try to proceed the
+error.  3condition-case* is the easiest to use, but does not allow
+proceeding, because it returns to the dynamic environment in which the handler
+was established.
+
+There is also a third form called 3condition-call* which is a more
+general version of 3condition-case* that uses user-specified predicates to select the
+clause to be executed.  All three of these forms are also available in a
+conditional variant, in which the handlers are only established if some
+expression is true.
+
+3condition-bind-default* is a variant of 3condition-bind*
+that establishes a handler on the default
+condition list instead of the bound condition list.  This is an advanced
+feature that you can ignore if you are not interested.  The distinction
+is described below under [ref to Signalling Conditions and Default Handlers].
+
+.defspec condition-bind bindings body...
+.defspec1 condition-bind-if cond-form bindings body...
+.defspec1 condition-bind-default bindings body...
+.defspec1 condition-bind-default-if cond-form bindings body...
+
+3condition-bind* establishes handlers for conditions, and then evaluates the
+body with those handlers established.  The handlers established
+have dynamic scope.  The format is:
+
+.lisp
+(condition-bind ((2condition-flavor-1 handler-1*)
+                 (2condition-flavor-2 handler-2*)
+                 ...
+                 (2condition-flavor-m handler-m*))
+  2form-1*
+  2form-2*
+  ...
+  2form-n*)
+.end_lisp
+
+Each 2condition-flavor-j* is either the name of a condition flavor (a
+symbol) or a list of names of condition flavors.  Each 2handler-j* is
+a form that is evaluated to produce a handler function; they are
+evaluted in order from 2handler-1* to 2handler-m*, and only after
+all the 2handler-j* forms are evaluated is any handler established.
+
+Each element of the list sets up a handler for the specified flavor of
+condition.  If a list is specified, the handler is established for
+conditions of any of the flavors in the list.  The condition handlers
+are established simultaneously; if a condition is signalled,
+2handler-1* will be the first one examined.
+
+The 2form-i* forms are a body, constituting an implicit 3progn*.
+They are evaluated sequentially, and the 3condition-bind* form returns
+whatever values 2form-n* returns (3nil* if there are no forms in the
+body).  The established conditions become disestablished when the
+3condition-bind* form is exited.
+
+If, during the evaluation of the body, a condition is signalled, one of
+these handlers might be invoked.  Each handler function is a function of
+one argument: the condition object.  The handler function is called by
+the signalling mechanism, and so it runs in the dynamic environment in
+which the error was occured; no 3*throw* is performed.
+
+The handler function has three choices.  First, it can return 3nil* to
+indicate that it does not want to handle the condition after all, in
+which case the signalling mechanism continues to search for a condition
+handler.  Second, it can throw to some outer catch-form, using
+3*throw*.  Third, if the condition has any proceed-types, it can
+proceed the condition by sending a 3:proceed* message to the condition
+object and returning the resulting values.  In this case, 3signal*
+returns all of the values returned by the handler function.  (If
+3error* had beem called, there would not have been any proceed-types.)
+Proceeding is discussed in detail below.
+
+Note that the handler is free to decide not to handle the condition,
+even though the 2condition-flavor-j* matched.  In fact, the
+2condition-flavor-j* is just a convenience; the handler could have
+checked itself and returned 3nil* to not handle the condition.
+
+Example:
+.lisp
+(condition-bind ((fs:file-not-found 'my-fnf-handler)
+		 (fs:delete-failure 'my-delete-handler))
+  (deletef pathname))
+.end_lisp
+
+If a 2handler* is a lambda-expression, it will be compiled.  (In a
+future release, it will be a proper lexical closure, capable of
+referring to the lexical variables of the containing block, but for now
+it is a separate top-level function.)
+
+3condition-bind-if* is just like 3condition-bind* except that
+it has another subform called 2cond-form*.  Its format is:
+.lisp
+(condition-bind-if 2cond-form*
+		   ((2condition-flavor-1 handler-1*)
+                    (2condition-flavor-2 handler-2*)
+                    ...
+                    (2condition-flavor-m handler-m*))
+  2form-1*
+  2form-2*
+  ...
+  2form-n*)
+.end_lisp
+
+The first thing 3condition-bind-if* does is to evaluate 2cond-form*.
+If the result is not 3nil*, then it continues just like
+3condition-bind*: it sets up the handlers and executes the body.  If
+the result is 3nil*, then it does not set up any handlers (although
+the 2handler* forms are still evaluated); it just
+executes the body like 3progn*.
+
+3condition-bind-default* is just like 3condition-bind*, and
+3condition-bind-default-if* is just like 3condition-bind-if*, except
+that these forms establish their handlers on the default handler list
+instead of the bound handler list.  Such 2default* handlers are only
+examined by the signalling mechanism 2after* all of the bound handlers
+have been examined, so that a 3condition-bind-default* can be
+overridden by a 3condition-bind* outside of it.  This advanced
+feature is described in more detail in the [ref. Default Handlers] section,
+below.
+
+.end_defspec
+
+.defspec condition-case (var) form clause...
+.defspec1 condition-case-if cond-form (var) form clause...
+
+3condition-case* establishes handlers for conditions, expressing the handlers
+as clauses of a case-like construct instead of as functions.  The
+handlers established have dynamic scope.  The format is:
+
+.lisp
+(condition-case (2var1* 2var2* 2...*)
+    2form*
+  (2condition-flavor-1 form-1-1 form-1-2 ... form-1-n*)
+  (2condition-flavor-2 form-2-1 form-2-2 ... form-2-n*)
+  ...
+  (2condition-flavor-m form-m-1 form-m-2 ... form-m-n*))
+.end_lisp
+
+Each 2condition-flavor-j* is either the name of a condition flavor (a
+symbol) or a list of names of condition flavors.  The remainder of each
+clause is a body, a list of forms constituting an implicit 3progn*.
+
+3condition-case* establishes one handler for each clause.  If one
+flavor is given, the clause will handle conditions of that flavor; if a
+list of flavors is given, the clause will handle conditions of any of
+the flavors in the list.  The handlers are established simultaneously;
+if a condition is signalled, the first clause will be examined first.
+
+3condition-case* establishes these handlers, evaluates 2form*,
+disestablishes the handlers, and returns the values returned by
+2form*.  If a condition is signalled during the evaluation of 2form*
+and it is handled by one of these handlers, then a 3*throw* is
+automatically performed to unwind the dynamic environment back to the
+point of the 3condition-case*; the body of the corresponding clause is
+then executed, and 3condition-case* returns the values produced by the
+last form in the clause.  Note that when any
+3condition-case* clause is executed, all the handlers established by
+the 3condition-case* have already been disestablished.
+
+During the execution of the clause, the variable 2var1* is bound to the
+condition object that was signalled.  If none of the clauses is
+interested in examining the condition object, 2var1* can simply be
+omitted, as in 3(condition-case () ...)*.
+
+As a special case, the last 2condition-flavor-m* can be the special
+symbol 3:no-error*.  If 2form* is evaluated and no error is
+signalled during the evaluation, then 3condition-case* will execute
+the 3:no-error* clause instead of returning the values returned by
+2form*.  The variables 2var1*, 2var2*, and so on are bound to
+the values procedued by 2form*, in the style of 3multiple-value-bind*, so
+that they can be accessed by the body of the 3:no-error* case.
+
+In order to make multiple values accessible when 3:no-error* is being
+used, the list containing 2var* may really be a list of several
+variables.  When the 3:no-error* clause is run, if 2n* variables
+are provided, the first 2n* variables will be bound to those variables
+in the style of 3multiple-value-bind*.  Any extra variables will be
+bound to 3nil*.  If any other clause is run, the first variable is
+bound to the condition object and the rest of the variables are bound
+to 3nil*.
+
+Note that if a condition occurs that none of the cases handle, then
+the signalling mechanism will continue to search the dynamic environment
+for a handler.  If you want to provide a case that handles all errors,
+simply make one of the 2condition-flavor-j*'s be 3error*.
+
+Examples:
+
+.lisp
+(condition-case ()
+    (time:parse string)
+  (time:parse-error *default-time*))
+
+(condition-case (e)
+    (time:parse string)
+  (time:parse-error
+   (format error-output "~A, using default time instead." e)
+   *default-time*))
+.end_lisp
+
+3condition-case-if* is just like 3condition-case* except that
+it has another subform called 2cond-form*.  Its format is:
+
+.lisp
+(condition-case-if 2cond-form* (2var*)
+  2form*
+  (2condition-flavor-1 form-1-1 form-1-2 ... form-1-n*)
+  (2condition-flavor-2 form-2-1 form-2-2 ... form-2-n*)
+  ...
+  (2condition-flavor-m form-m-1 form-m-2 ... form-m-n*))
+.end_lisp
+
+The first thing 3condition-case-if* does is to evaluate 2cond-form*.
+If the result is not 3nil*, then it continues just like
+3condition-case*: it sets up the handlers and evaluates the form.  If
+the result is 3nil*, then it does not set up any handlers; it just
+evaluates the form.  If there is a 3:no-error* clause, it will
+be run in the usual way (see above).
+
+.end_defspec
+
+.defspec condition-call (var) form clause...
+.defspec1 condition-call-if cond-form (var) form clause...
+
+3condition-call* establishes handlers for conditions, expressing the handlers
+as clauses of a case-like construct instead of as functions.  The
+handlers established have dynamic scope.  The format is:
+
+.lisp
+(condition-call (2var*)
+    2form*
+  (2predicate-1 form-1-1 form-1-2 ... form-1-n*)
+  (2predicate-2 form-2-1 form-2-2 ... form-2-n*)
+  ...
+  (2predicate-m form-m-1 form-m-2 ... form-m-n*))
+.end_lisp
+
+Each 2predicate-j* is a function of one argument (they are not
+evaluted).  The remainder of each clause is a body, a list of forms
+constituting an implicit 3progn*.  When a condition is signalled, each
+predicate is applied to the condition object, and the corresponding
+clause is executed if and only if the predicate returns a non-3nil*
+value.  The handlers are established simultaneously; if a condition is
+signalled, the first clause will be examined first.  The predicates
+are evaluated in the dynamic environment of the signaller.
+
+3condition-call* establishes these handlers, evaluates 2form*,
+disestablishes the handlers, and returns the values returned by
+2form*.  If a condition is signalled during the evaluation of 2form*
+and it is handled by one of these handlers, then a 3*throw* is
+automatically performed to unwind the dynamic environment back to the
+point of the 3condition-call*; the body of the corresponding clause is
+then executed, and 3condition-call* returns the values produced by the
+last form in the clause.  Note that when any
+3condition-call* clause is executed, all the handlers established by
+the 3condition-call* have already been disestablished.
+
+During the execution of the clause, the variable 2var* is bound to the
+condition object that was signalled.  If none of the clauses is
+interested in examining the condition object, 2var* can simply be
+omitted, as in 3(condition-call () ...)*.
+
+Note: the number of times that the signalling mechanism chooses to invoke
+the predicates, and the order in which it invokes them, are not
+defined.  Therefore, the predicates should never have any side-effects.
+You can use 3condition-bind* to perform side-effects in the dynamic environment
+of the signal.
+
+(Also note that right now, the predicates are not lexical closures and
+therefore cannot access variables of the lexically containing form,
+unless those variables are declared 3special*.  Also, the predicates
+currently do not get compiled if they are lambda-expressions.  These
+problems will be fixed.)
+
+3condition-call-if* is just like 3condition-call* except that
+it has another subform called 2cond-form*.  Its format is:
+
+.lisp
+(condition-call-if 2cond-form* (2var*)
+  2form*
+  (2predicate-1 form-1-1 form-1-2 ... form-1-n*)
+  (2predicate-2 form-2-1 form-2-2 ... form-2-n*)
+  ...
+  (2predicate-m form-m-1 form-m-2 ... form-m-n*))
+.end_lisp
+
+The first thing 3condition-call-if* does is to evaluate 2cond-form*.
+If the result is not 3nil*, then it continues just like
+3condition-call*: it sets up the handlers and evaluates the form.  If
+the result is 3nil*, then it does not set up any handlers; it just
+evaluates the form.
+
+.end_defspec
+
+.defspec ignore-errors body...
+This special form sets up a very simple handler on the bound handlers
+list that handles all error conditions.  3ignore-errors* executes the
+body and returns the first value of the last form in the body as its
+first value, and 3nil* as its second value.  If any error
+condition is signalled, the 3ignore-errors* form immediately returns
+3nil* as its first value and something non-3nil* as its second value.
+.end_defspec
+
+.section Signalling Conditions
+
+.defun signal flavor-name &rest init-options
+.defun1 error flavor-name &rest init-options
+
+3signal* is the primitive functions for signalling a condition.  The
+argument 2flavor-name* is the name of a condition flavor (a symbol).
+The 2init-options* are the init options when the flavor is created;
+they are passed in the 3:init* message to the flavor (see
+3make-instance*).  3signal* creates a new condition object of the
+specified flavor, and signals it.  If no handler is willing to handle
+the condition and the object is not an error object, 3signal* returns
+3nil*.  If no handler is willing to handle the condition and the
+object is an error object, the interactive debugger is entered.
+
+3error* is a restricted version of 3signal*.  First, the condition
+object or condition flavor that it is given must be an error object
+or error flavor.  Second, 3error* sets the proceed-types of the
+error object to 3nil* so that it cannot be proceeded.  Third, if
+there is no handler, the interactive debugger is entered regardless
+of whether the object is an error object or not.  3error*
+never returns to its caller.
+
+The argument 2flavor-name* can also be a condition object, created by
+3make-condition*, in which case that condition object is signalled.
+
+For compatibility with the old Maclisp 3error* function, 3error*
+tries to determine that it has been called with Maclisp-style arguments
+and turns into a 3fsignal* or 3ferror* as appropriate.  If 2flavor-name*
+is a symbol, but is not the name of a flavor, and there are no more
+than three arguments, 3error* assumes it was called with Maclisp-style
+arguments.
+.end_defun
+
+.defun fsignal format-string &rest format-args
+.defun1 ferror format-string &rest format-args
+3fsignal* and 3ferror* are simple functions for signalling
+particular conditions.  3fsignal* signals 3proceedable-ferror*,
+and 3ferror* signals 3ferror*.  These two flavors of condition are
+described in more detail [ref. below somewhere], along with the other flavors.  The
+arguments are passed as the 3:format-string* and 3:format-args*
+init-keywords to the flavors.
+
+The old 3(ferror nil ...)* syntax will continue to be accepted for
+compatibility reasons indefinitely; the 3nil* is ignored.  If the
+first argument is a symbol other than 3nil*, an error is signalled;
+the first argument must be 3nil* or a string.
+.end_defun
+
+.defun errorp object
+This predicate returns 3t* if 2object* is an error object, and
+3nil* otherwise.  That is,
+.lisp
+(errorp x) <=> (typep x 'error)
+.end_lisp
+.end_defun
+
+.defun make-condition flavor-name &rest init-options
+This function creates a condition object of the specified flavor with
+the specified init-options.  This object can then be signalled by
+passing it to 3signal* or 3error*.  Note that you are not supposed
+to design functions that indicate errors by 2returning* error objects;
+functions should always indicate errors by 2signalling* error objects.
+The intention of this function is to make possible complex systems that
+use subroutines to generate condition objects so that their caller can
+signal them.  See the notes on compatibility [ref. below somewhere].
+.end_defun
+
+The 3signal* and 3error* functions invoke the signalling mechanism,
+which tries to find a handler for the condition.  Here's how it does so.
+The signalling mechanism looks down each of four lists, sequentially,
+trying to find a handler on each one.
+
+It first looks down the list of 2bound* handlers, which are handlers
+set up by 3condition-bind*, 3condition-case*, and 3condition-call*
+forms.  Next, it looks down the list of 2default* handlers, which are
+set up by 3condition-bind-default*.  Next, it looks down the list of
+2interactive* handlers, which normally only contains one handler which
+enters the debugger if the condition is an error condition and declines
+to handle it otherwise.  Finally, it looks down the list of 2restart*
+handlers, which are set up by 3error-restart*,
+3error-restart-loop*, and 3catch-error-restart*.  (Restart
+handlers and default handlers will be discussed in more detail
+[ref. below somewhere].)
+
+Each handler is checked to see whether it wants to handle the condition;
+for example, a 3condition-bind* handler function is called if the flavor types
+match, and a 3condition-call* handler is called if the predicate
+returns a non-3nil* value.  Some handlers have the ability to decline
+to handle the condition (3condition-bind*-like handler functions can do this,
+most of the others cannot), in which case the signalling mechanism keeps
+searching.
+
+If it gets to the end of the last list and there are no handlers left to
+try, one of two things happens.  If the condition was signalled with
+3signal* and the condition object is not an error object, 3signal*
+returns 3nil*.  Otherwise, the interactive debugger is immediately
+entered.
+
+This means that if an error condition is signalled, a handler is
+searched for on the bound and default handlers list, and if one is
+found, it handles the error.  Otherwise, the debugger is entered.  The
+debugger prompts the user with a list of all the restart handlers and
+proceed-types, and the user may select one; or the user may type
+3Abort*, in which case the debugger finds the innermost restart
+handler for the 3Abort* condition and restarts it.
+
+If a non-error condition is signalled, a handler is searched for on the
+bound and default handler list, and if one is found, it handles the
+condition.  Otherwise, the first restart handler for that condition will
+handle it.  If there is no restart handler for the condition, 3signal*
+will return 3nil* if 3signal* was used, and 3error* will enter
+the debugger if 3error* was used.
+
+In practice, if the 3signal* function is applied to an error condition
+object, it is very unlikely that 3signal* will return 3nil*, because
+most processes contain a restart handler that handle all error
+conditions.  The function at the base of the stack of most processes
+contains a 3catch-error-restart* form that handles 3error* and
+3sys:abort*, so that if an error occurs and the debugger is entered, and
+you type the debugger 3Abort* command, if no other restart handler
+handles the error, the one at the base of the stack will handle it and the
+process will terminate.
+
+An important thing to notice is that 2all* of the bound handlers are
+searched before 2any* of the default handlers, and both of these lists are
+searched before any of the restart handlers.  Thus, a 3condition-bind*
+that is outside of a 3condition-bind-default* will be considered first,
+even though it is outside; similarly a 3condition-bind* outside an
+3error-restart* will be considered first even though it is outside.
+
+A condition must only be signalled in the environment in which the
+occurance that it signifies took place, so that handlers will be run in
+the proper dynamic environment.  Therefore, you cannot signal a
+condition object that has already been signalled once.  In particular,
+if you are writing a handler, such as a clause of a 3condition-case*,
+or a handler function for 3condition-bind*, it is not valid to attempt
+to signal the condition object.  Similarly, if a condition object is
+returned by some program (such as the 3open* function given 3nil*
+for the 3:error* keyword), you cannot signal that object.  When a
+program wants to signal the condition, it creates the object and then
+signals it; no other program can signal that object.
+
+.section Restart Handlers
+
+One way to handle an error is to restart the program that got the error
+at some earlier point.  A program can specify that if a condition is
+signalled during the evaluation of a particular form, it is willing
+to be restarted at a certain point.  The basic special form for
+doing this is called 3error-restart*; here is an example:
+
+.lisp
+(error-restart
+     (fs:delete-failure "Try deleting ~A again." file-name)
+  (deletef file-name))
+.end_lisp
+
+This code fragment evaluates the 3open* form, and returns its values
+if it works.  However, if a 3fs:file-not-found* condition is
+signalled, and the debugger is entered, the user will be given the
+opportunity of restarting the program.  The debugger's prompt message
+will be something like
+
+.lisp
+Super-A: Try deleting a:>foo>bar.lisp again.
+.end_lisp
+
+If the user types 3Super-A* at this point, then the 3open* form will
+be evaluated again; that is, the body of the 3error-restart* will be
+started from the beginning.
+
+3error-restart* returns values from its body if no condition is
+signalled; it starts over if a condition is signalled.  Two variations
+on this are provided.  3error-restart-loop* is like 3error-restart*,
+but it always starts over even if no condition is signalled (that is, it
+is an "infinite" loop construct).  3catch-error-restart* is like
+3error-restart* but it never starts over even if a condition is
+signalled (that is, it always returns, either returning the values from
+the body or else returning 3nil* if a condition was signalled and this
+restart handler was exercised).  3catch-error-restart* is the most
+primitive version (the other two can be built out of it easily), and so
+it is also provided in a conditional form.
+
+The use of 3error-* in the names of these functions doesn't have any
+real significance; they apply both to error conditions and non-error
+conditions.
+
+.defspec error-restart (condition-flavor format-string format-arg...) body...
+This form establishes a restart handler for 2condition-flavor* and
+then evaluates the body.  If the handler is not invoked,
+3error-restart* returns the values produced by the last form in the
+body and disestablishes the restart handler.  If a condition is
+signalled during the execution of the body and the restart handler
+is invoked, then control is thrown back to the dynamic environment
+of the inside of the 3error-restart* form, and the execution of
+the body is started all over again.  The format is:
+
+.lisp
+(error-restart (2condition-flavor* 2format-string* . 2format-args*)
+  2form-1*
+  2form-2*
+  ...)
+.end_lisp
+
+2condition-flavor* is either
+the name of a condition flavor (a symbol), or a list of condition flavors
+(all of which can be handled).  2format-string* and 2format-args*
+are a control string and a list of arguments to be passed to 3format*
+to construct a meaningful description of what would happen if the user
+were to invoke the handler; it is used by the debugger to create a
+prompting message.
+
+(Note: this is not compatible with the old (System 210 and earlier)
+definition of 3error-restart*.)
+.end_defspec
+
+.defspec error-restart-loop (condition-flavor format-string format-args...) body...
+This form establishes a restart handler for 2condition-flavor* and
+then evaluates the body.  If the handler is not invoked,
+3error-restart-loop* evaluates the body again and again,
+in an infinite loop.  3return* can be used to escape from the loop.
+If a condition is
+signalled during the execution of the body and the restart handler
+is invoked, then control is thrown back to the dynamic environment
+of the inside of the 3error-restart-loop* form, and the execution of
+the body is started all over again.  The format is:
+
+.lisp
+(error-restart-loop (2condition-flavor* 2format-string* . 2format-args*)
+  2form-1*
+  2form-2*
+  ...)
+.end_lisp
+
+2condition-flavor* is either
+the name of a condition flavor (a symbol), or a list of condition flavors
+(all of which can be handled).  2format-string* and 2format-args*
+are a control string and a list of arguments to be passed to 3format*
+to construct a meaningful description of what would happen if the user
+were to invoke the handler; it is used by the debugger to create a
+prompting message.
+.end_defspec
+
+.defspec catch-error-restart (condition-flavor format-string . format-args) body...
+.defspec1 catch-error-restart-if cond-form (condition-flavor format-string . format-args) body...
+3catch-error-restart* establishes a restart handler for 2condition-flavor* and
+then evaluates the body.  If the handler is not invoked,
+3catch-error-restart* returns the values produced by the last form in the
+body and disestablishes the restart handler.  If a condition is
+signalled during the execution of the body and the restart handler
+is invoked, then control is thrown back to the dynamic environment
+of the inside the of 3catch-error-restart* form, and 3catch-error-restart*
+returns 3nil* as its first value and something non-3nil* as its
+second value.  Its format is:
+.lisp
+(catch-error-restart (2condition-flavor* 2format-string* . 2format-args*)
+  2form-1*
+  2form-2*
+  ...)
+.end_lisp
+
+2condition-flavor* is either the name of condition flavor (a symbol),
+or a list of condition flavors (all of which can be handled).
+2format-string* and 2format-args* are a control string and a list of
+arguments to be passed to 3format* to construct a meaningful
+description of what would happen if the user were to invoke the handler;
+it is used by the debugger to create a prompting message.
+
+3catch-error-restart-if* is just like 3catch-error-restart* except
+that it has another subform called 2cond-form*.  Its format is:
+.lisp
+(catch-error-restart-if 2cond-form* 
+    (2condition-flavor* 2format-string* . 2format-args*)
+  2form-1*
+  2form-2*
+  ...)
+.end_lisp
+
+The first thing 3catch-error-restart-if* does is to evaluate 2cond-form*.
+If the result is not 3nil*, then it continues just like
+3catch-error-restart*: it sets up the handlers and executes the body.  If
+the result is 3nil*, then it does not set up any handlers; it just
+executes the body like 3progn*.
+.end_defspec
+
+A common paradigm is to use one of these forms in the command loop of an
+interactive program, with 2condition-flavor* being 3(error sys:abort)*.
+This way, if an unhandled error occurs, the user will be offered the
+option of returning to the command loop, and the 3Abort* key will
+return to the command loop.  Which of the forms you use depends on the
+nature of your command loop.  (See the compatibility note below
+about the obsolete 3sys:command-level* catch-tag.)
+
+.section Proceeding
+
+Some conditions are 2proceedable*.  When a program signals a
+condition, it may allow execution to proceed past the point at which the
+condition was signalled, allowing either a 3condition-bind* handler
+or the user operating the interactive debugger to decide that it is all
+right to proceed, possibly after repairing the original problem.  In
+general there can be many ways to proceed from a condition; each way is
+identified by a 2proceed-type*, which is represented as a symbol.
+
+In order to allow proceeding to work, there has to be agreement between
+two conceptual agents.  One agent is the programmer who wrote the
+program that signals the condition; we'll call this agent the
+2signaller*.  The other is the programmer who wrote the
+3condition-bind* handler that decided to proceed the condition, or
+else the user who operated the interactive debugger and told it to
+proceed; we'll call this agent the 2handler*.  The signaller is the
+one who signals the condition and provides the various proceed-types.  The
+handler is the one who chooses among the proceed-types to make execution
+proceed.
+
+Each agent has certain responsibilities to the other; each must follow
+the protocol described below to make sure that any handler will work
+correctly with any signaller.  The following description should be
+considered a two-part protocol, which each side must follow in order to
+communicate correctly with the other side.
+
+The signaller signals the condition using the 3signal* function
+(rather than 3error*).  The signaller also defines a
+condition flavor with at least one method to handle a proceed-type.  (In
+simple cases, 3fsignal* can be used, in which case there's no need to
+define a new flavor.)  The way to define a method that creates a new
+proceed type is somewhat unusual in that it uses a style of method
+combination called 3:case* combination.  Here's an example from the
+system:
+
+.lisp
+(defmethod (sys:subscript-out-of-bounds :case :proceed :new-subscripts)
+	   (&optional (sub (prompt-and-read ':number
+					    "Subscript to use instead: ")))
+  "Ask for a different subscript"
+  (values ':new-subscripts sub))
+.end_lisp
+
+This code fragment creates a new proceed-type called
+3:new-subscript*, for the condition flavor 3sys:subscript-out-of-bounds*.  New
+proceed-types are always defined by adding a 3:case :proceed* method
+handler to the condition flavor.
+
+(Note: 3:case* method combination is a relatively new and advanced
+feature of flavors.  The idea is that the first argument to the
+3:proceed* message is like a subsidiary message name, causing a
+further dispatch just as the original message name caused a primary
+dispatch.  The method defined above will be invoked whenever an object
+of this flavor is sent a 3:proceed* message whose first argument is
+3:argument-value*; the variables in its lambda list (in this case
+3new-arg*) will be taken from the rest of the arguments of the
+3send*.)
+
+All of the arguments to a 3:proceed* method must be optional
+arguments.  The 3:proceed* method should see whether these arguments
+were passed, and if they were not passed, it should prompt a user for
+the arguments using the 3query-io* stream.  The 3prompt-and-read*
+[ref] function is useful for this.  If the arguments were passed,
+then the 3:proceed* method must not do any input or output through
+3query-io*.  (The idea is that 3condition-bind* handlers will pass
+in the arguments, but the debugger won't; the debugger will run this
+method to prompt the user for the arguments instead.)
+
+The method should have a documentation string; the first form in the
+body (which must not be the only form) should be a string, and this will
+be the documentation of the proceed-type returned by the
+3:document-proceed-type* message to the condition object.  The message
+should be phrased as a one-line description of what would happen if
+the condition were proceeded, just like the messages that the debugger
+prints out to describe the effects of the 3Super-* commands.  It should
+end with a period and have no leading or trailing newlines.
+
+If a simple, fixed string is not adequate, you can provide a piece of
+Lisp code to compute the documentation text at run time.  To do
+this, use the following form:
+.lisp
+(defmethod (2condition-flavor* :case :document-proceed-type 2proceed-type*)
+           (2stream*)
+  2body...*)
+.end_lisp
+
+The body of the method should print out documentation of the
+2proceed-type* of the 2condition-flavor* onto 2stream*.
+
+The body of the 3:proceed* method may do anything it wants.  In general, it will
+try to repair the state of things so that execution can proceed past the
+point at which the condition was signalled.  It can have side-effects on
+the state of the environment, or it can return values so that the
+function that called 3signal* can try to fix things up, or it can do
+both.  The way that it works is invisible to the handler, and so the
+signaller is free to divide the work between the function that calls
+3signal* and the 3:proceed* method as it sees fit.  When the
+3:proceed* method returns, all of its values will be returned by
+3signal*, whose caller can examine them and take action accordingly if it
+wants to.  (The method must always return values rather
+than throwing.)
+
+The meaning of these returned values is strictly a matter of convention
+between the 3:proceed* method and the function calling 3signal*, and
+so is completely internal to the signaller and invisible to the handler.
+There is one exception: the 3:proceed* method may not return 3nil*
+as its first value, because that would give the appearance that the
+handler returned 3nil*, which would mean that it wanted to decline to
+handle the condition.  If a 3:proceed* method attempts to return
+3nil* as the first value, an error is signalled.
+
+When the signaller creates the condition object (with 3signal* or
+3make-condition*), it can specify which proceed-types it will
+accept, by passing a list of keyword symbols as the 3:proceed-types*
+init-option.  By passing a keyword in this list, the signaller is
+declaring that it is willing to handle this proceed-type.  If the
+init-option is not given, the default is the list of all proceed-types
+that have been defined for this condition flavor, and the signaller must
+be prepared to deal with any of them.  The init-option is provided so
+that some calls to 3signal* of a given flavor can decline to handle
+some of the proceed-types that are handled by other calls to 3signal*.
+This list will be the result of the 3:proceed-types* message to
+the condition object, and the 3:proceed-type-p* message works by
+searching this list.  (A condition flavor may also have an 3:init* 
+daemon that can modify the 3dbg:proceed-types* instance variable.)
+
+Now, suppose the handler is a 3condition-bind* handler function.  When
+the condition is signalled, the handler function is called with one
+arguments: the condition object.  The handler function can throw to some
+tag, or return 3nil* to say that it doesn't want to handle the
+condition, or try to proceed the condition.
+
+The handler may use the 3:proceed-types* and 3:proceed-type-p*
+messages to determine which proceed-types are available.  In general, it
+must not attempt to proceed using any proceed-types that are not on this
+list.  Note that it isn't good enough to examine the flavor of the
+condition to figure out which proceed-types exist, because some
+instances of any condition flavor may decline to handle some of the
+defined 3proceed-types*; the handler function must figure it out at
+run time.  In particular, if a condition was signalled with 3error*,
+there won't ever be any proceed-types.  So the handler function must check.
+
+If the handler function wants to proceed the condition, it should send
+the condition object a 3:proceed* message: the first argument is the
+proceed-type (a keyword symbol), and the rest are the arguments for that
+proceed type.  All of the defined 3proceed-types* are documented along
+with the documentation of the condition flavor, and so the programmer
+writing the handler function knows the meanings of the arguments.
+The handler function must always pass all of the arguments, even
+though they are optional (since otherwise the 3:proceed* handler would
+start trying to prompt the user, which should not happen).  The handler
+function must immediately return all of the values returned by the
+3:proceed* method to its caller; that is, sending the 3:proceed*
+message should be the last thing the handler does, and it then should
+immediately return, propagating the values from the 3:proceed* method
+back to its caller.  The meaning of the returned values is only the
+business of the signaller, and so the handler should not look at or do
+anything with these values.
+
+A note about naming of proceed-types: any symbol may be used as the name
+of a proceed-type, although it is conventional to use keyword symbols.
+Also, the symbols 3:which-operations* and 3:case-documentation* are
+not valid names for proceed types, because they are treated specially by
+the 3:case* flavor combination.  If you create a new condition flavor,
+do not use either of these symbols as the name of a proceed-type.
+
+If you are a signaller, you may find it useful to use the
+3signal-proceed-case* special form.  It assumes that a certain
+convention will be followed: the first value returned by every
+proceed-type is the name of that proceed-type (the keyword symbol), so
+that when 3signal* returns it is immediately clear which proceed-type
+was used.  While nothing enforces this convention, it is usually helpful
+to follow it, and if you do you can use 3signal-proceed-case*.
+
+.defspec signal-proceed-case
+This special form signals a condition proceedably, and has a clause
+to handle each proceed-type of the condition.  It looks like this:
+.lisp
+(signal-proceed-case ((2var1* 2var2* 2...*) 2arg1* 2arg2* 2...*)
+   (2proceed-type-1* 2body1...*)
+   (2proceed-type-2* 2body2...*)
+   2...*)
+.end_lisp
+
+This is a slightly more complicated syntax than most special forms: you
+provide some variables, some argument forms, and some clauses.  The
+first thing this form does is to call 3signal*; each 2arg* form is
+evaluated and passed as an argument to 3signal*.  In addition to the
+arguments you supply, 3signal-proceed-case* also specifies the
+3:proceed-types* init option, which it builds based on the clauses.
+
+When 3signal* returns, 3signal-proceed-case* internally receives the
+first returned value, and the 2var*s that you specified are bound to
+the second, third, and successive values respectively.
+
+3signal-proceed-case* then picks a clause to run, based on the first
+returned value, which is the proceed-type that was used.  It works
+in the style of 3selectq*: each clause starts with a 2proceed-type*
+(a keyword symbol), or a list of proceed types, and the rest of the
+clause is a list of forms to be evaluated; the values produced by the
+last form are returned by 3signal-proceed-case*.
+
+One of the 2proceed-type-i*'s can be 3nil*.  If 3signal* returns
+3nil*, meaning that the condition was not handled, then the 3nil*
+clause will be run.  If there is no 3nil* clause and signal returns
+3nil*, signal-proceed-case returns 3nil* itself.
+
+The value passed as the 3:proceed-types* option to 3signal* lists
+the various proceed-types in the same order as the clauses, so that the
+debugger will display them in that order to the user and the 3Resume*
+command will run the first one.
+.end_defspec
+
+.section Condition Flavors
+
+A condition object is an instance of any flavor built out of the
+3condition* flavor.  An error object is an instance of any flavor
+built out of the 3error* flavor.  The 3error* flavor is built out of
+the 3condition* flavor, and so all error objects are also condition
+objects.
+
+Every instantiatable flavor of condition must handle the 3:report*
+message (flavors that just define sets of conditions needn't handle it).
+This message takes a stream as its argument and prints out a textual
+message describing the condition on that stream.  The printed
+representation of a condition object is like the default printed
+representation of any instance, when slashifying is turned on.  However,
+when slashifying is turned off (by 3princ* or the 3~A* 3format*
+directive), the printed presentation of a condition object is its
+3:report* message.  Example:
+
+.lisp
+(condition-case (co)
+     (open "f:>a>b.c")
+  (fs:file-not-found
+     (prin1 co)))    1prints out*  #<QFILE-NOT-FOUND 33712233>
+
+(condition-case (co)
+     (open "f:>a>b.c")
+  (fs:file-not-found
+     (princ co)))    1prints out*  The file f:>a>b.c was not found.
+.end_lisp
+
+.subsection Messages and Init Options
+
+These messages can be sent to any condition object whatsoever.  They are
+handled by the basic flavor 3condition*, on which all condition
+objects are built.  Some particular condition flavors handle other
+messages; those are documented along with the condition flavor in
+question, in the next section.
+
+.defmethod condition :document-proceed-type proceed-type stream
+Prints out a description of what it means to proceed, using the given
+2proceed-type*, from this condition, on 2stream*.  This is mainly
+used by the debugger to create its prompt messages.  Such a message should
+be phrased as an imperative English sentence, ending with a period, without
+any leading or trailing 3return* characters.
+.end_defmethod
+
+.defmethod condition :proceed-type-p proceed-type
+Returns 3t* if 2proceed-type* is one of the valid proceed-types
+of this condition object.  Otherwise, returns 3nil*.
+.end_defmethod
+
+.defmethod condition :proceed-types
+Returns a list of all the valid proceed-types for this condition.
+.end_defmethod
+
+.defmethod condition :set-proceed-types new-proceed-types
+Set the list of valid proceed-types for this condition to 2new-proceed-types*.
+.end_defmethod
+
+.definitoption condition :proceed-types proceed-types
+This initialization option defines the set of proceed-types to be handled by this
+instance.  2proceed-types* is a list of proceed-types (symbols); it
+must be a subset of the set of proceed-types understood by this flavor.
+If this option is omitted, the instance will be able to handle all of
+the proceed-types understood by this flavor in general, but by passing
+this option explicitly, a subset of the proceed-types can be established
+as being acceptable.  This is used by 3signal-proceed-case* (see below).
+
+You can also pass a single symbol as 2proceed-types* instead of
+making a list out of it, if there is only one way to proceed.
+
+(If you pass a symbol that is not an understood proceed-type, it will be
+ignored.  This doesn't signal an error because it might become an
+understood proceed-type later when a new 3defmethod* is evaluated; if
+not, the problem will be caught at run-time.)
+
+The order in which the proceed-types occur in the list controls the
+order in which the debugger will display them in its list; sometimes
+you might want to select an order that makes more sense for the user,
+although usually this isn't too important.  The most important thing
+is that the debugger's 3Resume* command is assigned to the first
+proceed-type in the list.
+.end_definitoption
+
+.defmethod condition :debugger-special-commands
+Returns a list of all debugger special commands for this condition.
+See [ref below].
+.end_defmethod
+
+.defmethod condition :report stream
+Print the text message associated with this object onto 2stream*.
+The 3condition* flavor does not support this itself, but it
+is a required message; any instantiatable flavor built out of 3condition* must
+support this message.
+.end_defmethod
+
+.defmethod condition :report-string
+Return a string containing the textual 3:report* message associated with this object.
+.end_defmethod
+
+.subsection Standard Conditions
+
+.c Based on syscond.lisp.54.
+
+This section enumerates the standard condition flavors provided by the
+system.  Some of these flavors are the flavors of actual condition
+objects that get instantiated in response to certain conditions.  Others
+never actually get instantiated, but are used to build other flavors; these
+flavors represent sets of condition types.
+
+In some cases, the flavor that the system signals for an error is not
+exactly the one listed here, but rather a flavor built on the one listed
+here.  This often comes up when the same error can be reported by
+different programs, because the two programs are implementing a generic
+protocol.  For example, the condition signalled by a remote file system
+stream when a file is not found is different from the one signalled by a
+local file system stream; however, only the generic
+3fs:file-not-found* condition should ever be handled by programs, so that
+programs will work regardless of what kind of file system stream they
+are using.  The exact flavors signalled by each file system are
+considered to be internal system names, subject to change without notice
+and not documented herein.  You should not look at system source code
+to figure out the names of error flavors without being careful to choose
+the right level of flavor!  Furthermore, if you try to signal a system-defined
+condition, you have to be careful to choose a real instantiable flavor;
+for example, you can't signal a condition object of type 3fs:file-not-found*
+because this is really a set of errors and this flavor does not handle
+the 3:report* message.  If you were to implement your own file system
+and wanted to signal an error when a file cannot be found, it should probably
+have its own flavor, built on 3fs:file-not-found* (and other flavors).
+
+.subsubsection Fundamental Conditions
+
+These conditions are basic to the functionality of the condition mechanism,
+rather than having anything to do with particular system errors.
+
+.defflavor condition
+This is the basic flavor out of which all condition objects are built.
+.end_defflavor
+
+.defflavor sys:warning
+This flavor is built out of 3condition* and 3sys:no-action-mixin*
+(see below).  It is used for warning messages.
+.end_defflavor
+
+.defflavor error
+This flavor is built out of 3condition*.  All flavors that represent
+errors, as opposed to non-error conditions, are built out of this
+flavor.  The most important effect of being built out of 3error* is
+that if a condition is signalled and no handler is found, the debugger
+will be entered if the condition is an error condition, but there will
+be no effect if the condition is a non-error condition.
+.end_defflavor
+
+.defflavor ferror
+This is a simple error flavor for the 3ferror* function to use; it
+gets used when you do not want to bother to invent a new error flavor
+for a certain condition, probably because you think no program will ever
+want to handle the error.  Its only state information is an error message,
+normally created by the call to the 3ferror* function.  It has two
+init-options: 3:format-string* and 3:format-args*; the 3format*
+function is applied to these values to produce the 3:report* message.
+.end_defflavor
+
+.defflavor dbg:proceedable-ferror
+This is a simple error flavor for the 3fsignal* function to use; it
+gets used when you do not want to bother to invent a new error flavor
+for a certain condition, probably because you think no program will ever
+want to handle the error, but you want the condition to be proceedable.
+Its only state information is an error message, created by the call to
+the 3ferror* function.  Its only proceed-type is 3:no-action*;
+proceeding in this way does nothing and causes 3fsignal* (or 3signal*)
+to return the symbol 3:no-action*.
+.end_defflavor
+
+.defflavor sys:no-action-mixin
+This flavor can be mixed into any condition flavor to define a
+proceed-type called 3:no-action*; proceeding in this way causes the
+computation to proceed as if no error-check had ever been done.  The
+signaller might try the action again or might simply go on doing what it
+would have done.  For example, 3proceedable-ferror* is just 3ferror*
+with this mixin.
+.end_defflavor
+
+.c dbg:report-condition-name-mixin is explicitly internal
+.c and not documented.  It's never good to use it anyway.
+
+.defflavor sys:abort
+The 3Abort* key on the keyboard was typed.  This is not an error
+flavor.  See the discussion of special keys, below.
+.end_defflavor
+
+.defflavor break
+This is the flavor of the condition object passed to the debugger when
+it is entered via the 3Meta-Break* key.  It is never actually
+signalled; it exists because the debugger is always entered because
+of some condition, and this is an artifical condition to give
+the debugger when it is entered via this special way.
+This is not an error flavor.  See the discussion of special
+keys, below.
+.end_defflavor
+
+.subsubsection Lisp Errors
+
+This section describes the conditions signalled for basic Lisp errors.
+All of the conditions in this section are based on the 3error* flavor
+unless otherwise indicated.
+
+.defflavor sys:cell-contents-error
+All of the kinds of errors resulting from finding invalid contents in a
+cell of virtual memory are built on this flavor.  This represents a set of
+errors including the various kinds of unbound variable errors, the
+undefined function error, and the bad data type error.  It provides the
+3:new-value* proceed-type, which takes one argument: a new value to be
+used instead of the contents of the cell.  It also provides the
+3:store-new-value* proceed-type, which takes one argument: a new value to be
+stored in the cell, and used instead of the contents of the cell.  The
+3:no-action* proceed-type is also provided: the contents of the
+cell will be read again, and it might work this time if you have
+intervened.
+.end_defflavor
+
+.defflavor sys:unbound-variable
+All of the kinds of errors resulting from unbound variables are
+built out of this flavor.  These are a subset of the "cell contents"
+errors, and therefore this flavor is built on 3sys:cell-contents-error*.
+The 3:variable-name* message returns the name of the variable that
+was unbound (a symbol).
+.end_defflavor
+
+.defflavor sys:unbound-symbol
+An unbound symbol (special variable) was evaluated (or
+3symeval*'ed).  Some instances of this flavor provide the
+3:package-dwim* proceed-type, which takes no arguments, and prompts
+you asking whether you want to the value of various other symbols with
+the same print-name in different packages.  This proceed-type is only
+provided if there are, in fact, any such symbols in any other packages.
+This flavor is built on 3sys:unbound-variable*.
+The proceed-types from 3sys:cell-contents-error* are
+provided, as is the 3:variable-name* message from 3sys:unbound-variable*.
+.end_defflavor
+
+.defflavor sys:unbound-local-variable
+An unbound closure variable was evaluated (or 3symeval*'ed).  This
+flavor is built on 3sys:unbound-variable*.  The
+proceed-types from 3cell-contents-error* are provided, as is the
+3:variable-name* message from 3sys:unbound-variable*.  (Currently,
+local variables can never be unbound, and so this condition is not
+actually implemented.  This may be changed.)
+.end_defflavor
+
+.defflavor sys:unbound-closure-variable
+An unbound closure variable was evaluated (or 3symeval*'ed).  This
+flavor is built on 3sys:unbound-variable*.  The
+proceed-types from 3cell-contents-error* are
+provided, as is the 3:variable-name* message from 3sys:unbound-variable*.
+.end_defflavor
+
+.defflavor sys:unbound-instance-variable
+An unbound instance variable was evaluated (or 3symeval*'ed). This
+flavor is built on 3sys:unbound-variable*.  The 3:instance* message
+returns the instance in which the unbound variable was found.  The
+proceed-types from 3cell-contents-error* are
+provided, as is the 3:variable-name* message from 3sys:unbound-variable*.
+.end_defflavor
+
+.defflavor sys:undefined-function
+An undefined function was invoked; that is, a symbol with an unbound
+function cell was applied to arguments.  This flavor is built on
+3sys:cell-contents-error* and so provides all of its proceed
+types.  It also provides the same 3:package-dwim* proceed-type as
+3sys:unbound-symbol*.  The 3:function-name* message returns the
+name of the function that was undefined (a function spec).
+.end_defflavor
+
+.defflavor sys:bad-data-type-in-memory
+A word with an invalid type code was read from memory. This flavor is built on
+3sys:cell-contents-error* and so provides all of its proceed
+types.  The 3:address* message returns the virtual address from
+which the word was read, as a locative pointer.
+The 3:data-type* message returns the numeric value of the
+data-type tag field of the word, and the 3:pointer* message returns
+the numeric value of the pointer field of the word.
+.end_defflavor
+
+.defflavor sys:unknown-setf-reference
+3setf* was used to reverse the sense of a form, but there was
+no 3setf* property on the car of the form so 3setf* could
+not figure out what to do.  The 3:form* message returns the
+form that 3setf* tried to operate on.  (This happens when the
+3setf* macro is expanded, and so if you are using the compiler,
+this is really a "compile time" error.)
+.end_defflavor
+
+.defflavor sys:unknown-locf-reference
+3locf* was used to get a pointer from a form, but there was
+no 3locf* property on the car of the form so 3locf* could
+not figure out what to do.  The 3:form* message returns the
+form that 3locf* tried to operate on.  (This happens when the
+3setf* macro is expanded, and so if you are using the compiler,
+this is really a "compile time" error.)
+.end_defflavor
+
+.defflavor sys:arithmetic-error
+This flavor represents the set of all arithmetic errors.  No condition
+objects of this flavor are actually created; any arithmetic error
+will signal a more specific condition, built out of this one.  This
+flavor is provided to make it easy to handle any arithmetic error.
+.end_defflavor
+
+.defflavor sys:divide-by-zero
+There was an attempt to divide some number by zero.  This is built on
+3sys:arithmetic-error*.  The 3:function* message returns the
+function that did the division.
+.end_defflavor
+
+.defflavor sys:negative-sqrt
+There was an attempt to compute the square root of a negative number.
+This is built on 3sys:arithmetic-error*.  The 3:number* message
+returns the negative number.
+.end_defflavor
+
+.defflavor sys:non-positive-log
+There was an attempt to compute the logarithm of a non-positive number.
+This is built on 3sys:arithmetic-error*.  The 3:number* message
+returns the non-positive number.
+.end_defflavor
+
+.defflavor sys:zero-to-negative-power
+There was an attempt to raise zero to the power of a negative number;
+the result is undefined.  This is built on 3sys:arithmetic-error*.
+The 3:exponent* message returns the exponent.
+.end_defflavor
+
+.defflavor sys:floating-exponent-overflow
+There was an overflow of an exponent during floating-point arithmetic.  This is built
+on 3sys:arithmetic-error*.  The 3:function* message returns the function
+that got the overflow, if it is known, and 3nil* if it is not known.
+On the LM-2, the 3:small-float-p* message returns 3t* if
+"small" flonums were involved.  The 3:new-value* proceed-type is provided,
+with one argument: a value to use instead, which must be a floating
+point number.
+.end_defflavor
+
+.defflavor sys:floating-exponent-underflow
+There was an underflow of an exponent during floating-point arithmetic.
+This is built on 3sys:arithmetic-error*.  The 3:function* message returns
+the function that got the overflow, if it is known, and 3nil* if it is
+not known.  On the LM-2, the 3:small-float-p* message returns 3t* if
+"small" flonums were involved.  The 3:use-zero* proceed-type is provided,
+with no arguments; a 30.0* (or possibly 30.0s0* on the LM-2) is
+used instead.
+.end_defflavor
+
+.defflavor math:singular-matrix
+A singular matrix was given to a matrix operation such as inversion,
+taking of the determinant, or computation of the LU decomposition.
+This is built on 3sys:arithmetic-error*.
+.end_defflavor
+
+.defflavor sys:bad-array-type
+A meaningless array type code was found in virtual memory, indicating
+a system bug.  The 3:type* message returns the numeric type code.
+.end_defflavor
+
+.defflavor sys:wrong-stack-group-state
+A stack group was in the wrong state to be resumed.  The 3:stack-group*
+message returns the stack group.
+.end_defflavor
+
+.defflavor sys:draw-off-end-of-screen
+There was an attempt to draw graphics past the edge of the screen.
+.end_defflavor
+
+.defflavor sys:draw-on-unprepared-sheet
+A drawing primitive (such as 3tv:%draw-line*) was used on a screen array
+not inside a 3tv:prepare-sheet* special form.  The 3:sheet* message
+returns the sheet (window) that should have been prepared.
+.end_defflavor
+
+.defflavor sys:bitblt-destination-too-small
+The destination array of a 3bitblt* was too small.
+.end_defflavor
+
+.defflavor sys:bitblt-array-fractional-word-width
+An array passed to 3bitblt* does not have a first dimension that
+is a multiple of 32 bits.  The 3:array* message returns the array.
+.end_defflavor
+
+.defflavor sys:write-in-read-only
+There was an attempt to write into a read-only portion of memory.  The
+3:address* message returns the address at which the write was attempted.
+.end_defflavor
+
+.defflavor sys:pdl-overflow
+A stack (pdl) overflowed.  The 3:pdl-name* message returns the name of
+the stack (a string, such as 3"regular"* or 3"special*).
+The 3:grow-pdl* proceed type is provided, with no arguments;
+it increases the size of the stack.
+.end_defflavor
+
+.defflavor sys:cons-in-fixed-area
+There was an attempt to allocate storage from a "fixed" area of memory.
+The 3:area* message returns the name of the area, and the 3:region*
+message returns the region number.
+.end_defflavor
+
+.defflavor sys:throw-tag-not-seen
+3*throw* or 3throw* was called, but there was no matching 3*catch*
+found.  The 3:tag* message returns the catch-tag that was being thrown
+to, and the 3:values* message returns a list of the values that were
+being thrown.  (If 3*throw* was called, this will always be a list of
+two elements, the value being thrown and the tag; if the new 3throw*
+special form of Common Lisp (only implemented on the 3600) is used, the
+list may be of any length.)  The 3:new-tag* proceed-type is provided,
+with one argument: a new tag (a symbol) to try instead of the original.
+.end_defflavor
+
+.defflavor sys:instance-variable-zero-referenced
+There was an attempt to reference the "zeroth" instance variable of
+an instance, which usually means that some method is referring to
+an instance variable that was deleted by a later evaluation of
+a 3defflavor* form.
+.end_defflavor
+
+.defflavor sys:instance-variable-pointer-out-of-range
+There was an attempt to reference an instance variable that
+does not exist; this usually means that some method is using
+an obsolete instance because a 3defflavor* form got evaluated
+again and changed the flavor incompatibly.
+.end_defflavor
+
+.defflavor sys:zero-args-to-select-method
+A select-method was applied to no arguments.  The 3:select-method*
+message returns the select-method.
+.end_defflavor
+
+.defflavor sys:too-few-arguments
+A function was called with too few arguments.  The 3:function* message
+returns the function, and the 3:nargs* message returns the number of
+arguments that were supplied.  The 3:argument-list* message returns a
+list of the arguments that were passed.  The
+3:additional-arguments* proceed-type is provided, with one argument: a
+list of additional argument values to which the function should be applied.  If the
+error is proceeded, these new arguments will be appended to the old
+arguments and the function will be called with this new argument list.
+.end_defflavor
+
+.defflavor sys:too-many-arguments
+A function was called with too many arguments.  The 3:function* message
+returns the function, and the 3:nargs* message returns the number of
+arguments that were supplied.  The 3:argument-list* message returns a
+list of the arguments that were passed.  The 3:fewer-arguments*
+proceed-type is provided, with one argument: the new number of arguments
+with which the function should be called.  If the error is proceeded, the
+function will be called with only the first 2n* arguments, where 2n*
+is the number specified.
+.end_defflavor
+
+.defflavor sys:wrong-type-argument
+A function was called, but one or some of its arguments were of invalid
+types.  The 3:function* message returns the function whose arguments
+were bad; the 3:old-value* message returns the invalid value that was
+supplied; the 3:description* message returns the description of the
+type of value desired; the 3:arg-name* message returns the name of the
+argument; and the 3:arg-number* message returns the number of the
+argument (the first argument to a function is 30*, and so on) or
+3nil* if this does not apply.
+
+The 3:argument-value* proceed type is provided, with one argument:
+the new value to use for the argument.  The 3:store-argument-value*
+proceed-type may be provided (currently only on the 3600) [I am not sure
+I grok this - DLW].[][][]
+.end_defflavor
+
+.defflavor sys:bad-array-mixin
+All errors that involve an array that seems to be the wrong object include
+this flavor.  It provides the 3:array* message, which returns the array.
+The 3:new-array* proceed-type is provided, with one argument: an array
+to use instead of the old one.  The 3:store-new-array* proceed-type may
+be provided (only on the 3600), with one argument: an array to use instead
+of the old one and to save away [somewhere? - DLW][][][].
+.end_defflavor
+
+.defflavor sys:array-has-no-leader
+There was an attempt to use the leader of an array that has no array leader.
+The 3:array* message returns the array.  This includes the flavor
+2bad-array-mixin*.
+.end_defflavor
+
+.defflavor sys:fill-pointer-not-fixnum
+The fill pointer of an array was not a fixnum.  The 3:array* message
+returns the array.  This includes the flavor
+2bad-array-mixin*.
+.end_defflavor
+
+.defflavor sys:array-wrong-number-of-dimensions
+The wrong number of subscripts were presented to an array.  The 3:dimensions-given*
+message returns the number of subscripts that were presented; the 3:dimensions-expected*
+message returns the number that should have been given; the 3:array* message
+returns the array.  This includes the flavor
+2bad-array-mixin*.
+.end_defflavor
+
+.defflavor sys:number-array-not-allowed
+A number array (such as an 3art-4b* or 3art-16b*) was used in a context
+in which number arrays are not valid, such as an attempt to make a pointer
+to an element with 3aloc* or 3locf*.  This includes the flavor
+2bad-array-mixin*.
+.end_defflavor
+
+.defflavor sys:subscript-out-of-bounds
+There was an attempt to reference an array using a set of subscripts
+that were outside of the bounds of the array, or an array leader element
+out of its bounds, or an instance variable out of its bounds.  The
+3:object* message returns the object (an array or instance) if it is
+known, and 3nil* otherwise.  The 3:function* message returns the
+function that did the reference, or 3nil* if it is not known.
+
+The messages to access the subscripts and limits are complicated because
+the LM-2 cannot report the individual subscripts of a reference to a
+multi-dimensional array (only the computed product of them), but the
+3600 can.  Therefore, there are two sets of messages, accepted by both
+machines the same way.  3:subscript-used* is the subscript that was
+actually used and 3:subscript-limit* was the limit that it passed;
+these are fixnums, and if a multi-dimensional array was used, they are
+computed products.  The 3:subscripts-used* and 3:subscripts-limit*
+messages always returns lists of the values.
+
+The 3:new-subscript* proceed-type is provided, with an arbitrary
+number of arguments: the new subscripts for the array reference.
+The 3:store-new-subscript* proceed-type may also be provided
+(only on the 3600), [??? - DLW][][][].
+.end_defflavor
+
+.defflavor sys:invalid-form
+There was an attempt to evaluate a Lisp form that does not make sense
+to the evaluator.  The 3:form* message returns the form.
+.end_defflavor
+
+.defflavor sys:invalid-function
+There was an attempt to apply an object that is not a function, or
+a symbol whose definition is an object that is not a function.  The
+3:function* message returns the object that was applied.  The
+3:new-function* proceed-type is provided, with one argument: a
+new function to be used.
+.end_defflavor
+
+.defflavor sys:invalid-lambda-list
+There was an attempt to apply a function whose lambda-list did not
+make sense.  This is built on 3sys:invalid-function*, so the
+3:function* message and the 3:new-function* proceed-type are provided.
+.end_defflavor
+
+.defflavor sys:undefined-keyword-argument
+There was an attempt to pass a keyword to a function that does not
+recognize that keyword.  The 3:keyword* message returns the
+unrecognized keyword, and the 3:value* message returns the value
+passed with it.  The 3:no-action* proceed type is provided: when this
+is used, the keyword and its value are ignored.  The 3:new-keyword*
+proceed type is also provided, with one argument:  a new keyword to use
+instead.
+.end_defflavor
+
+.defflavor sys:missing-keyword-argument
+A required keyword parameter was not passed. The 3:keyword* message
+returns the missing keyword.  The 3:argument-value* proceed type is
+provided, with one argument: the value to use as the value of the
+missing keyword parameter.
+.end_defflavor
+
+.defflavor sys:funcall-macro
+There was an attempt to apply a macro (really a symbol whose definition is a macro)
+as if it were a function.  The 3:eval-macro-funcall* proceed
+type is defined with no arguments; it proceeds by building a form in which
+this macro is given these arguments and evaluating that form, which might
+conceivably be what was supposed to happen.
+.end_defflavor
+
+.defflavor sys:unclaimed-message
+An object was sent a message that it does not know how to handle.  The
+3:object* message returns the object; the 3:message* message returns
+the message-name; and the 3:arguments* message returns the arguments
+of the message.  The object can be an instance or a select-method.  (The
+3:arguments* message on the LM-2 for a select-method will always
+return 3nil*, because the information is lost.)
+.end_defflavor
+
+.defflavor sys:package-error
+All errors involving problems trying to intern symbols are built on this
+flavor; this is the set of all such errors.  Specific ones follow.
+.end_defflavor
+
+.defflavor sys:package-not-found
+A meaningless package reference name was given to 3pkg-find-package*.  The
+3:refname* message returns the reference name used; the 3:under-package*
+message returns the superior package whose reference name alist was
+searched.  This
+is built on the 3sys:package-error* flavor.  The 3:no-action*
+proceed type is provided; the reference name will be tried again,
+and if you have intervened in the meantime it might work now.
+The 3:new-refname* proceed type is also
+provided, with one argument: a new reference name (a string) to use
+instead of the invalid one.  The 3:create-package* proceed type
+is also provided, with no arguments; it creates a new package under
+3global* with the formerly-meaningless reference name as its name.
+.end_defflavor
+
+.defflavor sys:package-locked
+There was an attempt to intern a symbol into a locked package.  This
+is built on the 3sys:package-error* flavor.  The 3:symbol* message
+returns the symbol that 3intern* was given (if 3intern* was given
+a string, the message returns the symbol that 3intern* constructed
+and was trying to add to the package).  The 3:package* message
+returns the locked package.  The 3:no-action* proceed
+type is provided; if it is used, the symbol is interned despite
+the fact that the package is locked.
+.end_defflavor
+
+.defflavor sys:print-not-readable
+The Lisp printer encountered an object that it cannot print in a way
+that can be understood by the Lisp reader.  The printer only signals
+this condition if 3si:print-readably* is non-3nil* (it is normally
+3nil*).  The 3:object* message returns the object.
+The 3:no-action* proceed-type is provided; proceeding this way
+causes the object to be printed as if 3si:print-readably* were 3nil*.
+.end_defflavor
+
+.defflavor sys:end-of-file
+A function doing input from a stream attempted to read past the end-of-file.
+The 3:stream* message returns the stream.
+.end_defflavor
+
+.defflavor sys:read-error
+All errors encountered by the Lisp reader are members of this set of errors.
+For example, when the Lisp reader inputs past the end of a file, the flavor
+it signals is built out of 3sys:end-of-file* and 3sys:read-error*.
+.end_defflavor
+
+.defflavor sys:read-list-end-of-file
+The Lisp reader attempted to read past the end-of-file while it was in
+the middle of reading a list.  This is built on
+3sys:read-end-of-file*.  The 3:list* message returns the list
+that was being built.
+.end_defflavor
+
+.defflavor sys:read-string-end-of-file
+The Lisp reader attempted to read past the end-of-file while it was in
+the middle of reading a string.  This is built on
+3sys:read-end-of-file*.  The 3:string* message returns the string
+that was being built.
+.end_defflavor
+
+.defflavor sys:disk-error
+An error was reported by the disk controller.  The 3:retry-disk-operation*
+proceed type is provided; it takes no arguments.
+.end_defflavor
+
+.defflavor sys:redefinition
+This is a warning; it is built on 3sys:warning* rather than
+3error*.  There was an attempt to redefine something by some other
+file than the one that originally defined it.  The 3:definition-type*
+argument says what kind of definition this is; it might be 3defun* if
+the function cell is being defined, or 3defstruct* if a structure is
+being defined, and so on.  The 3:name* message returns the
+symbol (or function-spec) being redefined; the 3:old-pathname* message returns the
+pathname that originally defined it; the 3:new-pathname* message
+returns the pathname that is now trying to define it.  Either pathname
+may be 3nil* meaning that the definition was from inside the Lisp
+environment rather than from loading a file.
+
+The 3:proceed* proceed-type is provided, with no arguments.  It means
+that the redefinition should go ahead, and in the future no warnings
+should be signalled for this pair of pathnames.
+
+The 3:inhibit-definition* proceed-type is provided, with no arguments.
+The definition will not be changed, and execution will
+proceed.
+
+As with all warnings, the 3:no-action* proceed-type is also provided.
+It means that the function should be redefined as if there had been no
+warning.
+
+(Note: if this condition is not handled, the action is controlled
+by the value of 3fs:inhibit-fdefine-warnings* as it used to be.)
+.end_defflavor
+
+.subsubsection File System Errors
+
+The following condition flavors are part of the Lisp Machine's generic
+file system interface.  These flavors work for all file systems, whether
+local Lisp Machine file systems, remote Lisp Machine file systems
+(accessed over a network), or remote file systems of other kinds, such
+as Unix or TOPS-20.  All of them report errors uniformly.
+
+.defflavor fs:file-error
+All errors encountered during file operations are members of this set of
+errors.  This flavor is built on 3error*.  The 3:pathname* message
+returns the pathname that was being operated on.  The 3:operation* message returns the name
+of the operation that was being done:  this is a keyword symbol such as 3:open*,
+3:close*, 3:delete*, or 3:change-properties*, and it might
+be 3nil* if the signaller does not know what the operation was
+or if no specific operation was in progress.  In a few cases, the
+3:retry-file-error* proceed-type is provided, with no arguments; it
+retries the file system request.  Bear in mind that all flavors in this
+section accept these messages, and may provide this proceed-type.
+.end_defflavor
+
+.defflavor fs:file-request-failure
+All file system errors in which the request did not manage to get to
+the file system are in this set.
+.end_defflavor
+
+.defflavor fs:file-operation-failure
+All file system errors in which the request was delivered to the file
+system, and the file system decided that it was an error, are in this
+set.
+.end_defflavor
+
+Note: every file system error is either a request failure or an
+operation failure, and the rules given above explain the distinction,
+but these rules are slightly unclear in some cases.  If you want to be
+sure whether a certain error is a request failure or an operation
+failure, look at the detailed descriptions below.
+
+.defflavor fs:data-error
+There is bad data in the file system.  This might mean data errors
+detected by hardware, or inconsistent data inside the file system.
+This flavor is built on 3fs:file-request-failure*.  The
+3:retry-file-operation* proceed-type from 3fs:file-error* is
+provided in some cases; send a 3:proceed-types* message to find out.
+.end_defflavor
+
+.defflavor fs:host-not-available
+The file server or file system is intentionally denying service to
+users.  This does 2not* mean that the network connection failed; it
+means that the file system explicitly does not care to be available.
+This flavor is built on 3fs:file-request-failure*.
+.end_defflavor
+
+.defflavor fs:no-file-system
+The file system is not available; for example, this host does not
+have any file system, or this host's file system cannot be
+initialized for some reason.  This flavor is built on 3fs:file-request-failure*.
+.end_defflavor
+
+.defflavor fs:network-lossage
+The file server had some sort of trouble trying to create a new data
+connection, and was unable to do so.  This flavor is built on 3fs:file-request-failure*.
+.end_defflavor
+
+.defflavor fs:not-enough-resources
+Some resource was not available in sufficient supply.  Retrying the operation
+might work if you wait for some other users to go away, or if you close
+some of your own files.  This flavor is built on 3fs:file-request-failure*.
+.end_defflavor
+
+.defflavor fs:unknown-operation
+There was an attempt to perform a file system operation that
+is not supported.  This flavor is built on 3fs:file-request-failure*.
+.end_defflavor
+
+.defflavor fs:login-problems
+All problems encountered while trying to log into the file system are
+members of this set.  (Currently, none of these ever happen when you use
+a local file system.)  This flavor is built on
+3fs:file-request-failure*.
+.end_defflavor
+
+.defflavor fs:correctable-login-problems
+All correctable problems encountered while trying to log into the foreign host
+are members of this set.  (None of these ever happen when you use
+a local file system.)
+This flavor is built on 3fs:login-problems*.
+.end_defflavor
+
+The correctable login problem conditions, described below, work in a
+special way.  The Lisp Machine's generic file system interface, in the
+user-end of the remote file protocol, always handles these errors with
+its own condition handler; it then signals the 3fs:login-required*
+condition, which is not an error condition.  Therefore, if you want to
+handle one of these problems, you actually set up a handler for
+3fs:login-required*.  The condition object for the correctable login
+problem can be gotten from the condition object for
+3fs:login-required* by sending it an 3:original-connection* message.
+
+.defflavor fs:unknown-user
+The specified user name is not known at this host.  The 3:user-id* message
+returns the user name that was used.
+This flavor is built on 3fs:correctable-login-problems*.
+.end_defflavor
+
+.defflavor fs:invalid-password
+The specified password was not valid.
+This flavor is built on 3fs:correctable-login-problems*.
+.end_defflavor
+
+.defflavor fs:not-logged-in
+There was an attempt to perform a file operation before logging in.
+(Normally the file system interface always logs in before doing any
+operation, but this problem can come up in certain unusual cases in
+which logging in has been aborted.) This flavor is built on
+3fs:correctable-login-problems*.
+.end_defflavor
+
+.defflavor fs:login-required
+This is not an error condition; it is built on 3condition*.  It is
+signalled by the file system interface whenever one of the correctable
+login problems happens.  The 3:host* message returns the foreign host;
+the 3:default-user-id* message returns the user name that would be the
+default for this host; and the 3:original-condition* message returns
+the correctable login problem's condition object.  The 3:password*
+proceed-type is provided, with two arguments: a new user name and
+a new password, both of which should be strings.  If the condition
+is not handled by any handler, the file system prompts the user
+for a new user name and password, using the 3query-io* stream.
+.end_defflavor
+
+.defflavor fs:file-lookup-error
+All kinds of errors in looking up the name of a file are members of this
+set.  This flavor is built on 3fs:file-operation-failure*.
+.end_defflavor
+
+.defflavor fs:file-not-found
+The file was not found in the containing directory.  Note: the TOPS-20
+and Tenex "no such file type" and "no such file version" errors also signal
+this condition.  This flavor is built on 3fs:file-lookup-error*.
+.end_defflavor
+
+.defflavor fs:directory-not-found
+The directory of the file was not found or does not exist.  Note: this
+means that the 2containing* directory was not found; if you are trying
+to open a directory, and the very directory you are trying to open is
+not found, 3fs:file-not-found* is signalled, since there is no way
+to tell that you expected the non-existent object to be a directory,
+and since this is a very different problem from the containing directory
+not existing, deserving of a different error flavor.
+This flavor is built on 3fs:file-lookup-error*.
+.end_defflavor
+
+.defflavor fs:device-not-found
+The device of the file was not found or does not exist.
+This flavor is built on 3fs:file-lookup-error*.
+.end_defflavor
+
+.defflavor fs:link-target-not-found
+The target of the link that was opened did not exist.  In other
+words, there was an attempt to look up a pathname, and it turned
+out to be the pathname of a link that was linked to a name that
+wasn't found on lookup, or was a link that was itself linked
+to a name that wasn't found on lookup, etc.  This flavor is
+built on 3fs:file-lookup-error*.
+.end_defflavor
+
+.defflavor fs:access-error
+All kinds of errors because of protection violation are members of
+this set.  This flavor is built on 3fs:file-operation-failure*.
+.end_defflavor
+
+.defflavor fs:incorrect-access-to-file
+There was incorrect access to the file in the directory.
+This flavor is built on 3fs:access-error*.
+.end_defflavor
+
+.defflavor fs:incorrect-access-to-directory
+There was incorrect access to some directory containing the file.
+This flavor is built on 3fs:access-error*.
+.end_defflavor
+
+.defflavor fs:file-locked
+The file is "locked"; it cannot be accessed, possibly because it is in use by some
+other process.  (Various different file systems can have this problem in
+various system-dependent ways.)  This flavor is built on 3fs:file-operation-failure*.
+.end_defflavor
+
+.defflavor fs:invalid-pathname-syntax
+All kinds errors in which the syntax of the pathname was invalid are members of this set.
+Note: this is not the same thing as 3fs:parse-pathname-error* (see [ref below]).
+These errors occur when a (successfully parsed) pathname object is given
+to the file system, and there's something wrong with it.  See the specific
+conditions that follow.
+This flavor is built on 3fs:file-operation-failure*.
+.end_defflavor
+
+.defflavor fs:invalid-wildcard
+The pathname is not a valid wildcard pathname.
+This flavor is built on 3fs:invalid-pathname-syntax*.
+.end_defflavor
+
+.defflavor fs:wildcard-not-allowed
+A wildcard pathname was presented in a context that does not allow wildcards.
+This flavor is built on 3fs:invalid-pathname-syntax*.
+.end_defflavor
+
+.defflavor fs:circular-link
+The pathname is a link that eventually gets linked back to itself.
+This flavor is built on 3fs:file-operation-failure*.
+.end_defflavor
+
+.defflavor fs:unimplemented-option
+All errors in which an option to a command is not implemented are members of
+this set.  This flavor is built on 3fs:file-operation-failure*.
+.end_defflavor
+
+.defflavor fs:inconsistent-options
+Some of the options given in this operation are inconsistent with others.
+This flavor is built on 3fs:file-operation-failure*.
+.end_defflavor
+
+.defflavor fs:invalid-byte-size
+The value of the "byte size" option was not valid.
+This flavor is built on 3fs:unimplemented-option*.
+.end_defflavor
+
+.defflavor fs:wrong-kind-of-file
+All errors in which there was an attempt to perform an operation
+that doesn't make sense on this kind of object are members of
+this set.  A "kind", in this sense, refers to one of "file",
+"directory", or "link".
+.end_defflavor
+
+.defflavor fs:invalid-operation-for-link
+The operation that was given does not makes sense for links, and
+this pathname is the name of a link.
+This flavor is built on 3fs:wrong-kind-of-file*.
+.end_defflavor
+
+.defflavor fs:invalid-operation-for-directory
+The operation that was given does not makes sense for directories, and
+this pathname is the name of a directory.
+This flavor is built on 3fs:wrong-kind-of-file*.
+.end_defflavor
+
+.defflavor fs:no-more-room
+There is no more room in the file system.  This can mean any of several
+things: the entire file system might be full, the particular volume
+that you are using might be full, your directory might be full,
+you may have run out of your allocated quota, or other system-dependent
+things.  This flavor is built on 3fs:file-operation-failure*.  The
+3:retry-file-operation* proceed-type from 3fs:file-error* is
+provided.
+.end_defflavor
+
+.defflavor fs:filepos-out-of-range
+There was an attempt to position the file pointer past the end of the file
+or to a negative position.  This flavor is built on 3fs:file-operation-failure*.
+.end_defflavor
+
+.defflavor fs:file-open-for-output
+There was an attempt to open a file that was already opened for output.
+This flavor is built on 3fs:file-operation-failure*.
+.end_defflavor
+
+.defflavor fs:creation-failure
+All kinds errors that have to do with an attempt to create a file, directory, or link
+are a member of this set.
+This flavor is built on 3fs:file-operation-failure*.
+.end_defflavor
+
+.defflavor fs:file-already-exists
+A file of this name already exists.  This flavor is built on 3fs:creation-failure*.
+.end_defflavor
+
+.defflavor fs:create-directory-failure
+All kinds of errors that have to do with an attempt to create a
+directory are a member of this set.  This flavor is built on
+3fs:creation-failure*.
+.end_defflavor
+
+.defflavor fs:directory-already-exists
+A directory of this name already exists.  This flavor is built on
+3fs:creation-directory-failure*.
+.end_defflavor
+
+.defflavor fs:create-link-failure
+All kinds of errors that have to do with an attempt to create a link are
+members of this set.  This flavor is built on 3fs:creation-failure*.
+.end_defflavor
+
+.defflavor fs:rename-failure
+All kinds of errors that have to do with an attempt to rename a file are members of this set.
+The 3:new-pathname* message returns the target pathname of the rename operation.
+This flavor is built on 3fs:file-operation-failure*.
+.end_defflavor
+
+.defflavor fs:rename-to-existing-file
+The target name of a rename operation is the name of a file that already
+exists.  This flavor is built on 3fs:rename-failure*.
+.end_defflavor
+
+.defflavor fs:rename-across-directories
+The directories of the initial and target pathnames were not the same,
+but on this file system they are required to be.
+This flavor is built on 3fs:rename-failure*.
+.end_defflavor
+
+.defflavor fs:change-property-failure
+All kinds of errors that have to do with an attempt to change properties of a file
+are members of this set.  This might mean that you tried to set a property
+whose value may not be set except by the file system itself.  For file
+systems without user-defined properties, it might mean that there is
+no such property.  This flavor is built on 3fs:file-operation-failure*.
+.end_defflavor
+
+.defflavor fs:unknown-property
+The property is unknown.  This flavor is built on 3fs:change-property-failure*.
+.end_defflavor
+
+.defflavor fs:invalid-property-value
+The new value provided for the property was not valid.
+This flavor is built on 3fs:change-property-failure*.
+.end_defflavor
+
+.defflavor fs:delete-failure
+All kinds of errors that have to do with an attempt to delete a file
+are members of this set.  This flavor is built on 3fs:file-operation-failure*.
+.end_defflavor
+
+.defflavor fs:directory-not-empty
+There was an attempt to delete a non-empty directory, which is not allowed
+on this file system.  This flavor is built on 3fs:delete-failure*.
+.end_defflavor
+
+.defflavor fs:dont-delete-flag-set
+There was an attempt to delete a file whose "don't-delete" flag was set.
+This flavor is built on 3fs:delete-failure*.
+.end_defflavor
+
+.defflavor fs:not-available
+The file or device exists, but is not available for some reason,
+typically because the pack is not mounted on a drive or the drive is
+broken or something like that.  Probably operator intervention is
+required to fix the problem, but retrying the operation is likely to
+work after the problem is solved.  This flavor is built on
+3fs:file-operation-error*.  Don't confuse this with 3fs:host-not-available*.
+.end_defflavor
+
+.subsubsection Pathname Errors
+
+.defflavor fs:pathname-error
+All errors related to pathnames are in this set.  This is built on the
+3error* flavor.  The following flavors are built on this one.
+.end_defflavor
+
+.defflavor fs:parse-pathname-error
+There was a problem attempting to parse a pathname.
+.end_defflavor
+
+.defflavor fs:invalid-pathname-component
+A component of a pathname has an invalid value.  The 3:pathname*
+message returns the pathname; the 3:component-value* message returns
+the invalid value; the 3:component* message returns the name of the component
+(a keyword symbol such as 3:name* or 3:directory*); and the
+3:component-description* message returns a "pretty name" for
+the component (such as 3"file name"* or 3"directory"*).
+The 3:new-component* proceed-type is defined, with one argument:
+a component value to use instead.  
+
+Note: at the time this is signalled, a pathname object with the invalid
+component has actually been created; this is what the 3:pathname*
+message returns.  The error is signalled just after the pathname
+object is created.
+.end_defflavor
+
+.defflavor fs:unknown-pathname-host
+The function 3fs:get-pathname-host* was given a name that is not the
+name of any known file computer.  The 3:name* message returns the name (a string).
+.end_defflavor
+
+.subsubsection Network Errors
+
+.defflavor sys:network-error
+All errors signalled by networks are members of this set.  These
+are generic network errors that will be used uniformly for the
+Chaosnet, Ethernet, and any other networks supported.  This
+is built on 3error*.
+.end_defflavor
+
+.defflavor sys:local-network-error
+All network errors that are problems with
+one's own Lisp Machine rather than the network or the foreign
+host are members of this set.  This is built on 3sys:network-error*.
+.end_defflavor
+
+.defflavor sys:remote-network-error
+All network errors that are problems with the network or
+the foreign host rather than one's own Lisp Machine
+are members of this set.  The 3:foreign-host* message to any
+error in this set returns the remote host, and the 3:connection*
+message returns the connection, or 3nil* if no particular
+connection is involved.  This is built on 3sys:network-error*.
+.end_defflavor
+
+.defflavor sys:network-resources-exhausted
+The local network control program exhausted some resource; for
+example, its connection table was full.  This is built on
+3sys:local-network-error*.
+.end_defflavor
+
+.defflavor sys:unknown-address
+The network control program was given an address that is not understood.
+The 3:address* message returns the address.
+This is built on 3sys:local-network-error*.
+.end_defflavor
+
+.defflavor sys:unknown-host-name
+The host parser (3si:parse-host* or 3fs:get-pathname-host*)
+was given a name that is not the name of any known host.
+The 3:name* message returns the name.
+This is built on 3sys:local-network-error*.
+.end_defflavor
+
+.defflavor sys:bad-connection-state
+All remote errors in which a connection enters a bad state are members of this set.
+This is built on 3sys:remote-network-error*.  (However, it actually can
+happen due to purely local causes; in particular, if your Lisp Machine
+stays inside a 3without-interrupts* for a long time, the network
+control program may decide that a host is not answering periodic
+status requests, and put its connections into a closed state.)
+.end_defflavor
+
+.defflavor sys:connection-error
+All remote errors that occur while trying to establish a new network
+connection are members of this set.  The 3:contact-name* message
+to any error object in this set returns the contact name that we
+were trying to connect to.
+This is built on 3sys:remote-network-error*.
+.end_defflavor
+
+.defflavor sys:host-not-responding
+All errors in which the host is not responding, whether during initial
+connection or in the middle of a connection, are members of this set.
+This is built on 3sys:remote-network-error*.
+.end_defflavor
+
+.defflavor sys:host-not-responding-during-connection
+The network control program timed out while trying to establish a new
+connection to a host.  The host might be down, or the network might be
+down.  This is built on 3sys:host-not-responding* and
+3sys:connection-error*.
+.end_defflavor
+
+.defflavor sys:host-stopped-responding
+A host stopped responding during an already-established network
+connection.  The host or the network might have crashed.
+This is built on 3sys:host-not-responding* and 3sys:bad-connection-state*.
+.end_defflavor
+
+.defflavor sys:connection-refused
+The foreign host explicitly refused to accept the connection.  The 3:reason*
+message returns a text string from the foreign host containing its explanation,
+or 3nil* if it had none.
+This is built on 3sys:connection-error*.
+.end_defflavor
+
+.defflavor sys:connection-closed
+An already-established connection became closed.  The 3:reason*
+message returns a text string from the foreign host containing its explanation,
+or 3nil* if it had none. 
+This is built on 3sys:bad-connection-state*.
+.end_defflavor
+
+.defflavor sys:connection-lost
+The foreign host reported a problem with an already-established connection,
+and that connection may no longer be used.   The 3:reason*
+message returns a text string from the foreign host containing its explanation,
+or 3nil* if it had none.
+This is built on 3sys:bad-connection-state*.
+.end_defflavor
+
+.defflavor sys:connection-no-more-data
+There is no more data remaining on this connection.
+This is built on 3sys:bad-connection-state*.
+.end_defflavor
+
+.subsection Creating New Conditions
+
+It's easy to define a new condition.  If you want to be simple, you only
+need two forms: one defines the flavor, and the other defines a
+3:report* message.  The flavor definition should be built on 3error*
+if you want the condition to be an error, or on 3condition* if you
+don't.  The 3:report* message is passed a stream, which it should
+print an error message on.  The message should not have a leading or
+trailing newline; generally it should be an English sentence ending with
+a period.  Example:
+
+.lisp
+(defflavor block-wrong-color () (error))
+
+(defmethod (block-wrong-color :report) (stream)
+   (format stream "The block was of the wrong color."))
+.end_lisp
+
+Your program can now signal the error by doing 3(error 'block-wrong-color)*.
+
+The above example is perfectly OK, but doesn't take advantage of some of
+the power of the condition system.  First of all, the error message only
+tells you what kind of thing went wrong; it doesn't say anything about
+this specific occurrence of the error.  To parameterize individual
+condition objects to be able to distinguish among several occurrences of
+the same kind of condition, we add instance variables.  Example:
+
+.lisp
+(defflavor block-wrong-color (block color) (error)
+  :initable-instance-variables
+  :gettable-instance-variables)
+
+(defmethod (block-wrong-color :report) (stream)
+  (format stream "The block ~S was ~S, which is the wrong color."
+          block color))
+.end_lisp
+
+Your program would now signal the error by doing, for example,
+
+.lisp
+(error 'block-wrong-color ':block the-bad-block
+                          ':color the-bad-color)
+.end_lisp
+
+The 3:initable-instance-variables* option defines the two init-options
+3:block* and 3:color* so that 3error* can use them to build the
+condition object.  The 3:gettable-instance-variables* option defines
+methods for the 3:block* and 3:color* messages, which can be sent by
+handlers to find out details of the condition when it is signalled.
+
+The important thing to keep in mind is that your 3:report* method
+should never depend on the dynamic environment in which it is invoked;
+that is, it should not do any free references (to special variables).
+All the variables it uses should be its own instance variables.  The
+reason for this is that the condition object might get sent a
+3:report* message in a different dynamic environment than the one in
+which the object was created; this is common when 3condition-case* is
+being used.
+
+To define a set of errors of which this error is a member, all you need
+to do is to create a new flavor and build the flavors on each other
+accordingly.  There's no need to give this new flavor a 3:report*
+method if it is never going to be signalled itself.  Example:
+
+.lisp
+(defflavor block-world-error () (error))
+
+(defflavor block-wrong-color (block color) (block-world-error)
+  :initable-instance-variables)
+
+;; The :report method is the same.
+.end_lisp
+
+The only other interesting thing to do when creating a condition
+is to define proceed-types.  This is explained [ref. below in the discussion
+of proceeding].
+
+It is a good idea to use 3compile-flavor-methods* for any condition
+whose instantiation is considered likely, to avoid the need for run-time
+combination and compilation of the flavor.  Otherwise, the first time
+the condition is signalled, it will take a while.
+
+.section Other
+
+This section describes various advanced and miscellaneous topics.
+
+.subsection Tracing Conditions
+
+.defvar trace-conditions
+The value of this variable is a condition flavor (a symbol) or a list of
+condition flavors.  If any condition is signalled that is built on the
+specified flavor (or built on any of the specified flavors, if it's a
+list), then the debugger will be entered immediately, before any
+handlers are searched.  If the user proceeds (by typing 3Resume*), signalling will continue
+as usual, which might cause the debugger to be entered again.  This
+variable is provided for debugging purposes only; the idea is that it lets
+you trace the signalling of any condition so that you can figure out what
+conditions are being signalled and by what function.  You can set this
+variable to 3error* to trace all error conditions, for example, or you
+can be more specific.  If you set 3trace-conditions* to 3t*, all
+conditions are traced.
+.end_defvar
+
+.subsection Invoking Restart Handlers
+
+.defun dbg:invoke-restart-handlers condition &key flavors
+This function searches the list of restart handlers, and the one it
+finds immediately gets to run as if a condition were signalled and it were
+the handler.  If 2flavors* is provided, it should be a list of
+flavors.  The first restart handler that handles conditions of any of
+those flavors will be run; if it is not provided, the first restart
+handler on the handler list will be run.
+.end_defun
+	
+This function is intended to be called by handlers set up by
+3condition-bind* or 3condition-bind-default*.  The handler can call
+this function in order to intentionally short-circuit the interactive
+handlers list, preventing the interactive debugger from being invoked,
+and instead restarting execution.  A program that expects the user
+to be away from his console and wants to attempt to proceed a computation
+despite the occurrence of errors, such as a "batch-mode" compilation,
+might find this useful.
+
+.subsection Default Handlers and Complex Modularity
+
+When more than one handler exists for a condition, which one should be
+invoked?  The signalling mechanism has an elaborate rule, described
+above, but in most situations, the basic idea is that the innermost
+handler is invoked.  This decision is made on the basic principle of
+modularity and referential transparency: a function should behave the
+same way regardless of what calls it.  Therefore, whether a function's
+handler gets invoked should not depend on what is going on with the
+callers of the function.
+
+To put it another way, suppose function 3a* sets up a handler to deal
+with the 3fs:file-not-found* condition, and then calls procedure 3b*
+to perform some service for it.  Now, unbeknownst to 3a*, 3b*
+sometimes opens a file, and 3b* has a condition handler for
+3fs:file-not-found*.  If 3b*'s file is not found, 3b*'s handler
+will handle the error rather than 3a*'s.  This is as it should be,
+because it should not be visible to 3a* that 3b* uses a file (this
+is a hidden implementation detail of 3b*), and 3b*'s internal
+functioning should not be meddled with by 3a*'s unrelated condition
+handler.  Therefore, the basic inside-to-outside searching rule was
+chosen for the signalling mechanism.
+
+However, sometimes a function wants to signal a condition, to allow
+callers to handle it, but if no caller handles the condition, it has
+something it wants to do itself rather than just "bomb out" to the
+debugger.  At first, it seems that this means that an outside-to-inside
+searching rule should be used.  The modularity demands described above
+dictated that an inside-to-outside modularity rule be used instead; how
+can this be circumvented when a function wants to handle something only
+if no outer function handles it?
+
+There are several ways to deal with this.  Because of lack of experience
+with the condition signalling system, we are not yet sure which of these
+are better than others, and so several mechanisms are provided in order
+to allow the experimentation and flexibility needed to learn what works
+best.
+
+The simplest solution is to allow the debugger to be entered, but to
+provide a proceed-type.  That is, your program signals an error, to
+allow callers to handle the condition, and if none of them handle it,
+your program gets to handle it provided that the user decides to
+proceed.  If what your program wanted to do was to prompt the user
+anyway, this may be the right thing, particularly if you think that a
+program error is probably happening and the user might want to be able
+to trace and manipulate the stack using the debugger.
+
+Another simple solution is to signal a condition that is not an error.
+Then, if no handler is found, 3signal* returns 3nil*, and your
+program can take appropriate action.  In this case, the debugger is
+never entered at all.
+
+However, these simple solutions only work if your program is doing the
+signalling.  If some other program is signalling a condition, then you
+cannot control whether the condition is an error condition or whether it
+has any proceed-types; you can only write handlers.
+
+One way to write a handler that won't be invoked when an outer handler
+is willing to handle the error is to use 3condition-bind-default*.
+This creates a handler just like 3condition-bind*, but puts it on the
+default handler list, which is only searched after all of the regular
+bound handlers have been searched.  One drawback of this scheme is that
+it only works to one level; that is, if there are three nested functions
+in question, you can't get outside-to-inside modularity for all three,
+because there are only two lists: the bound list and the default list.
+However, this is probably good enough for some applications.
+
+Another way to write such a handler is to use the following function:
+
+.defun dbg:condition-handled-p condition-flavor
+This function searches the bound handler list and the default handler
+list to see whether there is a handler for the specified flavor.
+It should 2only* be called from inside a 3condition-bind*
+handler function.  It starts looking from the point in the
+two handler lists at which this handler was invoked and proceeds
+to look outwards through the bound handler list and then the
+default handler list.  It returns 3t* if there is definitely a handler,
+and 3nil* if there is no handler; it can also return 3:maybe*
+when all of the handlers are 3condition-bind* handlers that accept
+this flavor but might return 3nil* to decline to handle it (there's
+no way to tell without actually running the handler).
+.end_defun
+
+This has the advantage that it works for any number of levels of nested
+handler, instead of only two; one disadvantage is that it can return
+3:maybe*, in which case it may not be clear what to do.
+
+.subsection Interactive Handlers
+
+The interactive handler list has one element: a handler that invokes the
+interactive debugger if the condition is an error, and declines to
+handle the condition if it is not an error.  There is no defined way to
+alter the contents of this list.
+
+Sometimes when one embeds a whole new programming system in Lisp, it is
+desirable to completely take over the function of the debugger in some
+new way as part of that programming system.  One of the original design
+goals of the condition signalling mechanism was to allow this.  However,
+the exact definition of the problem is not completely clear, and we are
+not sure whether this functionality is provided by the system as it
+stands.
+
+If you are writing an application that needs to completely take over the
+handling of errors, it might work to just create a 3condition-bind*
+handler that handles 3error*, to prevent the debugger from being
+invoked, but this may have problems that we have not anticipated.  If it
+is really necessary to get the interactive debugger out of the way, you
+might try changing the interactive handler list.  There is no defined
+way to do this; you will have to read the code for complete details and
+figure it out, and what you do is not guaranteed to work in future
+releases.  However, experimentation is encouraged, and if you find you
+need to do this, please contact the maintainers so that an official
+supported facility to serve your needs can be implemented if it does not
+exist already.  Briefly, the variable holding this list is named
+3dbg:*interactive-handlers**; the object in it should take two arguments
+which are just like the arguments of a 3condition-bind* handler, and
+it should return 3nil* or throw like such a handler; the list
+is reset to hold the standard interactive debugger upon warm-booting
+the machine.
+
+.subsection Breakpoints
+
+The functions 3breakon* and 3unbreakon* can be used to set
+"breakpoints" in a program.  They use the "trap on call" feature of the
+Lisp Machine's function-calling mechanism, that can cause the calling of
+a certain function to signal a condition.
+
+.defun breakon function-spec &optional condition-form
+Sets a "breakpoint" for the specified function.  Whenever this function
+is called, the error condition 3sys:call-trap* will be signalled, and
+the debugger will be entered.  At this point, you can inspect the state
+of the Lisp environment and the stack, and then proceed the condition to
+cause the program to continue to run.
+
+The first argument may actually be any function spec, so that you can
+trace methods and other functions not named by symbols.  See Chapter 10
+of 2The Lisp Machine Manual*.
+
+If the 2condition-form* argument is provided, it should be a Lisp
+form.  This form will be evaluated when the function is called, and if
+it returns 3nil* the function call will proceed without signalling
+anything.  If you call 3breakon* several times using the second
+argument, all of the condition forms that you provide will be 3or*'ed,
+so that if any of the conditions is true the breakpoint will "go off".
+The form is evaluated in the dynamic environment of the function
+call, but no way is provided to inspect the arguments of the function.
+.end_defun
+
+.defun unbreakon &optional function-spec condition-form
+Turns off a breakpoint set by 3breakon*.  If 2condition-form* is
+provided, it only "turns off" that condition, leaving any others; if
+3condition-form* is not provided, the entire breakpoint is turned off
+for that function.  If 2function-spec* is not provided, all
+breakpoints set by 3breakon* are turned off.
+.end_defun
+
+If a breakpoint is set on a function and the function is called, an
+error is signalled with the message "Break on entry to function".  The
+3:no-action* proceed-type is provided; this allows the function entry
+to proceed.  The "trap on exit" bit is set in the stack frame of the
+function call, so that when the function returns, another error is
+signalled.  The message is "Break on exit from marked frame", and the
+3:no-action* proceed-type is provided, allowing the function return to
+proceed.
+
+.subsection Debugger Bug-reports
+
+The 3c-M* command in the debugger sends a bug report, using the
+3bug* function.  By default, the first argument to 3bug* will be the
+symbol 3lispm*, so that the report will be sent to the 3BUG-LISPM*
+mailing list.  Also by default, the initial contents of the mail-sending
+text buffer will be a standard set of information dumped by the
+debugger.  You can control this behavior for your own condition flavors.
+First, you can control the mailing list to which the bug report is sent
+by defining your own primary method for the following message.
+
+.defmessage :bug-report-recipient-system
+This message is sent by the debugger's 3c-M* command to find the
+mailing list to which to send the bug report mail.  The default
+method (the one in the 3condition* flavor) returns 3lispm*,
+and this is passed as the first argument to the 3bug* function.
+.end_defmessage
+
+You can control the initial contents of the mail-sending buffer by
+altering the handling of the following message, either by providing your
+own primary method to replace the default message with your own, or by
+defining a 3:before* or 3:after* daemon to add your own specialized
+information before or after the default text.
+
+.defmessage :bug-report-description stream
+This message is sent by the debugger's 3c-M* command to print
+out the text that is the initial contents of the mail-sending buffer.
+The handler should simply print whatever information it considers
+appropriate onto 2stream*.
+.end_defmessage
+
+.subsection 3open* and Conditions
+
+The 3open* function has been changed to interpret its 3:error*
+option differently.  There are three possible values for this keyword
+argument, which controls what happens if any
+3fs:file-operation-failure* error is signalled.  (Other errors will
+always be signalled normally.)
+
+.table
+.item
+3t* means that if there is such an error (a
+3fs:file-operation-failure* error), the error should just be signalled
+normally.  This is the default.
+
+.item
+3nil* means that if there is such an
+error, the condition object should be returned by 3open*.
+
+.item
+3:reprompt* means that if there is an error, the user should be
+prompted for a new file name to be used instead of the original one
+passed to 3open* and 3open* should try again using this pathname.
+Note that if you use this value, the file opened by 3open* may not
+have anything to do with the pathname given to 3open*; you must write
+your program accordingly.  (This behavior used to be the default, but
+many programs did not take into account this problem.)
+.end_table
+
+Two special forms have been added to make it easy to get the
+functionality of 3condition-case* in the context of 3with-open-file*
+and 3with-open-stream*:
+
+.defspec with-open-file-case (var pathname option...) clause...)
+This is like 3with-open-file*: it opens 2pathname*, using the
+2option*s as options to 3open*, and 2var* is bound to the stream
+that 3open* returns.  When the form is exited, the stream is closed.
+The difference is that instead of a body of forms to be evaluated, the
+body is made of clauses just like 3condition-case*, each of which
+handles a condition or a set of conditions that can be signalled when
+the file is opened.  In the 3:no-error* clause, 2var* is bound
+to the stream returned by 3open*, but in the other clauses it
+is bound to the error signalled by 3open*.  Example:
+.lisp
+(with-open-file-case (stream "f:>dla>foo.lisp" ':direction ':input)
+    (fs:file-not-found (format t "~%Not Found"))
+  (:no-error (stream-copy-until-eof stream standard-output)))
+.end_lisp
+.end_defspec
+
+.defspec with-open-stream-case (form option...) clause...)
+This is like 3with-open-file*: it evaluates 2form* to open a stream
+and 2var* is bound to the stream
+that 2form* returns.  When the form is exited, the stream is closed.
+The difference is that instead of a body of forms to be evaluated, the
+body is made of clauses just like 3condition-case*, each of which
+handles a condition or a set of conditions that can be signalled when
+the file is opened.  In the 3:no-error* clause, 2var* is bound
+to the stream returned by 2form*, but in the other clauses it
+is bound to the error signalled by 2form*.
+.end_defspec
+
+.subsection Debugger Special Commands
+
+When the debugger is entered because an error condition was signalled
+and not handled, the user is offered various ways to proceed and
+restart.  Sometimes it's useful to offer the user other things, too.
+The most commonly-seen example of this is that when you forget to type a
+package prefix: a 3sys:unbound-symbol* error is signalled, and it
+offers to let you use the symbol from the right package instead.  This
+is neither a proceed-type nor a restart-handler; it is a 2special
+command*.
+
+You can add a special command (or several of them) to any condition
+flavor.  You can control whether to offer the special command when any
+particular instance is signalled; for example, the one described above
+is not offered unless there is some other symbol with the same
+print-name in a different package.  Special commands are only called by
+the debugger; 3condition-bind* handler functions never see them.
+
+To add special commands to your condition flavor, you must mix in the
+flavor 3dbg:special-commands-mixin*, which provides the instance
+variable 3dbg:special-commands*, and several method combinations.
+Each special command to a particular flavor is identified by a keyword
+symbol, just the same way that proceed-types are identified.
+You can then create handlers for any of the following messages:
+
+.defmessage :special-command command-type
+This message is sent when the user invokes the special command.  The
+3:case* method-combination is used, and the name of the special
+command is what is dispatched on.  No arguments are passed.  Therefore,
+the syntax is:
+.lisp
+(defmethod (2my-flavor* :case :special-command 2my-command-keyword*) ()
+   "2documentation*"
+   2body...*)
+.end_lisp
+
+The method should do any input and output to the 3query-io* stream
+to communicate with the user.  It can return 3nil* to return control
+to the debugger, or else it can return the same thing that any of the
+3:proceed* methods would have returned in order to proceed in that
+manner.
+.end_defmessage
+
+.defmessage :document-special-command command-type stream
+This message prints out documentation of 2command-type* onto 2stream*.
+If you don't handle this explicitly, the default handler will use the
+documentation string from the 3:special-command* method.  You can,
+however, handle this message in order to print a prompt string
+that has to be computed at run-time.  This is analogous with
+3:document-proceed-type*.  The syntax is:
+.lisp
+(defmethod (2my-flavor* :case :document-proceed-type 2my-command-keyword*)
+           (stream)
+  2body...*)
+.end_lisp
+.end_defmessage
+
+.defmessage :initialize-special-commands
+The debugger sends this message after it prints the error message.  The
+methods are combined with 3:progn* combination, so that each one
+can do some initialization.  In particular, the methods for this
+message can remove items from the list 3dbg:special-commands* in
+order to decide not to offer these special commands.
+.end_defmessage
+
+.subsection Special Keys
+
+The 3Abort* and 3Break* keys on the keyboard are handled specially
+by the system.  The basic idea of 3Abort* is that it aborts what you
+are doing, and the basic idea of 3Break* is that it enters a
+breakpoint.  The 3Control-* modifier means that the keystroke should
+take effect asynchronously (i.e. immediately), whereas without the
+modifier, the keystroke takes effect only at the next time that the
+process reads a character from the keyboard.  The 3Meta-* modifier
+means "do it more strongly"; 3Meta-Abort* resets the process entirely,
+and 3Meta-Break* enters the debugger instead of just a simple read-eval-print
+loop.
+
+That's the basic idea, but to completely and accurately describe what
+these keys do, their function must be expressed in terms of conditions
+and the debugger in some cases.  Here is the complete definition of what
+these keys and the modifiers mean.
+
+First of all, the 3Control-* modifier always has the same meaning.
+The keystrokes without 3Control-* are detected when your process tries
+to do input from the keyboard (typically by doing an input stream
+operation such as 3:tyi* on a window).  Therefore, if your process is
+computing or waiting for something else, the effects of the keystrokes
+are deferred until your process tries to do input.  When the
+3Control-* modifier is given, the keystroke is intercepted immediately
+by the Keyboard Process, and your process is sent an 3:interrupt*
+message so that it will perform the specified function immediately, even
+if it is computing or waiting for anything.  With this in mind, we will
+describe the four combinations of 3Abort* and 3Break*, without and
+with the 3Meta-* modifier.  Inside the interactive debugger, these
+keys have the same meanings as usual, except 3Abort* (see below).
+
+3Abort* prints the string 3[Abort]* on the 3terminal-io* stream
+(except sometimes it doesn't, if it believes that output on that stream
+might not work), and then does 3(signal 'sys:abort)*.  3sys:abort* is a
+non-error condition.  Programs can set up bound handlers for 3sys:abort*,
+although most do not.  Many programs set up restart handlers for
+3sys:abort*; most interactive programs have such a handler in their
+command loops.  Therefore, typing 3Abort* usually restarts your
+program at the innermost command loop.  Inside the interactive
+debugger, 3Abort* has a special meaning; see below.
+
+3Meta-Abort*  prints the string 3[Abort all]* on the 3terminal-io* stream
+(except sometimes it doesn't, if it believes that output on that stream
+might not work), and then sends your process a 3:reset* message, with the
+argument 3:always*.  This has nothing to do with condition signalling;
+it just resets the process completely, unwinding its entire stack.  What
+the process does after that depends on what kind of process it is and
+how it was created; it might start over from its initial function or it
+might disappear.  See the discussion of processes in 2The Lisp Machine
+Manual*.
+
+3Break* calls the 3break* function, with the argument 3break*.
+This has nothing to do with condition signalling.  See the description
+of the 3break* function in 2The Lisp Machine Manual*.
+
+3Meta-Break* causes the interactive debugger to be entered, but
+without signalling any condition.  The debugger normally expects to be
+invoked because of some condition object, though, and it needs a
+condition object to interact properly with proceeding and restarting.
+Therefore, a condition object of flavor 3break* is created in order to
+give the debugger something to work with.  3break* is not an error
+flavor; it is built on 3condition*.  It has no proceed-types, but
+the 3Resume* command in the debugger will cause the debugger to
+return and the process to resume what it was doing.
+
+There are several techniques for overriding the interception of these
+special keys.  First of all, the 3Control-* keys are all intercepted
+by the Keyboard Process ("at interrupt level", so to speak).  To prevent
+it from intercepting any of these keys, put a 3:super-image* property
+on the property list of the io-buffer of a window, and then when one of
+the 3Control-* characters is typed while that window is the selected
+window, they won't be treated specially.  You can access this property
+list with the form
+.lisp
+(locf (tv:io-buffer-plist (send 2window* ':io-buffer)))
+.end_lisp
+
+As for the non-3Control-* characters, there is a simple way and a
+complex way.  The simple way is to lambda-bind the value of the variable
+3tv:kbd-intercepted-characters*, which is the list used by the
+default 3tv:kbd-tyi-hook*.  The complex way is to define your own hook
+function and bind 3tv:kbd-tyi-hook* to it.  For more details, see the
+window system documentation.
+
+At the command loop of the debugger, 3Abort* acts as a debugger
+command (it is the same as 3c-Z*).  It makes sure there is at least
+one restart handler for the 3sys:abort* condition (if there isn't, it
+prints an error message).  It then signals the 3sys:abort*
+condition so that the innermost restart handler for 3sys:abort* will
+handle it (unless there is a bound or default handler for 3sys:abort*,
+which would get the first chance at handling the condition).
+
+When it is entered, the interactive debugger prints out a list of
+ways to restart and proceed, and tells which keys are assigned to them.
+(By the way, proceed-types come first, followed by special commands,
+followed by restart handlers.)
+One alphabetic key with the 3Super-* prefix is assigned to each,
+and 3Abort* and 3Resume* are assigned to two of these as well.
+3Abort* is always assigned to the innermost restart handler that
+handles 3sys:abort*.  3Resume*
+is always assigned to some proceed type (specifically, the first
+one in the list given as the 3:proceed-types* init option [ref above] when
+the condition object is created); if there is no way to proceed
+from the condition, 3Resume* is will print an error message if you type it.
+3Resume* is never assigned to a restart handler or to a debugger special
+command.  When
+3Meta-Break* is used to enter the debugger, 3Resume* means that
+the execution of the process should resume.
+
+You can also customize the debugger, assigning certain keystrokes to
+certain proceed-types or special commands, by setting these variables in
+your init file:
+
+.defvar dbg:*proceed-type-special-keys*
+The value of this variable should be an alist associating proceed-types
+with characters.  When any of these proceed-types is supplied by
+an error, the debugger will assign that proceed-type to the key
+specified.  This is why the 3:store-new-value* proceed-type is
+offered on the 3m-C* keystroke.
+.end_defvar
+
+.defvar dbg:*special-command-special-keys*
+The value of this variable should be an alist associating names of
+special commands with characters.  When any of these special commands is
+supplied by an error, the debugger will assign special command to the
+key specified.  This is why the 3:package-dwim* special command is
+offered on the 3c-sh-P* keystroke.
+.end_defvar
+   

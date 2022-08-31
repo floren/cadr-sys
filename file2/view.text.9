@@ -1,0 +1,101 @@
+
+;Decode a viewspec string into a viewspec list.
+
+;A viewspec string looks in general like
+;D2L*ND3L4ND*N
+
+;A viewspec is used in displaying the contents of the file system subtree
+;down from a given node.
+;What a viewspec says is how much of a node to display at
+;each level of depth.
+
+;In a viewspec string, Dnnn indicates that the following specs
+;apply to depths up to nnn.  D* indicates that the following specs
+;apply to all depths.  When more than one set of specs applies
+;to a given depth, the shallower specs take priority.
+;So if there are D1 specs and D5 specs, the D1 specs beat the D5
+;specs for depth zero and one.
+
+;What follows the Dnnn can specify a number of lines to be printed
+;with Lnnn (or L* meaning print the entire text).
+;It can also contain N meaning print the subnode name (and version),
+;"I" meaning print other less important information,
+;and a V spec which says which version to use at lower levels.
+;V> means the most recent version, V! means the current version,
+;V* means all versions!
+
+;So D2L*ND3L4ND*N means down to depth two print the name and the whole text,
+;for depth three print the name and four lines of text, below that
+;print just the text.
+
+;If no spec applies to a depth, that depth is ignored.
+;A Dnnn with no specs after it defaults depending on the context.
+
+;A viewspec can also be represented by a list.
+;Each element in the list starts with a maximum depth
+;followed by a number of lines to print at that depth,
+;followed by other flags.
+;The elements of the list must be ordered by increasing maximum depth.
+;The equivalent of D2L*ND3L4ND*N is
+;  ((2 * NAME) (3 4 NAME) (* 0 NAME))
+;"I" turns into INFO, "V>" into NEWEST-VERSION,
+;"V!" into CURRENT-VERSION, "V*" into ALL-VERSIONS.
+
+(defun decode-viewstring (viewstring default &aux speclist)
+  (do ((i 0) (len (string-length viewstring)))
+      ((= i len))
+    (let (depth lines flags)
+      (selectq (char-upcase (aref viewstring i))
+	(#\space (setq i (1+ i)))
+	(#/D 
+	 (multiple-value (depth i)
+			 (decode-viewstring-1 viewstring (1+ i)))
+	 (do () ((= i len))
+	   (selectq (prog1 (char-upcase (aref viewstring i)) (setq i (1+ i)))
+	     (#/L 
+	      (multiple-value (lines i)
+			      (decode-viewstring-1 viewstring i)))
+	     (#/N (push 'name flags))
+	     (#/I (push 'info flags))
+	     (#\space nil)
+	     (#/V
+	      (selectq (prog1 (char-upcase (aref viewstring i)) (setq i (1+ i)))
+		(#/> (push 'newest-version flags))
+		(#/! (push 'current-version flags))
+		(#/* (push 'all-versions flags))
+		(t (return (setq i (1- i))))))
+	     (t (setq i (1- i)) (return))))
+	 (push (cond ((or lines flags) `(,depth ,(or lines 0) . ,flags))
+		     (t (cons depth default)))
+	       speclist))
+	(t (ferror 'bad-viewstring "Garbage in viewstring ~A" viewstring)))))
+  (sortcar speclist
+	   #'(lambda (x y) (cond ((eq y '*) t) 
+				 ((eq x '*) nil)
+				 (t (< x y))))))
+
+(defun decode-viewstring-1 (string start-pos)
+  (prog (end-pos)
+	(cond ((= #/* (aref string start-pos))
+	       (return '* (1+ start-pos))))
+	(setq end-pos (string-search-not-set `(#/0 #/1 #/2 #/3 #/4 #/5 #/6 #/7 #/8 #/9)
+					     string start-pos))
+	(return (read-from-string (substring string start-pos end-pos)) end-pos)))
+
+;Find out what a viewlist says about a given depth
+;The first value is what to do at that depth: (nlines . flags).
+(defun ask-viewlist (viewlist depth)
+  (do ((vl viewlist (cdr vl))) ((null vl))
+    (let ((v (car vl)))
+      (and (or (eq (car v) '*) (>= (car v) depth))
+	   (return (cdr v))))))
+
+;In obeying a viewlist, can a certain depth (and everything below it) be ignored?
+(defun ask-viewlist-1 (viewlist depth)
+  (dolist (v viewlist)
+    ;; If we find an entry for a depth equal to or greater than the specified
+    (and (or (eq (car v) '*) (>= (car v) depth))
+	 ;; and we actually want to look at something at that depth,
+	 (or (cadr v) (cddr v))
+	 ;; then return T.
+	 (return t))))

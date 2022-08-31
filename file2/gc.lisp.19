@@ -1,0 +1,152 @@
+;-*- Mode:LISP; Package:FILE-SYSTEM; Base:8; Lowercase:T -*-
+
+
+;Reasoning behind this GC:
+
+;we want to find all blocks which are not free in the bit map
+;but also not in any file and not available.
+
+;So, we mark all files recursively, and ultimately any block which
+;has not been marked is made "free".  This works by itself if the file
+;system is not running.
+
+;If the file system is running, then the only way blocks can get in
+;and out of files is via the available table.  And once any block has
+;gone through that, its status is certainly correct.  So, the allocation
+;routines mark all blocks that are put into the available table.
+;When GC is over, the status of blocks that were marked is not changed.
+;So if they were flushed from the available table, they remain free.
+
+;This is extended to cover locked blocks as well.  A locked block
+;is indicated by a 1 in the pack-locked-block-map-array, and it should
+;not be allocated for anything.  We assume that all locked blocks
+;are marked "in use", not "free", in the bit map.  To keep that true,
+;we mark all locked blocks as "in use" after GC is finished.
+
+;Also, to facilitate fixing up the file system when blocks get locked,
+;we make a list of (the first block numbers of) all files that contain
+;any locked blocks.  If we do not find any such files, then no locked
+;block should ever be marked, since none are ever put in the available table.
+;We have an error check for that.  An additional use of this information
+;is that, if no locked blocks are in any files, there is no need for
+;FREE-DISK-BLOCKS to check the locked block map.
+
+;This is the area we do consing in.
+;We cons for one file to be marked,
+;then reset the area.  So it never gets very big.
+(defvar file-gc-area)
+
+;Find a pack that needs to be GC'd and do it,
+;and repeat until no pack needs to be GC'd.
+(defun gc-all-packs ()
+  (or (boundp 'file-gc-area)
+      (setq file-gc-area (make-area ':name 'file-gc-area ':gc ':temporary)))
+  (do ()
+      ((null  ;Exit the outer loop if we find no pack that needs GC.
+	(dolist (pack pack-list)
+	  (cond ((pack-gc-bit-map pack)
+		 (gc-pack pack)
+		 (return t))))))))
+
+(defun gc-pack (pack &aux (max-block (pack-number-of-blocks pack)))
+  ;; Make sure we have a real bit-map to work with.
+  (and (eq (pack-gc-bit-map pack) t)
+       (setf (pack-gc-bit-map pack)
+	     (make-array (array-length (pack-block-starts-file-map-array pack))
+			 ':type 'art-16b)))
+  ;; Make sure blocks starting files do not get freed
+  ;; even if we lose trying to look at their first blocks.
+  (copy-array-contents (pack-block-starts-file-map-array pack) (pack-gc-bit-map pack))
+  ;; Find each block that starts a file, and mark that file's blocks.
+  (dotimes (block max-block)
+    (cond ((block-starts-file-p pack block)
+	   (prog (node-file
+		  half-dead-flag
+		  contains-locked-block-flag
+		  (current-file-area file-gc-area)          ;In case we have to open the node.
+		  (default-cons-area file-gc-area))
+	     ;; "open" the file starting at that block.
+	     ;; This is so that we extract its map.
+	     (setf (values nil half-dead-flag) (file-setup pack block "GC" t nil nil t))
+	     (cond ((eq half-dead-flag ':lose)) ;Invalid file => mark only first block.
+		   (half-dead-flag
+		    ;; The file is half-dead.
+		    ;; Is it pointed to by a directory?
+		    (let ((node (open-node-given-first-block 'gc1 pack block)))
+		      ;; Yes => close the node and go ahead.
+		      (if node (funcall node ':remove-reason 'gc1)
+			  ;; No => don't mark this file.
+			  ;; Its block will be reclaimed.
+			  (return nil)))))
+	     ;; Now turn on, in pack-gc-bit-map, all the blocks this file occupies.
+	     (with-pack-lock pack
+	       (dolist (mapelt (file-disk-map node-file))
+		 (change-bitmap-bits (pack-gc-bit-map pack) 0 max-block
+				     (mapelt-data mapelt)
+				     (- (mapelt-end mapelt) (mapelt-start mapelt))
+				     1 t)
+		 ;; See if this mapelt includes any locked blocks.
+		 ;; Note that find-bitmap bit can "find" a block
+		 ;; a little past the end of the region we specify.
+		 ;; We arrange to treat that like returning NIL.
+		 (let ((last-block (+ (mapelt-data mapelt)
+				      (- (mapelt-end mapelt) (mapelt-start mapelt)))))
+		   (and (< (or (find-bitmap-bit (pack-locked-block-map-array pack) 0
+						last-block
+						(mapelt-data mapelt) 1)
+			       last-block)
+			   last-block)
+			(setq contains-locked-block-flag t)))))
+	     (and contains-locked-block-flag
+		  (setf (pack-locked-block-files pack)
+			(cons-in-area block (pack-locked-block-files pack)
+				      permanent-storage-area)))
+	     ;; Free up all the RQBs used to read the blocks that hold the map.
+	     (push-out-of-core 0 (file-n-records node-file)))
+	   (reset-temporary-area file-gc-area))))
+  (with-pack-lock pack
+    ;; Mark the pack header and maps
+    (change-bitmap-bits (pack-gc-bit-map pack) 0 max-block
+			0 1
+			1)
+    (change-bitmap-bits (pack-gc-bit-map pack) 0 max-block
+			(pack-free-map-first-block pack)
+			(* 3 (pack-free-map-number-of-blocks pack))
+			1)
+    ;; Mark the nonexistent blocks-numbers past the maximum block number
+    ;; as the easiest way of preventing them from becoming marked free.
+    (change-bitmap-bits (pack-gc-bit-map pack) 0 (* 16. (array-length (pack-gc-bit-map pack)))
+			max-block (- (* 16. (array-length (pack-gc-bit-map pack))) max-block)
+			1)
+    ;; Now free anything not marked as in use in the gc-bit-map
+    (free-inaccessible-blocks pack))
+  (setf (pack-gc-bit-map pack) nil))
+
+;Free any blocks not marked in pack-gc-bit-map, unless it is locked.
+;Also, if any block which is currently in use, and is locked,
+;check that we have detected this fact earlier when checking specific files.
+(defun free-inaccessible-blocks (pack)
+  (let* ((gc-map (pack-gc-bit-map pack))
+	 (lock-map (pack-locked-block-map-array pack))
+	 (free-map (rqb-buffer  (pack-free-map-rqb pack)))
+	 (len (array-length free-map)))
+    (dotimes (map-idx len)
+      ;; Mark all blocks not found by GC as free.
+      (setf (aref free-map map-idx)
+	    (logior (logxor (aref gc-map map-idx) 177777)
+		    (aref free-map map-idx)))
+      ;; If any locked blocks are in use according to GC,
+      ;; we should already have recorded the files that contain them.
+      ;; Barf if that is not so.
+      (or (pack-locked-block-files pack)
+	  (zerop (logand (aref lock-map map-idx)
+			 (logxor 177777 (aref free-map map-idx))))
+	  (ferror nil "Locked blocks are in use, but not in any file, on ~S" pack))
+      ;; Now mark all locked blocks as in use.
+      (setf (aref free-map map-idx)
+	    (logand (logxor (aref lock-map map-idx) 177777)
+		    (aref free-map map-idx))))
+    (rewrite-free-map pack)
+    (setf (pack-number-of-free-blocks pack)
+	  (count-free-blocks pack))))
+
