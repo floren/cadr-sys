@@ -1,0 +1,195 @@
+;-*- Mode:LISP; Package:FILE-SYSTEM; Base:8 -*-
+
+;This little stack group recursively found all the files needing to be dumped,
+(defvar dump-tree-walking-sg nil)
+
+;While this little stack group dumped them one by one.
+(defvar dump-tape-writing-sg)
+
+;The tape unit number the dump is being done on.
+(defvar dump-tape-unit)
+
+;This is the node now being dumped or next to be dumped.
+;Left here so that, if reach end of tape while dumping a node,
+;the next tape will start with that node.
+;At the start of the first reel of the dump, this is nil.
+(defvar dump-next-node)
+
+(defun dump-file-system (&key &optional full (set-dump-bits t) (unit 0) starting-directory)
+  "Dump all files, or all files never dumped, onto magtape.
+FULL if non-NIL means dump all files, not just the files not yet dumped.
+STARTING-DIRECTORY should be a list of directory names,
+forming a path to the first directory to start dumping from.
+UNIT is the magtape unit to use.
+SET-DUMP-BITS if NIL means do not mark files as dumped.  Default is T."
+  (or dump-tree-walking-sg
+      (setq dump-tree-walking-sg (make-stack-group "dump tree walk" ':regular-pdl-size 6000)))
+  (stack-group-preset dump-tree-walking-sg 'dump-start-tree-walk
+		      full %current-stack-group (copylist starting-directory))
+  (let (dump-finished
+	(dump-tape-unit unit)
+	dump-next-node)
+    (unwind-protect 
+      (progn
+	(do () ((dump-one-tape set-dump-bits)))
+	(setq dump-finished t))
+      (or dump-finished
+	  (funcall dump-tree-walking-sg 'abort-dump)))))
+
+(defvar dump-starting-directory)
+
+(defun dump-start-tree-walk (full-flag dump-tape-writing-sg dump-starting-directory)
+  (let ((temp-reason (gen-temp-reason)))
+    ;; Push an entry for each subnode that deserves one.
+    ;; Their order is reversed in the process.
+    (*catch 'abort-dump
+      (funcall root-node 'dont-lock 'dir-iterate
+	       t nil ()
+	       'dir-node-dump-subnodes
+	       temp-reason
+	       (not full-flag)
+	       #'(lambda (node)
+		   (if (eq (funcall dump-tape-writing-sg node)
+			   'abort-dump)
+		       (*throw 'abort-dump t))))))
+  (funcall dump-tape-writing-sg nil))
+
+;This variable accumulates the position on the tape
+;as the dump progresses.  It is measured not in files
+;but in approximate length of tape.
+(defvar dump-tape-position)
+
+;Do some dumping onto one reel of tape.
+;Value is T if we finished the dump,
+;NIL if stopped due to end of tape.
+(defun dump-one-tape (set-dump-bits &aux (dump-tape-position 0) dump-tape-id
+		      (dump-file-count 0)
+		      tape-not-new
+		      value)
+  (cond (dump-next-node
+	 (format t "~%Load the next reel now.  Type a character when ready.")
+	 (tyi)))
+  (terpri)
+  (format t "Type the tape id (Fnum or Inum or Gnum): ")
+  (setq dump-tape-id (readline))
+  (mt-rewind dump-tape-unit)
+  (with-open-file (dump-record-stream
+		    (parse-pathname (format nil "fc:backup-tapes;tape-~a" dump-tape-id))
+		    ':direction ':output
+		    ':old-file ':append
+		    ':new-file t)
+    (with-open-stream (dump-tape-stream
+			(make-mt-stream ':direction ':output ':unit dump-tape-unit))
+      ;; Either write at the end of the tape and the record file,
+      ;; or initialize them both.
+      (if (and (not (zerop (funcall dump-record-stream ':read-pointer)))
+	       (prog1 (y-or-n-p "Append to the data already on the tape? ")
+		      (terpri)))
+	  (progn (setq tape-not-new t)
+		 (mt-space-to-append dump-tape-unit))
+	(or (funcall dump-record-stream ':get ':deleted)
+	    (let ((pathname (funcall dump-record-stream ':pathname)))
+	      (close dump-record-stream)
+	      (setq dump-record-stream (open pathname ':direction ':output))))
+	(format dump-record-stream
+		"Files dumped on tape ~a~2%" dump-tape-id)
+	(format dump-tape-stream
+		"Dump tape ~a~%"
+		dump-tape-id)
+	(funcall dump-tape-stream ':finish))
+      (mt-write-eof dump-tape-unit)
+      (condition-case ()
+	  (setq value
+	    (do () (())
+	      (cond (dump-next-node
+		     (funcall dump-next-node ':tape-dump 'dump-file
+			      dump-tape-stream dump-record-stream)
+		     (incf dump-file-count)))
+	      (or (setq dump-next-node (funcall dump-tree-walking-sg nil))
+		  (return t))))
+	(end-of-tape
+	 (mt-space-rev-to-bof dump-tape-unit)
+	 (setq value nil)))
+      (mt-write-eof dump-tape-unit)
+      (close dump-tape-stream ':raw))
+    (format t "~2%Beginning verification")
+    (if (not tape-not-new)
+	(mt-rewind dump-tape-unit)
+      (mt-space-rev-to-bof dump-tape-unit (1+ dump-file-count)))
+    (verify-tape dump-tape-unit set-dump-bits)
+    (close dump-record-stream)
+    (funcall root-node ':finish)
+    (if dump-next-node
+	(format t "~2%This reel is finished.")
+	(format t "~2%Dump finished."))
+    (mt-rewind dump-tape-unit)
+    (mt-offline dump-tape-unit)
+    value))
+
+;Attempt dumping a single node onto the tape.
+;If successful, write a record into the disk file that records the tape contents.
+(defun dump-file (node copier-function tape-stream record-stream)
+  (let* ((pathlist (funcall node ':standard-pathlist))
+	 (pathstring (pathlist-to-string pathlist))
+	 (unit (funcall tape-stream ':unit))
+	 (old-position dump-tape-position))
+    (format t "~%Writing ~A to tape" pathstring)
+    (write-magtape-header tape-stream `(:truename ,pathstring . ,(funcall node ':plist)))
+    (incf dump-tape-position (funcall copier-function node tape-stream))
+    (funcall tape-stream ':finish)
+    (mt-write-eof unit)
+    (record-tape-file record-stream
+		      pathlist
+		      old-position
+		      (funcall node ':get ':creation-date))))
+
+;Record information (name, date, position on tape) about a file being dumped
+;in the dump-record file.
+(defun record-tape-file (ostream pathlist position date)
+  (prin1 (pathlist-to-string pathlist) ostream)
+  (tyo #\space ostream)
+  (prin1 position ostream)
+  (princ " at " ostream)
+  (time:print-universal-time date ostream)
+  (terpri ostream))
+
+;Read through a tape, finding the nodes that were dumped on it,
+;and mark them as "dumped".
+;Eventually ought to make sure that the node found matches the data on the tape.
+(defun verify-tape (unit &optional set-dump-bits
+		    &aux (tape-stream
+			   (make-mt-stream ':direction ':input
+					   ':unit unit
+					   ':characters nil)))
+  (unwind-protect
+    (progn
+      (mt-space-to-eof unit)
+      (do ()
+	  ((not (verify-file tape-stream set-dump-bits)))))
+    (close tape-stream)))
+
+;Returns nil if reach end of data on tape.
+(defun verify-file (tape-stream set-dump-bits)
+  (let* ((hdr (read-magtape-header tape-stream))
+	 (truename (or (get (locf hdr) 'truename)
+		       (get (locf hdr) ':truename))))
+    (and hdr
+	 (let* ((node (open-node root-node ':verify-tape nil (expand-pathstring truename)
+				 ':create nil ':preserve-dates t)))
+	   (and (errorp node) (setq node nil))
+	   ;; Arrange not to mismatch due to change in ref date.
+	   (unwind-protect
+	     (cond ((and node
+			 (funcall node ':tape-compare tape-stream (cddr hdr) set-dump-bits))
+		    (format t (if set-dump-bits
+				  "~%~A verified and marked as dumped"
+				"~%~A verified")
+			    truename))
+		   (t
+		    (format t (if set-dump-bits
+				  "~%~A does not verify, not marked as dumped"
+				"~%~A does not verify")
+			    truename)))
+	     (funcall tape-stream ':next-file)
+	     (funcall node ':remove-reason ':verify-tape))
+	   t))))

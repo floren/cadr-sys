@@ -1,0 +1,10 @@
+;;; -*- Mode:Lisp; Package:(spice global 2000); Base:10. -*-
+
+(defsystem spice-plot
+  (:pathname-default "oz:ps:<dpl.mit.spice.plot>")
+  (:package spice)
+  (:module macros ("structures"))
+  (:module rest-of-it ("window" "parse-spice" "plot" "random"))
+
+  (:compile-load macros)
+  (:compile-load-init rest-of-it (macros) (:fasload macros) (:fasload macros)))

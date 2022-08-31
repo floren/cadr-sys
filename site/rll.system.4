@@ -1,0 +1,48 @@
+;;; -*- Mode:LISP -*-
+
+(FS:ADD-CHAOSNET-FILE-COMPUTER "Vulcan")
+
+(fs:add-logical-pathname-host
+  "RLL" "OZ"
+  '(("Sources" "ps:<kwh.rll>")
+    ("New"     "ps:<kwh.rll.new>")
+    ("AI"      "ps:<kwh.rll.smart>")
+    ("Ancient" "src:<kwh.rll>")
+    ("Doc"     "ps:<kwh.rll.doc>")
+    ("LmLib"   "ps:<lmlib>")
+    ("Patches" "ps:<kwh.rll.mit-patches>")))
+
+(fs:add-logical-pathname-host
+  "ORLL" "OZ"
+  '(("Sources" "ps:<kwh.rll>")
+    ("New"     "ps:<kwh.rll.new>")
+    ("AI"      "ps:<kwh.rll.smart>")
+    ("Ancient" "src:<kwh.rll>")
+    ("Doc"     "ps:<kwh.rll.doc>")
+    ("LmLib"   "ps:<lmlib>")
+    ("Patches" "ps:<kwh.rll.mit-patches>")))
+
+(fs:add-logical-pathname-host
+  "VRLL" "Vulcan"
+  '(("Sources" "usrd$:[kwh.rll]")
+    ("New"     "usrd$:[kwh.rll.new]")
+    ("AI"      "usrd$:[kwh.rll.smart]")
+    ("Ancient" "usrd$:[kwh.rll.orll]")
+    ("Doc"     "usrd$:[kwh.rll.doc]")
+    ("LmLib"   "usrd$:[kwh.rll.lmlib]")
+    ("Patches" "usrd$:[kwh.rll.patches]")))
+
+(fs:add-logical-pathname-host
+  "PRLL" "Pygmalion"
+  '(("Sources" "usrd$:[kwh.rll]")
+    ("New"     "usrd$:[kwh.rll.new]")
+    ("AI"      "usrd$:[kwh.rll.smart]")
+    ("Ancient" "usrd$:[kwh.rll.orll]")
+    ("Doc"     "usrd$:[kwh.rll.doc]")
+    ("LmLib"   "usrd$:[kwh.rll.lmlib]")
+    ("Patches" "usrd$:[kwh.rll.patches]")))
+
+(si:set-system-source-file "RLL" "RLL: Sources; SysDef LISP")
+
+;;; Stop silly NIL/LISPM error from "Readtable:" file attribute.
+(defprop readtable T fs:known-file-attribute)
