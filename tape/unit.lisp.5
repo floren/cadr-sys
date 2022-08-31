@@ -1,0 +1,189 @@
+;;; -*-Mode:Lisp;Package:TAPE;Fonts:CPTFONT;Base:8-*-
+;;; (c) 1984 Massachusetts Institute of Technology
+;;;
+;;; Tape unit scheme for Lisp Machines.  Designed to handle different pieces of hardware
+;;; and remote access, too.  Keeps numbers of flavors of streams down to a minimum.
+;;;
+;;; to do: parsing
+
+(DEFFLAVOR BASIC-UNIT (LOCK REWIND-MEMO NUMBER) ()
+  :ABSTRACT-FLAVOR
+  (:GETTABLE-INSTANCE-VARIABLES NUMBER LOCK)
+  (:INITABLE-INSTANCE-VARIABLES NUMBER)
+  ;; Standard operations follow.  If not documented, the operation has no arguments
+  ;; and its meaning should be obvious.
+  (:REQUIRED-METHODS
+    :ACCESS			; returns hardware type or protocol name
+    :HOST
+    :LOCAL-P
+    :DEVICE			; constant for local units, needs to be different for remotes
+    :REWIND
+    :UNLOAD
+    :OFFLINE
+    :WRITE-EOF			; done implicitly on normal close remotely (file stream)
+    :ADVANCE-FILE
+    :BEGIN-INTERLEAVED-REWIND	; (id) start rewinding, remembering id
+    :FINISH-INTERLEAVED-REWIND	; (id) finish rewinding
+    :STREAM-FLAVOR		; (direction characters file-p &optional format)
+    :SPACE			; (ntimes) }
+    :SPACE-TO-EOF		; (ntimes) } ``0 means moby many''
+    :SPACE-REV			; (ntimes need-status-p) }
+    :SPACE-REV-TO-BOF		; (skip-n-files) 0 = tape at beginning of file; 1 = previous
+    				; [CADR version returns () if premature.  Neccessary ?]
+    :SPACE-TO-APPEND
+    :STATUS-EOF			; (status)
+    :STATUS-EOT			; (status)
+    :STATUS-BOT			; (status)
+    :STATUS-ERROR		; (status) usually not requested remotely
+    :WAIT-CONTROLLER-READY
+    :WAIT-UNIT-READY
+    :STATUS-EOF)
+  (:DOCUMENTATION :ESSENTIAL-MIXIN "The basic flavor used by all tape units.
+Does not define much on its own; it just insures that other flavors are defining the essential
+operations themselves.
+It defines three instance variables:
+ LOCK (currently not used)
+ REWIND-MEMO for interleaved rewind
+ NUMBER for the controller"))
+
+(DEFFLAVOR BASIC-REMOTE-UNIT (HOST) ()
+  :ABSTRACT-FLAVOR
+  (:INITTABLE-INSTANCE-VARIABLES HOST)
+  (:GETTABLE-INSTANCE-VARIABLES HOST)
+  (:REQUIRED-METHODS
+    :PROTOCOL
+    :ACTIVE-P))
+
+(DEFMETHOD (BASIC-REMOTE-UNIT :ACCESS) () (SEND SELF ':PROTOCOL))
+
+(DEFFLAVOR BASIC-LOCAL-UNIT () ()
+  :ABSTRACT-FLAVOR
+  ;; This flavor assumes a fairly standard mode of operation for a tape drive.
+  ;; The model might break down for other bizarre things.
+  (:REQUIRED-METHODS ; these usually implement the guts of the streams
+    :STATUS			; returns a status ``object'' (might be a fixnum,
+    				; or a structure) (instance variable for TM)
+    :STATUS-READY		; this drive is ready
+    :COMMAND-READY		; controller is ready
+    ;; Locally, there must be a BUFFER, a STATUS object, block IO methods, and
+    ;; ways to decode the status.  Note that the STATUS and BUFFER objects may
+    ;; be the same (as on the CADR/Wesperco hardware).
+    :I-WRITE-BUFFER		; (buffer count density ibm-mode) -> status
+    :I-READ-BUFFER		; (buffer count density) -> status (containing bytes read)
+    :DECODE-STATUS	; (status thing) return T, () or number for these interesting THINGs:
+    			; :EOT, :EOF, :BOT, :WRITE-ONLY, :ERROR, :BYTES-TRANSFERRED, :ON-LINE,
+    			; :ERROR-CODE, :BAD-TAPE
+    :ODD-BYTES-OK-P		; happens to be () for the Wesperco
+    )
+  (:REQUIRED-FLAVORS BASIC-UNIT))
+
+(DEFMETHOD (BASIC-LOCAL-UNIT :LOCAL-P) () T)
+(DEFMETHOD (BASIC-LOCAL-UNIT :HOST) () SI:LOCAL-HOST)
+
+(DEFMETHOD (BASIC-LOCAL-UNIT :UNLOAD) () (SEND SELF ':OFFLINE))
+
+(DEFMETHOD (BASIC-LOCAL-UNIT :FINISH-INTERLEAVED-REWIND) (MEMO)
+  (IF (NEQ MEMO REWIND-MEMO)
+      (FERROR () "Somebody else was waiting for the tape to rewind: ~S" REWIND-MEMO)
+    (DO ()
+	((SEND SELF ':STATUS-BOT))
+      (PROCESS-SLEEP 120. "MT Rewind"))))
+
+(DEFFLAVOR BASIC-LOCAL-MT-UNIT-MIXIN () ()
+  (:ABSTRACT-FLAVOR T)
+  (:INCLUDED-FLAVORS BASIC-LOCAL-UNIT)
+  (:DOCUMENTATION :ESSENTIAL-MIXIN "Used for MT-type devices.
+Defines the streams to be used to be of the MT-family defined in MTSTR."))
+
+(DEFMETHOD (BASIC-LOCAL-MT-UNIT-MIXIN :DEVICE) () ':MT)
+
+(DEFMETHOD (BASIC-LOCAL-MT-UNIT-MIXIN :STREAM-FLAVOR)
+	   (DIRECTION CHARACTERS FILE-P &OPTIONAL FORMAT)
+  (IF FILE-P
+      (IF CHARACTERS
+	  (SELECTQ DIRECTION
+	    (:INPUT 'MT-CHARACTER-INPUT-STREAM)
+	    (:OUTPUT 'MT-CHARACTER-OUTPUT-STREAM)
+	    (OTHERWISE ()))
+	(SELECTQ DIRECTION
+	  (:INPUT 'MT-INPUT-STREAM)
+	  (:OUTPUT 'MT-OUTPUT-STREAM)
+	  (OTHERWISE ()))
+	(IF CHARACTERS
+	    (SELECTQ DIRECTION
+	      (:INPUT 'MT-FILE-CHARACTER-INPUT-STREAM)
+	      (:OUTPUT 'MT-FILE-CHARACTER-OUTPUT-STREAM)
+	      (OTHERWISE ()))
+	  (SELECTQ DIRECTION
+	    (:INPUT 'MT-FILE-INPUT-STREAM)
+	    (:OUTPUT 'MT-FILE-OUTPUT-STREAM)
+	    (OTHERWISE ()))))))
+
+;;; Flavors defined in other files:
+;;; WEUNIT: WESPERCO-UNIT (used on the CADR, Unibus)
+;;; TMUNIT: TAPEMASTER-UNIT (used on the Lambda, multibus)
+;;; RMUNIT: RM-UNIT (remote protocol, seems to be CHAOS-independent)
+
+(DEFPROP :MT "Conventional Magnetic Tape" DEVICE-DESCRIPTION)
+;; :MT must have a LOCAL-UNIT-FLAVOR property to work properly (should be set at initialisation)
+
+(DEFINE-SITE-VARIABLE *DEFAULT-REMOTE-PROTOCOL* :DEFAULT-REMOTE-TAPE-PROTOCOL)
+;;; Protocol must have UNIT-FLAVOR property, take :DEVICE, :NUMBER, and :HOST args
+;;; in MAKE-INSTANCE
+(DEFVAR *DEFAULT-UNIT* :UNBOUND) ; initialised at warm boot
+(DEFVAR *UNITS* ())
+
+(DEFUN PARSE-UNIT-DEVICE-AND-NUMBER (THING DEFAULT-DEVICE)
+  (DECLARE (:VALUES DEVICE NUMBER))
+  (IF (ZEROP (STRING-LENGTH THING)) (VALUES DEFAULT-DEVICE 0)
+    (LET ((IDX (STRING-SEARCH-SET "1234567890" THING)))
+      (VALUES (PKG-BIND (PKG-FIND-PACKAGE "") ; actually, the keyword package
+		(OR (READ-FROM-STRING THING () 0 IDX) DEFAULT-DEVICE))
+	      (PARSE-UNIT-NUMBER (SUBSTRING THING (1+ IDX)))))))
+
+(DEFUN PARSE-UNIT-NUMBER (THING)
+  (IF (ZEROP (STRING-LENGTH THING)) 0
+    (LET ((IBASE 10.)) (READ-FROM-STRING THING))))
+
+(DEFUN MAKE-UNIT (HOST DEVICE NUMBER PROTOCOL)
+;  (IF (EQ HOST SI:LOCAL-HOST)
+ ()     
+  )
+
+(DEFUN PARSE-UNIT (THING &OPTIONAL &KEY (DEFAULT-DEVICE ':MT)
+					(DEFAULT-REMOTE-PROTOCOL *DEFAULT-REMOTE-PROTOCOL*))
+  "Parse a THING into a tape unit.  A number, (), a unit object, or a string.
+Acceptable strings: MT, MT0, 0, HOST:MT, HOST:MT0, HOST:0, HOST:"
+  (COND ((NULL THING) *DEFAULT-UNIT*)
+	((NUMBERP THING) (MAKE-UNIT SI:LOCAL-HOST DEFAULT-DEVICE THING ()))
+	((STRINGP THING)
+	 (SETQ THING (STRING-UPCASE (STRING-TRIM #\Space THING)))
+	 (LET ((IDX (STRING-SEARCH-CHAR #/: THING)))
+	   ;; see if there really is a host (i.e., a colon)
+	   (COND (IDX
+		  (MULTIPLE-VALUE-BIND (DEVICE NUMBER)
+		      (PARSE-UNIT-DEVICE-AND-NUMBER (STRING-LEFT-TRIM #\Space
+								      (SUBSTRING THING (1+ IDX)))
+						    DEFAULT-DEVICE)
+		    (MAKE-UNIT (SI:PARSE-HOST (STRING-RIGHT-TRIM #\Space
+								 (SUBSTRING THING 0 IDX))
+					      () T)
+			       DEVICE NUMBER DEFAULT-REMOTE-PROTOCOL)))
+		 (T
+		  (MULTIPLE-VALUE-BIND (DEVICE NUMBER)
+		      (PARSE-UNIT-DEVICE-AND-NUMBER THING DEFAULT-DEVICE)
+		    (MAKE-UNIT SI:LOCAL-HOST DEVICE NUMBER ()))))))
+	((TYPEP THING 'BASIC-UNIT) THING )
+	(T (FERROR () "What is ~A ?" THING))))
+
+;;; will tapemaster need a status structure ?  (don't think so)
+;;; remote tape protocol (not called RTAPE -- keep CHAOS feature usage out)
+#|
+command is
+<NL>:COMMAND<NL>arg1<NL>arg2<NL> <NL>argn<NL><NL>
+response is same as args.
+
+Control connection, data connection 
+:FORCE-OUTPUT -- how should that be done (as a wrapper, but how over net ?)
+
+|#

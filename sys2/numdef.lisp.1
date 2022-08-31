@@ -1,0 +1,86 @@
+;;; -*- Mode:LISP; Package:SYSTEM-INTERNALS; Base:10 -*-
+
+;;; A rational is of type DTP-EXTENDED-NUMBER and occupies three words.
+
+;;; The second word is the numerator, and the third is the denominator.
+;;; Rationals with denominator 0 or 1 are never created.
+
+;;; A complex looks like a rational except it contains %HEADER-TYPE-COMPLEX.
+;;; The second word is the real part and the third is the imaginary part.
+;;; Rational complexes with imaginary part 0 are not created.
+;;; The real and imaginary parts of complexes are either both rational or
+;;;  both flonums of the same type
+
+(defsubst %rational-numerator (number)
+  (%p-contents-offset number 1))
+
+(defsubst %rational-denominator (number)
+  (%p-contents-offset number 2))
+
+(defsubst %complex-real-part (number)
+  (%p-contents-offset number 1))
+
+(defsubst %complex-imag-part (number)
+  (%p-contents-offset number 2))
+
+;;; conses up a complexnum with prescribed real and imag parts
+;; want this ucoded
+(defsubst %complex-cons (realpart imagpart)
+  (let ((object
+	 (%allocate-and-initialize dtp-extended-number dtp-header
+				   (dpb '#,%header-type-complex
+					'#,%%header-type-field
+					0)
+				   0 number-cons-area 3)))
+    (setf (%complex-real-part object) realpart)
+    (setf (%complex-imag-part object) imagpart)
+    object))
+
+;;; lower-level than complex -- performs no error checks, but does
+;;;  complex rational (imagpart=0 => real) canonicalization
+(defsubst %complex (realpart imagpart)
+  (if (eq imagpart 0) realpart
+    (%complex-cons realpart imagpart)))
+
+;;; want this ucoded
+(defsubst %ratio-cons (numerator denominator)
+  "Return a rational number with specified numerator and denominator.
+This can be used to construct rationals not in lowest terms,
+but should not normally be so used."
+  (let ((object
+	  (%allocate-and-initialize dtp-extended-number dtp-header
+				    (dpb '#,%header-type-rational
+					 '#,%%header-type-field
+					 0)
+				    0 number-cons-area 3)))
+    (setf (%rational-numerator object) numerator)
+    (setf (%rational-denominator object) denominator)
+    object))
+
+;; want this ucoded
+(defsubst complexp (x)
+  "T if X is a complex number.
+Note that this may include complex numbers with an imaginary part of 0.0!
+To avoid this problem, use you may wany to use (NOT (REALP X)) instead."
+  (and (eq (%data-type x) '#,dtp-extended-number)
+       (eq (%p-ldb-offset %%header-type-field x 0)
+	  %header-type-complex)))
+
+;; want this ucoded
+(defsubst realp (x)
+  "T if X is a real number, or a complex number with zero imaginary part."
+  (and (numberp x)
+       (if (complexp x)
+	   (zerop (%complex-imag-part x))
+	 t)))
+
+;; want this ucoded
+(defsubst rationalp (x)
+  "T if X is an exact rational number (which includes integers).
+ie either a fixnum or a ratio."
+  (or (integerp x)
+      (and (eq (%data-type x) '#,dtp-extended-number)
+	   (memq (%p-ldb-offset %%header-type-field x 0)
+		 '(#,%header-type-bignum
+		   #,%header-type-rational))
+	   t)))

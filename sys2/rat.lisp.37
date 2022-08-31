@@ -1,0 +1,443 @@
+;;; -*- Mode:LISP; Package:SYSTEM-INTERNALS; Lowercase:T; Base:8 -*-
+
+;A rational is of type DTP-EXTENDED-NUMBER and occupies three words.
+
+;The second word is the numerator, and the third is the denominator.
+;Rationals with denominator 0 or 1 are never created.
+
+;A complex looks like a rational except it contains %HEADER-TYPE-COMPLEX.
+;The second word is the real part and the third is the imaginary part.
+;Complexes with imaginary part 0 are not normally created
+;but are created by coercion in mixed-mode arithmetic and can be made with COMPLEX.
+
+(defsubst rational-numerator (number)
+  (%p-contents-offset number 1))
+
+(defsubst rational-denominator (number)
+  (%p-contents-offset number 2))
+
+(defsubst complex-real-part (number)
+  (%p-contents-offset number 1))
+
+(defsubst complex-imag-part (number)
+  (%p-contents-offset number 2))
+
+(defun complex (realpart &optional (imagpart 0))
+  "Return a complex number with specified real and imaginary parts."
+  (check-arg-type realpart :real)
+  (when imagpart (check-arg-type imagpart :real))
+  (if (and (zerop imagpart)
+	   (rationalp realpart)
+	   (rationalp imagpart))
+      realpart
+    (%complex realpart imagpart)))
+
+(defun %complex (realpart imagpart)
+  (let ((object
+	  (%allocate-and-initialize dtp-extended-number dtp-header
+				    (dpb %header-type-complex
+					 %%header-type-field
+					 0)
+				    0 number-cons-area 3)))
+    (setf (complex-real-part object) (+ realpart (* 0 imagpart)))
+    (setf (complex-imag-part object) (+ imagpart (* 0 realpart)))
+    object))
+
+(defun make-rational (numerator denominator)
+  "Return a rational number with specified numerator and denominator.
+This can be used to construct rationals not in lowest terms,
+but should not normally be so used."
+  (let ((object
+	  (%allocate-and-initialize dtp-extended-number dtp-header
+				    (dpb %header-type-rational
+					 %%header-type-field
+					 0)
+				    0 number-cons-area 3)))
+    (setf (rational-numerator object) numerator)
+    (setf (rational-denominator object) denominator)
+    object))
+
+;Slightly higher level creation and access functions.
+;NORMALIZED-mumble makes a mumble in standard form
+;and knows that some complex numbers are real, and some rationals are integers.
+
+(defsubst normalized-rational (num den) (%div num den))
+
+(defun normalized-complex (realpart &optional (imagpart 0))
+  "Return a number with specified real and imaginary parts.
+The number will be complex if the imaginary part specified is nonzero."
+  (check-arg-type realpart :real)
+  (check-arg-type imagpart :real)
+  (if (zerop imagpart) realpart
+    (let ((object
+	    (%allocate-and-initialize dtp-extended-number dtp-header
+				      (dpb %header-type-complex
+					   %%header-type-field
+					   0)
+				      0 number-cons-area 3)))
+      (setf (complex-real-part object) (+ realpart (* 0 imagpart)))
+      (setf (complex-imag-part object) (+ imagpart (* 0 realpart)))
+      object)))
+
+(defun numerator (rational)
+  "Return the numerator of RATIONAL.  On integers, this is the identity function."
+  (if (fixp rational) rational
+    (if (rationalp rational) (rational-numerator rational)
+      (check-arg-type rational :rational)
+      (numerator rational))))
+
+(defun denominator (rational)
+  "Return the denominator of RATIONAL.  On integers, this returns 1."
+  (if (fixp rational) 1
+    (if (rationalp rational) (rational-denominator rational)
+      (check-arg-type rational :rational)
+      (denominator rational))))
+
+(defun realpart (number)
+  "Return the real part of a complex number.  The real part of a real number is itself."
+  (if (typep number ':complex)
+      (complex-real-part number)
+    number))
+
+(defun imagpart (number)
+  "Return the imaginary part of a complex number, or 0 if given a real number."
+  (if (typep number ':complex)
+      (complex-imag-part number)
+    0))
+
+(defun realp (x)
+  "T if X is a real number--any number that is not COMPLEXP."
+  (and (numberp x) (not (complexp x))))
+
+(defun complexp (x)
+  "T if X is a complex number (that is not real)."
+  (and (= (%data-type x) dtp-extended-number)
+       (= (%p-ldb-offset %%header-type-field x 0)
+	  %header-type-complex)))
+
+
+(defun rationalp (x)
+  "T if X is an exact rational number (which includes integers)."
+  (or (fixnump x)
+      (and (= (%data-type x) dtp-extended-number)
+	   (memq (%p-ldb-offset %%header-type-field x 0)
+		 '(#,%header-type-bignum
+		   #,%header-type-rational))
+	   t)))
+
+
+;Higher level conversion functions
+
+(defun rational (x)
+  "Convert X to a rational number.
+If X is a floating point number, it is regarded as completely exact."
+  (cond ((rationalp x) x)
+	((fixp x) x)
+	((small-floatp x) (make-rational-from-float-exact x))
+	((floatp x) (make-rational-from-float-exact x))
+	(t (ferror nil "Cannot coerce ~S into a rational" x))))
+
+(defun make-rational-from-float-exact (x &aux minusflag)
+  (if (zerop x) (make-rational 0 1)
+    (if (minusp x)
+	(setq minusflag t x (- x)))
+    (let* ((mant (flonum-mantissa x))
+	   (expt (+ (haulong mant) (flonum-exponent x)))
+	   (zeros (1- (haulong (logand (- mant) mant))))
+	   (denom (ash 1 (- (haulong mant) zeros))))
+      (cond ((plusp expt)
+	     (setq mant (ash mant (- expt zeros))))
+	    ((minusp expt)
+	     (setq mant (ash mant (- zeros)))
+	     (setq denom (ash denom (- expt))))
+	    (t (setq mant (ash mant (- zeros)))))
+      (if minusflag (setq mant (- mant)))
+      (make-rational mant denom))))
+
+(defun rationalize (x &optional tolerance)
+  "Return the simplest rational that approximates X well.
+TOLERANCE specifies how much precision of X to regard as valid:
+ NIL means all that there is of X,
+ a positive fixnum means that many bits of X,
+ a negative fixnum is minus the number of low bits to ignore,
+ a flonum is a ratio: it times X gives the magnitude of uncertainty."
+  (cond ((rationalp x)
+	 (if tolerance (make-rational-from-float (float x) 31. tolerance)
+	   x))
+	((fixp x) x)
+	((small-floatp x) (make-rational-from-float (float x) 17. tolerance))
+	((floatp x) (make-rational-from-float x 31. tolerance))
+	(t (ferror nil "Cannot coerce ~S into a rational" x))))
+
+(defun make-rational-from-float (x precision tolerance)
+  (cond ((null tolerance))
+	((floatp tolerance)
+	 (setq precision (min 0 (max precision (- (float-exponent tolerance))))))
+	((plusp tolerance)
+	 (setq precision (min precision tolerance)))
+	((minusp tolerance)
+	 (setq precision (max 0 (+ precision tolerance)))))	
+  ;; Continued fraction expansion. This keeps track of precision 
+  ;; There should be macros for extracting the parts of flonums.
+  ;; It also assumes only loss of precision is in the subtraction, and one in
+  ;; the division. This seems to be a good assumption - BEE
+  (loop named top
+	with terms ()
+	with pow2 = (%p-ldb-offset 1013 x 0)	;Original exponent 
+	as int-part = (fix x)
+	do (progn (push int-part terms)
+		  (decf precision (1+ (haulong int-part)))
+		  (decf x int-part))
+	when (or (zerop x) (> (- pow2 (%p-ldb-offset 1013 x 0)) precision))
+	do (loop for term in terms
+		 with num = 1 and den = 0
+		 do (psetq num (+ (* term num) den)
+			   den num)
+		 finally (return-from top (normalized-rational num den)))
+	else do (setq x (// x))))
+
+
+(defun conjugate (number)
+  "Return the complex conjugate of NUMBER.  If NUMBER is real, NUMBER is returned."
+  (if (typep number ':complex)
+      (complex (complex-real-part number) (- (complex-imag-part number)))
+    number))
+
+(defun phase (number)
+  "Return the phase of NUMBER, in radians.
+This is the angle in the complex plane from the positive real axis
+to the ray from the origin through NUMBER.
+It is between -pi (exclusive) and pi (inclusive).
+For a positive real, this is 0; for a negative real, this is pi."
+  (cond ((realp number)
+	 (if (minusp number) (- pi) 0))
+	((zerop number) 0)
+	(t
+	 (atan (complex-imag-part number) (complex-real-part number)))))
+
+;;; need more efficient way to do this than calculate both cos AND sin
+(defun cis (angle)
+  "Return the value of e^(i*ANGLE).  The inverse of the function PHASE."
+  (normalized-complex (cos angle) (sin angle)))
+
+(defun signum (number)
+  "Return a number with the same phase as NUMBER but unit magnitude.
+If NUMBER is zero, zero is returned.
+For a nonzero real number, the value is either 1 or -1."
+  (cond ((zerop number) 0)
+	((realp number)
+	 (if (plusp number) 1 -1))
+	(t (%div number (abs number)))))
+
+(defun print-rational (number stream ignore)
+  (and *print-radix*
+       (not (pttbl-rational-radix *readtable*))
+       (numberp *print-base*)
+       (cond ((eq *print-base* 8)
+	      (send stream ':string-out "#o"))
+	     ((eq *print-base* 2)
+	      (send stream ':string-out "#b"))
+	     ((eq *print-base* 16.)
+	      (send stream ':string-out "#x"))
+	     (t
+	      (send stream ':tyo #/#)
+	      (let ((*print-base* 10.) (*print-radix* nil) (*nopoint t) (tem *print-base*))
+		(print-fixnum tem stream))
+	      (send stream ':tyo #/r))))       
+  (let ((*print-base* (or (pttbl-rational-radix *readtable*) *print-base*))
+	(*nopoint t)
+	(*print-radix* nil))
+    (print-fixnum (rational-numerator number) stream)
+    (funcall stream ':tyo (pttbl-rational-infix *readtable*))
+    (print-fixnum (rational-denominator number) stream)))
+
+(defun print-complex (cplx stream ignore)
+  (send stream ':string-out (first (pttbl-complex *readtable*)))
+  (princ (complex-real-part cplx) stream)
+  (if (second (pttbl-complex *readtable*))
+      (send stream ':string-out (second (pttbl-complex *readtable*)))
+    (unless (minusp (complex-imag-part cplx))
+      (send stream ':tyo #/+)))
+  (princ (complex-imag-part cplx) stream)
+  (send stream ':string-out (third (pttbl-complex *readtable*))))
+
+(defun (rational standard-read-function) (stream string &aux num i (*read-base* 10.)
+							(len (string-length string)))
+   stream
+   (multiple-value (num i)
+     (xr-read-fixnum-internal string 0 len))
+   (values
+     (normalized-rational
+       num
+       (xr-read-fixnum-internal string (1+ i) len))
+     'rational))
+
+(defun (cl-rational standard-read-function) (stream string &aux num i
+					     (len (string-length string)))
+   stream
+   (multiple-value (num i)
+     (xr-read-fixnum-internal string 0 len))
+   (values
+     (normalized-rational
+       num
+       (xr-read-fixnum-internal string (1+ i) len))
+     'rational))
+
+(defun (complex standard-read-function) (stream string &aux complex-start (zero 0))
+  stream
+  (do ((i 1 (1+ i)))
+      ((= i (length string)))
+    (when (and (mem '= (aref string i) '(#/+ #/-))
+	       (not (alpha-char-p (aref string (1- i)))))
+      (return (setq complex-start i))))
+  (values
+    (normalized-complex
+      (cond (complex-start (with-input-from-string (strm string zero complex-start)
+			     (xr-read-thing strm)))
+	    (t (setq complex-start 0)))
+      (with-input-from-string (strm string complex-start (1- (string-length string)))
+	(xr-read-thing strm)))
+    'complex))
+
+
+
+;Standard arithmetic functions.
+
+(defun numeric-one-argument (code number)
+  (cond ((rationalp number)
+	 (let ((num (rational-numerator number))
+	       (den (rational-denominator number)))
+	   (selectq (logand 77 code)
+	     (0 (if (or (= num 0)		;ABS
+			(and (> num 0) (> den 0))
+			(and (< den 0) (< num 0)))
+		    number
+		  (make-rational (abs num) (abs den))))
+	     (1 (make-rational (- num) den))	;MINUS
+	     (2 (= num 0))			;ZEROP
+	     (3 (or (and (> num 0) (> den 0))	;PLUSP
+		    (and (< num 0) (< den 0))))
+	     (4 (or (and (> num 0) (< den 0))	;MINUSP
+		    (and (< num 0) (> den 0))))
+	     (5 (make-rational (+ num den) den))	;ADD1
+	     (6 (make-rational (- num den) den))	;SUB1
+	     (7					;FIX
+	      (selectq (ldb 0603 code)
+		(0 (if (plusp num) (truncate num den)
+		     (truncate (- num den -1) den)))
+		(1 (if (minusp num) (truncate num den)
+		     (truncate (+ num den -1) den)))
+		(2 (truncate num den))
+		(3
+		 (let* ((floor (if (plusp num) (truncate num den)
+				 (truncate (- num den -1) den)))
+			(fraction-num (- num (* floor den)))
+			(half-indicator (- (+ fraction-num fraction-num) den)))
+		   (if (or (plusp half-indicator)
+			   (and (zerop half-indicator)
+				(oddp floor)))
+		       (incf floor))
+		   floor))))
+	     (10 (// (float num) (float den)))	;FLOAT
+	     (11 (// (small-float num) (small-float den)))	;SMALL-FLOAT
+	     (12 (ferror nil "Illegal operation /"HAULONG/" on ~S" number))
+	     (13 (ferror nil "Illegal operation /"LDB/" on ~S" number))
+	     (14 (ferror nil "Illegal operation /"DPB/" on ~S" number))
+	     (15 (ferror nil "Illegal operation /"ASH/" on ~S" number))
+	     (16 (ferror nil "Illegal operation /"ODDP/" on ~S" number))
+	     (17 (ferror nil "Illegal operation /"EVENP/" on ~S" number))
+	     (t (ferror nil "Arith one-arg op code ~S on ~S" code number)))))
+	 ((complexp number)
+	  (let ((real (complex-real-part number))
+		(imag (complex-imag-part number)))
+	    (selectq code
+	      (0 (sqrt (+ (* real real) (* imag imag)))) ;ABS
+	      (1 (normalized-complex (- real) (- imag))) ;MINUS
+	      (2 (and (zerop real) (zerop imag)))	;ZEROP
+	      (3 (ferror nil "PLUSP applied to the complex number ~S" number)) ;PLUSP
+	      (4 (ferror nil "MINUSP applied to the complex number ~S" number)) ;MINUSP
+	      (5 (normalized-complex (+ real 1) imag))	;ADD1
+	      (6 (normalized-complex (- real 1) imag))	;SUB1
+	      (7 (normalized-complex (fix real) (fix imag)))	;FIX
+	      (10 (normalized-complex (float real) (float imag)))	;FLOAT
+	      (11 (normalized-complex			;SMALL-FLOAT
+		    (small-float real)
+		    (small-float imag)))
+	      (12 (ferror nil "Illegal operation /"HAULONG/" on ~S" number))
+	      (13 (ferror nil "Illegal operation /"LDB/" on ~S" number))
+	      (14 (ferror nil "Illegal operation /"DPB/" on ~S" number))
+	      (15 (ferror nil "Illegal operation /"ASH/" on ~S" number))
+	      (16 (and (zerop imag) (oddp real)))
+	      (17 (and (zerop imag) (evenp real)))
+	      (t (ferror nil "Arith one-arg op code ~S on ~S" code number)))))
+	 (t (ferror nil "Trap to macrocode for arithmetic on number ~S" number))))
+
+(defun numeric-two-arguments (code number1 number2 &aux function)
+  (setq function (nth code '(*plus *dif *times *quo = > < *min *max *boole %div)))
+  (cond ((and (complexp number1) (complexp number2))
+	 (complex-two-arguments code number1 number2))
+	((complexp number1)
+	 (funcall function number1 (%complex number2 0)))
+	((complexp number2)
+	 (funcall function (%complex number1 0) number2))
+	((floatp number1)
+	 (funcall function number1 (float number2)))
+	((floatp number2)
+	 (funcall function (float number1) number2))
+	((small-floatp number1)
+	 (funcall function number1 (small-float number2)))
+	((small-floatp number2)
+	 (funcall function (small-float number1) number2))
+	((and (rationalp number1) (rationalp number2))
+	 (rational-two-arguments code number1 number2))
+	((rationalp number1)
+	 (funcall function number1 (rational number2)))
+	((rationalp number2)
+	 (funcall function (rational number1) number2))
+	(t
+	 (ferror nil "Arith two-arg op code ~S on ~S and ~S" code number1 number2))))
+
+(defun rational-two-arguments (code number1 number2)
+  (let (num1 den1 num2 den2)
+    (if (integerp number1) (setq num1 number1 den1 1)
+      (setq num1 (rational-numerator number1)
+	    den1 (rational-denominator number1)))
+    (if (integerp number2) (setq num2 number2 den2 1)
+      (setq num2 (rational-numerator number2)
+	    den2 (rational-denominator number2)))
+    (selectq code
+      (0 (normalized-rational (+ (* num1 den2) (* num2 den1)) (* den1 den2)))	;ADD
+      (1 (normalized-rational (- (* num1 den2) (* num2 den1)) (* den1 den2)))	;SUB
+      (2 (normalized-rational (* num1 num2) (* den1 den2)))	;MUL
+      ((3 12)
+       (normalized-rational (* num1 den2) (* den1 num2)))	;DIV
+      (4 (and (= num1 num2) (or (zerop num1) (= den1 den2))))	;EQUAL
+      (5 (> (* num1 den2) (* num2 den1)))	;GREATERP
+      (6 (< (* num1 den2) (* num2 den1)))	;LESSP
+      (7 (if (> number1 number2) number2 number1))	;MIN
+      (10 (if (> number1 number2) number1 number2))	;MAX
+      (otherwise (ferror nil "Rational two arg op code ~S on ~S and ~S"
+			 code number1 number2)))))
+
+(defun complex-two-arguments (code number1 number2)
+  (let ((real1 (complex-real-part number1))
+	(imag1 (complex-imag-part number1))
+	(real2 (complex-real-part number2))
+	(imag2 (complex-imag-part number2)))
+    (selectq code
+      (0 (normalized-complex (+ real1 real2) (+ imag1 imag2)))	;ADD
+      (1 (normalized-complex (- real1 real2) (- imag1 imag2)))	;SUB
+      (2 (normalized-complex (- (* real1 real2) (* imag1 imag2))
+			     (+ (* real1 imag2) (* imag1 real2)))) ;MUL
+      ((3 12)
+       (let ((norm2 (+ (* real2 real2) (* imag2 imag2))))	;DIV
+	 (normalized-complex (%div (+ (* real1 real2) (* imag1 imag2)) norm2)
+			     (%div (- (* imag1 real2) (* real1 imag2)) norm2))))
+      (4 (and (= real1 real2) (= imag1 imag2)))	;EQUAL
+      (5 (ferror nil "GREATERP applied to complex numbers ~S and ~S." number1 number2))	;GREATERP
+      (6 (ferror nil "LESSP applied to complex numbers ~S and ~S." number1 number2))	;LESSP
+      (7 (ferror nil "MIN applied to complex numbers ~S and ~S." number1 number2))	;MIN
+      (10 (ferror nil "MAX applied to complex numbers ~S and ~S." number1 number2))	;MAX
+      (otherwise (ferror nil "Rational two arg op code ~S on ~S and ~S"
+			 code number1 number2)))))
+

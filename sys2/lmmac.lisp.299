@@ -1,0 +1,1961 @@
+;; -*- Mode:LISP; Package:SYSTEM-INTERNALS; Base:8 -*-
+;; These are the macros in the Lisp Machine system.
+;; They used to be in LISPM;MACROS > but have been moved
+;; for purposes of the cold load.
+
+;	** (c) Copyright 1980 Massachusetts Institute of Technology **
+
+; Macros which do the equivalent of a displace MUST use DISPLACE
+; to make sure that temporary area problems are worried about.
+
+;;; Macros which look at the processor type at run time.
+
+(DECLARE (:SPECIAL CADR-TYPE-CODE LAMBDA-TYPE-CODE))
+
+(DEFMACRO IF-IN-CADR (&BODY FORMS)
+  `(WHEN (eq PROCESSOR-TYPE-CODE #.CADR-TYPE-CODE)
+    ,@FORMS))
+
+(DEFMACRO IF-IN-LAMBDA (&BODY FORMS)
+  `(WHEN (eq PROCESSOR-TYPE-CODE #.LAMBDA-TYPE-CODE)
+    ,@FORMS))
+
+
+(DEFMACRO IF-IN-CADR-ELSE-LAMBDA (CADR-FORM &BODY LAMBDA-FORMS)
+  `(IF (eq PROCESSOR-TYPE-CODE #.CADR-TYPE-CODE)
+      ,CADR-FORM
+    ,@LAMBDA-FORMS))
+
+(DEFMACRO IF-IN-LAMBDA-ELSE-CADR (LAMBDA-FORM &BODY CADR-FORMS)
+  `(IF (eq PROCESSOR-TYPE-CODE #.LAMBDA-TYPE-CODE)
+       ,LAMBDA-FORM
+     ,@CADR-FORMS))
+
+
+(DEFPROP :CADR #.CADR-TYPE-CODE PROCESSOR-TYPE-CODE)
+(DEFPROP :LAMBDA #.LAMBDA-TYPE-CODE PROCESSOR-TYPE-CODE)
+
+(DEFMACRO SELECT-PROCESSOR (&REST CLAUSES)
+  "CLAUSES begin with :CADR or :LAMBDA"
+  `(SELECTQ PROCESSOR-TYPE-CODE
+     ,@(MAPCAR #'(LAMBDA (CLAUSE)
+		   (CONS (GET (FIRST CLAUSE) 'PROCESSOR-TYPE-CODE) (CDR CLAUSE)))
+	       CLAUSES)))
+
+
+;The IF-IN-MACLISP/IF-IN-LISPM conditionals have to do with not breaking
+;the Maclisp environment when compiling.  The optimizers in COMPAT take
+;over these functions when compiling in Maclisp.
+
+(DECLARE (SETQ INHIBIT-STYLE-WARNINGS-SWITCH T)
+	 (SPECIAL COMPILING-FOR-LISPM))
+
+;THESE ARE CONDITIONAL ON WHICH SYSTEM IS EXECUTING THEM.
+(DEFMACRO IF-IN-MACLISP (&BODY FORMS)
+  "Use FORMS only if running or compiling in Maclisp.  No-op on the Lisp machine."
+  (COND ((NOT (STATUS FEATURE LISPM))
+	 `(PROGN . ,FORMS))))
+
+(DEFMACRO IF-IN-LISPM (&BODY FORMS)
+  "Use FORMS only if running or compiling on the Lisp machine."
+  (COND ((STATUS FEATURE LISPM)
+	 `(PROGN . ,FORMS))))
+
+(DEFMACRO IF-FOR-MACLISP (&BODY FORMS)
+  "Use FORMS only if evaluating on or compiling FOR Maclisp.
+Nowadays this is the same as IF-IN-MACLISP since there is no longer
+a cross-compiler in Maclisp for the Lisp machine."
+  (COND ((NOT (STATUS FEATURE LISPM))
+	 `(PROGN . ,FORMS))))
+
+(DEFMACRO IF-FOR-LISPM (&BODY FORMS)
+  "Use FORMS only if evaluating on or compiling FOR the Lisp machine.
+Nowadays this is the same as IF-IN-LISPM since there is no longer
+a cross-compiler in Maclisp for the Lisp machine."
+  (COND ((STATUS FEATURE LISPM)
+	 `(COMPILER-LET ((RUN-IN-MACLISP-SWITCH NIL))
+	    (PROGN . ,FORMS)))))
+
+(DEFMACRO IF-FOR-MACLISP-ELSE-LISPM (MACLISP-FORM LISPM-FORM)
+  "Use MACLISP-FORMS only if in Maclisp, use LISPM-FORM if on the Lisp machine."
+  (COND ((STATUS FEATURE LISPM)
+	 `(COMPILER-LET ((RUN-IN-MACLISP-SWITCH NIL)) ,LISPM-FORM))
+	(T MACLISP-FORM)))
+
+(IF-FOR-LISPM
+;PUSH, POP, LET, LET* now exist in COMPLR and in ITS MacLisp.  -cwh
+
+(DEFMACRO-DISPLACE PUSH (ITEM LIST)
+  "Add ITEM to the front of the value of LIST."
+  `(SETF ,LIST (CONS ,ITEM ,LIST)))
+
+(DEFMACRO-DISPLACE POP (LIST &OPTIONAL DEST)
+  "Remove the first element from the value of LIST and return it.
+If DEST is supplied, it is set to that value as well."
+  `(PROG1 ,(COND ((NULL DEST)          
+                  `(CAR ,LIST))
+                 (T `(SETF ,DEST (CAR ,LIST))))
+           (SETF ,LIST (CDR ,LIST))))
+)
+
+(DEFMACRO-DISPLACE PUSHNEW (ITEM LIST)
+  "Add ITEM to front of the value of LIST, unless already MEMQ in it."
+  (ONCE-ONLY (ITEM)
+    `(UNLESS (MEMQ ,ITEM ,LIST) (PUSH ,ITEM ,LIST))))
+
+(DEFMACRO GETF (PLACE PROPERTY &OPTIONAL (DEFAULT '.NO-DEFAULT.))
+  "Returns the PROPERTY property from the plist stored in PLACE.
+If there is no such property, DEFAULT is returned.
+PLACE should be such that simply evaluating it would return
+the contents of the property list."
+  (IF (EQ DEFAULT '.NO-DEFAULT.)
+      `(GET (LOCF ,PLACE) ,PROPERTY)
+    `(GET (LOCF ,PLACE) ,PROPERTY ,DEFAULT)))
+
+(DEFMACRO GET-PROPERTIES (PLACE LIST-OF-PROPERTIES)
+  "Finds the first property of any in LIST-OF-PROPERTIES from the plist PLACE.
+The first value is the property found first,
+the second is the value of that property,
+the third is the tail of the plist, whose car is the property
+and whose cadr is the value.
+PLACE should be such that simply evaluating it would return
+the contents of the property list."
+  `(GET-PROPERTIES-INTERNAL (LOCF ,PLACE) ,LIST-OF-PROPERTIES))
+
+(DEFMACRO REMF (PLACE PROPERTY)
+  "Removes the PROPERTY property from the plist stored in PLACE.
+PLACE should be such that simply evaluating it would return
+the contents of the property list."
+  `(REMPROP (LOCF ,PLACE) ,PROPERTY))
+
+(DEFPROP MACRO-TYPE-CHECK-WARNING T :ERROR-REPORTER)
+(DEFUN MACRO-TYPE-CHECK-WARNING (MACRO OBJECT)
+  "Detect attempts by macros to check type at compile time of an eval-at-load-time.
+A macro should call this function with OBJECT being the subexpression whose
+type is to be checked and MACRO being the macro name.  If OBJECT is an
+eval-at-load-time, an error happens."
+#M NIL
+#Q (IF (AND (CONSP OBJECT) (EQ (CAR OBJECT) COMPILER:EVAL-AT-LOAD-TIME-MARKER))
+       (FERROR NIL "The macro ~S is attempting to check the type of an argument
+at compile time, but the argument is #,~S,
+whose type is not known until load time"
+	       MACRO (CDR OBJECT))))
+
+;Semi-adequate Maclisp version of DEFSUBST
+(if-for-maclisp
+(DEFMACRO DEFSUBST (FUNCTION-SPEC LAMBDA-LIST . BODY)
+  `(DEFUN ,FUNCTION-SPEC MACRO (X)
+     (SUBLIS (DO ((V ',LAMBDA-LIST (CDR V))
+		  (X (CDR X) (CDR X))
+		  (R NIL (CONS (CONS (CAR V) (CAR X)) R)))
+		  ((NULL V) (NREVERSE R)))
+	      '(PROGN . ,BODY)))))
+
+(DEFMACRO DEFSUBST-WITH-PARENT (FUNCTION-SPEC PARENT LAMBDA-LIST . BODY)
+  "Like DEFSUBST but says that the parent of FUNCTION-SPEC is PARENT.
+This is for DEFSUBSTs generated by macros, as in DEFSTRUCT.
+This tells the editor to find FUNCTION-SPEC's definition in PARENT's definition.
+PARENT is either a symbol, or a list of a function spec and a definition type."
+  (OR (CONSP PARENT) (SETQ PARENT (LIST PARENT)))
+  `(LOCAL-DECLARE ((FUNCTION-PARENT . ,PARENT))
+     (DEFSUBST ,FUNCTION-SPEC ,LAMBDA-LIST . ,BODY)))
+
+;Macros in Lambda position of function
+(DEFMACRO LAMBDA-MACRO (LAMBDA-MACRO-NAME LAMBDA-LIST . BODY)
+  (LET ((DEF1 `(NAMED-LAMBDA ,LAMBDA-MACRO-NAME ,LAMBDA-LIST . ,BODY)))
+    `(PROGN (EVAL-WHEN (COMPILE)
+		       (PUTDECL ',LAMBDA-MACRO-NAME 'LAMBDA-MACRO ',DEF1))
+	    (DEFUN (:LAMBDA-MACRO ,LAMBDA-MACRO-NAME) . ,(CDDR DEF1)))))
+
+(LAMBDA-MACRO DISPLACED (FCTN) ; moved from qfctns because it doesn't work in cold load.
+  (CADDR FCTN))
+
+(DEFMACRO DEFFUNCTION (FUNCTION-SPEC LAMBDA-TYPE LAMBDA-LIST &BODY REST)
+  "Define FUNCTION-SPEC as a function, like DEFUN, but use LAMDBA-TYPE instead of 'LAMBDA.
+With this you can define a function with a definition that uses a lambda macro.
+The lambda macro is expanded and should yield a LAMBDA, SUBST or MACRO;
+then this macro expands into a suitable use of DEFUN, DEFSUBST or MACRO."
+  (LET ((FUNCTION (LAMBDA-MACRO-EXPAND `(,LAMBDA-TYPE ,LAMBDA-LIST . ,REST))))
+    `(,(SELECTQ (CAR FUNCTION)
+	 ((LAMBDA NAMED-LAMBDA) 'DEFUN)
+	 ((SUBST NAMED-SUBST) 'DEFSUBST)
+	 (MACRO 'MACRO)
+	 (T (FERROR NIL "~A (a lambda macro) did not expand into a suitable function"
+		    LAMBDA-TYPE)))
+      ,FUNCTION-SPEC
+      . ,(SELECTQ (CAR FUNCTION)
+	   ((LAMBDA SUBST)
+	    (CDR FUNCTION))
+	   ((NAMED-LAMBDA NAMED-SUBST)
+	    (CDDR FUNCTION))
+	   (MACRO (CDDR FUNCTION))))))
+
+(DEFMACRO DEFDECL (NAME PROP VALUE)
+  "Declare that the PROP property of NAME is VALUE, for GETDECL.
+When executed, this makes a property, like DEFPROP.
+In file compilation, this makes a declaration, so that GETDECL
+done in macros being expanded will see this property."
+  `(PROGN (DEFPROP ,NAME ,VALUE ,PROP)
+	  (EVAL-WHEN (COMPILE)
+		     (PUTDECL ',NAME ',PROP ',VALUE))))
+
+(DEFMACRO-DISPLACE @DEFINE (&REST IGNORE) NIL)
+
+(DEFSUBST FILL-POINTER (ARRAY)
+  "Return the fill pointer of ARRAY."
+  (ARRAY-LEADER ARRAY 0))
+
+(DEFMACRO-DISPLACE STORE (ARRAY-REFERENCE VALUE)
+  (LET* ((ARRAYCALL (MACROEXPAND ARRAY-REFERENCE)))
+    (SELECTQ (CAR ARRAYCALL)
+      (FUNCALL `(ASET ,VALUE ,(CADR ARRAYCALL) . ,(CDDR ARRAYCALL)))
+      (ARRAYCALL `(ASET ,VALUE ,(CADDR ARRAYCALL) . ,(CDDDR ARRAYCALL)))
+      ((LEXPR-FUNCALL FUNCALL* APPLY)
+       `(LEXPR-FUNCALL 'ASET ,VALUE ,(CADR ARRAYCALL) . ,(CDDR ARRAYCALL)))
+      (T `(ASET ,VALUE (FUNCTION ,(CAR ARRAYCALL)) . ,(CDR ARRAYCALL))))))
+
+(DEFMACRO-DISPLACE GET-LOCATIVE-POINTER-INTO-ARRAY (ARRAY-REFERENCE)
+  (LET* ((ARRAYCALL (MACROEXPAND ARRAY-REFERENCE)))
+    (SELECTQ (CAR ARRAYCALL)
+      (FUNCALL `(ALOC ,(CADR ARRAYCALL) . ,(CDDR ARRAYCALL)))
+      (ARRAYCALL `(ALOC ,(CADDR ARRAYCALL) . ,(CDDDR ARRAYCALL)))
+      ((LEXPR-FUNCALL FUNCALL* APPLY)
+       `(LEXPR-FUNCALL 'ALOC ,(CADR ARRAYCALL) . ,(CDDR ARRAYCALL)))
+      (T `(ALOC (FUNCTION ,(CAR ARRAYCALL)) . ,(CDR ARRAYCALL))))))
+
+(DEFSUBST CADDR-SAFE (OBJECT)
+  "Like CADDR, but treats all non-lists as NIL rather than getting an error."
+  (CAR-SAFE (CDDR-SAFE OBJECT)))
+
+(DEFSUBST CADDDR-SAFE (OBJECT)
+  "Like CADDDR, but treats all non-lists as NIL rather than getting an error."
+  (CADR-SAFE (CDDR-SAFE OBJECT)))
+
+(DEFSUBST CDDDR-SAFE (OBJECT)
+  "Like CDDDR, but treats all non-lists as NIL rather than getting an error."
+  (CDR-SAFE (CDDR-SAFE OBJECT)))
+
+(DEFSUBST FIRST (LIST)
+  "Return the first element of LIST."
+  (CAR LIST))
+
+(DEFSUBST SECOND (LIST)
+  "Return the second element of LIST."
+  (CADR LIST))
+
+(DEFSUBST THIRD (LIST)
+  "Return the third element of LIST."
+  (CADDR LIST))
+
+(DEFSUBST FOURTH (LIST)
+  "Return the fourth element of LIST."
+  (CADDDR LIST))
+
+(DEFSUBST FIFTH (LIST)
+  "Return the fifth element of LIST."
+  (CAR (CDDDDR LIST)))
+
+(DEFSUBST SIXTH (LIST)
+  "Return the sixth element of LIST."
+  (CADR (CDDDDR LIST)))
+
+(DEFSUBST SEVENTH (LIST)
+  "Return the seventh element of LIST."
+  (CADDR (CDDDDR LIST)))
+
+(DEFSUBST EIGHTH (LIST)
+  "Return the eighth element of LIST."
+  (CADDDR (CDDDDR LIST)))
+
+(DEFSUBST NINTH (LIST)
+  "Return the ninth element of LIST."
+  (CADDR (CDDR (CDDDDR LIST))))
+
+(DEFSUBST TENTH (LIST)
+  "Return the tenth element of LIST."
+  (CADDR (CDDDR (CDDDDR LIST))))
+
+(DEFSUBST REST1 (LIST)
+  "Return LIST sans its first element."
+  (CDR LIST))
+
+(DEFSUBST REST2 (LIST)
+  "Return LIST sans its first two elements."
+  (CDDR LIST))
+
+(DEFSUBST REST3 (LIST)
+  "Return LIST sans its first three elements."
+  (CDDDR LIST))
+
+(DEFSUBST REST4 (LIST)
+  "Return LIST sans its first four elements."
+  (CDDDDR LIST))
+
+(DEFSUBST CONTENTS (LOCATIVE)
+  "Return the contents of the cell LOCATIVE points to.
+/(CONTENTS (LOCF <expression>)) is equivalent to <expression>."
+  (CDR LOCATIVE))
+
+(DEFSUBST CONSP (OBJECT)
+  "T if OBJECT is a cons (a non-null list)."
+  (NOT (ATOM OBJECT)))
+
+(DEFSUBST CLI:LISTP (OBJECT)
+  "T if OBJECT is a list (either a cons or NIL)."
+  (COMMON-LISP-LISTP OBJECT))
+
+(DEFSUBST CLI:NLISTP (OBJECT)
+  "T if OBJECT is not a list (neither a cons nor NIL)."
+  (NOT (COMMON-LISP-LISTP OBJECT)))
+
+(DEFSUBST INTEGERP (OBJECT)
+  "T if OBJECT is an integer; NIL for other numbers and non-numbers."
+  (FIXP OBJECT))
+
+(DEFMACRO THE (TYPE VALUE)
+  "Returns the value(s) of VALUE, but declares them to be of type(s) TYPE.
+This is a Common Lisp construct that simply returns VALUE on the Lisp machine."
+  TYPE
+  VALUE)
+
+(DEFSUBST CLI:SYMBOL-VALUE (SYMBOL)
+  "Returns the value of SYMBOL."
+  (COMMON-LISP-SYMBOL-VALUE PKG-KEYWORD-PACKAGE SYMBOL))
+
+(DEFMACRO LOCALLY (&BODY BODY)
+  "Common Lisp local declaration construct.
+LOCALLY is like PROGN except that Common Lisp says that declarations
+are allowed only in LOCALLY, not in PROGN.
+Naturally, this dumb restriction has not been implemented on the Lisp machine,
+so LOCALLY is identical to PROGN."
+  `(PROGN . ,BODY))
+
+(DEFSUBST NEQ (X Y)
+  "T if X and Y are not the same object."
+  (NOT (EQ X Y)))
+
+(DEFSUBST ENDP (X)
+  "T if X as the cdr of a list terminates it."
+  (ATOM X))
+
+(DEFSUBST BIT-TEST (BITS WORD)
+  "T if the bits specified by BITS in WORD are not all zero.
+BITS is a mask in which the bits to be tested are ones."
+  (NOT (ZEROP (LOGAND BITS WORD))))
+(DEFF LOGTEST #'BIT-TEST)
+
+(DEFSUBST LDB-TEST (PPSS WORD)
+  "T if the field specified by PPSS in WORD is not zero.
+PPSS is a position (from the right) times 64., plus a size."
+  (NOT (ZEROP (LDB PPSS WORD))))
+
+(IF-IN-LISPM
+(DEFMACRO-DISPLACE ARRAYCALL (IGNORE ARRAY &REST DIMS)
+  `(FUNCALL ,ARRAY . ,DIMS))
+)
+
+(IF-IN-LISPM
+(DEFMACRO-DISPLACE CATCH (BODY TAG)
+    `(*CATCH ',TAG ,BODY))
+   )
+
+(IF-IN-LISPM
+(DEFMACRO-DISPLACE THROW (BODY TAG)
+    `(*THROW ',TAG ,BODY))
+   )
+
+(DEFCONST NOCATCH (LIST NIL)
+  "This is used as a catch tag when a conditional catch is not supposed to happen.")
+
+(DEFMACRO CATCH-CONTINUATION (TAG-EXPRESSION
+			      THROW-CONTINUATION NON-THROW-CONTINUATION
+			      &REST BODY)
+  "Execute BODY with a catch for TAG-EXPRESSION, then call one continuation or the other.
+If BODY throws to the tag, THROW-CONTINUATION is called,
+ with the value thrown (and the rest of the values of *CATCH) as args.
+ But if THROW-CONTINUATION is NIL in the source code,
+ *CATCH's values are returned directly.
+If BODY returns normally, NON-THROW-CONTINUATION is called and its values returned,
+ with the values of BODY as arguments.
+ But if NON-THROW-CONTINUATION is NIL in the source code,
+ BODY's values are returned directly."
+  ;; We don't use &BODY in the real arglist to avoid overriding
+  ;; the special form of indentation on *INITIAL-LISP-INDENT-OFFSET-ALIST*
+  (DECLARE (ARGLIST TAG-EXPRESSION THROW-CONTINUATION NON-THROW-CONTINUATION
+		    &BODY BODY))
+  `(CATCH-CONTINUATION-IF T ,TAG-EXPRESSION ,THROW-CONTINUATION ,NON-THROW-CONTINUATION
+     . ,BODY))
+
+(DEFMACRO CATCH-CONTINUATION-IF (COND-FORM TAG-EXPRESSION
+				 THROW-CONTINUATION NON-THROW-CONTINUATION
+				 &REST BODY)
+  "Like CATCH-CONTINUATION but catch only if COND-FORM evals non-NIL."
+  ;; We don't use &BODY in the real arglist to avoid overriding
+  ;; the special form of indentation on *INITIAL-LISP-INDENT-OFFSET-ALIST*
+  (DECLARE (ARGLIST COND-FORM TAG-EXPRESSION
+		    THROW-CONTINUATION NON-THROW-CONTINUATION
+		    &BODY BODY))
+  (IF NON-THROW-CONTINUATION
+      `(BLOCK CATCH-CONTINUATION-1
+	 ,(IF THROW-CONTINUATION
+	      `(CALL ,THROW-CONTINUATION
+		     '(:SPREAD :OPTIONAL)
+		     (MULTIPLE-VALUE-LIST
+		       (*CATCH (IF ,COND-FORM ,TAG-EXPRESSION NOCATCH)
+			 (RETURN-FROM CATCH-CONTINUATION-1
+			   (CALL ,NON-THROW-CONTINUATION
+				 '(:SPREAD :OPTIONAL)
+				 (MULTIPLE-VALUE-LIST
+				   (PROGN ,@BODY)))))))
+	    `(*CATCH (IF ,COND-FORM ,TAG-EXPRESSION NOCATCH)
+	       (RETURN-FROM CATCH-CONTINUATION-1
+		 (CALL ,NON-THROW-CONTINUATION
+		       '(:SPREAD :OPTIONAL)
+		       (MULTIPLE-VALUE-LIST
+			 (PROGN ,@BODY)))))))
+    `(BLOCK CATCH-CONTINUATION-1
+       ,(IF THROW-CONTINUATION
+	    `(CALL ,THROW-CONTINUATION
+		   '(:SPREAD :OPTIONAL)
+		   (MULTIPLE-VALUE-LIST
+		     (*CATCH (IF ,COND-FORM ,TAG-EXPRESSION NOCATCH)
+		       (RETURN-FROM CATCH-CONTINUATION-1 (PROGN . ,BODY)))))
+	  `(*CATCH (IF ,COND-FORM ,TAG-EXPRESSION NOCATCH)
+	     (RETURN-FROM CATCH-CONTINUATION-1 (PROGN . ,BODY)))))))
+
+(DEFMACRO CONDITION-CASE (VARIABLES BODY-FORM &REST CLAUSES)
+  "Execute BODY-FORM with conditions handled according to CLAUSES.
+Each element of CLAUSES is a clause like those used in SELECTQ.
+It specifies one or more condition names, and what to do if they are signalled.
+
+If any of the conditions specified in the clauses happens during BODY-FORM,
+it is handled by throwing to this level and executing the matching clause.
+Within the clause, the first of VARIABLES is bound to the condition-object
+that was signaled.
+The values of the last form in the clause are returned from CONDITION-CASE.
+
+If none of the conditions occurs, the values of BODY-FORM are returned
+from CONDITION-CASE.
+
+If there is a clause with keyword :NO-ERROR, it is executed after BODY-FORM
+if conditions are NOT signaled.  During this clause, the variables VARIABLES
+are bound to the values produced by BODY-FORM.  The values of the last form
+in the clause are returned from CONDITION-CASE."
+  ;; We don't use &BODY in the real arglist to avoid overriding
+  ;; the special form of indentation on *INITIAL-LISP-INDENT-OFFSET-ALIST*
+  (DECLARE (ARGLIST VARIABLES BODY-FORM &BODY CLAUSES))
+  `(CONDITION-CASE-IF T ,VARIABLES ,BODY-FORM . ,CLAUSES))
+
+(DEFMACRO CONDITION-CASE-IF (COND-FORM VARIABLES BODY-FORM &REST CLAUSES)
+  "Like CONDITION-CASE, but establishes condition handlers only if COND-FORM evaluates non-NIL.
+Refer to the documentation of CONDITION-CASE for more information."
+  ;; We don't use &BODY in the real arglist to avoid overriding
+  ;; the special form of indentation on *INITIAL-LISP-INDENT-OFFSET-ALIST*
+  (DECLARE (ARGLIST COND-FORM VARIABLES BODY-FORM &BODY CLAUSES))
+  (LET* ((ALL-CONDITIONS
+	   (MAPCAN #'(LAMBDA (CLAUSE)
+		       (MACRO-TYPE-CHECK-WARNING 'CONDITION-CASE-IF (CAR CLAUSE))
+		       (IF (EQ (CAR CLAUSE) ':NO-ERROR) NIL
+			 (IF (CONSP (CAR CLAUSE)) (CAR CLAUSE)
+			   (LIST (CAR CLAUSE)))))
+		   CLAUSES))
+	 (VAR (OR (CAR VARIABLES) (GENSYM)))
+	 (NO-ERROR-CLAUSE (ASSQ ':NO-ERROR CLAUSES))
+	 (TAG (GENSYM)))
+    (IF (NULL (CDR ALL-CONDITIONS))
+	(SETQ ALL-CONDITIONS (CAR ALL-CONDITIONS)))
+    (IF NO-ERROR-CLAUSE
+	`(LET ,VARIABLES
+	   (CATCH-CONTINUATION-IF T ',TAG
+				  #'(LAMBDA (,VAR)
+				      (SELECT-MEMQ (SEND ,VAR ':CONDITION-NAMES)
+					. ,(REMQ NO-ERROR-CLAUSE CLAUSES)))
+				  #'(LAMBDA () . ,(CDR NO-ERROR-CLAUSE))
+	     (CONDITION-BIND-IF ,COND-FORM ((,ALL-CONDITIONS 'CONDITION-CASE-THROW ',TAG))
+				(MULTIPLE-VALUE ,VARIABLES ,BODY-FORM))))
+      `(CATCH-CONTINUATION-IF T ',TAG
+			      #'(LAMBDA (,VAR)
+				  (SELECT-MEMQ (SEND ,VAR ':CONDITION-NAMES)
+				    . ,CLAUSES))
+			      ()
+	 (CONDITION-BIND-IF ,COND-FORM ((,ALL-CONDITIONS 'CONDITION-CASE-THROW ',TAG))
+	   ,BODY-FORM)))))
+
+(DEFMACRO CONDITION-CALL ((VARIABLE) BODY-FORM &REST CLAUSES)
+  "Execute BODY-FORM with conditions handled according to CLAUSES.
+Each element of CLAUSES is a clause like those used in COND.
+This virtual COND is executed whenever a condition is signaled within BODY-FORM.
+If the predicate at the start of a clause evaluates to non-NIL,
+the rest of the clause is used to handle the condition.
+The values of the last form in the clause are returned from CONDITION-CALL.
+The predicate, and the rest of the clause, can find the condition object
+that was signaled in the value of VARIABLE.
+
+If no predicate evaluates to non-NIL, the condition is not handled
+at this level.  Previously established handlers then get a chance.
+
+The predicates may be evaluated more than once, and should have no side-effects.
+They may not refer to local variables of the environment of the CONDITION-CALL.
+The rest of the clause is evaluated after throwing back to this level,
+and may access all local variables.
+
+The values of BODY-FORM are returned from the CONDITION-CALL if condition
+handling does not cause something else to happen."
+  ;; We don't use &BODY in the real arglist to avoid overriding
+  ;; the special form of indentation on *INITIAL-LISP-INDENT-OFFSET-ALIST*
+  (DECLARE (ARGLIST (VARIABLE) BODY-FORM &BODY CLAUSES))
+  `(CONDITION-CALL-IF T (,VARIABLE) ,BODY-FORM . ,CLAUSES))
+
+(DEFMACRO-DISPLACE CONDITION-CALL-IF (COND-FORM (VARIABLE) BODY-FORM &REST CLAUSES)
+  "Like CONDITION-CALL, but establishes the handlers only if COND-FORM evaluates non-NIL.
+See the documentation of CONDITION-CALL for more information."
+  ;; We don't use &BODY in the real arglist to avoid overriding
+  ;; the special form of indentation on *INITIAL-LISP-INDENT-OFFSET-ALIST*
+  (DECLARE (ARGLIST COND-FORM (VARIABLE) BODY-FORM &BODY CLAUSES))
+  (LET* ((PREDICATES
+	   (MAPCAR 'CAR CLAUSES))
+	 (VAR (OR VARIABLE (GENSYM)))
+	 (TAG (GENSYM))
+	 (HANDLER `#'(LAMBDA (,VAR &REST IGNORE)
+		       (IF (OR . ,PREDICATES)
+			   (*THROW ',TAG ,VAR)))))
+    `(CATCH-CONTINUATION-IF T ',TAG
+			    #'(LAMBDA (,VAR)
+				(COND . ,CLAUSES))
+			    ()
+       (CONDITION-BIND-IF ,COND-FORM ((NIL ,HANDLER)) ,BODY-FORM))))
+
+(DEFMACRO-DISPLACE CONDITION-BIND-IF (COND-FORM HANDLERS &BODY BODY)
+  "Execute BODY, with condition handlers HANDLERS in effect iff COND-FORM evals non-NIL.
+If COND-FORM's value is non-NIL, this acts just like CONDITION-BIND.
+Otherwise, BODY is evaluated as if it were in a PROGN, with no condition handlers."
+  (LET* ((VARS (MAPCAR #'(LAMBDA (IGNORE) (GENSYM)) HANDLERS))
+	 (VAR1 (GENSYM))
+	 (INSIDE
+	   `(WITH-STACK-LIST* (,VAR1 ,@VARS EH:CONDITION-HANDLERS)
+	      (LET-IF ,COND-FORM
+		      ((EH:CONDITION-HANDLERS ,VAR1))
+		. ,BODY))))
+    (DO ((VS (REVERSE VARS) (CDR VS))
+	 (HS (REVERSE HANDLERS) (CDR HS)))
+	((NULL VS))
+      (SETQ INSIDE
+	    `(WITH-STACK-LIST (,(CAR VS) ',(CAR (CAR HS)) . ,(CDAR HS))
+	       ,INSIDE)))
+    INSIDE))
+
+(DEFMACRO-DISPLACE CONDITION-BIND (HANDLERS &BODY BODY)
+  "Execute BODY with condition handlers HANDLERS in effect.
+Each element of HANDLERS is a list of at least two elements:
+ (CONDITIONS FUNCTION EXTRA-ARGUMENTS...).
+CONDITIONS is not evaluated, and should be a condition name,
+ a list of condition names, or NIL meaning all possible conditions.
+FUNCTION is evaluated before BODY is entered to get a function to call
+ to handle the condition(s); EXTRA-ARGUMENTS are evaluated then too.
+When a one of the specified conditions is signaled, FUNCTION is called
+ with arguments of the condition object followed by the EXTRA-ARGUMENTS.
+FUNCTION should return two values.  If the first value is NIL,
+the condition has not really been handled.  Otherwise, the two
+values of FUNCTION will be returned from SIGNAL.
+The conditions specified by CONDITIONS do not always have to be handled;
+they are an initial filter that determines whether FUNCTION will be called.
+Once function is called, it can then decide whether it will handle this SIGNAL."
+  `(CONDITION-BIND-IF T ,HANDLERS . ,BODY))
+
+(DEFMACRO-DISPLACE CONDITION-BIND-DEFAULT-IF (COND-FORM HANDLERS &BODY BODY)
+  "Execute BODY with default condition handlers HANDLERS in effect iff COND-FORM evals non-NIL.
+Like CONDITION-BIND-IF except the condition handlers go on
+the default handler list, EH:CONDITION-DEFAULT-HANDLERS, rather than
+on the regular handler list.  The two lists work just the same
+except that the default list is searched after the entire regular list."
+  (LET* ((VARS (MAPCAR #'(LAMBDA (IGNORE) (GENSYM)) HANDLERS))
+	 (VAR1 (GENSYM))
+	 (INSIDE
+	   `(WITH-STACK-LIST* (,VAR1 ,@VARS EH:CONDITION-DEFAULT-HANDLERS)
+	      (LET-IF ,COND-FORM
+		      ((EH:CONDITION-DEFAULT-HANDLERS ,VAR1))
+		. ,BODY))))
+    (DO ((VS (REVERSE VARS) (CDR VS))
+	 (HS (REVERSE HANDLERS) (CDR HS)))
+	((NULL VS))
+      (SETQ INSIDE
+	    `(WITH-STACK-LIST (,(CAR VS) ',(CAR (CAR HS)) . ,(CDAR HS))
+	       ,INSIDE)))
+    INSIDE))
+
+(DEFMACRO-DISPLACE CONDITION-BIND-DEFAULT (HANDLERS &BODY BODY)
+  "Execute BODY with default condition handlers HANDLERS in effect.
+Like CONDITION-BIND except the condition handlers go on
+the default handler list, EH:CONDITION-DEFAULT-HANDLERS, rather than
+on the regular handler list.  The two lists work just the same
+except that the default list is searched after the entire regular list."
+  `(CONDITION-BIND-DEFAULT-IF T ,HANDLERS . ,BODY))
+
+(IF-IN-LISPM
+(DEFMACRO-DISPLACE ERRSET (BODY &OPTIONAL (PRINTFLAG T))
+  "Execute body, trapping errors.  If no error, return a 1-list of the value of BODY.
+If there is an error, return NIL (or at least not a list.)
+An error message is printed unless PRINTFLAG is specified and evaluates to NIL."
+  (LET ((TAG (GENSYM)))
+    `(CATCH-CONTINUATION ',TAG #'(LAMBDA () (VALUES NIL T)) NIL
+       (CONDITION-BIND ((ERROR 'ERRSET-HANDLER ',TAG ,PRINTFLAG))
+	  (LIST ,BODY)))))
+)
+
+(IF-IN-LISPM 
+(DEFMACRO-DISPLACE ERR (&OPTIONAL VALUE-FORM FLAG)
+    (COND ((OR VALUE-FORM FLAG) (ERROR "ERR with arguments is not implemented"))
+	  (T '(ERROR ""))))
+
+;	  (value-form `(COND (EH:ERRSET-STATUS (*THROW 'EH:ERRSET-CATCH ,VALUE-FORM))
+;		             (T (ERROR ""))))))
+)
+
+(DEFMACRO-DISPLACE IGNORE-ERRORS (&BODY BODY)
+  "Evaluate BODY and return even if an error occurs.
+If no error occurs, our first value is the first value of the last form in BODY,
+ and our second value is NIL.
+If an error does occur, our first value is NIL and our second value is T.
+Dangerous errors such as running out of memory are not caught."
+  (LET ((TAG (GENSYM)))
+    `(CATCH-CONTINUATION ',TAG #'(LAMBDA () (VALUES NIL T)) NIL
+       (CONDITION-BIND ((ERROR 'IGNORE-ERRORS-HANDLER ',TAG))
+	 (VALUES (PROGN . ,BODY) NIL)))))
+
+(DEFMACRO-DISPLACE ERROR-RESTART ((CONDITION FORMAT-STRING . FORMAT-ARGS) &BODY BODY)
+  "Execute BODY, with a restart for CONDITION in effect that will try BODY over.
+FORMAT-STRING and FORMAT-ARGS are for the debugger to print a description
+of what this restart is for, so the user can decide whether to use it.
+They are all evaluated each time around the loop, before doing BODY.
+
+If the user chooses to go to the restart we provide, it throws back to
+the loop and BODY is executed again.  If BODY returns normally, the values
+of the last form in BODY are returned from the ERROR-RESTART."
+  (LET ((TAG (GENSYM)))
+    `(BLOCK ERROR-RESTART-BLOCK
+       (TAGBODY
+	RETRY
+	   (RETURN-FROM ERROR-RESTART-BLOCK
+	     (WITH-STACK-LIST (,TAG ,FORMAT-STRING . ,FORMAT-ARGS)
+	       (CATCH-CONTINUATION-IF T ,TAG #'(LAMBDA (IGNORE) (GO RETRY)) NIL
+		 (WITH-STACK-LIST (,TAG ',CONDITION ,TAG T
+				   ,TAG
+				   'CATCH-ERROR-RESTART-THROW ,TAG)
+		   (WITH-STACK-LIST* (EH:CONDITION-RESUME-HANDLERS
+				       ,TAG
+				       EH:CONDITION-RESUME-HANDLERS)
+		     . ,BODY)))))))))
+
+(DEFMACRO-DISPLACE ERROR-RESTART-LOOP ((CONDITION FORMAT-STRING . FORMAT-ARGS) &BODY BODY)
+  "Execute BODY over and over, with a restart for CONDITION in effect.
+FORMAT-STRING and FORMAT-ARGS are for the debugger to print a description
+of what this restart is for, so the user can decide whether to use it.
+They are all evaluated each time around the loop, before doing BODY.
+
+If the user chooses to go to the restart we provide, it throws back to
+the loop and loops around again.  If BODY returns normally, it also loops around."
+  (LET ((TAG (GENSYM)))
+    `(TAGBODY
+      RETRY
+       (WITH-STACK-LIST (,TAG ,FORMAT-STRING . ,FORMAT-ARGS)
+         (CATCH-CONTINUATION-IF T ,TAG NIL NIL
+	   (WITH-STACK-LIST (,TAG ',CONDITION ,TAG T
+			     ,TAG
+			     'CATCH-ERROR-RESTART-THROW ,TAG)
+	     (WITH-STACK-LIST* (EH:CONDITION-RESUME-HANDLERS
+				,TAG
+				EH:CONDITION-RESUME-HANDLERS)
+	       . ,BODY))))
+       (GO RETRY))))
+
+(DEFMACRO-DISPLACE CATCH-ERROR-RESTART ((CONDITION FORMAT-STRING . FORMAT-ARGS) &BODY BODY)
+  "Provide a restart for CONDITION if signaled within BODY.
+FORMAT-STRING and FORMAT-ARGS are for the debugger to print a description
+of what this restart is for, so the user can decide whether to use it.
+They are all evaluated when the CATCH-ERROR-RESTART is entered.
+If the user chooses to go to the restart we provide,
+CATCH-ERROR-RESTART returns NIL as first value and a non-NIL second value.
+If CATCH-ERROR-RESTART is exited normally, it returns the values
+of the last form in BODY."
+  (LET ((TAG (GENSYM)))
+    `(WITH-STACK-LIST (,TAG ,FORMAT-STRING . ,FORMAT-ARGS)
+       (CATCH-CONTINUATION-IF T ,TAG #'(LAMBDA () (VALUES NIL T)) NIL
+         (WITH-STACK-LIST (,TAG ',CONDITION ,TAG T
+			   ,TAG
+			   'CATCH-ERROR-RESTART-THROW ,TAG)
+	   (WITH-STACK-LIST* (EH:CONDITION-RESUME-HANDLERS
+			      ,TAG
+			      EH:CONDITION-RESUME-HANDLERS)
+	     . ,BODY))))))
+
+(DEFMACRO-DISPLACE CATCH-ERROR-RESTART-IF
+		   (COND-FORM (CONDITION FORMAT-STRING . FORMAT-ARGS) &BODY BODY)
+  "Provide a restart for CONDITION if signaled within BODY, if COND-FORM evals non-NIL.
+FORMAT-STRING and FORMAT-ARGS are for the debugger to print a description
+of what this restart is for, so the user can decide whether to use it.
+They are all evaluated when the CATCH-ERROR-RESTART-IF is entered.
+If the user chooses to go to the restart we provide,
+CATCH-ERROR-RESTART-IF returns NIL as first value and a non-NIL second value.
+If CATCH-ERROR-RESTART-IF is exited normally, it returns the values
+of the last form in BODY."
+  (LET ((TAG (GENSYM)))
+    `(WITH-STACK-LIST (,TAG ,FORMAT-STRING . ,FORMAT-ARGS)
+       (CATCH-CONTINUATION-IF T ,TAG #'(LAMBDA () (VALUES NIL T)) NIL
+	 (WITH-STACK-LIST (,TAG ',CONDITION ,TAG T
+			   ,TAG
+			   'CATCH-ERROR-RESTART-THROW ,TAG)
+	   (WITH-STACK-LIST* (,TAG
+			      ,TAG
+			      EH:CONDITION-RESUME-HANDLERS)
+	     (LET-IF ,COND-FORM
+		     ((EH:CONDITION-RESUME-HANDLERS ,TAG))
+	       . ,BODY)))))))
+
+(DEFMACRO-DISPLACE CATCH-ERROR-RESTART-EXPLICIT-IF
+		   (COND-FORM (CONDITION PROCEED-TYPE FORMAT-STRING . FORMAT-ARGS) &BODY BODY)
+  "Provide a PROCEED-TYPE resume handler for CONDITION if signaled within BODY, if COND-FORM evals non-NIL.
+PROCEED-TYPE, like CONDITION, is not evaluated.
+FORMAT-STRING and FORMAT-ARGS are for the debugger to print a description
+of what this restart is for, so the user can decide whether to use it.
+They are all evaluated when the CATCH-ERROR-RESTART-IF is entered.
+If the user chooses to go to the restart we provide,
+CATCH-ERROR-RESTART-IF returns NIL as first value and a non-NIL second value.
+If CATCH-ERROR-RESTART-IF is exited normally, it returns the values
+of the last form in BODY."
+  (LET ((TAG (GENSYM)))
+    `(WITH-STACK-LIST (,TAG ,FORMAT-STRING . ,FORMAT-ARGS)
+       (CATCH-CONTINUATION-IF T ,TAG #'(LAMBDA () (VALUES NIL T)) NIL
+	 (WITH-STACK-LIST (,TAG ',CONDITION ',PROCEED-TYPE T
+			   ,TAG
+			   'CATCH-ERROR-RESTART-THROW ,TAG)
+	   (WITH-STACK-LIST* (,TAG
+			      ,TAG
+			      EH:CONDITION-RESUME-HANDLERS)
+	     (LET-IF ,COND-FORM
+		     ((EH:CONDITION-RESUME-HANDLERS ,TAG))
+	       . ,BODY)))))))
+
+(DEFMACRO CONDITION-RESUME (HANDLER &BODY BODY)
+  "Provide a resume handler for conditions signaled within BODY.
+Each resume handler applies to certain conditions, and is named by a keyword.
+The error system sees which resume handlers can apply to the condition being handled,
+ and includes their names (keywords) in the available proceed-types.
+If a condition handler or the debugger elects to proceed with a proceed-type
+ which was supplied by a resume handler, the resume handler is called.
+It should always do a throw; it should not return to its caller.
+
+HANDLER is evaluated on entry to the CONDITION-RESUME-IF.  The value should
+look like this:
+ (CONDITION-NAMES PROCEED-TYPE PREDICATE (FORMAT-STRING FORMAT-ARGS...) FUNCTION EXTRA-ARGS...)
+CONDITION-NAMES is as for CONDITION-BIND.  It says which conditions to consider applying to.
+PROCEED-TYPE is a keyword that identifies the purpose of this resume handler.
+ A resume handler is only considered for use when an attempt is made to
+ proceed with this PROCEED-TYPE.
+PREDICATE is a function of one arg (a condition object) which decides
+ whether this resume handler is really applicable.
+ PREDICATE can be T if you don't want to test anything.
+FORMAT-STRING and FORMAT-ARGS are for the debugger to print a description
+of what this resume handler is for, so the user can decide whether to use it.
+FUNCTION is the actual resume handler function.  Its arguments are
+ the condition object and the EXTRA-ARGS.
+
+CONDITION-RESUME does not do a *CATCH.
+It simply establishes the resume handler and executes the body."
+  `(WITH-STACK-LIST* (EH:CONDITION-RESUME-HANDLERS ,HANDLER EH:CONDITION-RESUME-HANDLERS)
+     . ,BODY))
+
+(DEFMACRO-DISPLACE CONDITION-RESUME-IF
+		   (COND-FORM HANDLER &BODY BODY)
+  "Like CONDITION-RESUME, but provide the resume handler only if COND-FORM evals non-NIL."
+  (LET ((TAG (GENSYM)))
+    `(WITH-STACK-LIST* (,TAG ,HANDLER EH:CONDITION-RESUME-HANDLERS)
+       (LET-IF ,COND-FORM
+	       ((EH:CONDITION-RESUME-HANDLERS ,TAG))
+	 . ,BODY))))
+
+(DEFMACRO-DISPLACE SIGNAL-PROCEED-CASE ((VARIABLES . SIGNAL-ARGS) &BODY CLAUSES)
+  "Signal a condition and provide a SELECTQ for proceed-types in case it is handled.
+The SIGNAL-ARGS are evaluated and passed to SIGNAL.  That is how the condition is signaled.
+The VARIABLES are bound to all but the first of the values returned by SIGNAL.
+ The first value is used to select one of the CLAUSES with a SELECTQ.
+ The selected clause is executed and its values are returned.
+SIGNAL is called with a :PROCEED-TYPES argument constructed by examining
+ the cars of the CLAUSES.
+If the condition is not handled, SIGNAL returns NIL.  If there is a clause
+for NIL, it is run.  Otherwise, SIGNAL-PROCEED-CASE returns NIL."
+  (LET ((PROCEED-TYPE-VARIABLE (GENSYM))
+	(PROCEED-TYPES-IN-SIGNAL-ARGS)
+	(PROCEED-TYPES
+	  (MAPCAN #'(LAMBDA (CLAUSE)
+		      (IF (SYMBOLP (CAR CLAUSE))
+			  (NCONS (CAR CLAUSE))
+			(COPYLIST (CAR CLAUSE))))
+		  CLAUSES)))
+    (DO ((SA (CDR SIGNAL-ARGS) (CDDR SA)))
+	((NULL SA))
+      (IF (EQUAL (CAR SA) '':PROCEED-TYPES)
+	  (SETQ PROCEED-TYPES-IN-SIGNAL-ARGS (CDR SA))))
+    `(MULTIPLE-VALUE-BIND (,PROCEED-TYPE-VARIABLE . ,VARIABLES)
+	 (SIGNAL (MAKE-CONDITION ,@SIGNAL-ARGS) ':PROCEED-TYPES
+		 ,(IF PROCEED-TYPES-IN-SIGNAL-ARGS
+		      (CAR PROCEED-TYPES-IN-SIGNAL-ARGS)
+		    `',(DELQ NIL PROCEED-TYPES)))
+       (SELECTQ ,PROCEED-TYPE-VARIABLE
+	 . ,CLAUSES))))
+
+(DEFMACRO FILE-RETRY-NEW-PATHNAME
+	  ((PATHNAME-VARIABLE . CONDITION-NAMES) &BODY BODY)
+  "Execute BODY with a handler for CONDITION-NAMES that reads a new pathname and tries again.
+If one of those conditions is signaled within BODY, 
+a new pathname is read and put in PATHNAME-VARIABLE,
+and then BODY is executed again.
+This is most useful when BODY is an OPEN, DELETEF, etc."
+  `(BLOCK FILE-RETRY-NEW-PN
+     (TAGBODY
+      RETRY
+	 (RETURN-FROM FILE-RETRY-NEW-PN
+	   (CATCH-CONTINUATION 'FILE-RETRY-NEW-PATHNAME
+	       #'(LAMBDA (NEW-PATHNAME) (SETQ ,PATHNAME-VARIABLE NEW-PATHNAME)
+			 (GO RETRY))
+	       NIL
+	     (CONDITION-RESUME `(,',CONDITION-NAMES :NEW-PATHNAME T
+				 ("Try again with a new pathname, not telling the callers.")
+				 FILE-RETRY-RESUME-HANDLER)
+	       (CONDITION-BIND ((,CONDITION-NAMES 'FILE-RETRY-HANDLER ,PATHNAME-VARIABLE))
+		 . ,BODY)))))))
+
+(DEFUN FILE-RETRY-RESUME-HANDLER (ERROR-OBJECT NEW-PATHNAME)
+  ERROR-OBJECT
+  (*THROW 'FILE-RETRY-NEW-PATHNAME NEW-PATHNAME))
+
+(DEFUN FILE-RETRY-HANDLER (ERROR-OBJECT PATHNAME)
+  (FORMAT QUERY-IO "~&~A" ERROR-OBJECT)
+  (SETQ PATHNAME (FS:PARSE-PATHNAME PATHNAME))
+  (LET* ((FS:*ALWAYS-MERGE-TYPE-AND-VERSION* T)
+	 (INPUT
+	   (PROMPT-AND-READ `(:PATHNAME-OR-END :DEFAULTS ,PATHNAME)
+			    "~&Pathname to use instead (default ~A) or ~C to enter debugger: "
+			    PATHNAME #\END)))
+    (IF (EQ INPUT #\END) NIL
+      (*THROW 'FILE-RETRY-NEW-PATHNAME INPUT))))
+
+(DEFMACRO FILE-RETRY-NEW-PATHNAME-IF
+	  (COND-FORM (PATHNAME-VARIABLE . CONDITION-NAMES) &BODY BODY)
+  "Execute BODY with a handler for CONDITION-NAMES that reads a new pathname and tries again.
+If COND-FORM evaluates non-NIL, then if one of those conditions is signaled within BODY, 
+a new pathname is read and put in PATHNAME-VARIABLE, and then BODY is executed again.
+This is most useful when BODY is an OPEN, DELETEF, etc."
+  `(BLOCK FILE-RETRY-NEW-PN
+     (TAGBODY
+      RETRY
+	 (RETURN-FROM FILE-RETRY-NEW-PN
+	   (CATCH-CONTINUATION 'FILE-RETRY-NEW-PATHNAME
+	       #'(LAMBDA (NEW-PATHNAME) (SETQ ,PATHNAME-VARIABLE NEW-PATHNAME)
+			 (GO RETRY))
+	       NIL
+	     (CONDITION-RESUME `(,',CONDITION-NAMES :NEW-PATHNAME T
+				 ("Try again with a new pathname, not telling the callers.")
+				 FILE-RETRY-RESUME-HANDLER)
+	       (CONDITION-BIND-IF ,COND-FORM
+				  ((,CONDITION-NAMES 'FILE-RETRY-HANDLER ,PATHNAME-VARIABLE))
+		 . ,BODY)))))))
+
+;; Called by old expansion of FILE-RETRY-NEW-PATHNAME.
+(DEFUN FILE-RETRY-READ-PATHNAME (PATHNAME)
+  (SETQ PATHNAME (FS:PARSE-PATHNAME PATHNAME))
+  (LET ((FS:*ALWAYS-MERGE-TYPE-AND-VERSION* T))
+    (PROMPT-AND-READ `(:PATHNAME :DEFAULTS ,PATHNAME)
+		     "~&Pathname to use instead: (default ~A) "
+		     PATHNAME)))
+
+(DEFMACRO-DISPLACE WITH-OPEN-FILE-RETRY ((STREAM (FILENAME . CONDITION-NAMES)
+						 . OPTIONS)
+					 &BODY BODY)
+  "Like WITH-OPEN-FILE, but provides a :NEW-PATHNAME resume handler around the OPEN.
+Thus, if the open fails, condition handlers or the user can specify a
+new pathname and retry the open."
+  `(WITH-OPEN-STREAM (,STREAM
+		      (FILE-RETRY-NEW-PATHNAME-IF T (,FILENAME . ,CONDITION-NAMES)
+			(OPEN ,FILENAME . ,OPTIONS)))
+     . ,BODY))
+
+(DEFMACRO-DISPLACE CATCH-ERROR (BODY &OPTIONAL (PRINTFLAG T))
+  "Execute body, trapping errors.  If no error, return the values of BODY.
+If there is an error, return first value NIL, second non-NIL.
+An error message is printed unless PRINTFLAG is specified and evaluates to NIL."
+  (LET ((TAG (GENSYM)))
+    `(CATCH-CONTINUATION ',TAG #'(LAMBDA () (VALUES NIL T)) NIL
+       (VALUES (CONDITION-BIND ((ERROR 'ERRSET-HANDLER ',TAG ,PRINTFLAG))
+		 ,BODY)))))
+
+(DEFF CASE 'SELECTQ)
+(DEFMACRO-DISPLACE SELECTQ (TEST-OBJECT &BODY CLAUSES)
+  "Execute the first clause that matches TEST-OBJECT.
+The first element of each clause is a match value or a list of match values.
+TEST-OBJECT is compared with the match values using EQ.
+When a match-value matches, the rest of that clause is executed
+and the value of the last thing in the clause is the value of the SELECTQ.
+T or :OTHERWISE as the first element of a clause matches any test object."
+  (LET (TEST-EXP COND-EXP)
+    (SETQ TEST-EXP
+	  ;; If TEST-OBJECT is an eval-at-load-time,
+	  ;; we will treat it as a random expression, which is right.
+	  (COND ((OR (ATOM TEST-OBJECT)
+		     (AND (MEMQ (CAR TEST-OBJECT) '(CAR CDR CAAR CADR CDAR CDDR))
+			  (ATOM (CADR TEST-OBJECT))))
+		 TEST-OBJECT)
+		(T '*SELECTQ-ITEM*)))
+    (SETQ COND-EXP
+	  (CONS 'COND
+		(MAPCAR #'(LAMBDA (CLAUSE)
+			    (MACRO-TYPE-CHECK-WARNING 'SELECTQ (CAR CLAUSE))
+			    (COND ((MEMQ (CAR CLAUSE) '(OTHERWISE :OTHERWISE T))
+				   (LIST* T NIL (CDR CLAUSE)))
+				  ((ATOM (CAR CLAUSE))
+				   `((EQ ,TEST-EXP ',(CAR CLAUSE)) NIL . ,(CDR CLAUSE)))
+				  (T
+				   `((MEMQ ,TEST-EXP ',(CAR CLAUSE)) NIL . ,(CDR CLAUSE)))))
+			CLAUSES)))
+    (DEAD-CLAUSES-WARNING (CDR COND-EXP) 'SELECTQ)
+    (COND ((EQ TEST-EXP TEST-OBJECT) COND-EXP)
+	  (T
+	   `(LET ((*SELECTQ-ITEM* ,TEST-OBJECT))
+	      ,COND-EXP)))))
+
+(DEFUN DEAD-CLAUSES-WARNING (COND-CLAUSES FUNCTION-NAME)
+  "Given a list of COND-clauses, warn if any but the last starts with T.
+FUNCTION-NAME (usually a macro name) is used in the warning.
+The warning is made iff we are now accumulating warnings for an object."
+  (DO ((CLAUSES COND-CLAUSES (CDR CLAUSES)))
+      ((NULL (CDR CLAUSES)))
+    (AND (EQ (CAAR CLAUSES) T)
+	 OBJECT-WARNINGS-OBJECT-NAME
+	 (RETURN
+	   (COMPILER:WARN 'DEAD-CODE ':IMPLAUSIBLE
+			  "Unreachable clauses following otherwise-clause in ~S." FUNCTION-NAME)))))
+
+;;;This should be sufficient for the moment:
+(DEFF CASEQ 'SELECTQ)
+
+(DEFMACRO-DISPLACE SELECT-MEMQ (TEST-LIST &BODY CLAUSES)
+  "Execute the first clause that matches some element of TEST-LIST.
+The first element of each clause is a match value or a list of match values.
+Each match value is compare with each element of TEST-LIST, using EQ.
+When a match-value matches, the rest of that clause is executed
+and the value of the last thing in the clause is the value of the SELECT-MEMQ.
+T or :OTHERWISE as the first element of a clause matches any test object."
+  (LET (TEST-EXP COND-EXP)
+    (SETQ TEST-EXP
+	  ;; If TEST-LIST is an eval-at-load-time,
+	  ;; we will treat it as a random expression, which is right.
+	  (COND ((OR (ATOM TEST-LIST)
+		     (AND (MEMQ (CAR TEST-LIST) '(CAR CDR CAAR CADR CDAR CDDR))
+			  (ATOM (CADR TEST-LIST))))
+		 TEST-LIST)
+		(T '*SELECTQ-ITEM*)))
+    (SETQ COND-EXP
+	  (CONS 'COND
+		(MAPCAR #'(LAMBDA (CLAUSE)
+			    (MACRO-TYPE-CHECK-WARNING 'SELECT-MEMQ (CAR CLAUSE))
+			    (COND ((MEMQ (CAR CLAUSE) '(OTHERWISE :OTHERWISE T))
+				   (LIST* T NIL (CDR CLAUSE)))
+				  ((ATOM (CAR CLAUSE))
+				   `((MEMQ ',(CAR CLAUSE) ,TEST-EXP) NIL . ,(CDR CLAUSE)))
+				  (T
+				   `((OR . ,(MAPCAR #'(LAMBDA (MATCH-VALUE)
+							`(MEMQ ',MATCH-VALUE ,TEST-EXP))
+						    (CAR CLAUSE)))
+				     NIL . ,(CDR CLAUSE)))))
+			CLAUSES)))
+    (DEAD-CLAUSES-WARNING (CDR COND-EXP) 'SELECT-MEMQ)
+    (COND ((EQ TEST-EXP TEST-LIST) COND-EXP)
+	  (T
+	   `(LET ((*SELECTQ-ITEM* ,TEST-LIST))
+	      ,COND-EXP)))))
+
+(DEFMACRO-DISPLACE SELECT (TEST-OBJECT &BODY CLAUSES)
+  "Execute the first clause that matches TEST-OBJECT.
+The first element of each clause is a match value expression or a list of such.
+TEST-OBJECT is compared with the VALUES of the match expressions, using EQ.
+When a match-value matches, the rest of that clause is executed
+and the value of the last thing in the clause is the value of the SELECTQ.
+T or :OTHERWISE as the first element of a clause matches any test object.
+This is a special exception, in that :OTHERWISE is not evaluated."
+  (LET (TEST-EXP COND-EXP)
+    (SETQ TEST-EXP
+	  ;; If TEST-OBJECT is an eval-at-load-time,
+	  ;; we will treat it as a random expression, which is right.
+	  (COND ((OR (ATOM TEST-OBJECT)
+		     (AND (MEMQ (CAR TEST-OBJECT) '(CAR CDR CAAR CADR CDAR CDDR))
+			  (ATOM (CADR TEST-OBJECT))))
+		 TEST-OBJECT)
+		(T '*SELECTQ-ITEM*)))
+    (SETQ COND-EXP
+	  (CONS 'COND
+		(MAPCAR #'(LAMBDA (CLAUSE)
+			    (MACRO-TYPE-CHECK-WARNING 'SELECT (CAR CLAUSE))
+			    (COND ((MEMQ (CAR CLAUSE) '(OTHERWISE :OTHERWISE T))
+				   (LIST* T NIL (CDR CLAUSE)))
+				  ((ATOM (CAR CLAUSE))
+				   `((EQ ,TEST-EXP ,(CAR CLAUSE)) NIL . ,(CDR CLAUSE)))
+				  (T
+				   `((OR . ,(MAPCAR #'(LAMBDA (FORM)
+							`(EQ ,TEST-EXP ,FORM))
+					 (CAR CLAUSE)))
+				     NIL . ,(CDR CLAUSE)))))
+			CLAUSES)))
+    (DEAD-CLAUSES-WARNING (CDR COND-EXP) 'SELECT)
+    (COND ((EQ TEST-EXP TEST-OBJECT) COND-EXP)
+	  (T
+	   `(LET ((*SELECTQ-ITEM* ,TEST-OBJECT))
+	      ,COND-EXP)))))
+
+(DEFMACRO-DISPLACE SELECTOR (TEST-OBJECT TEST-FUNCTION &BODY CLAUSES)
+  "Execute the first clause that matches TEST-OBJECT.
+The first element of each clause is a match value expression or a list of such.
+TEST-OBJECT is compared with the VALUES of the match expressions, using TEST-FUNCTION.
+When a match-value matches, the rest of that clause is executed
+and the value of the last thing in the clause is the value of the SELECTQ.
+T or :OTHERWISE as the first element of a clause matches any test object.
+This is a special exception, in that :OTHERWISE is not evaluated."
+  (LET (TEST-EXP COND-EXP)
+    (SETQ TEST-EXP
+	  ;; If TEST-OBJECT is an eval-at-load-time,
+	  ;; we will treat it as a random expression, which is right.
+	  (COND ((OR (ATOM TEST-OBJECT)
+		     (AND (MEMQ (CAR TEST-OBJECT) '(CAR CDR CAAR CADR CDAR CDDR))
+			  (ATOM (CADR TEST-OBJECT))))
+		 TEST-OBJECT)
+		(T '*SELECTQ-ITEM*)))
+    (SETQ COND-EXP
+	  (CONS 'COND
+		(MAPCAR #'(LAMBDA (CLAUSE)
+			    (MACRO-TYPE-CHECK-WARNING 'SELECTOR (CAR CLAUSE))
+			    (COND ((MEMQ (CAR CLAUSE) '(OTHERWISE :OTHERWISE T))
+				   (LIST* T NIL (CDR CLAUSE)))
+				  ((ATOM (CAR CLAUSE))
+				   `((,TEST-FUNCTION ,TEST-EXP ,(CAR CLAUSE))
+				     NIL . ,(CDR CLAUSE)))
+				  (T
+				   `((OR . ,(MAPCAR #'(LAMBDA (FORM)
+							`(,TEST-FUNCTION ,TEST-EXP ,FORM))
+						    (CAR CLAUSE)))
+				     NIL . ,(CDR CLAUSE)))))
+			CLAUSES)))
+    (DEAD-CLAUSES-WARNING (CDR COND-EXP) 'SELECTOR)
+    (COND ((EQ TEST-EXP TEST-OBJECT) COND-EXP)
+	  (T
+	   `(LET ((*SELECTQ-ITEM* ,TEST-OBJECT))
+	      ,COND-EXP)))))
+
+;EVENTUALLY THE MICRO COMPILER SHOULD BE AWARE OF THIS
+(DEFMACRO-DISPLACE DISPATCH (PPSS WORD &BODY CLAUSES)
+  "Extract the byte PPSS from WORD and execute a clause selected by the value.
+The first element of each clause is a value to compare with the byte value,
+or a list of byte values.  These byte values are evaluated!.
+T or :OTHERWISE as the first element of a clause matches any test object.
+This is a special exception, in that :OTHERWISE is not evaluated."
+  (LET ((FOO (GENSYM)))
+    `(LET ((,FOO (LDB ,PPSS ,WORD)))
+       (COND ,@(MAPCAR #'(LAMBDA (CLAUSE)
+			   (MACRO-TYPE-CHECK-WARNING 'DISPATCH (CAR CLAUSE))
+			   `(,(COND ((MEMQ (CAR CLAUSE) '(OTHERWISE :OTHERWISE T))
+				     'T)
+				    ((ATOM (CAR CLAUSE))
+				     `(= ,FOO ,(CAR CLAUSE)))
+				    (T
+				     `(OR ,@(MAPCAR #'(LAMBDA (ITEM)
+							`(= ,FOO ,ITEM))
+						    (CAR CLAUSE)))))
+			     NIL . ,(CDR CLAUSE)))
+		       CLAUSES)))))
+
+(DEFMACRO-DISPLACE EVERY (LIST PRED &OPTIONAL (STEP ''CDR))
+  "T if every element of LIST satisfies PRED.
+If STEP is specified, it is a function to move down the list
+/(default is CDR.)."
+  (LET ((TAIL (GENSYM)))
+    (ONCE-ONLY (PRED STEP)
+      `(DO ((,TAIL ,LIST (FUNCALL ,STEP ,TAIL)))
+	   ((NULL ,TAIL) T)
+	 (OR (FUNCALL ,PRED (CAR ,TAIL)) (RETURN NIL))))))
+
+(DEFMACRO-DISPLACE SOME (LIST PRED &OPTIONAL (STEP ''CDR))
+  "Non-NIL if some element of LIST satisfies PRED.
+If STEP is specified, it is a function to move down the list
+/(default is CDR.).  The actual value is the tail of the list
+whose car is the first element that satisfies PRED."
+  (LET ((TAIL (GENSYM)))
+    (ONCE-ONLY (PRED STEP)
+      `(DO ((,TAIL ,LIST (FUNCALL ,STEP ,TAIL)))
+	   ((NULL ,TAIL) NIL)
+	 (AND (FUNCALL ,PRED (CAR ,TAIL)) (RETURN ,TAIL))))))
+
+(DEFMACRO-DISPLACE LET-GLOBALLY-IF (COND-FORM VARLIST &BODY BODY)
+  "Like LET-IF, but sets the variables on entry and sets them back on exit.
+No new binding is created.  As a result, the changed values are visible
+in other stack groups while this frame is dynamically active."
+  (LET ((VARS (MAPCAR '(LAMBDA (V) (COND ((ATOM V) V) (T (CAR V)))) VARLIST))
+	(VALS (MAPCAR '(LAMBDA (V) (COND ((ATOM V) NIL) (T (CADR V)))) VARLIST))
+	(GENVARS (MAPCAR '(LAMBDA (IGNORE) (GENSYM)) VARLIST))
+	(CONDVAR (GENSYM)))
+    `(LET ((,CONDVAR ,COND-FORM) . ,GENVARS)
+       (UNWIND-PROTECT (PROGN (WHEN ,CONDVAR
+				,@(MAPCAR #'(LAMBDA (GENVAR VAR)
+					      `(COPY-VALUE (LOCF ,GENVAR) (LOCF ,VAR)))
+					  GENVARS VARS)
+				(SETQ . ,(MAPCAN 'LIST VARS VALS)))
+			      . ,BODY)
+		       (WHEN ,CONDVAR
+			 . ,(MAPCAR #'(LAMBDA (VAR GENVAR)
+				      `(COPY-VALUE (LOCF ,VAR) (LOCF ,GENVAR)))
+				  VARS GENVARS))))))
+
+(DEFMACRO-DISPLACE LET-GLOBALLY (VARLIST &BODY BODY)
+  "Like LET, but sets the variables on entry and sets them back on exit.
+No new binding is created.  As a result, the changed values are visible
+in other stack groups while this frame is dynamically active."
+  (LET ((VARS (MAPCAR '(LAMBDA (V) (COND ((ATOM V) V) (T (CAR V)))) VARLIST))
+	(VALS (MAPCAR '(LAMBDA (V) (COND ((ATOM V) NIL) (T (CADR V)))) VARLIST))
+	(GENVARS (MAPCAR '(LAMBDA (IGNORE) (GENSYM)) VARLIST)))
+     `(LET ,GENVARS
+        (UNWIND-PROTECT (PROGN ,@(MAPCAR #'(LAMBDA (GENVAR VAR)
+					     `(COPY-VALUE (LOCF ,GENVAR) (LOCF ,VAR)))
+					 GENVARS VARS)
+			       (SETQ . ,(MAPCAN 'LIST VARS VALS))
+			       . ,BODY)
+			. ,(MAPCAR #'(LAMBDA (VAR GENVAR)
+				       `(COPY-VALUE (LOCF ,VAR) (LOCF ,GENVAR)))
+				   VARS GENVARS)))))
+
+(DEFSUBST COPY-VALUE (TO-CELL FROM-CELL)
+  "Copy whatever value is in FROM-CELL into TO-CELL."
+  (%BLT-TYPED FROM-CELL TO-CELL 1 0))
+
+;;; DEFUNP is like DEFUN but provides an implicit PROG.
+;;; However, the value on falling off the end is the last thing in the body.
+
+(DEFMACRO DEFUNP (FUNCTION-SPEC LAMBDA-LIST &REST BODY)
+  "Like DEFUN, but provides an implicit PROG of no variables around the BODY.
+So you can use RETURN to return from the function, and use GO.
+There is one difference from an ordinary PROG:
+the value of the last element of the BODY is returned.
+This is so even if it is an atom.  This is like ordinary DEFUNs."
+  (LET ((DEFAULT-CONS-AREA WORKING-STORAGE-AREA)
+	(LAST NIL)
+	DECLARES DOC)
+    (SETQ BODY (APPEND BODY NIL))
+    (SETQ LAST (LAST BODY))
+    (SETF (VALUES BODY DECLARES DOC)
+	  (EXTRACT-DECLARATIONS BODY NIL T))
+    (COND ((OR (ATOM (CAR LAST)) (NOT (EQ 'RETURN (CAAR LAST))))
+	   (RPLACA LAST (LIST 'RETURN (CAR LAST)))))
+    `(DEFUN ,FUNCTION-SPEC ,LAMBDA-LIST
+       ,DOC
+       (DECLARE . ,DECLARES)
+       (PROG () . ,BODY))))
+
+(DEFMACRO-DISPLACE CATCH-ALL BODY
+  "Catch all throws to all tags within the body."
+  `(*CATCH NIL (PROGN . ,BODY)))
+
+(DEFMACRO-DISPLACE MULTIPLE-VALUE-CALL (FUNCTION &REST FORMS)
+  "Call FUNCTION like FUNCALL, but use all values returned by each of FORMS.
+FUNCALL would use only the first value returned by each of them.
+This conses, alas."
+  `(CALL ,FUNCTION
+	 . ,(MAPCAN #'(LAMBDA (FORM)
+			`(':SPREAD (MULTIPLE-VALUE-LIST ,FORM)))
+		    FORMS)))
+
+;;; (IF test then-action else-action)
+(DEFMACRO-DISPLACE IF (TEST THEN &BODY ELSES)
+  "Execute THEN if TEST comes out non-NIL; otherwise, execute the ELSES."
+  (COND ((NULL TEST) (AND ELSES `(PROGN . ,ELSES)))	;macros can generate this case...
+	((EQ TEST T) THEN)			;and this one (avoids compiler error msg)
+	(T `(COND (,TEST ,THEN) (T . ,(OR ELSES '(NIL)))))))
+
+;;; (WHEN pred {form}*)
+(DEFMACRO WHEN (PRED &BODY BODY)
+	 "(WHEN pred form1 from2 ...) ==> (AND pred (PROGN form1 form2 ...))
+WHEN first evaluates PRED.  If the result is (), WHEN returns ().
+Otherwise, the BODY is executed and its last expression's value returned."
+  `(AND ,PRED (PROGN ,@BODY)))
+
+;;; (UNLESS pred {form}*)
+(DEFMACRO UNLESS (PRED &BODY BODY)
+  "(UNLESS pred form1 form2 ...) ==> (IF pred () form1 form2 ...)
+UNLESS first evaluates PRED.  If the result is non-(), UNLESS returns ().
+Otherwise, the BODY executed and its last expression's value is returned."
+  `(IF ,PRED () ,@BODY))
+
+;;; (CHECK-ARG <VARIABLE> <PREDICATE> <MESSAGE>), for example:
+;;; (CHECK-ARG STRING STRINGP "a string") signals an error if STRING is not a string.
+;;; The error signals condition :WRONG-TYPE-ARGUMENT with arguments
+;;; which are STRINGP (the predicate), the value of STRING (the losing value),
+;;; the name of the argument (STRING), and the string "a string".
+;;; If you try to proceed and do not supply a valid string to replace it,
+;;; the error happens again.
+;;; The second form may be the name of a predicate function, or it may be a full
+;;; predicate form, as in:
+;;; (CHECK-ARG A (AND (NUMBERP A) (< A 10.) (> A 0.)) "a number from one to ten" ONE-TO-TEN)
+;;; ONE-TO-TEN is a symbol for the "type" which the argument failed to be.
+;;; It is used instead of the second argument (the predicate) when signalling the error,
+;;; since the second argument is not a suitable symbol.
+;;; The value returned by CHECK-ARG is the argument's (original or respecified) value.
+;;; In general, the condition :WRONG-TYPE-ARGUMENT is signalled with arguments
+;;;    (1) A symbol for the desired type (NIL if not supplied)
+;;;    (2) The bad value
+;;;    (3) The name of the argument
+;;;    (4) A string for the desired type.
+(DEFMACRO-DISPLACE CHECK-ARG (ARG-NAME PREDICATE TYPE-STRING &OPTIONAL ERROR-TYPE-NAME)
+  "Generate error if the value of ARG-NAME doesn't satisfy PREDICATE.
+PREDICATE is a function name (a symbol) or an expression to compute.
+TYPE-STRING is a string to use in the error message, such as /"a list/".
+ERROR-TYPE-NAME is a keyword that tells condition handlers what type was desired."
+    (AND (NULL ERROR-TYPE-NAME)
+	 (SYMBOLP PREDICATE)
+	 (SETQ ERROR-TYPE-NAME PREDICATE))
+    `(DO () (,(COND ((SYMBOLP PREDICATE)
+                     `(,PREDICATE ,ARG-NAME))
+                    (T PREDICATE))
+             ,ARG-NAME)
+	 (SETQ ,ARG-NAME
+	       (CERROR '(:ARGUMENT-VALUE) NIL 'WRONG-TYPE-ARGUMENT
+		       "The argument ~2G~A was ~1G~S, which is not ~3G~A."
+		       ',ERROR-TYPE-NAME ,ARG-NAME ',ARG-NAME ',TYPE-STRING))))
+
+(DEFF CHECK-TYPE 'CHECK-ARG-TYPE)
+;;; (CHECK-ARG-TYPE X FIXNUM) signals an error if (TYPEP X 'FIXNUM) is not true.
+(DEFMACRO CHECK-ARG-TYPE (ARG-NAME TYPE &OPTIONAL TYPE-STRING)
+  "Generate an error unless (TYPEP ARG-NAME 'TYPE).
+TYPE-STRING is a string to use in the error message, such as /"a list/".
+If you omit it, it will be computed from TYPE's pname."
+  (IF (NULL TYPE-STRING)
+      (SETQ TYPE-STRING (TYPE-PRETTY-NAME TYPE)))
+  `(DO () ((TYPEP ,ARG-NAME ',TYPE))
+     (SETQ ,ARG-NAME
+	   (CERROR '(:ARGUMENT-VALUE) NIL 'WRONG-TYPE-ARGUMENT
+		   "The argument ~2G~A was ~1G~S, which is not ~3G~A."
+		   ',TYPE ,ARG-NAME ',ARG-NAME ',TYPE-STRING))))
+
+(DEFMACRO ETYPECASE (OBJECT &BODY CLAUSES)
+  "Execute the first clause whose type specifier OBJECT fits.
+The first element of each clause is a type specifier.
+It is used as the second argument to TYPEP to test the type of OBJECT.
+If the result is T, the rest of that clause is excuted and the values
+ of the last form in it are the values of the ETYPECASE form.
+If no clause fits, an uncorrectable error is signaled."
+  (LET ((SAVE-OBJECT OBJECT))
+    (ONCE-ONLY (OBJECT)
+      `(COND
+	 ,@(LOOP FOR (TYPE . CONSEQUENTS) IN CLAUSES
+		 COLLECT `(,(PROGN
+			      (MACRO-TYPE-CHECK-WARNING 'TYPECASE TYPE)
+			      (COND ;; This clause will eventually be subsumed
+				    ;; by the definition of (OR ...) as a type,
+				    ;; but for now it is essential.
+				    ((AND (LISTP TYPE) (EQ (CAR TYPE) 'OR))
+				     `(OR . ,(LOOP FOR XTYPE IN (CDR TYPE)
+						   COLLECT `(TYPEP ,OBJECT ',XTYPE))))
+				    (T
+				     `(TYPEP ,OBJECT ',TYPE))))
+			   NIL . ,CONSEQUENTS))
+	 (T (FERROR NIL
+		    "The argument ~2G~A was ~1G~S, which is not ~3G~A."
+		    '(OR . ,(MAPCAR 'CAR CLAUSES))
+		    ,OBJECT ',SAVE-OBJECT
+		    ,(TYPE-PRETTY-NAME `(OR . ,(MAPCAR 'CAR CLAUSES)))))))))
+
+(DEFMACRO CTYPECASE (OBJECT &BODY CLAUSES)
+  "Execute the first clause whose type specifier OBJECT fits.
+The first element of each clause is a type specifier.
+It is used as the second argument to TYPEP to test the type of OBJECT.
+If the result is T, the rest of that clause is excuted and the values
+ of the last form in it are the values of the CTYPECASE form.
+If no clause fits, a correctable error is signaled.
+The user can correct with a new value for OBJECT."
+  (LET ((SAVE-OBJECT OBJECT))
+    `(BLOCK CTYPECASE-LOOP
+       (TAGBODY
+      CTYPECASE-LOOP
+	 (RETURN-FROM CTYPECASE-LOOP
+	   ,(ONCE-ONLY (OBJECT)
+	      `(COND
+		 ,@(LOOP FOR (TYPE . CONSEQUENTS) IN CLAUSES
+			 COLLECT `(,(PROGN
+				      (MACRO-TYPE-CHECK-WARNING 'TYPECASE TYPE)
+				      (COND ;; This clause will eventually be subsumed
+					;; by the definition of (OR ...) as a type,
+					;; but for now it is essential.
+					((AND (LISTP TYPE) (EQ (CAR TYPE) 'OR))
+					 `(OR . ,(LOOP FOR XTYPE IN (CDR TYPE)
+						       COLLECT `(TYPEP ,OBJECT ',XTYPE))))
+					(T
+					 `(TYPEP ,OBJECT ',TYPE))))
+				   NIL . ,CONSEQUENTS))
+		 (T (SETF ,SAVE-OBJECT
+			  (CERROR '(:ARGUMENT-VALUE) NIL 'WRONG-TYPE-ARGUMENT
+				  "The argument ~2G~A was ~1G~S, which is not ~3G~A."
+				  '(OR . ,(MAPCAR 'CAR CLAUSES))
+				  ,OBJECT ',SAVE-OBJECT
+				  ,(TYPE-PRETTY-NAME `(OR . ,(MAPCAR 'CAR CLAUSES)))))
+		    (GO CTYPECASE-LOOP)))))))))
+
+(DEFMACRO-DISPLACE CCASE (TEST-OBJECT &BODY CLAUSES)
+  "Execute the first clause that matches TEST-OBJECT.
+The first element of each clause is a match value or a list of match values.
+TEST-OBJECT is compared with the match values using EQ.
+When a match-value matches, the rest of that clause is executed
+and the value of the last thing in the clause is the value of the CCASE.
+If no clause matches, a correctable error is signaled.
+The user can correct with a new value for TEST-OBJECT."
+  (LET (TEST-EXP COND-EXP TYPE-FOR-ERROR)
+    (SETQ TEST-EXP
+	  ;; If TEST-OBJECT is an eval-at-load-time,
+	  ;; we will treat it as a random expression, which is right.
+	  (COND ((OR (ATOM TEST-OBJECT)
+		     (AND (MEMQ (CAR TEST-OBJECT) '(CAR CDR CAAR CADR CDAR CDDR))
+			  (ATOM (CADR TEST-OBJECT))))
+		 TEST-OBJECT)
+		(T '*SELECTQ-ITEM*)))
+    (SETQ TYPE-FOR-ERROR
+	  `(MEMBER . ,(MAPCAN #'(LAMBDA (CLAUSE)
+				  (LET ((MATCH (CAR CLAUSE)))
+				    (IF (NLISTP MATCH) (LIST MATCH)
+				      (COPYLIST MATCH))))
+			      CLAUSES)))
+    (SETQ COND-EXP
+	  `(COND
+	     ,@(MAPCAR #'(LAMBDA (CLAUSE)
+			   (MACRO-TYPE-CHECK-WARNING 'CCASE (CAR CLAUSE))
+			   (COND ((ATOM (CAR CLAUSE))
+				  `((EQ ,TEST-EXP ',(CAR CLAUSE)) NIL . ,(CDR CLAUSE)))
+				 (T
+				  `((MEMQ ,TEST-EXP ',(CAR CLAUSE)) NIL . ,(CDR CLAUSE)))))
+		       CLAUSES)
+	     (T (SETF ,TEST-OBJECT
+		      (CERROR '(:ARGUMENT-VALUE) NIL 'WRONG-TYPE-ARGUMENT
+			      "The argument ~2G~A was ~1G~S, which is not ~3G~A."
+			      ',TYPE-FOR-ERROR
+			      ,TEST-EXP ',TEST-OBJECT
+			      ,(TYPE-PRETTY-NAME TYPE-FOR-ERROR)))
+		(GO CCASE-LOOP))))
+    (DEAD-CLAUSES-WARNING (CDR COND-EXP) 'CCASE)
+    (UNLESS (EQ TEST-EXP TEST-OBJECT)
+      (SETQ COND-EXP
+	    `(LET ((*SELECTQ-ITEM* ,TEST-OBJECT))
+	       ,COND-EXP)))
+    `(BLOCK CCASE-LOOP
+       (TAGBODY
+      CCASE-LOOP
+         (RETURN-FROM CCASE-LOOP
+	   ,COND-EXP)))))
+
+(DEFMACRO-DISPLACE ECASE (TEST-OBJECT &BODY CLAUSES)
+  "Execute the first clause that matches TEST-OBJECT.
+The first element of each clause is a match value or a list of match values.
+TEST-OBJECT is compared with the match values using EQ.
+When a match-value matches, the rest of that clause is executed
+and the value of the last thing in the clause is the value of the ECASE.
+If no clause matches, an uncorrectable error is signaled."
+  (LET (TEST-EXP COND-EXP TYPE-FOR-ERROR)
+    (SETQ TEST-EXP
+	  ;; If TEST-OBJECT is an eval-at-load-time,
+	  ;; we will treat it as a random expression, which is right.
+	  (COND ((OR (ATOM TEST-OBJECT)
+		     (AND (MEMQ (CAR TEST-OBJECT) '(CAR CDR CAAR CADR CDAR CDDR))
+			  (ATOM (CADR TEST-OBJECT))))
+		 TEST-OBJECT)
+		(T '*SELECTQ-ITEM*)))
+    (SETQ TYPE-FOR-ERROR
+	  `(MEMBER . ,(MAPCAN #'(LAMBDA (CLAUSE)
+				  (LET ((MATCH (CAR CLAUSE)))
+				    (IF (NLISTP MATCH) (LIST MATCH)
+				      (COPYLIST MATCH))))
+			      CLAUSES)))
+    (SETQ COND-EXP
+	  `(COND
+	     ,@(MAPCAR #'(LAMBDA (CLAUSE)
+			   (MACRO-TYPE-CHECK-WARNING 'ECASE (CAR CLAUSE))
+			   (COND ((ATOM (CAR CLAUSE))
+				  `((EQ ,TEST-EXP ',(CAR CLAUSE)) NIL . ,(CDR CLAUSE)))
+				 (T
+				  `((MEMQ ,TEST-EXP ',(CAR CLAUSE)) NIL . ,(CDR CLAUSE)))))
+		       CLAUSES)
+	     (T (FERROR NIL
+			"The argument ~2G~A was ~1G~S, which is not ~3G~A."
+			',TYPE-FOR-ERROR
+			,TEST-EXP ',TEST-OBJECT
+			,(TYPE-PRETTY-NAME TYPE-FOR-ERROR)))))
+    (DEAD-CLAUSES-WARNING (CDR COND-EXP) 'ECASE)
+    (UNLESS (EQ TEST-EXP TEST-OBJECT)
+      (SETQ COND-EXP
+	    `(LET ((*SELECTQ-ITEM* ,TEST-OBJECT))
+	       ,COND-EXP)))
+    COND-EXP))
+
+(DEFMACRO ASSERT (TEST-FORM &REST PLACES-STRING-AND-ARGS)
+  "Signals an error if TEST-FORM evals to NIL.
+PLACES are SETF'able things that the user should be able to change when proceeding.
+Typically they are things used in TEST-FORM.
+Each one becomes a proceed-type which means to set that place.
+STRING and ARGS are passed to FORMAT to make the error message.
+STRING is not evaluated!  The presence of an actual string among the args
+is used to mark the boundary between the PLACES and the ARGS!
+Don't blame me for this terribly calling convention, blame Common Lisp."
+  (DECLARE (ARGLIST TEST-FORM &REST PLACES &OPTIONAL STRING &REST ARGS))
+  (LET (PLACES STRING ARGS)
+    (DO ((TAIL PLACES-STRING-AND-ARGS (CDR TAIL)))
+	((OR (NULL TAIL)
+	     (STRINGP (CAR TAIL)))
+	 (SETQ PLACES (LDIFF PLACES-STRING-AND-ARGS TAIL)
+	       STRING (OR (CAR TAIL) "Assertion failed.")
+	       ARGS (CDR TAIL))))
+    `(DO () (,TEST-FORM)
+       (SIGNAL-PROCEED-CASE ((VALUE) 'EH:FAILED-ASSERTION
+				     ':PLACES ',PLACES
+				     ':FORMAT-STRING ,STRING
+				     ':FORMAT-ARGS (LIST . ,ARGS))
+	 . ,(MAPCAR #'(LAMBDA (PLACE)
+			`((,PLACE) (SETF ,PLACE VALUE)))
+		    PLACES)))))
+      
+;;; (KEYWORD-EXTRACT <keylist> KEY (FOO (UGH BLETCH) BAR) (FLAG FALG) <otherwise> ...)
+;;; parses a list of alternating keywords and values, <keylist>.
+;;; The symbol KEY is bound internally to remaineder of the keyword list.
+;;; The keywords recognized are :FOO, :BAR and UGH;  whatever follows
+;;; the keyword UGH is put in the variable BLETCH, whatever follows the
+;;; keyword :FOO is put in the variable FOO, and similar for BAR.
+;;; The flags are :FLAG and :FALG;  if :FLAG is seen, FLAG is set to T.
+;;; <otherwise> is one or more SELECTQ clauses which can be used
+;;; to recognize whatever else you like, in nonstandard format.
+;;; To gobble the next thing from the <keylist>, say (CAR (SETQ KEY (CDR KEY))).
+(DEFMACRO-DISPLACE KEYWORD-EXTRACT (KEYLIST KEYVAR KEYWORDS &OPTIONAL FLAGS &BODY OTHERWISE)
+  "Look through KEYLIST for keywords and set some variables and flags.
+KEYLIST's value should be a list of keywords, some followed by values.
+KEYWORDS describes the keywords to check for.  Each element describes one keyword.
+An element can be a list of a keyword and the variable to store its value in,
+or just the variable to store in (the keyword has the same pname, in the keyword package).
+FLAGS is like KEYWORDS except that the flags are not followed by values;
+the variable is set to T if the flag is present at all.
+
+KEYVAR is a variable used internally by the generated code, to hold
+the remaining part of the list.
+OTHERWISE is some SELECTQ clauses that will be executed if an element of KEYLIST
+is not a recognized flag or keyword.  It can refer to KEYVAR."
+  `(DO ((,KEYVAR ,KEYLIST (CDR ,KEYVAR)))
+       ((NULL ,KEYVAR))
+     (SELECTQ (CAR ,KEYVAR)
+       ,@(MAPCAR #'(LAMBDA (KEYWORD)
+		     (COND ((ATOM KEYWORD)
+			    `(,(INTERN (STRING KEYWORD) "USER")
+			      (SETQ ,KEYWORD (CAR (SETQ ,KEYVAR (CDR ,KEYVAR))))))
+			   (T `(,(CAR KEYWORD)
+				(SETQ ,(CADR KEYWORD)
+				      (CAR (SETQ ,KEYVAR (CDR ,KEYVAR))))))))
+		 KEYWORDS)
+       ,@(MAPCAR #'(LAMBDA (KEYWORD)
+		     (COND ((ATOM KEYWORD)
+			    `(,(INTERN (STRING KEYWORD) "USER")
+			      (SETQ ,KEYWORD T)))
+			   (T `(,(CAR KEYWORD)
+				(SETQ ,(CADR KEYWORD) T)))))
+		 FLAGS)
+       ,@OTHERWISE
+       ,@(IF (NOT (MEMQ (CAAR (LAST OTHERWISE)) '(T OTHERWISE)))
+	     `((OTHERWISE
+		 (FERROR NIL "~S is not a recognized keyword" (CAR ,KEYVAR))))))))
+
+(DEFMACRO-DISPLACE PSETQ (&REST REST)
+  "Like SETQ, but no variable value is changed until all the values are computed.
+The returned value is undefined."
+  ;; To improve the efficiency of do-stepping, by using the SETE-CDR, SETE-CDDR,
+  ;; SETE-1+, and SETE-1- instructions, we try to do such operations with SETQ
+  ;; rather than PSETQ.  To avoid having to do full code analysis, never rearrange
+  ;; the order of any code when doing this, and only do it when there are no
+  ;; variable name duplications.
+  (LOOP FOR (VAL VAR) ON (REVERSE REST) BY 'CDDR
+	WITH SETQS = NIL WITH PSETQS = NIL
+	DO (IF (AND (NULL PSETQS)
+		    (CONSP VAL)
+		    (MEMQ (CAR VAL) '(1+ 1- CDR CDDR))
+		    (EQ (CADR VAL) VAR)
+		    (NOT (MEMQ VAR SETQS)))
+	       (SETQ SETQS (CONS VAR (CONS VAL SETQS)))
+	       (SETQ PSETQS (CONS VAR (CONS VAL PSETQS))))
+	FINALLY
+	  (SETQ PSETQS (PSETQ-PROG1IFY PSETQS))
+	  (RETURN (COND ((NULL SETQS) PSETQS)
+			((NULL PSETQS) (CONS 'SETQ SETQS))
+			(T `(PROGN ,PSETQS (SETQ . ,SETQS)))))))
+
+(DEFUN PSETQ-PROG1IFY (X)
+  (COND ((NULL X) NIL)
+	((NULL (CDDR X)) (CONS 'SETQ X))
+	(T `(SETQ ,(CAR X) (PROG1 ,(CADR X) ,(PSETQ-PROG1IFY (CDDR X)))))))
+
+;;; (LOCAL-DECLARE ((SPECIAL FOO) (UNSPECIAL BAR)) code)
+;;; declares FOO and BAR locally within <code>.
+;;; LOCAL-DECLARE can also be used by macros to pass information down
+;;; to other macros that expand inside the code they produce.
+;;; The list of declarations (in this case, ((MUMBLE FOO BAR))) is appended
+;;; onto the front of LOCAL-DECLARATIONS, which can be searched by
+;;; macros expending inside of <code>.
+(DEFMACRO-DISPLACE LOCAL-DECLARE (DECLARATIONS &BODY BODY)
+  "Evaluates or compiles BODY with DECLARATIONS in effect.
+DECLARATIONS is a list of declarations, each of which is a list.
+Declarations include (SPECIAL variables...), (ARGLIST argument-names...),
+/(RETURN-LIST value-names...), (:SELF-FLAVOR flavorname)."
+  `(COMPILER-LET ((LOCAL-DECLARATIONS (APPEND ',DECLARATIONS LOCAL-DECLARATIONS)))
+     . ,BODY))
+
+(DEFMACRO-DISPLACE INHIBIT-STYLE-WARNINGS (BODY)
+  "Inhibit style warnings from compilation of BODY."
+  BODY)
+
+(DEFMACRO-DISPLACE LET-CLOSED (VARS &BODY BODY)
+  "Binds VARS like LET, then returns a closure of the value of BODY over those variables."
+  (LET ((VARNAMES (MAPCAR (FUNCTION (LAMBDA (V) (COND ((ATOM V) V) (T (CAR V))))) VARS)))
+    `(LOCAL-DECLARE ((SPECIAL . ,VARNAMES))
+       (LET ,VARS
+	 (CLOSURE ',VARNAMES (PROGN . ,BODY))))))
+
+(DEFMACRO DEF-OPEN-CODED (FUNCTION-SPEC DEFINITION)
+  "Define FUNCTION-SPEC with DEFINITION like DEFF, and tell the compiler to open-code it.
+The compiler will substitute the definition for FUNCTION-SPEC whenever FUNCTION-SPEC
+appears as the car of an expression."
+  `(PROGN (DEFDECL ,FUNCTION-SPEC OPEN-CODE ,DEFINITION)
+	  (DEFF ,FUNCTION-SPEC ',DEFINITION)))
+
+;;; Say that FUNCTION-SPEC should be open-coded by the compiler as DEFINITION
+;;; without changing FUNCTION-SPEC's real definition.
+;;; A call to this OPEN-CODE can be used as a local declaration, too.
+;;; Giving NIL as the definition turns off open-coding.
+(DEFMACRO OPEN-CODE (FUNCTION-SPEC DEFINITION)
+  "Tell compiler to open-code FUNCTION-SPEC by replacing it with DEFINITION.
+DEFINITION should be something that can appear as the car of an expression,
+such as a LAMBDA or SUBST expression."
+  `(DEFDECL ,FUNCTION-SPEC OPEN-CODE ,DEFINITION))
+
+;;; Make a variable special and, optionally, initialize it.
+;;; This is recorded as a definition by TAGS and ZWEI.
+(DEFMACRO DEFVAR (VARIABLE . ARGS)
+  "Define a special variable named VARIABLE, and initialize to INITIAL-VALUE if unbound.
+Normally, reeva,XL,~    E.,+H-2B-3B(7    + 
+. ad  + 
+
+:@S-< c@   ,
+O+ .O@S,Y+  	' `7@z`B  + /+H07@  + 1,	=+ 2@@     @   :@S-< c,m+ .7@  + 
+ :[B  ab  + 
+   "3aB  + 
+ "zQ"A` 
+  .
+( :    3,<L+ 
+@    ab  + 
+%     `b  + 46@  + 5   ,l\+ 
+B D   X  6@   ,:,9@    BX  XLX  `b  + 
+(O@S,Y+  	'7@  + 
++!$ @ ,T[+ 5QXTXLT,
+GO@S,Y+  	' B  ,Y7@  + 7 ab  + 8 `aB  + 9   ,m	,~      ,+T B  :@CS-< c    ,m+ :QXCTXLCT!<  B\CTO@CS,+M_R.4"
+Al  \$;@      Q  X     +    \$=   +  	'g  O@   B  ,YO@S4DK1J @+ Q   +@4,~   !<  B\TZT4BR E   .E!& aQ" `  H   5H
+L!<  G\T,~   -< 
+ B   EZ
+  [Z      ,le+ UZ 2B  + UR` 6B  + V      ,ll+  	'+H[   4$Y0d  + XZ   ,Y-$ D+  #j, 2+ [+H\+H](To,+l   ,+C RJt]1P  ,^,+M,+w+  	', 2+ [,+l   ,+D Jd$p&_(F  +H`,+M,+w+  	', 2+ [,+l   1B  ,`   ,+C@@J,+M,+w+  	', 2+ [,+l   ,+D K+Hb,+M,+w+  	'+H0B   + b `aB  + c+Hd,Si+  #eaf @ + e,+Hf[[e1F+ 1F+ 1&  %7 -M+ f3F  + 0H1H7    + iQF[e!"  GBz!"  GBzp,>    .+O@  ,^   +  #i!"  GBzp0H+ lQF[e+ !"  BBzp0H+ oQF[e+ : 4, 	3,>   ,>   .+:@  a    + ,^  ,^   7    + + +  "    	.+ DV D  ,^  ,^   ,~   +@41    + -< ch"ib+  	'`b  ,~   "r1b  +  	'0"  0b  ,~   , 	9,~   +  	'-< 	Y     ( 
+-aD+ sQ$   D   ,lY,XL+  #e+H ,,+ t,Y,;5, { Bq+  #i-< 	_  h  Dh  Bh @@h   "h  Q`   :     $h  .$  *"   h 2$u2du+ <d$  \"h  :     &     J,~   `   Z   /$h  :    Dh >   "`  S  X"h  + @ h ,+ v "h  ,l#+ v_   "`   Dh      h ,],~    Bh  Dh  Fh `b  +  	' h @@t.$   Dt\"t $h  Q$ ` &   (      4 h  Bx h , Q+  	'-< 	_  h @hh @    Dh  E  4DU.EZ  >        :    &h , 	= "' Bh "('!"   X"h  + @, ~+  #j,!-$ D, _2+ w, `, _;+  #j, ~+  #j,!-$ D, _2+ w, _w, _;+  #j+ x `aB  + y7<.7    a|  ,|7    + c: 4:@\g+ @@\e ( BM ` BM+H J/`j   + )aB  `j  7    + /+HO@R+H1B+ |0"  0" ;+ 0    /$  -< t, `p+ u3F(3Dn+ ,S\+ uaf  + u+H+H+HA" BR-< wl     +    5*aj  + +H "R,l#+ /+HMIT's value.
+LIMIT is evaluated only once.  When it is reached, RESULTFORM is executed and returned.
+RETURN and GO can be used inside the BODY."
+  (COND ((FIXP LIMIT)
+	 `(DO ((,VAR 0 (1+ ,VAR)))
+	      (( ,VAR ,LIMIT) ,RESULTFORM)
+	    . ,BODY))
+	(T (LET ((ITERATION-VAR (GENSYM)))
+	     `(DO ((,VAR 0 (1+ ,VAR))
+		   (,ITERATION-VAR ,LIMIT))
+		  (( ,VAR ,ITERATION-VAR) ,RESULTFORM)
+		. ,BODY)))))
+
+(DEFMACRO-DISPLACE WITH-OPEN-STREAM ((STREAM CONSTRUCTION-FORM) &BODY BODY)
+  "Execute the BODY with the variable STREAM bound to the value of CONSTRUCTOR-FORM.
+On normal exit, close STREAM normally.
+On abnormal exit (throwing, errors, etc) close STREAM with argument :ABORT."
+  (LET ((GENSYM (GENSYM)))
+    `(LET ((,GENSYM NIL)
+	   (.FILE-ABORTED-FLAG. ':ABORT))
+       (UNWIND-PROTECT
+	 (PROG2 (SETQ ,GENSYM ,CONSTRUCTION-FORM)
+		(LET ((,STREAM ,GENSYM))
+		  . ,BODY)
+		(SETQ .FILE-ABORTED-FLAG. NIL))
+	 (AND ,GENSYM (NOT (ERRORP ,GENSYM))
+	      (FUNCALL ,GENSYM ':CLOSE .FILE-ABORTED-FLAG.))))))
+
+(DEFMACRO-DISPLACE WITH-OPEN-STREAM-CASE ((STREAM CONSTRUCTION-FORM) &BODY CLAUSES)
+  "Use CONSTRUCTOR-FORM to open a stream, using the CLAUSES as in CONDITION-CASE.
+The CLAUSES may contain a :NO-ERROR clause which will be executed,
+with STREAM bound to the resulting stream, if CONSTRUCTOR-FORM does not get an error.
+On normal exit from the :NO-ERROR clause, STREAM is closed normally.
+On abnormal exit (throwing, errors, etc) STREAM is closed with argument :ABORT."
+  (LET ((GENSYM (GENSYM)))
+    `(LET ((,GENSYM NIL)
+	   (.FILE-ABORTED-FLAG. ':ABORT))
+       (UNWIND-PROTECT
+	 (PROG1
+	   (CONDITION-CASE (,STREAM) (SETQ ,GENSYM ,CONSTRUCTION-FORM)
+	     . ,CLAUSES)
+	   (SETQ .FILE-ABORTED-FLAG. NIL))
+	 (AND ,GENSYM (NOT (ERRORP ,GENSYM))
+	      (FUNCALL ,GENSYM ':CLOSE .FILE-ABORTED-FLAG.))))))
+
+(DEFMACRO-DISPLACE WITH-OPEN-FILE ((STREAM FILENAME . OPTIONS) &BODY BODY)
+  "Execute the BODY with the variable STREAM bound to a stream for file FILENAME.
+FILENAME is opened using OPTIONS, which are the same as for the OPEN function.
+On normal exit, close STREAM normally.
+On abnormal exit (throwing, errors, etc) close STREAM with argument :ABORT."
+  `(WITH-OPEN-STREAM (,STREAM (OPEN ,FILENAME . ,OPTIONS))
+     . ,BODY))
+
+(DEFMACRO-DISPLACE WITH-OPEN-FILE-CASE ((STREAM FILENAME . OPTIONS) &BODY CLAUSES)
+  "Use open a file stream from FILENAME and OPTIONS, using the CLAUSES as in CONDITION-CASE.
+FILENAME and OPTIONS are passed to OPEN.
+The CLAUSES may contain a :NO-ERROR clause which will be executed,
+with STREAM bound to the resulting stream, if OPEN does not get an error.
+On normal exit from the :NO-ERROR clause, STREAM is closed normally.
+On abnormal exit (throwing, errors, etc) STREAM is closed with argument :ABORT."
+  `(WITH-OPEN-STREAM-CASE (,STREAM (OPEN ,FILENAME . ,OPTIONS))
+     . ,CLAUSES))
+
+(DEFMACRO ONCE-ONLY (VARIABLE-LIST &BODY BODY)
+  "Generate code that evaluates certain expressions only once.
+This is used in macros, for computing expansions.
+VARIABLE-LIST is a list of symbols, whose values are subexpressions
+to be substituted into a larger expression.  BODY is what uses those
+symbols' values and constructs the larger expression.
+
+ONCE-ONLY modifies BODY so that it constructs a different expression,
+which when run will evaluate the subsexpressions only once, save the
+values in temporary variables, and use those from then on.
+Example:
+/(DEFMACRO DOUBLE (ARG) `(+ ,ARG ,ARG)) expands into code that computes ARG twice.
+/(DEFMACRO DOUBLE (ARG) (ONCE-ONLY (ARG) `(+ ,ARG ,ARG))) will not."
+  (DOLIST (VARIABLE VARIABLE-LIST)
+    (IF (NOT (SYMBOLP VARIABLE))
+	(FERROR NIL "~S is not a variable" VARIABLE)))
+  (LET ((BIND-VARS (GENSYM))
+	(BIND-VALS (GENSYM))
+	(TEM (GENSYM)))
+    `(LET ((,BIND-VARS NIL)
+	   (,BIND-VALS NIL))
+       (LET ((RESULT ((LAMBDA ,VARIABLE-LIST . ,BODY)
+		      . ,(LOOP FOR VARIABLE IN VARIABLE-LIST
+			       COLLECT `(IF (OR (ATOM ,VARIABLE)
+						(EQ (CAR ,VARIABLE) 'QUOTE)
+						(EQ (CAR ,VARIABLE) 'FUNCTION))
+					    ,VARIABLE
+					    (LET ((,TEM (GENSYM)))
+					      (PUSH ,TEM ,BIND-VARS)
+					      (PUSH ,VARIABLE ,BIND-VALS)
+					      ,TEM))))))
+	 (IF (NULL ,BIND-VARS)
+	     RESULT
+	     `((LAMBDA ,(NREVERSE ,BIND-VARS) ,RESULT) . ,(NREVERSE ,BIND-VALS)))))))
+
+;Bind NAME-TO-BIND to a cleanup-list,
+;and on exit do any cleanup-actions stored in the list.
+;The body can pass NAME-TO-BIND to various allocation functions,
+;which will attach cleanups to the car of the cleanup-list
+;so that the objects they allocate will be returned.
+;A cleanup is just a cons of a function and arguments.
+;the arguments are not evaluated.
+(DEFMACRO WITH-CLEANUP-LIST (NAME-TO-BIND &BODY BODY)
+  `(LET ((,NAME-TO-BIND (LIST NIL)))
+     (UNWIND-PROTECT (PROGN . ,BODY)
+		     (LOOP FOR ELEM IN (CAR ,NAME-TO-BIND)
+			   DO (APPLY (CAR ELEM) (CDR ELEM))))))
+
+;Add a cleanup to a list, returns the cleanup object.
+(DEFUN ADD-CLEANUP (CLEANUP-LIST FUNCTION &REST ARGS)
+  (WITHOUT-INTERRUPTS
+    (PUSH (CONS FUNCTION (COPYLIST ARGS))
+	  (CAR CLEANUP-LIST))
+    (CAAR CLEANUP-LIST)))
+
+;Delete a cleanup from a list
+(DEFUN DELETE-CLEANUP (CLEANUP CLEANUP-LIST)
+  (WITHOUT-INTERRUPTS
+    (SETF (CAR CLEANUP-LIST) (DELQ CLEANUP (CAR CLEANUP-LIST)))))
+
+;Move a specific cleanup action from one cleanup-list to another, atomically.
+(DEFUN MOVE-CLEANUP (CLEANUP FROM-CLEANUP-LIST TO-CLEANUP-LIST)
+  (WITHOUT-INTERRUPTS
+    (SETF (CAR FROM-CLEANUP-LIST) (DELQ CLEANUP (CAR FROM-CLEANUP-LIST)))
+    (PUSH CLEANUP (CAR TO-CLEANUP-LIST))))
+
+;Replace one cleanup with another, atomically.
+(DEFUN REPLACE-CLEANUP (OLD-CLEANUP NEW-CLEANUP CLEANUP-LIST)
+  (WITHOUT-INTERRUPTS
+    (SETF (CAR CLEANUP-LIST) (CONS NEW-CLEANUP (DELQ OLD-CLEANUP (CAR CLEANUP-LIST))))))
+
+(DEFMACRO TYPECASE (OBJECT &BODY CLAUSES)
+  "Execute the first clause whose type specifier OBJECT fits.
+The first element of each clause is a type specifier.
+It is used as the second argument to TYPEP to test the type of OBJECT.
+If the result is T, the rest of that clause is excuted and the values
+ of the last form in it are the values of the TYPECASE form.
+If no clause fits, the value of the TYPECASE is NIL."
+  (ONCE-ONLY (OBJECT)
+    `(COND
+       . ,(LOOP FOR (TYPE . CONSEQUENTS) IN CLAUSES
+		COLLECT `(,(PROGN
+			     (MACRO-TYPE-CHECK-WARNING 'TYPECASE TYPE)
+			     (COND ((MEMQ TYPE '(T OTHERWISE))
+				    'T)
+				   ;; This clause will eventually be subsumed
+				   ;; by the definition of (OR ...) as a type,
+				   ;; but for now it is essential.
+				   ((AND (LISTP TYPE) (EQ (CAR TYPE) 'OR))
+				    `(OR . ,(LOOP FOR XTYPE IN (CDR TYPE)
+						  COLLECT `(TYPEP ,OBJECT ',XTYPE))))
+				   (T
+				    `(TYPEP ,OBJECT ',TYPE))))
+			  NIL . ,CONSEQUENTS)))))
+
+(DEFMACRO WITH-LOCK ((LOCATOR . OPTIONS) &BODY BODY &AUX NORECURSIVE NOERROR)
+  "Execute the BODY with a lock locked.
+LOCATOR is an expression whose value is the lock status;
+it should be suitable for use inside LOCF.
+OPTIONS include :NORECURSIVE, do not allow locking a lock already locked by this process."
+  ;; Ignore the old :NOERROR option -- it's always that way now.
+  (KEYWORD-EXTRACT OPTIONS O () (NORECURSIVE NOERROR) (OTHERWISE NIL))
+  `(LET* ((POINTER (LOCF ,LOCATOR))
+	  (ALREADY-MINE (EQ (CAR POINTER) CURRENT-PROCESS)))
+     (UNWIND-PROTECT
+       (PROGN (IF ALREADY-MINE
+		  ,(IF NORECURSIVE `(FERROR NIL "Attempt to lock ~S recursively." ',LOCATOR))
+		;; Redundant, but saves time if not locked.
+		(OR (%STORE-CONDITIONAL POINTER NIL CURRENT-PROCESS)
+		    (PROCESS-LOCK POINTER)))
+	      . ,BODY)
+       (UNLESS ALREADY-MINE
+	 (%STORE-CONDITIONAL POINTER CURRENT-PROCESS NIL)))))
+
+(DEFMACRO DO-FOREVER (&BODY BODY)
+  "Execute BODY until it does a RETURN or a *THROW."
+  `(DO ()
+       (())
+     . ,BODY))
+
+;;; Be compatible with new Brand S names
+(DEFMACRO SEND (OBJECT OPERATION &REST ARGUMENTS)
+  "Send a message to OBJECT, with operation OPERATION and ARGUMENTS."
+  `(FUNCALL ,OBJECT ,OPERATION . ,ARGUMENTS))
+
+(DEFMACRO LEXPR-SEND (&REST ARGS)
+  "Send a message to OBJECT, with operation OPERATION and ARGUMENTS.
+The last one of ARGUMENTS actually is a list of arguments, not one argument."
+  (DECLARE (ARGLIST OBJECT OPERATION &REST ARGUMENTS))
+  `(LEXPR-FUNCALL . ,ARGS))
+
+;;; WITH-HELP-STREAM sets up a stream for printing a long help message.
+;;; This is a pop-up window (like FINGER windows) if the parent stream is a window,
+;;; otherwise the stream is simply the parent stream (this avoids lossage if the
+;;; stream is a file stream or the cold-load stream.).
+;;;
+;;; Usage:
+;;;   (WITH-HELP-STREAM (STREAM . OPTIONS) &BODY BOD)
+;;;
+;;; STREAM is a symbol to assign the new stream to.  Output operations in the body
+;;; (PRINT, FORMAT, etc.) should use this symbol as the stream argument.
+;;;
+;;; OPTIONS is a keyword argument list.  The following options are recognized:
+;;;   :LABEL     Label to give the help window.  Default is a null string.
+;;;   :WIDTH     Symbol to take on the value of the width in characters of the stream.
+;;;              An internal symbol is used (and ignored) if none is specified.
+;;;   :HEIGHT    Symbol to take on the value of the height in characters of the stream.
+;;;              An internal symbol is used (and ignored) if none is specified.
+;;;   :SUPERIOR  The superior stream.  Defaults to TERMINAL-IO.
+
+(defmacro-displace with-help-stream ((stream . options) &body bod
+				     &aux label width height superior)
+  "Execute the BODY with STREAM bound to a stream for printing help text on.
+If TERMINAL-IO or the specified superior is a window, a special /"help window/"
+is popped up and used as STREAM. 
+If TERMINAL-IO or the specified superior is not a window, it is used directly.
+OPTIONS is a list of alternating keywords and values.
+ :LABEL's value is a string to use as the label of the help window if one is used.
+ :WIDTH's value is a symbol to bind to the width in characters of STREAM.
+  It is bound while BODY is executed.
+ :HEIGHT's value is a symbol to bind to the height in characters.
+ :SUPERIOR's value is a window to use as the superior of the help window."
+  (keyword-extract options *with-help-iter* (label width height superior) nil)
+  (process-defaults '((label "") (width '*with-help-width*)
+		      (height '*with-help-height*) (superior 'terminal-io)))
+  `(let ((body-function
+	   #'(lambda (,stream &aux ,width ,height)
+	       (if (memq ':size-in-characters (send ,stream ':which-operations))
+		   (multiple-value (,width ,height) (send ,stream ':size-in-characters))
+		 (setq ,width 85. ,height 66.))
+	       . ,bod)))
+     (with-help-stream-1 ,label ,superior body-function)))
+
+(defun with-help-stream-1 (label superior body-function &aux input-p)
+  (cond ((typep superior 'tv:sheet)
+	 (using-resource (stream tv:pop-up-finger-window)
+	   (lexpr-send stream ':set-edges
+		       (multiple-value-list (send superior ':edges)))
+	   (send stream ':set-label label)
+	   (tv:window-call (stream :deactivate)
+	     (send stream ':clear-screen)
+	     (funcall body-function stream)
+	     (format stream "~2&Type any character to continue: ")
+	     (send stream ':wait-for-input-or-deexposure)
+	     ;; This hair is so that if we woke up due to deexposure
+	     ;; we do not try to read anything;
+	     ;; if we woke up due to input, we do not read until after
+	     ;; we deactivate the help window, so that if the input is Break
+	     ;; the break-loop is not entered until our normal window is usable again.
+	     (if (and (send stream ':exposed-p)
+		      (send stream ':listen))
+		 (setq input-p t)))
+	   (if input-p
+	       (send (if (send superior ':operation-handled-p ':tyi-no-hang)
+			 superior terminal-io)
+		     ':tyi-no-hang))))
+	(t (funcall body-function superior))))
+
+;;; PROCESS-DEFAULTS is for use in macros which handle keyword arguments
+;;; (via KEYWORD-EXTRACT or whatever).
+;;;
+;;; Usage:
+;;;   (PROCESS-DEFAULTS DEFAULT-LIST)
+;;;
+;;; DEFAULT-LIST is a list of two-element lists.  Each element of the list should
+;;; contain the name of a variable to default as its CAR, and the default value
+;;; as its CADR.  If the variable is NIL, its value will be set to the default.
+;;;
+;;; This macro-expands into a series of IF statements (with a SETQ statement as the
+;;; consequent).  The variable and default-value names are copied directly into the
+;;; SETQ's, so you probably want to quote the values.
+;;;
+;;; The DEFAULT-LIST is evaluated, so you have to quote it as well if it is constant.
+
+(defmacro-displace process-defaults (default-list)
+  `(progn . ,(mapcar #'(lambda (default)
+			 (let ((var (car default))
+			       (val (cadr default)))
+			   `(if (null ,var) (setq ,var ,val))))
+		     (eval default-list))))
+
+;;; Macros relating to warnings (compiler, etc).
+
+;Use this around an operation that goes through some or all the objects in a file.
+;WHOLE-FILE-P should evaluate to T if we are doing the entire file.
+(DEFMACRO FILE-OPERATION-WITH-WARNINGS ((GENERIC-PATHNAME OPERATION-TYPE WHOLE-FILE-P)
+					&BODY BODY)
+  "Execute BODY, recording warnings for performing OPERATION-TYPE on file GENERIC-PATHNAME.
+WHOLE-FILE-P should evaluate to non-NIL if the body will process all of the file.
+OPERATION-TYPE is most frequently ':COMPILE, in the compiler."
+  `(LET* ((FILE-WARNINGS-DATUM FILE-WARNINGS-DATUM)
+	  (FILE-WARNINGS-PATHNAME FILE-WARNINGS-PATHNAME)
+	  (FILE-WARNINGS-PUSHING-LOCATION FILE-WARNINGS-PUSHING-LOCATION)
+	  (PREMATURE-WARNINGS PREMATURE-WARNINGS)
+	  (PREMATURE-WARNINGS-THIS-OBJECT PREMATURE-WARNINGS-THIS-OBJECT)
+	  (NEW-FILE-THIS-LEVEL
+	    (BEGIN-FILE-OPERATION ,GENERIC-PATHNAME ,OPERATION-TYPE)))
+     (PROG1 (PROGN . ,BODY)
+	    (DISPOSE-OF-WARNINGS-AFTER-LAST-OBJECT)
+	    (AND ,WHOLE-FILE-P NEW-FILE-THIS-LEVEL (END-FILE-OPERATION)))))
+
+;Use this around operating on an individual object,
+;inside (dynamically) a use of the preceding macro.
+(DEFMACRO OBJECT-OPERATION-WITH-WARNINGS ((OBJECT-NAME LOCATION-FUNCTION INCREMENTAL)
+					  &BODY BODY)
+  "Execute BODY, recording warnings for OBJECT-NAME.
+If INCREMENTAL evaluates to NIL, all previous warnings about that object
+are discarded when the body is finished.  OBJECT-NAME is the name
+of an object in the file set up with FILE-OPERATION-WITH-WARNINGS;
+each file is its own space of object names, for recording warnings.
+This macro's expansion must be executed inside the body of a
+FILE-OPERATION-WITH-WARNINGS.  LOCATION-FUNCTION's value tells the editor
+how to find this object's definition in the file; usually it is NIL."
+  `(LET-IF (NOT (EQUAL ,OBJECT-NAME OBJECT-WARNINGS-OBJECT-NAME))
+	   ((OBJECT-WARNINGS-DATUM OBJECT-WARNINGS-DATUM)
+	    (OBJECT-WARNINGS-LOCATION-FUNCTION OBJECT-WARNINGS-LOCATION-FUNCTION)
+	    (OBJECT-WARNINGS-OBJECT-NAME OBJECT-WARNINGS-OBJECT-NAME)
+	    (OBJECT-WARNINGS-PUSHING-LOCATION OBJECT-WARNINGS-PUSHING-LOCATION))
+     (LET ((NEW-OBJECT-THIS-LEVEL
+	     (BEGIN-OBJECT-OPERATION ,OBJECT-NAME ,LOCATION-FUNCTION)))
+       (PROG1 (PROGN . ,BODY)
+	      (AND ,(NOT INCREMENTAL) NEW-OBJECT-THIS-LEVEL (END-OBJECT-OPERATION))))))
+
+;Variables bound by the above macros.
+(DECLARE (SPECIAL OBJECT-WARNINGS-DATUM OBJECT-WARNINGS-LOCATION-FUNCTION
+		  OBJECT-WARNINGS-OBJECT-NAME
+		  OBJECT-WARNINGS-PUSHING-LOCATION)
+	 (SPECIAL FILE-WARNINGS-DATUM FILE-WARNINGS-PATHNAME
+		  FILE-WARNINGS-PUSHING-LOCATION
+		  PREMATURE-WARNINGS PREMATURE-WARNINGS-THIS-OBJECT))
+
+(DEFMACRO WITH-SYS-HOST-ACCESSIBLE (&BODY BODY)
+  "Execute the BODY, making sure we can read files without user interaction.
+This is done by logging in if necessary (and logging out again when done)."
+  `(LET (UNDO-FORM)
+     (UNWIND-PROTECT
+       (PROGN (SETQ UNDO-FORM (MAYBE-SYS-LOGIN))
+	      . ,BODY)
+       (EVAL UNDO-FORM))))
+
+(DEFMACRO INHIBIT-GC-FLIPS (&BODY BODY)
+  "Execute the BODY making sure no GC flip happens during it."
+  `(LET-GLOBALLY ((INHIBIT-GC-FLIPS T))
+     . ,BODY))
+
+(defmacro-displace with-input-from-string ((stream string . keyword-args) &body body)
+  "Execute BODY with STREAM bound to a stream to output into STRING.
+The values of BODY's last expression are returned.
+Keywords allowed are :START, :END and :INDEX.
+:START and :END can be used to specify a substring of STRING to be read from.
+ Eof will then occur when :END is reached.
+ If the :END value is NIL, that means the end of STRING.
+:INDEX specifies a SETF-able place to store the index of where reading stopped.
+ This is done after exit from the body.  It stores the index of the first unread character,
+ or the index of eof if that was reached.
+/
+Old calling format: (STREAM STRING &OPTIONAL INDEX END), where INDEX serves
+ as the value for the :START keyword and for the :INDEX keyword."
+  (let (start end index decls realbody)
+    (setf (values realbody decls)
+	  (extract-declarations body))
+    (if (keywordp (car keyword-args))
+	(setq start (get (locf keyword-args) ':start)
+	      index (get (locf keyword-args) ':index)
+	      end (get (locf keyword-args) ':end))
+      (setq start (car keyword-args)
+	    index (car keyword-args)
+	    end (cadr keyword-args)))
+    `(let ((,stream (make-string-input-stream ,string ,(or start 0) ,end)))
+       (declare . ,decls)
+       (unwind-protect
+	   (progn . ,realbody)
+	 ,(if index `(setf ,index (send ,stream ':get-string-index)))))))
+
+(defmacro-displace with-output-to-string ((stream string index) &body body)
+  "Execute BODY with STREAM bound to a stream to output into STRING.
+If STRING is omitted, a new string with no fill pointer is created and returned.
+If STRING is supplied, that string's contents are modified destructively,
+and the values of BODY's last expression are returned.
+If INDEX is supplied, it should be a SETFable accessor which describes
+where to find the index to store into STRING, instead of at the end.
+The value of INDEX will be updated after the BODY is finished."
+  (multiple-value-bind (realbody decls)
+      (extract-declarations body)
+    (if string
+	`(let ((,stream (make-string-output-stream nil ,string ,index)))
+	   (declare . ,decls)
+	   (unwind-protect
+	       (progn . ,realbody)
+	     ,(if index `(setf ,index (send ,stream ':get-string-index)))))
+      `(let ((,stream (make-string-output-stream)))
+	 (declare . ,decls)
+	 ,@realbody
+	 (get-output-stream-string ,stream)))))
