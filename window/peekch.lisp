@@ -26,12 +26,12 @@ Pkt [to ! from] <name> (number){, transmitted <n> times (at <time>)}{, being ret
 Packet: to AI (2026), transmitted 27 times (at 1231232), being retransmitted
  CLS (11), 432 bytes, number 3422, acking 3221, source idx 177777, dest idx 177777
  Words from 0: 123123 12371 1227 272727 272626
- String: 'Now is the time for all good men'
+ String: /"Now is the time for all good men/"
 
 Packet: from MC (1440), released, forwarded 17 times
  DAT (201), 100 bytes, number 432, acking 102, source idx 123451, dest idx 123441
  Words from 0: 123123 64532
- String: 'FUKT!'
+ String: /"FUKT!/"
 
 "
   (LET ((TO-US (AND (ZEROP (PKT-TIMES-TRANSMITTED PKT))
@@ -46,7 +46,7 @@ Packet: from MC (1440), released, forwarded 17 times
 	  ':LEADER 4
 	  `(:MOUSE-ITEM (NIL :EVAL (PEEK-CHAOS-HOST-MENU ',OTHER-HOST 'TV:ITEM 0 ,INDENT)
 			     :DOCUMENTATION "Menu of useful things to do to this host.")
-	    :STRING ,(FORMAT NIL "~VXPacket ~:[to~;from~] ~@[~A ~](~O)"
+	    :STRING ,(FORMAT NIL "~V@TPacket ~:[to~;from~] ~@[~A ~](~O)"
 			     INDENT TO-US
 			     (SI:GET-HOST-FROM-ADDRESS OTHER-HOST ':CHAOS) OTHER-HOST))
 	  (AND (NOT TO-US)
@@ -57,25 +57,25 @@ Packet: from MC (1440), released, forwarded 17 times
 	  (AND (NOT TO-US)
 	       `(:FUNCTION ,#'PKT-BEING-RETRANSMITTED (,PKT)
 			   NIL ("~:[, being retransmitted~;~]")))
-	  `(:FUNCTION ,#'PKT-STATUS (,PKT) NIL ("~:[~;, Status: ~0G~A~]"))
+	  `(:FUNCTION ,#'PKT-STATUS (,PKT) NIL ("~:[~;, Status: ~@*G~A~]"))
 	  (AND TO-US
-	       (FORMAT NIL ", fowarded ~D times" (PKT-FWD-COUNT PKT)))))
+	       (FORMAT NIL ", fowarded ~D time~:P" (PKT-FWD-COUNT PKT)))))
 
       ;; Second line
       (LET ((OP (PKT-OPCODE PKT)))
        (TV:SCROLL-PARSE-ITEM
-	(FORMAT NIL
-		"~VX~A (~O), ~O bytes, number ~O, acking ~O, source idx ~O, dest idx ~O"
-		INDENT
-		(IF ( OP DAT-OP)
-		    "Data"
-		    (NTH OP OPCODE-LIST))
-		OP
-		(PKT-NBYTES PKT)
-		(PKT-NUM PKT) (PKT-ACK-NUM PKT)
-		(PKT-SOURCE-INDEX-NUM PKT) (PKT-DEST-INDEX-NUM PKT))))
-      (TV:SCROLL-PARSE-ITEM (FORMAT NIL "~VX" INDENT) (PEEK-CHAOS-PKT-WORDS PKT 0 6))
-      (TV:SCROLL-PARSE-ITEM (FORMAT NIL "~VXString: " INDENT) (PEEK-CHAOS-PKT-STRING PKT)))))
+	 (FORMAT NIL
+		 "~V@T~A (~O), ~O bytes, number ~O, acking ~O, source idx ~O, dest idx ~O"
+		 INDENT
+		 (IF ( OP DAT-OP)
+		     "Data"
+		   (NTH OP OPCODE-LIST))
+		 OP
+		 (PKT-NBYTES PKT)
+		 (PKT-NUM PKT) (PKT-ACK-NUM PKT)
+		 (PKT-SOURCE-INDEX-NUM PKT) (PKT-DEST-INDEX-NUM PKT))))
+      (TV:SCROLL-PARSE-ITEM (FORMAT NIL "~V@T" INDENT) (PEEK-CHAOS-PKT-WORDS PKT 0 6))
+      (TV:SCROLL-PARSE-ITEM (FORMAT NIL "~V@TString: " INDENT) (PEEK-CHAOS-PKT-STRING PKT)))))
 
 (DEFUN PEEK-CHAOS-PKT-WORDS (PKT START NUMBER &AUX STRING)
   "Returns a string consisting of words from the packet."
@@ -92,22 +92,20 @@ Packet: from MC (1440), released, forwarded 17 times
 ;;; Boy, is this piece of shit ad hoc!!
 (DEFUN PEEK-CHAOS-PKT-STRING (PKT &OPTIONAL COUNT)
   "Returns a 'safe' string as far as the scrolling stuff is concerned"
-  (DO ((STRING (MAKE-ARRAY 100
-			   ':TYPE 'ART-STRING
-			   ':LEADER-LIST '(0)))
+  (DO ((STRING (MAKE-STRING #o100 :FILL-POINTER 0))
        (PKT-STRING (PKT-STRING PKT))
        (CHAR)
        (I 0 (1+ I))
        (LEN (STRING-LENGTH (PKT-STRING PKT))))
       ((OR ( I LEN) (AND COUNT ( I COUNT)))
        STRING)
-      (SETQ CHAR (AREF PKT-STRING I))
-      (IF (AND (< CHAR 200) ( CHAR #/))
-	  (ARRAY-PUSH-EXTEND STRING CHAR)
-	  (ARRAY-PUSH-EXTEND STRING #/)
-	  (IF ( CHAR #/)
-	      (ARRAY-PUSH-EXTEND STRING (LOGIOR 100 (LOGAND CHAR 77)))
-	      (ARRAY-PUSH-EXTEND STRING #/)))))
+    (SETQ CHAR (AREF PKT-STRING I))
+    (IF (AND (< CHAR #o200) ( CHAR #/))
+	(VECTOR-PUSH-EXTEND CHAR STRING)
+      (VECTOR-PUSH-EXTEND #/ STRING)
+      (IF ( CHAR #/)
+	  (ARRAY-PUSH-EXTEND STRING (LOGIOR #o100 (LOGAND CHAR #o77)))
+	  (ARRAY-PUSH-EXTEND STRING #/)))))
 
 (DEFUN PEEK-CHAOS-CONN (CONN)
   "Format is:
@@ -125,16 +123,16 @@ Sent: pkt <n>, ack for pkt <n>, <n> queued
 	    `(:MOUSE-ITEM
 	       (NIL :MENU-CHOOSE
 		    ("Connection Operations"
-		     ("Close" :EVAL (CHAOS:CLOSE CONN)
+		     ("Close" :EVAL (CHAOS:CLOSE-CONN CONN)
 		      :DOCUMENTATION
 		      "Click left to close this connection")
 		     ("Inspect" :EVAL
-		      (LET ((TERMINAL-IO TYPWIN))
+		      (LET ((*TERMINAL-IO* TYPWIN))
 			(INSPECT CONN))
 		      :DOCUMENTATION
 		      "Click left to INSPECT this connection.")
 		     ("Describe" :EVAL
-		      (LET ((TERMINAL-IO TYPWIN))
+		      (LET ((*TERMINAL-IO* TYPWIN))
 			(DESCRIBE CONN))
 		      :DOCUMENTATION
 		      "Click left to DESCRIBE this connection."))
@@ -142,14 +140,12 @@ Sent: pkt <n>, ack for pkt <n>, <n> queued
 		    "Menu of things to do to this connection."
 		    :BINDINGS
 		    ((CONN ',CONN)
-		     (TYPWIN ',(FUNCALL SELF ':TYPEOUT-WINDOW))))
+		     (TYPWIN ',(SEND SELF ':TYPEOUT-WINDOW))))
 	       :FUNCTION CONTACT-NAME (,CONN) NIL ("~@[Connection to ~A~]"))
 	    `(:FUNCTION ,#'(LAMBDA (CONN)
-			     (COND ((GET (LOCF (CONN-PLIST CONN))
-					 'RFC-CONTACT-NAME)
+			     (COND ((GETF (CONN-PLIST CONN) 'RFC-CONTACT-NAME)
 				    " at host")
-				   ((GET (LOCF (CONN-PLIST CONN))
-					 'LISTEN-CONTACT-NAME)
+				   ((GETF (CONN-PLIST CONN) 'LISTEN-CONTACT-NAME)
 				    " from host")
 				   (T "Host")))
 			(,CONN)
@@ -157,25 +153,25 @@ Sent: pkt <n>, ack for pkt <n>, <n> queued
 	    ;; The following code returns a list which specifies the entry
 	    ;; that prints the name of the connection's host.
 	    ;; The hair is because we create a closure to put in the entry specification.
-	    (LOCAL-DECLARE ((SPECIAL PEEK-CHAOS-HOST))
-	      (LET ((PEEK-CHAOS-HOST (CONS -1 NIL)))
-		`(:MOUSE-ITEM
-		   (NIL :EVAL (PEEK-CHAOS-HOST-MENU (CAR ',(LOCF (CAR PEEK-CHAOS-HOST)))
-						    'TV:ITEM 0)
-			:DOCUMENTATION "Menu of useful things to do to this host.")
-		  :FUNCTION ,(CLOSURE '(PEEK-CHAOS-HOST)
-			       #'(LAMBDA (CONN)
-				   (AND ( (CAR PEEK-CHAOS-HOST)
-					   (PROG2 (RPLACA PEEK-CHAOS-HOST
-							  (FOREIGN-ADDRESS CONN))
-						  (CAR PEEK-CHAOS-HOST)))
-					(RPLACD PEEK-CHAOS-HOST
-						(FORMAT NIL "~@[~A ~](~O), "
-						   (SI:GET-HOST-FROM-ADDRESS
-						     (CAR PEEK-CHAOS-HOST) ':CHAOS)
-						   (CAR PEEK-CHAOS-HOST))))
-				   (CDR PEEK-CHAOS-HOST)))
-		  (,CONN) NIL)))))
+	    (LET ((PEEK-CHAOS-HOST (CONS -1 NIL)))
+	      (DECLARE (SPECIAL PEEK-CHAOS-HOST))
+	      `(:MOUSE-ITEM
+		 (NIL :EVAL (PEEK-CHAOS-HOST-MENU (CAR ',(LOCF (CAR PEEK-CHAOS-HOST)))
+						  'TV:ITEM 0)
+		      :DOCUMENTATION "Menu of useful things to do to this host.")
+		 :FUNCTION ,(CLOSURE '(PEEK-CHAOS-HOST)
+				     #'(LAMBDA (CONN)
+					 (AND ( (CAR PEEK-CHAOS-HOST)
+						 (PROG2 (RPLACA PEEK-CHAOS-HOST
+								(FOREIGN-ADDRESS CONN))
+							(CAR PEEK-CHAOS-HOST)))
+					      (RPLACD PEEK-CHAOS-HOST
+						      (FORMAT NIL "~@[~A ~](~O), "
+							      (SI:GET-HOST-FROM-ADDRESS
+								(CAR PEEK-CHAOS-HOST) ':CHAOS)
+							      (CAR PEEK-CHAOS-HOST))))
+					 (CDR PEEK-CHAOS-HOST)))
+		 (,CONN) NIL))))
     (TV:SCROLL-PARSE-ITEM
       `(:FUNCTION STATE (,CONN) NIL)
       `(:FUNCTION LOCAL-INDEX-NUM (,CONN) NIL (", local idx ~O, "))
@@ -212,12 +208,11 @@ Sent: pkt <n>, ack for pkt <n>, <n> queued
   (LET ((STRING 
 	  (FORMAT NIL "~:[Direct~;~A~]"
 		  ( SUBNET MY-SUBNET)
-   ;;this could really be clever and try to save away the info somewhere
+		  ;; this could really be clever and try to save away the info somewhere
 		  (LET ((BRIDGE (AREF ROUTING-TABLE SUBNET)))
 		    (COND ((AND BRIDGE (NOT (ZEROP BRIDGE)))
 			   (HOST-DATA BRIDGE))
-			  (T
-			   "No Connection"))))))
+			  (T "No Connection"))))))
     (SUBSTRING STRING 0 (MIN 18. (STRING-LENGTH STRING)))))
 
 (DEFUN PEEK-CHAOS-ROUTING-COST (SUBNET)
@@ -228,40 +223,39 @@ Sent: pkt <n>, ack for pkt <n>, <n> queued
 (DEFUN PEEK-CHAOS (IGNORE)
   "Displays state of all chaos net connections, meters, and routing table"
   (LIST NIL
-	(TV:SCROLL-PARSE-ITEM
-	  "Chaos connections at "
-	  `(:FUNCTION ,#'TIME () NIL ("~O")))
+	(TV:SCROLL-PARSE-ITEM "Chaos connections at "
+			      `(:FUNCTION ,#'TIME () NIL ("~O")))
 	(TV:SCROLL-PARSE-ITEM "")
 	(TV:SCROLL-MAINTAIN-LIST #'(LAMBDA () CONN-LIST)
-			      #'PEEK-CHAOS-CONN)
+				 #'PEEK-CHAOS-CONN)
 	(TV:SCROLL-PARSE-ITEM "Interesting meters")
 	(TV:SCROLL-MAINTAIN-LIST #'(LAMBDA () PEEK-A-BOO-LIST)
-			      #'(LAMBDA (COUNTER)
-				  (TV:SCROLL-PARSE-ITEM
-				    `(:STRING ,(STRING COUNTER) 35.)
-				    `(:FUNCTION SYMEVAL (,COUNTER) NIL ("~@15A" 10. T)))))
+				 #'(LAMBDA (COUNTER)
+				     (TV:SCROLL-PARSE-ITEM
+				       `(:STRING ,(STRING COUNTER) 35.)
+				       `(:FUNCTION SYMEVAL (,COUNTER) NIL ("~@15A" 10. T)))))
 	(TV:SCROLL-PARSE-ITEM '(:STRING "%COUNT-CHAOS-TRANSMIT-ABORTS" 35.)
-			   '(:FUNCTION READ-METER (%COUNT-CHAOS-TRANSMIT-ABORTS) NIL
-				       ("~@15A" 10. T)))
+			      '(:FUNCTION READ-METER (%COUNT-CHAOS-TRANSMIT-ABORTS) NIL
+					  ("~@15A" 10. T)))
 	(TV:SCROLL-PARSE-ITEM "")
 	(TV:SCROLL-PARSE-ITEM "Subnet  Gateway            Cost")
-	(TV:SCROLL-MAINTAIN-LIST
-	  #'(LAMBDA () 1)
-	  #'(LAMBDA (SUBNET)
-	      (TV:SCROLL-PARSE-ITEM
-		`(:STRING ,(FORMAT NIL "~O" SUBNET) 8.)
-		`(:FUNCTION PEEK-CHAOS-SUBNET-NAME (,SUBNET) 16.)
-		`(:FUNCTION PEEK-CHAOS-ROUTING-COST (,SUBNET) 12.)))
-	  NIL
-	  #'(LAMBDA (SUBNET)
-	      (LET ((NEW-SUBNET (POSITION-IF-NOT #'ZEROP ROUTING-TABLE :START SUBNET)))
-		(VALUES NEW-SUBNET
-			(AND NEW-SUBNET (+ NEW-SUBNET 1))
-			(NOT NEW-SUBNET)))))))
+	(TV:SCROLL-MAINTAIN-LIST #'(LAMBDA () 1)
+				 #'(LAMBDA (SUBNET)
+				     (TV:SCROLL-PARSE-ITEM
+				       `(:STRING ,(FORMAT NIL "~O" SUBNET) 8.)
+				       `(:FUNCTION PEEK-CHAOS-SUBNET-NAME (,SUBNET) 16.)
+				       `(:FUNCTION PEEK-CHAOS-ROUTING-COST (,SUBNET) 12.)))
+				 NIL
+				 #'(LAMBDA (SUBNET)
+				     (LET ((NEW-SUBNET
+					     (POSITION-IF-NOT #'ZEROP
+							      ROUTING-TABLE :START SUBNET)))
+				       (VALUES NEW-SUBNET
+					       (AND NEW-SUBNET (+ NEW-SUBNET 1))
+					       (NOT NEW-SUBNET)))))))
 
 (DEFUN PEEK-CHAOS-HOST-MENU (&REST ARGS)
-  (LEXPR-FUNCALL #'PROCESS-RUN-FUNCTION "Peek Chaos Menu"
-		 SELF ':PEEK-CHAOS-HOST-MENU ARGS))
+  (APPLY 'PROCESS-RUN-FUNCTION "Peek Chaos Menu" SELF ':PEEK-CHAOS-HOST-MENU ARGS))
 
 (DEFMETHOD (TV:BASIC-PEEK :PEEK-CHAOS-HOST-MENU)
 	   (HOST ITEM &OPTIONAL (OFFSET 0) &REST ADDITIONAL-STUFF)
@@ -288,8 +282,8 @@ OFFSET and ADDITIONAL-STUFF are hairy, for the INSERT-HOSTAT choice."
 		     :DOCUMENTATION "Look at host object in inspector."))
 		  (STRING-APPEND "HOST "
 				 (IF (NUMBERP HOST) (FORMAT NIL "~O" HOST)
-				   (FUNCALL HOST ':NAME)))))
-	(TERMINAL-IO TV:TYPEOUT-WINDOW))
+				   (SEND HOST ':NAME)))))
+	(*TERMINAL-IO* TV:TYPEOUT-WINDOW))
     (SELECTQ CHOICE
       (HOSTAT-ONE (HOSTAT HOST))
       (HOSTAT-ALL (HOSTAT))
@@ -301,10 +295,10 @@ OFFSET and ADDITIONAL-STUFF are hairy, for the INSERT-HOSTAT choice."
 	 (SETF (ARRAY-LEADER ITEM (+ TV:SCROLL-ITEM-LEADER-OFFSET OFFSET I 2))
 	       (NTH I ADDITIONAL-STUFF)))
        (SETQ TV:NEEDS-REDISPLAY T))
-      (HOSTAT-SUPDUP (FUNCALL-SELF ':FORCE-KBD-INPUT `(SUPDUP ,HOST)))
-      (HOSTAT-TELNET (FUNCALL-SELF ':FORCE-KBD-INPUT `(TELNET ,HOST)))
-      (HOSTAT-QSEND (FUNCALL-SELF ':FORCE-KBD-INPUT `(QSEND ,HOST)))
-      (HOSTAT-INSPECT (FUNCALL-SELF ':FORCE-KBD-INPUT `(INSPECT ,HOST)))
+      (HOSTAT-SUPDUP (SEND SELF ':FORCE-KBD-INPUT `(SUPDUP ,HOST)))
+      (HOSTAT-TELNET (SEND SELF ':FORCE-KBD-INPUT `(TELNET ,HOST)))
+      (HOSTAT-QSEND (SEND SELF ':FORCE-KBD-INPUT `(QSEND ,HOST)))
+      (HOSTAT-INSPECT (SEND SELF ':FORCE-KBD-INPUT `(INSPECT ,HOST)))
       (NIL)
       (OTHERWISE (BEEP)))))
 
@@ -349,8 +343,8 @@ OFFSET and ADDITIONAL-STUFF are hairy, for the INSERT-HOSTAT choice."
 (DEFUN PEEK-CHAOS-HOSTAT (HOST *PEEK-HOSTAT-INDENT* &OPTIONAL PKT
 			  &AUX (*PEEK-HOSTAT-LIST* NIL) (*PEEK-HOSTAT-STRING* NIL))
   (COND ((OR PKT (SETQ PKT (GET-HOST-STATUS-PACKET HOST)))
-	 (PEEK-HOSTAT-STREAM ':TYO #\CR)
-	 (HOSTAT-HEADING 'PEEK-HOSTAT-STREAM)
+	 (PEEK-HOSTAT-STREAM ':TYO #/CR)
+	 (HOSTAT-HEADING 'PEEK-HOSTAT-STREAM NIL)
 	 (HOSTAT-FORMAT-ANS (PKT-SOURCE-ADDRESS PKT) PKT 'PEEK-HOSTAT-STREAM)
 	 ;; Parse the strings into scroll items, removing any blank lines
 	 (SETQ *PEEK-HOSTAT-LIST* (NREVERSE *PEEK-HOSTAT-LIST*))
@@ -365,12 +359,10 @@ OFFSET and ADDITIONAL-STUFF are hairy, for the INSERT-HOSTAT choice."
   (SELECTQ OP
     (:WHICH-OPERATIONS '(:TYO :READ-CURSORPOS :SET-CURSORPOS))
     (:TYO
-     (COND ((= ARG1 #\CR)
+     (COND ((= ARG1 #/CR)
 	    (AND *PEEK-HOSTAT-STRING*
 		 (PUSH *PEEK-HOSTAT-STRING* *PEEK-HOSTAT-LIST*))
-	    (SETQ *PEEK-HOSTAT-STRING* (MAKE-ARRAY 50.
-						   ':TYPE 'ART-STRING
-						   ':LEADER-LIST '(0)))
+	    (SETQ *PEEK-HOSTAT-STRING* (MAKE-STRING 50. :FILL-POINTER 0))
 	    (PEEK-HOSTAT-STREAM ':SET-CURSORPOS *PEEK-HOSTAT-INDENT*))
 	   (T
 	    (ARRAY-PUSH-EXTEND *PEEK-HOSTAT-STRING* ARG1))))
@@ -378,12 +370,12 @@ OFFSET and ADDITIONAL-STUFF are hairy, for the INSERT-HOSTAT choice."
     (:SET-CURSORPOS
      (LET ((SPACES (- ARG1 (STRING-LENGTH *PEEK-HOSTAT-STRING*))))
        (AND (> SPACES 0)
-	    (DOTIMES (I SPACES) (PEEK-HOSTAT-STREAM ':TYO #/ )))))	      
+	    (DOTIMES (I SPACES) (PEEK-HOSTAT-STREAM ':TYO #/SPACE)))))
     (T (STREAM-DEFAULT-HANDLER 'PEEK-HOSTAT-STREAM OP ARG1 REST))))
 
 (DEFUN PEEK-CHAOS-CONN-RECEIVED-PKTS (ITEM &OPTIONAL (INDENT 0) &AUX CONN)
-  "Show/unshow the received pkts of the connection"
-  (OR (SETQ CONN (GET (LOCF (TV:SCROLL-FLAGS ITEM)) ':CONNECTION))
+  "Show//unshow the received pkts of the connection"
+  (OR (SETQ CONN (GETF (TV:SCROLL-FLAGS ITEM) ':CONNECTION))
       (FERROR NIL "~S has no associated connection, can't display packets." ITEM))
   (COND ((NOT (ARRAY-LEADER (FIRST (TV:SCROLL-ITEMS ITEM)) TV:SCROLL-ITEM-LEADER-OFFSET))
 	 ;; Want to leave state alone
@@ -396,18 +388,18 @@ OFFSET and ADDITIONAL-STUFF are hairy, for the INSERT-HOSTAT choice."
 	 (RPLACD (TV:SCROLL-ITEMS ITEM)
 		 (NCONS
 		   (TV:SCROLL-MAINTAIN-LIST `(LAMBDA () (READ-PKTS ',CONN))
-					 `(LAMBDA (X)
-					    (PEEK-CHAOS-PACKET-ITEM X ,(+ INDENT 2)))
-					 NIL
-					 #'(LAMBDA (STATE)
-					     (PROG ()
-					       (RETURN STATE (PKT-LINK STATE)
-						       (NULL (PKT-LINK STATE))))))))))
+					    `(LAMBDA (X)
+					       (PEEK-CHAOS-PACKET-ITEM X ,(+ INDENT 2)))
+					    NIL
+					    #'(LAMBDA (STATE)
+						(PROG ()
+						      (RETURN STATE (PKT-LINK STATE)
+							      (NULL (PKT-LINK STATE))))))))))
   (SETF (ARRAY-LEADER (FIRST (TV:SCROLL-ITEMS ITEM)) TV:SCROLL-ITEM-LEADER-OFFSET) NIL))
 
 (DEFUN PEEK-CHAOS-CONN-SEND-PKTS (ITEM &OPTIONAL (INDENT 0) &AUX CONN)
-  "Show/unshow the send pkts of the connection"
-  (OR (SETQ CONN (GET (LOCF (TV:SCROLL-FLAGS ITEM)) ':CONNECTION))
+  "Show//unshow the send pkts of the connection"
+  (OR (SETQ CONN (GETF (TV:SCROLL-FLAGS ITEM) ':CONNECTION))
       (FERROR NIL "~S has no associated connection, can't display packets." ITEM))
   (COND ((NOT (ARRAY-LEADER (FIRST (TV:SCROLL-ITEMS ITEM)) TV:SCROLL-ITEM-LEADER-OFFSET))
 	 ;; Want to leave state alone
@@ -420,21 +412,20 @@ OFFSET and ADDITIONAL-STUFF are hairy, for the INSERT-HOSTAT choice."
 	 (RPLACD (TV:SCROLL-ITEMS ITEM)
 		 (NCONS
 		   (TV:SCROLL-MAINTAIN-LIST `(LAMBDA () (SEND-PKTS ',CONN))
-					 `(LAMBDA (X)
-					    (PEEK-CHAOS-PACKET-ITEM X ,(+ INDENT 2)))
-					 NIL
-					 #'(LAMBDA (STATE)
-					     (PROG ()
-					       (RETURN STATE (PKT-LINK STATE)
-						       (NULL (PKT-LINK STATE))))))))))
+					    `(LAMBDA (X)
+					       (PEEK-CHAOS-PACKET-ITEM X ,(+ INDENT 2)))
+					    NIL
+					    #'(LAMBDA (STATE)
+						(PROG ()
+						      (RETURN STATE (PKT-LINK STATE)
+							      (NULL (PKT-LINK STATE))))))))))
     (SETF (ARRAY-LEADER (FIRST (TV:SCROLL-ITEMS ITEM)) TV:SCROLL-ITEM-LEADER-OFFSET) NIL))
 
-(DECLARE-FLAVOR-INSTANCE-VARIABLES (HOST-CHAOS-MIXIN)
-(DEFUN HOST-CHAOS-PEEK-FILE-SYSTEM-HEADER (IGNORE)
+(DEFUN HOST-CHAOS-PEEK-FILE-SYSTEM-HEADER (ACCESS HOST)
   (LIST '(:PRE-PROCESS-FUNCTION PEEK-CHAOS-CONN-INSERT-HOSTAT)
 	(TV:SCROLL-PARSE-ITEM
 	  ':LEADER 3
 	  `(:MOUSE-ITEM
-	     (NIL :EVAL (PEEK-CHAOS-HOST-MENU ',SELF 'TV:ITEM 0)
+	     (NIL :EVAL (PEEK-CHAOS-HOST-MENU ',HOST 'TV:ITEM 0)
 		  :DOCUMENTATION "Menu of useful things to do to this host.")
-	     :STRING ,(FORMAT NIL "Host ~A" SELF))))))
+	     :STRING ,(FORMAT NIL "~A" ACCESS)))))
