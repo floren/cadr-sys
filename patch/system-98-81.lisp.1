@@ -1,0 +1,136 @@
+;;; -*- Mode: Lisp; Package: User; Base: 10.; Patch-File: T -*-
+;;; Written 28-Nov-84 03:42:39 by MLY,
+;;; while running on Lisp Machine Twelve from band 4
+;;; with System 98.80, CADR 3.10, ZMail 53.19, MIT-Specific 22.5, microcode 309, gc@36.
+
+
+; From file INSPCT.LISP OZ:<L.WINDOW> OZ: (158)
+#8R TV#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "TV")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: WINDOW; INSPCT  "
+
+
+(defun print-pointer (locative stream)
+  (format stream "#<~S ~O>"
+	  (or (q-data-types (%p-data-type locative)) (%p-data-type locative))
+	  (%pointer locative)))
+
+(defmethod (basic-inspect :object-locative) (obj)
+  `(((:item1 locative-cell "Contents : " princ)
+     ,(if (%p-contents-safe-p obj)
+	  `(:item1 locative-contents ,(contents obj))
+	(print-pointer obj nil)))
+    (" Offset " ,(format nil "~D" (%pointer-difference obj (%find-structure-header obj)))
+     " into "
+     (:item1 ,(data-type (%find-structure-header obj)) ,(%find-structure-header obj)))
+    ("%Pointer : " ,(format nil "~O ~*  (Area ~O, ~S)" (%pointer obj)
+			    (%p-pointerp obj) (%area-number obj)
+			    (area-name (%area-number obj))))
+    ("Cdr-code : " ,(symbol-name (nth (%p-cdr-code obj) sys:q-cdr-codes)))
+    ("Data type: " ,(symbol-name (q-data-types (%p-data-type obj))))))
+(defun (:property locative-cell set-function) (ignore new-value object)
+  (setf (contents object) new-value))
+(defprop locative-cell t only-when-modify)
+
+
+(DEFUN INSPECT-ARRAY-PRINTER (ITEM ARG STREAM ITEM-NUMBER
+			      &AUX (OBJ (CAR ARG))
+			      (LEADER-LENGTH-TO-MENTION
+				(OR (AND (CADR ARG) (ARRAY-LEADER-LENGTH OBJ)) 0)))
+  "The print-function used when inspecting an array."
+  ;; (CAR ARG) is the array.  (CADR ARG) is T to display the leader.
+  ;; ITEM is usually a number.  A small number is an index in the leader.
+  ;; Numbers too big for that start moving through the array elements.
+  (COND ((NOT (NUMBERP ITEM))
+	 (INSPECT-PRINTER ITEM OBJ STREAM ITEM-NUMBER))
+	((< ITEM LEADER-LENGTH-TO-MENTION)
+	 (SEND STREAM :ITEM1 ITEM 'LEADER-SLOT
+	       #'(LAMBDA (ITEM STREAM)
+		   (FORMAT STREAM "Leader ~D" ITEM)))
+	 (FORMAT STREAM ":~12T ")
+	 (if (%p-contents-safe-p (locf (array-leader obj item)))
+	     (send stream :item1 (array-leader obj item) :value 'print-item-concisely)
+	   (print-pointer (locf (array-leader obj item)) stream)))
+	(T
+	 (LET ((ITEM (- ITEM LEADER-LENGTH-TO-MENTION))
+	       (RANK (ARRAY-RANK OBJ))
+	       INDICES)
+	   (OR (= RANK 1) (SETQ INDICES (ARRAY-INDICES-FROM-INDEX OBJ ITEM)))
+	   (SEND STREAM :ITEM1 (CONS ITEM (IF (= RANK 1) ITEM INDICES)) 'ARRAY-SLOT
+		 #'(LAMBDA (DATUM STREAM)
+		     (FORMAT STREAM "Elt ~D" (CDR DATUM))))
+	   (FORMAT STREAM ":~9T ")
+	   (IF (OR (CDR (ASSQ (ARRAY-TYPE OBJ) ARRAY-BITS-PER-ELEMENT))
+		   (%P-CONTENTS-SAFE-P (AP-1-FORCE OBJ ITEM)))
+	       ;; Deal with data types that are objects, and with numeric arrays.
+	       (SEND STREAM
+		     :ITEM1 (CLI:AR-1-FORCE OBJ ITEM)	;yes, I really mean cli:
+		     :VALUE 'PRINT-ITEM-CONCISELY)
+	     ;; Deal with data types that aren't really objects.
+	     (print-pointer (locf (cli:ar-1-force obj item)) stream))))))
+
+(defun array-indices-from-index (array index)
+  "Given a single INDEX into ARRAY, compute the equivalent set of indices.
+The value is a list whose elements could be used with AREF and ARRAY,
+and be equivalent to (AR-1-FORCE ARRAY INDEX)."
+  (let ((indicies ())
+	(index1 index))
+    (do ((i (1- (array-rank array)) (1- i)))
+	((< i 0) indicies)
+      ;; row-major-order!
+      (push (\ index1 (array-dimension array i)) indicies)
+      (setq index1 (truncate index1 (array-dimension array i))))))
+))
+
+; From file TSCROL.LISP OZ:<L.WINDOW> OZ: (73)
+#8R TV#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "TV")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: WINDOW; TSCROL  "
+
+(DEFMETHOD (FUNCTION-TEXT-SCROLL-WINDOW :PRINT-ITEM) (ITEM IGNORE ITEM-NO)
+  (CONDITION-BIND (((SYS:CELL-CONTENTS-ERROR)
+		    #'(LAMBDA (COND)
+			(VALUES :NEW-VALUE
+				(FORMAT NIL "#<~S ~O>"
+					(Q-DATA-TYPES (SEND COND :DATA-TYPE))
+					(%POINTER (SEND COND :ADDRESS)))))))
+    (FUNCALL PRINT-FUNCTION ITEM PRINT-FUNCTION-ARG SELF ITEM-NO)))
+
+))
+
+; From file FORMAT.LISP OZ:<L.IO> OZ: (239)
+#10R FORMAT#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "FORMAT")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: IO; FORMAT  "
+
+(DEFUN FORMAT-CTL-TAB (PARAMS &AUX (DEST (OR (FIRST PARAMS) 1)) (EXTRA (OR (SECOND PARAMS) 1))
+				   (OPS (SEND *STANDARD-OUTPUT* :WHICH-OPERATIONS))
+				   INCR-OK)
+  (COND ((OR (SETQ INCR-OK (MEMQ :INCREMENT-CURSORPOS OPS))
+	     (MEMQ :SET-CURSORPOS OPS))
+	 (LET ((FLAVOR (IF COLON-FLAG :PIXEL :CHARACTER)))
+	   (MULTIPLE-VALUE-BIND (X Y) (SEND *STANDARD-OUTPUT* :READ-CURSORPOS FLAVOR)
+	     (LET ((NEW-X (IF ATSIGN-FLAG
+			      (IF ( EXTRA 1)
+				  (+ DEST X)
+				  (* (CEILING (+ DEST X) EXTRA) EXTRA))
+			    (COND ((< X DEST)
+				   DEST)
+				  ((ZEROP EXTRA)
+				   X)
+				  (T
+				   (+ X EXTRA (- (\ (- X DEST) EXTRA))))))))
+	       (COND ((= NEW-X X))
+		     (INCR-OK
+		      ;; Use :INCREMENT-CURSORPOS preferentially
+		      ;; because it will do a **MORE** if we need one.
+		      (SEND *STANDARD-OUTPUT* :INCREMENT-CURSORPOS (- NEW-X X) 0 FLAVOR))
+		     (T
+		      (SEND *STANDARD-OUTPUT* :SET-CURSORPOS NEW-X Y FLAVOR)))))))
+	(ATSIGN-FLAG
+	 (DOTIMES (I DEST)
+	   (SEND *STANDARD-OUTPUT* :TYO #/SPACE)))
+	(T (SEND *STANDARD-OUTPUT* :STRING-OUT "  "))))
+
+))
+

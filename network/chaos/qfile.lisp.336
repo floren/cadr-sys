@@ -1,0 +1,2405 @@
+;;; -*- Mode: LISP; Package: FILE-SYSTEM; Base: 8 -*-
+;;;  ** (c) Copyright 1980 Massachusetts Institute of Technology
+;;;     Enhancements (c) Copyright 1981 Symbolics, Inc.
+;;;     The Massachusetts Institute of Technology has acquired the rights from
+;;;     Symbolics to include the Enhancements covered by the foregoing notice
+;;;     of copyright with its licenses of the Lisp Machine System. **
+
+;;; Some remaining crocks:
+;;; Why not just get an error in DATA-CONNECTION rather than having to know number foreign
+;;; host supports?
+
+;Don't lose before window system loaded.
+(UNLESS (FBOUNDP 'TV:NOTIFY)
+  (FSET 'TV:NOTIFY '(LAMBDA (IGNORE &REST ARGS)
+		      "Default definition, provided in QFILE."
+		      (LEXPR-FUNCALL 'FORMAT TV:COLD-LOAD-STREAM ARGS))))
+
+(DEFCONST %FILE-CHARACTER-OPCODE CHAOS:DAT-OP)
+(DEFCONST %FILE-BINARY-OPCODE (LOGIOR CHAOS:DAT-OP 100))
+(DEFCONST %FILE-COMMAND-OPCODE CHAOS:DAT-OP)
+(DEFCONST %FILE-SYNCHRONOUS-MARK-OPCODE (1+ CHAOS:DAT-OP))
+(DEFCONST %FILE-ASYNCHRONOUS-MARK-OPCODE (+ CHAOS:DAT-OP 2))
+(DEFCONST %FILE-NOTIFICATION-OPCODE (+ CHAOS:DAT-OP 3))
+(DEFCONST %FILE-EOF-OPCODE CHAOS:EOF-OP)
+
+;Disembodied plists whose property names are host objects
+;and whose values are pathnames connected to or accessed to.
+;Used so that when a new host unit connection is made
+;it can be told to connect or access as specified.
+(DEFVAR CHAOS-HOST-CONNECT-PLIST (CONS NIL NIL))
+(DEFVAR CHAOS-HOST-ACCESS-PLIST (CONS NIL NIL))
+(DEFVAR CHAOS-HOST-CAPABILITIES-PLIST (CONS NIL NIL))
+
+(DEFUN CLEAR-CONNECT-AND-ACCESS-MEMORY ()
+  "Clear the records of what remote access and connects have been done to what hosts.
+Also clears out records of enabled capabilities."
+  (SETQ CHAOS-HOST-CONNECT-PLIST (CONS NIL NIL))
+  (SETQ CHAOS-HOST-ACCESS-PLIST (CONS NIL NIL))
+  (SETQ CHAOS-HOST-CAPABILITIES-PLIST (CONS NIL NIL)))
+
+;;; A file server host.  In the HOST slot of a pathname.
+(DEFFLAVOR FILE-HOST-MIXIN
+	((HOST-UNITS NIL))			;List of active HOST-UNIT's
+	()
+  (:REQUIRED-METHODS :MAX-DATA-CONNECTIONS :HSNAME-INFORMATION)
+  (:GETTABLE-INSTANCE-VARIABLES HOST-UNITS)
+  (:REQUIRED-FLAVORS SI:BASIC-HOST))
+
+;;; One HOST-UNIT is associated with each control connection
+(DEFFLAVOR HOST-UNIT
+	(HOST					;Host object
+	 (CONTROL-CONNECTION NIL)		;Control connection for this host
+	 (DATA-CONNECTIONS NIL)			;List of DATA-CONNECTION's
+	 MAX-DATA-CONNECTIONS			;Maximum number of data connections
+	 (LOCK NIL)				;Lock to insure no timing screws
+	 (LAST-USE-TIME (TIME)))
+	()
+  :ORDERED-INSTANCE-VARIABLES
+  (:GETTABLE-INSTANCE-VARIABLES CONTROL-CONNECTION)
+  :OUTSIDE-ACCESSIBLE-INSTANCE-VARIABLES
+  (:INITABLE-INSTANCE-VARIABLES HOST))
+
+;;; A DATA-CONNECTION is associated with each data connection.
+;;; The two directions in the connection itself are used independently.
+(DEFSTRUCT (DATA-CONNECTION :LIST*
+			    (:CONC-NAME DATA-)
+			    (:ALTERANT NIL)
+			    (:CONSTRUCTOR MAKE-DATA-CONNECTION
+					  (CONNECTION INPUT-HANDLE OUTPUT-HANDLE)))
+  CONNECTION					;The chaos connection
+  INPUT-HANDLE
+  OUTPUT-HANDLE
+  (LAST-USE-TIME (TIME))
+  (STREAM-LIST (LIST ':INPUT NIL ':OUTPUT NIL))
+  )
+
+(DEFSUBST DATA-HANDLE (DATA-CONNECTION DIRECTION)
+  (SELECTQ DIRECTION
+    (:INPUT (DATA-INPUT-HANDLE DATA-CONNECTION))
+    (:OUTPUT (DATA-OUTPUT-HANDLE DATA-CONNECTION))))
+
+(DEFSUBST DATA-STREAM (DATA-CONNECTION DIRECTION)
+  (CADR (MEMQ DIRECTION (DATA-STREAM-LIST DATA-CONNECTION))))
+
+(DEFMETHOD (HOST-UNIT :INIT) (IGNORE)
+  (SETQ MAX-DATA-CONNECTIONS (FUNCALL HOST ':MAX-DATA-CONNECTIONS)))
+
+;;; Lock a host unit around BODY
+(DEFMACRO LOCK-HOST-UNIT ((HOST-UNIT) &BODY BODY)
+  (LET ((LOCK (GENSYM)) (LOCKED-P (GENSYM)))
+    `(LET ((,LOCK (LOCF (HOST-UNIT-LOCK ,HOST-UNIT)))
+	   (,LOCKED-P NIL))
+       (UNWIND-PROTECT
+	 (PROGN
+	   (COND ((NEQ (CAR ,LOCK) CURRENT-PROCESS)
+		  (PROCESS-LOCK ,LOCK)
+		  (SETQ ,LOCKED-P T)))
+	   . ,BODY)
+	 (SETQ LAST-USE-TIME (TIME))
+	 (AND ,LOCKED-P (PROCESS-UNLOCK ,LOCK))))))
+
+;;; Sent when booting, forget all active connections, reset all HOST-UNIT's.
+(DEFMETHOD (FILE-HOST-MIXIN :RESET) ()
+  (DOLIST (UNIT HOST-UNITS)
+    (FUNCALL UNIT ':RESET)))
+
+(DEFMETHOD (HOST-UNIT :RESET) (&OPTIONAL DONT-UNLOCK-LOCK-P)
+  (COND (CONTROL-CONNECTION
+	 (CHAOS:REMOVE-CONN CONTROL-CONNECTION)
+	 (SETQ CONTROL-CONNECTION NIL)))
+  (DO ((DATA-CONNS DATA-CONNECTIONS (CDR DATA-CONNS))
+       (DATA-CONN))
+      ((NULL DATA-CONNS)
+       (SETQ DATA-CONNECTIONS NIL))
+    (SETQ DATA-CONN (CAR DATA-CONNS))
+    (DO ((LIST (DATA-STREAM-LIST DATA-CONN) (CDDR LIST))
+	 (STREAM))
+	((NULL LIST))
+      (UNLESS (SYMBOLP (SETQ STREAM (CADR LIST)))
+	(SEND TV:WHO-LINE-FILE-STATE-SHEET ':DELETE-STREAM STREAM)
+	(FUNCALL STREAM ':SET-STATUS ':CLOSED)))
+    (CHAOS:REMOVE-CONN (DATA-CONNECTION DATA-CONN)))
+  (OR DONT-UNLOCK-LOCK-P (SETQ LOCK NIL)))
+
+;;; This also frees up any slots marked as open
+(DEFMETHOD (FILE-HOST-MIXIN :CLOSE-ALL-FILES) (&AUX THINGS-CLOSED)
+  (DOLIST (UNIT HOST-UNITS) 
+    (DOLIST (DATA-CONN (HOST-UNIT-DATA-CONNECTIONS UNIT))
+      (DO LIST (DATA-STREAM-LIST DATA-CONN) (CDDR LIST) (NULL LIST)
+	(LET ((STREAM (CADR LIST)))
+	  (COND ((NULL STREAM))
+		((EQ STREAM T)
+		 (SETF (CADR LIST) NIL))
+		(T
+		 (FORMAT ERROR-OUTPUT "~%Closing ~S" STREAM)
+		 (PUSH STREAM THINGS-CLOSED)
+		 (FUNCALL STREAM ':CLOSE ':ABORT)))))))
+  THINGS-CLOSED)
+
+(DEFMETHOD (FILE-HOST-MIXIN :OPEN-STREAMS) (&AUX STREAMS)
+  (DOLIST (UNIT HOST-UNITS) 
+    (DOLIST (DATA-CONN (HOST-UNIT-DATA-CONNECTIONS UNIT))
+      (DO LIST (DATA-STREAM-LIST DATA-CONN) (CDDR LIST) (NULL LIST)
+	(LET ((STREAM (CADR LIST)))
+	  (OR (SYMBOLP STREAM)
+	      (PUSH STREAM STREAMS))))))
+  STREAMS)
+
+;;; Number is the protocol version number
+(DEFCONST *FILE-CONTACT-NAME* "FILE 1")
+(DEFCONST *FILE-CONTROL-WINDOW-SIZE* 5)
+(DEFVAR *HOST-FILE-CONTACT-NAME-ALIST* NIL
+  "Alist of host primary names and the contact name for the file.")
+
+;;; Check that connection hasn't gone away, making a new one if necessary
+(DEFMETHOD (HOST-UNIT :VALIDATE-CONTROL-CONNECTION) (&OPTIONAL NO-ERROR-P)
+  (LOCK-HOST-UNIT (SELF)
+    (COND ((AND CONTROL-CONNECTION
+		(EQ (CHAOS:STATE CONTROL-CONNECTION) 'CHAOS:OPEN-STATE)
+		(LOOP FOR DATA-CONN IN DATA-CONNECTIONS
+		      ALWAYS (EQ (CHAOS:STATE (DATA-CONNECTION DATA-CONN))
+				 'CHAOS:OPEN-STATE)))
+	   T)
+	  (T
+	   (FUNCALL-SELF ':RESET T)	;Arg of T means don't unlock lock
+	   (CONDITION-CASE-IF NO-ERROR-P ()
+	       (PROGN
+		 (SETQ CONTROL-CONNECTION
+		       (CHAOS:CONNECT HOST
+				      (OR (SECOND (ASSOC-EQUALP (SEND HOST ':NAME)
+							 FS:*HOST-FILE-CONTACT-NAME-ALIST*))
+					  *FILE-CONTACT-NAME*)
+				      *FILE-CONTROL-WINDOW-SIZE*))
+		 (SETF (CHAOS:INTERRUPT-FUNCTION CONTROL-CONNECTION)
+		       (LET-CLOSED ((HOST-UNIT SELF))
+			 'HOST-CHAOS-INTERRUPT-FUNCTION))
+		 (FUNCALL HOST ':LOGIN-UNIT SELF T)
+		 T)
+	     (REMOTE-NETWORK-ERROR
+	       NIL))))))
+
+;;; Transaction management
+(DEFSTRUCT (FILE-TRANSACTION-ID :LIST :CONC-NAME
+				(:ALTERANT NIL)
+				(:CONSTRUCTOR MAKE-FILE-TRANSACTION-ID-INTERNAL
+					      (ID SIMPLE-P)))
+  ID
+  SIMPLE-P
+  (PKT NIL))
+
+(DEFVAR *FILE-UNIQUE-NUMBER* 259.)
+(DEFVAR *FILE-PENDING-TRANSACTIONS* NIL)
+
+(DEFUN FILE-GENSYM (LEADER)
+  "Create a string which is LEADER followed by a unique number (printed out)."
+  (LET ((NUMBER (WITHOUT-INTERRUPTS
+		  (SETQ *FILE-UNIQUE-NUMBER*
+			(\ (1+ *FILE-UNIQUE-NUMBER*) 10000.)))))
+    (STRING-APPEND LEADER
+		   (+ #/0 (\ (TRUNCATE NUMBER 1000.) 10.))
+		   (+ #/0 (\ (TRUNCATE NUMBER 100.) 10.))
+		   (+ #/0 (\ (TRUNCATE NUMBER 10.) 10.))
+		   (+ #/0 (\ NUMBER 10.)))))
+
+(DEFUN FILE-MAKE-TRANSACTION-ID (&OPTIONAL (SIMPLE-P NIL) &AUX ID
+				 (DEFAULT-CONS-AREA BACKGROUND-CONS-AREA))
+  "Return a new transaction ID string, and perhaps record a pending transaction.
+If SIMPLE-P is not non-NIL, a pending transaction is recorded forthis transaction ID."
+  (WITHOUT-INTERRUPTS
+    (SETQ ID (FILE-GENSYM "T"))
+    (PUSH (MAKE-FILE-TRANSACTION-ID-INTERNAL ID SIMPLE-P) *FILE-PENDING-TRANSACTIONS*))
+  ID)
+
+(DEFUN FILE-WAIT-FOR-TRANSACTION (TID &OPTIONAL CONN (WHOSTATE "File Transaction") &AUX ID)
+  "Wait for completion of transaction with id TID, which should be on the pending list.
+CONN is the connection the reply should arrive on (the control connection).
+WHOSTATE is what to say in the who-line while waiting."
+  (IF (NULL (SETQ ID (ASSOC TID *FILE-PENDING-TRANSACTIONS*)))
+      (FERROR NIL "Transaction ID ~A not found on pending list" TID)
+    (PROCESS-WAIT WHOSTATE #'(LAMBDA (ID CONN)
+			       (OR (FILE-TRANSACTION-ID-PKT ID)
+				   (NEQ (CHAOS:STATE CONN) 'CHAOS:OPEN-STATE)))
+		  ID CONN)
+    (COND ((NEQ (CHAOS:STATE CONN) 'CHAOS:OPEN-STATE)
+	   ;; Get an error of the appropriate sort.
+	   (CHAOS:REPORT-BAD-CONNECTION-STATE CONN
+					      "read file command reply from"))
+	  (T
+	   (WITHOUT-INTERRUPTS
+	     (SETQ *FILE-PENDING-TRANSACTIONS* (DELQ ID *FILE-PENDING-TRANSACTIONS*))
+	     (FILE-TRANSACTION-ID-PKT ID))))))
+
+;This is the interrupt function we put into the control connection
+;so we can detect asynchronous arrival of packets.
+(DEFUN HOST-CHAOS-INTERRUPT-FUNCTION (REASON CONN &REST IGNORE)
+  (DECLARE (SPECIAL HOST-UNIT))
+  (SELECTQ REASON
+    (:INPUT
+     (DO ((PKT (CHAOS:GET-NEXT-PKT CONN T)
+	       (CHAOS:GET-NEXT-PKT CONN T))
+	  (STRING) (TEM))
+	 ((NULL PKT))
+       (SETQ STRING (CHAOS:PKT-STRING PKT))
+       (SELECT (CHAOS:PKT-OPCODE PKT)
+	 (%FILE-ASYNCHRONOUS-MARK-OPCODE
+	  (SETQ STRING (NSUBSTRING STRING
+				   (1+ (STRING-SEARCH-CHAR #\SP (CHAOS:PKT-STRING PKT)))))
+	  (DO ((DATA-CONNS (HOST-UNIT-DATA-CONNECTIONS HOST-UNIT) (CDR DATA-CONNS))
+	       (HANDLE-LEN (OR (STRING-SEARCH-CHAR #\SP STRING)
+			       (STRING-LENGTH STRING)))
+	       (STREAM))
+	      ((NULL DATA-CONNS) (CHAOS:RETURN-PKT PKT))
+	    (COND ((STRING-EQUAL STRING (DATA-HANDLE (CAR DATA-CONNS) ':OUTPUT) 0 0
+				 HANDLE-LEN)
+		   (SETQ STREAM (DATA-STREAM (CAR DATA-CONNS) ':OUTPUT))
+		   (FUNCALL STREAM ':ASYNC-MARK PKT)
+		   (RETURN NIL)))))
+	 (%FILE-COMMAND-OPCODE
+	  (SETQ STRING (SUBSTRING STRING 0 (STRING-SEARCH-CHAR #\SP STRING)))
+	  (SETQ TEM (ASSOC STRING *FILE-PENDING-TRANSACTIONS*))
+	  (RETURN-ARRAY (PROG1 STRING (SETQ STRING NIL)))	;Don't cons
+	  (COND ((NULL TEM)
+		 (PROCESS-RUN-FUNCTION
+		   "File system fucked"
+		   #'(LAMBDA (PKT)
+		       (UNWIND-PROTECT
+			 (FERROR NIL "File system fucked, unknown transaction id in ~S"
+				 (CHAOS:PKT-STRING PKT))
+			 (CHAOS:RETURN-PKT PKT)))
+		   PKT))
+		((FILE-TRANSACTION-ID-SIMPLE-P TEM)
+		 ;;If simple transaction, make sure no error
+		 (LET ((STRING (NSUBSTRING (CHAOS:PKT-STRING PKT)
+					   (1+ (STRING-SEARCH-CHAR #\SP
+								   (CHAOS:PKT-STRING PKT)))))
+		       (FROM))
+		   (SETQ FROM (1+ (STRING-SEARCH-SET '(#\SP #\CR) STRING)))
+		   ;; If simple transaction fails, barf in another process
+		   (OR (NOT (STRING-EQUAL "ERROR" STRING 0 FROM 5
+					  (STRING-SEARCH-SET '(#\SP #\CR) STRING FROM)))
+		       (PROCESS-RUN-FUNCTION "File System Barf"
+					     #'FILE-PROCESS-ERROR-NEW
+					     (PROG1 (STRING-APPEND STRING)
+						    (CHAOS:RETURN-PKT PKT)))))
+		 (SETQ *FILE-PENDING-TRANSACTIONS* (DELQ TEM *FILE-PENDING-TRANSACTIONS*)))
+		(T (SETF (FILE-TRANSACTION-ID-PKT TEM) PKT))))
+	 (%FILE-NOTIFICATION-OPCODE
+	  (TV:NOTIFY NIL "File server ~A: ~A" (HOST-UNIT-HOST HOST-UNIT) STRING)
+	  (CHAOS:RETURN-PKT PKT))
+	 (OTHERWISE (CHAOS:RETURN-PKT PKT)))))))
+
+(DEFMETHOD (FILE-HOST-MIXIN :NEW-HOST-UNIT)
+	   (&OPTIONAL (NOERROR-P NIL) &AUX UNIT
+	    (DEFAULT-CONS-AREA BACKGROUND-CONS-AREA))
+  (SETQ UNIT (MAKE-INSTANCE 'HOST-UNIT ':HOST SELF))  
+  (SETQ HOST-UNITS (NCONC HOST-UNITS (NCONS UNIT)))
+  (AND (FUNCALL UNIT ':VALIDATE-CONTROL-CONNECTION NOERROR-P)
+       UNIT))
+
+;;; Return a valid host unit.  If no units, make one.  If any unit is still open, use it.
+;;; Errors if fails to connect unless noerror-p is T.
+(DEFMETHOD (FILE-HOST-MIXIN :GET-HOST-UNIT) (&OPTIONAL NOERROR-P)
+  (COND ((NULL HOST-UNITS)
+	 (FUNCALL-SELF ':NEW-HOST-UNIT NOERROR-P))
+	((LOOP FOR UNIT IN HOST-UNITS
+	       WHEN (FUNCALL UNIT ':VALIDATE-CONTROL-CONNECTION T)
+	       RETURN UNIT))
+	((NOT NOERROR-P)
+	 (LET ((UNIT (CAR HOST-UNITS)))
+	   (FUNCALL UNIT ':VALIDATE-CONTROL-CONNECTION)
+	   UNIT))))
+
+;;; Get a DATA-CONNECTION for use in DIRECTION.
+;;; Make two passes over existing units, first trying open ones.
+(DEFMETHOD (FILE-HOST-MIXIN :GET-DATA-CONNECTION) (DIRECTION &OPTIONAL NOERROR-P)
+  (DO-NAMED TOP ((ERROR-P NIL T)) (NIL)
+    (DO ((UNITS HOST-UNITS (CDR UNITS))
+	 (UNIT) (DATA-CONN))
+	((NULL UNITS))
+      (SETQ UNIT (CAR UNITS))
+      (AND (FUNCALL UNIT ':VALIDATE-CONTROL-CONNECTION (OR NOERROR-P (NOT ERROR-P)))
+	   (SETQ DATA-CONN (FUNCALL UNIT ':GET-DATA-CONNECTION DIRECTION))
+	   (RETURN-FROM TOP DATA-CONN UNIT)))
+    (AND NOERROR-P
+	 (NOT (FUNCALL-SELF ':GET-HOST-UNIT T))	;If you can't get a valid connection,
+	 (RETURN-FROM TOP NIL NIL))		;then you have a loosing host.
+    (AND ERROR-P
+	 (LET* ((UNIT (FUNCALL-SELF ':NEW-HOST-UNIT))
+		(DATA-CONN (FUNCALL UNIT ':GET-DATA-CONNECTION DIRECTION)))
+	   (OR DATA-CONN
+	       (FERROR NIL "New unit failed to allocate data connection"))
+	   (RETURN-FROM TOP DATA-CONN UNIT)))))
+
+;;; Get a data connection for this unit.  Makes a new one if there is room in within the
+;;; maximum number.  We are assumed to have recently been checked for validity.
+(DEFMETHOD (HOST-UNIT :GET-DATA-CONNECTION) (DIRECTION)
+  (LOCK-HOST-UNIT (SELF)
+    (DO ((DATA-CONNS DATA-CONNECTIONS (CDR DATA-CONNS))
+	 (DATA-CONN))
+	(NIL)
+      (SETQ DATA-CONN (COND (DATA-CONNS (CAR DATA-CONNS))
+			    ((= (LENGTH DATA-CONNECTIONS) MAX-DATA-CONNECTIONS)
+			     (RETURN NIL))
+			    (T (FUNCALL-SELF ':NEW-DATA-CONNECTION))))
+      (COND ((NULL (DATA-STREAM DATA-CONN DIRECTION))
+	     (SETF (DATA-STREAM DATA-CONN DIRECTION) T)	;Mark as allocated
+	     (RETURN DATA-CONN))))))
+
+;;; Called when done with a DATA-CONNECTION for DIRECTION.
+;;; If free in both directions for long enough, it is flushed for being dormant.
+(DEFMETHOD (HOST-UNIT :FREE-DATA-CONNECTION) (DATA-CONNECTION DIRECTION)
+  (SETF (DATA-STREAM DATA-CONNECTION DIRECTION) NIL)
+  (SETF (DATA-LAST-USE-TIME DATA-CONNECTION) (TIME))
+  (SETQ LAST-USE-TIME (TIME)))
+
+(DEFVAR *FILE-DATA-WINDOW-SIZE* 15
+  "Window size used on file data connections.")
+
+;;; Allocate a new data connection
+(DEFMETHOD (HOST-UNIT :NEW-DATA-CONNECTION) ()
+  (LET* ((DEFAULT-CONS-AREA BACKGROUND-CONS-AREA)
+	 (INPUT-HANDLE (FILE-GENSYM "I"))
+	 (OUTPUT-HANDLE (FILE-GENSYM "O"))
+	 CONNECTION
+	 SUCCESS)				;T => don't remove-conn the connection.
+    (UNWIND-PROTECT
+      (PROG ()
+	 RETRY
+	   (SETQ CONNECTION
+		 (CHAOS:LISTEN OUTPUT-HANDLE *FILE-DATA-WINDOW-SIZE* NIL))
+	   (LET ((PKT (CHAOS:GET-PKT))
+		 (ID (FILE-MAKE-TRANSACTION-ID))
+		 (DATA-CONN))
+	     (CHAOS:SET-PKT-STRING PKT ID "  DATA-CONNECTION " INPUT-HANDLE " " OUTPUT-HANDLE)
+	     (CHAOS:SEND-PKT CONTROL-CONNECTION PKT)
+	     (UNLESS (CHAOS:WAIT CONNECTION 'CHAOS:LISTENING-STATE (* 60. 30.) "File Data Connection")
+	       ;; Attempt to establish connection timed out -- give reasonable error
+	       (CERROR ':RETRY-FILE-OPERATION NIL 'NETWORK-LOSSAGE
+		       "Attempt to establish file data connection timed out.")
+	       ;; It lost; tell the connection we gave up,
+	       (CHAOS:CLOSE CONNECTION)
+	       ;; wait for the server to report the failure on our side,
+	       ;; or say why it failed, or something.
+	       (CHAOS:RETURN-PKT
+		 (FILE-WAIT-FOR-TRANSACTION ID CONTROL-CONNECTION "File Data Connection"))
+	       ;; then try again
+	       (GO RETRY))
+	     (CHAOS:ACCEPT CONNECTION)
+	     (SETQ PKT (FILE-WAIT-FOR-TRANSACTION ID CONTROL-CONNECTION "File Data Connection"))
+	     (UNWIND-PROTECT
+	       (LET ((STRING (CHAOS:PKT-STRING PKT)))
+		 (SETQ STRING (NSUBSTRING STRING (1+ (STRING-SEARCH-CHAR #\SP STRING))))
+		 (COND ((FILE-CHECK-COMMAND "DATA-CONNECTION" STRING T)
+			(SETQ DATA-CONN (MAKE-DATA-CONNECTION CONNECTION INPUT-HANDLE OUTPUT-HANDLE))
+			(PUSH DATA-CONN DATA-CONNECTIONS))
+		       (T (FILE-PROCESS-ERROR-NEW STRING))))	;not proceedable
+	       (CHAOS:RETURN-PKT PKT))
+	     (SETQ SUCCESS T)
+	     (RETURN DATA-CONN)))
+      ;; If we are not putting CONNECTION into the host unit, free it.
+      (UNLESS SUCCESS
+	(WHEN CONNECTION
+	  (FUNCALL-SELF ':COMMAND NIL INPUT-HANDLE T
+			"UNDATA-CONNECTION")
+	  (CHAOS:CLOSE CONNECTION "Aborted")
+	  (CHAOS:REMOVE-CONN CONNECTION))))))
+
+;;; An error string is as follows:
+;;;  FHN<SP>ERROR<SP>Error-code<SP>Error-severity<SP>Error-description
+;;; The error code is a three letter code that uniquely determines the error.  In general,
+;;; this code will be ignored, but some codes may be of interest.  FNF is file not found,
+;;; and NER is not enough resources.  The severity is either F (Fatal) or R (Restartable).
+;;; If an error is Fatal, it can not be continued from, even if it is an asynchronous
+;;; error.  If an error is Restartable, sending a CONTINUE command for the appropriate
+;;; file handle will cause the file job to proceed where it left off.  In general, before
+;;; the error is continued from, the error condition should be corrected, or the error
+;;; will happen again immediately.
+;;; The string that is passed in is expected to be "temporary" (contained in a chaos packet,
+;;; for example).  Therefore, if an error handler gets called and it wants to save some
+;;; of the strings, it must copy the ones it wishes to save.
+
+(DEFPROP FILE-PROCESS-ERROR-NEW T :ERROR-REPORTER)
+(DEFUN FILE-PROCESS-ERROR-NEW (STRING &OPTIONAL PATHNAME-OR-STREAM
+			       PROCEEDABLE NOERROR &REST MAKE-CONDITION-ARGS
+			       &AUX S-P ERROR-CODE ERROR-SEVERITY ERROR-STRING WHO-FOR
+			       (DEFAULT-CONS-AREA BACKGROUND-CONS-AREA))
+  (COND ((TYPEP PATHNAME-OR-STREAM 'PATHNAME)
+	 (SETQ WHO-FOR PATHNAME-OR-STREAM))
+	((TYPEP PATHNAME-OR-STREAM 'SI:FILE-STREAM-MIXIN)
+	 (SETQ WHO-FOR (FUNCALL PATHNAME-OR-STREAM ':PATHNAME)))
+	(T (SETQ WHO-FOR PATHNAME-OR-STREAM)))
+  (SETQ S-P (FILE-CHECK-COMMAND "ERROR" STRING))
+  (SETQ ERROR-CODE (SUBSTRING STRING S-P (SETQ S-P (STRING-SEARCH-CHAR #\SP STRING S-P))))
+  (SETQ S-P (1+ S-P))
+  (SETQ ERROR-SEVERITY
+	(SUBSTRING STRING S-P (SETQ S-P (STRING-SEARCH-CHAR #\SP STRING S-P))))
+  (SETQ ERROR-STRING (NSUBSTRING STRING (1+ S-P) (STRING-LENGTH STRING)))
+  (AND WHO-FOR
+       (SETQ ERROR-STRING (STRING-APPEND ERROR-STRING " for " (STRING WHO-FOR))))
+  (LET ((CONDITION (LEXPR-FUNCALL 'MAKE-CONDITION
+				  (OR (GET (INTERN ERROR-CODE "FS") 'FILE-ERROR)
+				      'FILE-OPERATION-FAILURE-1)
+				  "~A"
+				  WHO-FOR MAKE-CONDITION-ARGS)))
+    (SEND CONDITION ':SET-FORMAT-ARGS (LIST ERROR-STRING))
+    (IF NOERROR CONDITION
+      (SIGNAL CONDITION
+	      ':PROCEED-TYPES
+	      (COND ((CONSP PROCEEDABLE) PROCEEDABLE)
+		    (PROCEEDABLE '(:RETRY-FILE-OPERATION)))))))
+
+(DEFUN FILE-CHECK-COMMAND (COMMAND RETURNED-STRING &OPTIONAL (Y-OR-N-P NIL)
+                                                   &AUX START END)
+  "Verify a reply from a file server using the FILE protocol.
+Returns the index in the reply of the start of the data.
+Gets an error if the reply's command name is not COMMAND."
+  (SETQ START (1+ (STRING-SEARCH-CHAR #\SP RETURNED-STRING)))
+  (SETQ END (OR (STRING-SEARCH-SET '(#\SP #\CR) RETURNED-STRING START)
+                (STRING-LENGTH RETURNED-STRING)))
+  (COND ((STRING-EQUAL RETURNED-STRING COMMAND START 0 END)
+	 (1+ END)) ;Index of character after the delimiting space
+        (Y-OR-N-P NIL)
+        (T (FERROR NIL  ;I think this is best for an internal bug in FILE protocol.
+                   "Incorrect command name ~S in acknowledge from file computer"
+                   (NSUBSTRING RETURNED-STRING START END)))))
+
+;;; Send a command over the control connection.
+;;; MARK-P means writing or reading (expecting) a synchronous mark.
+;;; STREAM-OR-HANDLE is a stream whose file handle should be used, or the handle itself.
+;;;  if MARK-P, this had better really be a stream.
+;;; SIMPLE-P means do not wait for a response, get an asynchronous error if any.
+(DEFMETHOD (HOST-UNIT :COMMAND) (MARK-P STREAM-OR-HANDLE SIMPLE-P &REST COMMANDS
+								  &AUX HANDLE STREAM)
+  (DECLARE (RETURN-LIST PKT SUCCESS STRING))
+  (SETQ LAST-USE-TIME (TIME))
+  (COND ((STRINGP STREAM-OR-HANDLE)
+	 (SETQ HANDLE STREAM-OR-HANDLE))
+	(STREAM-OR-HANDLE
+	 (SETQ STREAM STREAM-OR-HANDLE
+	       HANDLE (FUNCALL STREAM ':FILE-HANDLE))
+	 (AND MARK-P (SETQ MARK-P (FUNCALL STREAM ':DIRECTION)))))
+  (LET ((PKT (CHAOS:GET-PKT))
+	(TRANSACTION-ID (FILE-MAKE-TRANSACTION-ID SIMPLE-P))
+	SUCCESS WHOSTATE STRING)
+    ;; Make up a packet containing the command to be sent over
+    (LEXPR-FUNCALL #'CHAOS:SET-PKT-STRING PKT TRANSACTION-ID " " (OR HANDLE "") " " COMMANDS)
+    (LET ((STRING (CHAOS:PKT-STRING PKT))
+	  (FROM 0))
+      (SETQ FROM (STRING-SEARCH-CHAR #\SP STRING (1+ (STRING-SEARCH-CHAR #\SP STRING))))
+      (SETQ WHOSTATE (SUBSTRING STRING (1+ FROM)
+				(STRING-SEARCH-SET '(#\SP #\CR) STRING (1+ FROM))))
+      ;; Make the whostate look pretty.
+      (DO ((I 1 (1+ I)) (LEN (STRING-LENGTH WHOSTATE)))
+	  ((= I LEN))
+	(SETF (AREF WHOSTATE I)
+	      (CHAR-DOWNCASE (AREF WHOSTATE I)))))
+    (CHAOS:SEND-PKT CONTROL-CONNECTION PKT %FILE-COMMAND-OPCODE)
+    (AND (EQ MARK-P ':OUTPUT)
+	 (FUNCALL STREAM ':WRITE-SYNCHRONOUS-MARK))
+    ;; Get the portion of the response after the transaction ID.
+    (COND (SIMPLE-P
+	   (AND (EQ MARK-P ':INPUT)
+		(FUNCALL STREAM ':READ-UNTIL-SYNCHRONOUS-MARK))
+	   (VALUES NIL T ""))
+	  ((SETQ PKT (FILE-WAIT-FOR-TRANSACTION TRANSACTION-ID CONTROL-CONNECTION WHOSTATE))
+	   (SETQ STRING (NSUBSTRING (CHAOS:PKT-STRING PKT)
+				    (1+ (STRING-SEARCH-CHAR #\SP (CHAOS:PKT-STRING PKT)))))
+	   (SETQ SUCCESS (LET ((FROM (IF HANDLE (FILE-CHECK-HANDLE HANDLE STRING)
+					 (1+ (STRING-SEARCH-SET '(#\SP #\CR) STRING)))))
+			   (NOT (STRING-EQUAL "ERROR" STRING 0 FROM 5
+					      (STRING-SEARCH-SET '(#\SP #\CR) STRING FROM)))))
+	   (AND SUCCESS (EQ MARK-P ':INPUT)
+		(FUNCALL STREAM ':READ-UNTIL-SYNCHRONOUS-MARK))
+	   (VALUES PKT SUCCESS STRING)))))
+
+(DEFUN FILE-CHECK-HANDLE (HANDLE STRING)
+  "Validate a reply STRING received supposedly for file HANDLE.
+Gets an error if the string does not start with HANDLE.
+If it does, returns the index of the first character in STRING after the handle."
+  (LET ((HANDLE-END (STRING-SEARCH-SET '(#\SP #\CR) STRING)))
+    (AND (NULL HANDLE-END)
+	 (FERROR NIL "Response over control connection was incorrectly formatted"))
+    (OR (STRING-EQUAL STRING HANDLE 0 0 HANDLE-END)
+	(FERROR NIL "Response over control connection was for wrong file handle"))
+    (1+ HANDLE-END)))
+
+(DEFMETHOD (FILE-HOST-MIXIN :LOGIN-UNIT) (UNIT LOGIN-P)
+  (UNLESS USER-ID (FORCE-USER-TO-LOGIN))
+  (LOGIN-HOST-UNIT UNIT LOGIN-P SELF))
+
+(DEFUN LOGIN-HOST-UNIT (UNIT LOGIN-P UNAME-HOST &AUX HOST CONN SUCCESS PKT
+			(DEFAULT-CONS-AREA BACKGROUND-CONS-AREA))
+  "Log the host unit UNIT in or out.  LOGIN-P = NIL means log out, otherwise log in.
+Note that logging in must be done on each host unit before it can be used,
+whether or not this is the host that the user actually specified when
+he said /"log in/".  UNAME-HOST should be the host that the user actually logged in on."
+  (SETQ HOST (HOST-UNIT-HOST UNIT)
+	CONN (HOST-UNIT-CONTROL-CONNECTION UNIT))
+  ;;first thing we should do is check to see 
+  ;;if the connection is in a valid state, and then logout.
+  (if (null login-p)
+      (and conn (eq (chaos:state conn) 'chaos:open-state)
+	   (setq conn (chaos:close conn "I'm loggin out.")))) ;;nil
+  (AND CONN (EQ (CHAOS:STATE CONN) 'CHAOS:OPEN-STATE)
+       (UNWIND-PROTECT
+	 (DO ((ID (FILE-MAKE-TRANSACTION-ID))
+	      (PASSWORD "")
+	      (ACCOUNT "")
+	      (NEED-PASSWORD NIL)
+	      NEW-USER-ID)
+	     (SUCCESS)
+	   (SETQ PKT (CHAOS:GET-PKT)
+		 ID (FILE-MAKE-TRANSACTION-ID))
+	   ;; Only hack user name or password if logging in, not out.
+	   (COND (LOGIN-P
+		  (SETQ NEW-USER-ID (CDR (ASSQ UNAME-HOST USER-UNAMES)))
+		  (COND ((EQ UNAME-HOST 'ITS)
+			 (COND ((NULL NEW-USER-ID)
+				;; This is an ITS; ask for the user name for all ITSes.
+				(FORMAT QUERY-IO "~&ITS uname (default ~A): " USER-ID)
+				(LET ((NID (READLINE-TRIM QUERY-IO)))
+				  (SETQ NEW-USER-ID (IF (EQUAL NID "") USER-ID NID))))))
+			;; Not an ITS: if we don't know user id or if password failed,
+			;; ask for one or both.
+			((OR NEED-PASSWORD
+;			     (NULL NEW-USER-ID)
+			     )
+			 (MULTIPLE-VALUE (NEW-USER-ID PASSWORD)
+			   (FILE-GET-PASSWORD USER-ID UNAME-HOST)))
+			;; We know the user id; use remembered password if any.
+			((EQUAL PASSWORD "")
+			 (SETQ PASSWORD
+			       (OR (CADR (ASS 'EQUALP
+					   (LIST NEW-USER-ID (FUNCALL HOST ':NAME))
+					   USER-HOST-PASSWORD-ALIST))
+				   ;; None remembered => guess, except on Multics
+				   ;; since multics would hassle the guy if it's wrong.
+				   (IF (EQ (SEND HOST ':SYSTEM-TYPE) ':MULTICS) "")
+				   ;; Try guessing password same as on some other host.
+				   (CADR (CAR USER-HOST-PASSWORD-ALIST))
+				   ;; Try guessing password same as uname or last part of it.
+				   (PROG1
+				     (SETQ PASSWORD
+					   (SUBSTRING NEW-USER-ID
+						      (1+ (OR (STRING-REVERSE-SEARCH #/. NEW-USER-ID)
+							      -1))))
+				     (PUSH (LIST (LIST NEW-USER-ID (SEND HOST ':NAME))
+						 PASSWORD)
+					   USER-HOST-PASSWORD-ALIST))))))
+		  (OR NEW-USER-ID (SETQ NEW-USER-ID USER-ID))
+		  (FILE-HOST-USER-ID NEW-USER-ID HOST)))
+	   ;; If the connection got closed while we waited for input, reconnect.
+	   (COND ((NOT (EQ (CHAOS:STATE CONN) 'CHAOS:OPEN-STATE))
+		  (CHAOS:CLOSE CONN)
+		  (CONDITION-CASE (CONN1)
+				  (CHAOS:CONNECT HOST *FILE-CONTACT-NAME*
+						 *FILE-CONTROL-WINDOW-SIZE*)
+		    (:NO-ERROR
+		      (SETF (HOST-UNIT-CONTROL-CONNECTION UNIT) CONN1)
+		      (SETQ CONN CONN1)
+		      (SETF (CHAOS:INTERRUPT-FUNCTION CONN)
+			    (LET-CLOSED ((HOST-UNIT UNIT))
+			      'HOST-CHAOS-INTERRUPT-FUNCTION)))
+		    (SYS:CONNECTION-REFUSED
+		      (FERROR 'HOST-NOT-AVAILABLE
+			      "File server ~2G~A is refusing file connections."
+			      NIL NIL HOST)))))
+	   ;; Send the login command.
+	   (CHAOS:SET-PKT-STRING PKT ID "  LOGIN " (OR NEW-USER-ID "") " " PASSWORD " " ACCOUNT)
+	   (CHAOS:SEND-PKT CONN PKT)
+	   ;; Avoid doing RETURN-PKT on a PKT that has been returned already by SEND-PKT.
+	   (SETQ PKT NIL)
+	   (SETQ PKT (FILE-WAIT-FOR-TRANSACTION ID CONN "Login"))
+	   (IF LOGIN-P
+	       (LET ((STR (CHAOS:PKT-STRING PKT))
+		     IDX HSNAME-PATHNAME PERSONAL-NAME GROUP PERSONAL-NAME-1 ITEM)
+		 (SETQ STR (NSUBSTRING STR (1+ (STRING-SEARCH-CHAR #\SP STR))))
+		 (SETQ IDX (FILE-CHECK-COMMAND "LOGIN" STR T))
+		 (COND (IDX
+;This error check never goes off, except that more hosts are starting
+;to return different data from the argument.  So flush it.  RMS 10/13/83.
+;			(OR (STRING-EQUAL NEW-USER-ID STR 0 IDX NIL
+;					  (SETQ IDX (STRING-SEARCH-CHAR #\SP STR IDX)))
+;			    (SEND HOST ':IGNORE-USER-ID-IN-REPLY)
+;			    (FERROR NIL "File job claims to have logged in as someone else."))
+			(SETQ IDX (STRING-SEARCH-CHAR #\SP STR IDX))
+			(MULTIPLE-VALUE (HSNAME-PATHNAME PERSONAL-NAME GROUP PERSONAL-NAME-1)
+			  (FUNCALL HOST ':HSNAME-INFORMATION UNIT STR IDX))
+			;; Record info about this user
+			;; only if host login name equals name given to LOGIN.
+			(AND (EQUAL USER-ID NEW-USER-ID)
+			     (EQUAL USER-PERSONAL-NAME "")
+			     (SETQ USER-PERSONAL-NAME PERSONAL-NAME
+				   USER-GROUP-AFFILIATION GROUP
+				   USER-PERSONAL-NAME-FIRST-NAME-FIRST PERSONAL-NAME-1))
+			(SETQ CHAOS:GIVE-FINGER-SAVED-USER-ID T)	;Clear cache
+			;; If this is the user's login host
+			;; but the host user id is not the one specified in LOGIN,
+			;; do not accept the file server's suggested home dir
+			;; since it is based on the file server login id.
+			(AND (EQ HOST USER-LOGIN-MACHINE)
+			     (NOT (EQUAL USER-ID NEW-USER-ID))
+			     (SETQ HSNAME-PATHNAME (QUIET-USER-HOMEDIR HOST)))
+			;; Record homedir for this host.
+			(IF (SETQ ITEM (ASSQ HOST USER-HOMEDIRS))
+			    (RPLACD ITEM HSNAME-PATHNAME)
+			  (PUSH (CONS HOST HSNAME-PATHNAME) USER-HOMEDIRS))
+			;; If we have done remote connect or access on this host,
+			;; tell the new file server about it.
+			(IF (GET CHAOS-HOST-CONNECT-PLIST HOST)
+			    (CWD-CHAOS HOST (GET CHAOS-HOST-CONNECT-PLIST HOST)
+				       T NIL UNIT))
+			(IF (GET CHAOS-HOST-ACCESS-PLIST HOST)
+			    (CWD-CHAOS HOST (GET CHAOS-HOST-ACCESS-PLIST HOST)
+				       T T UNIT))
+			(IF (GET CHAOS-HOST-CAPABILITIES-PLIST HOST)
+			    (CHANGE-CAPABILITIES-CHAOS
+			      HOST (GET CHAOS-HOST-CAPABILITIES-PLIST HOST)
+			      T UNIT))
+			(SETQ SUCCESS T))
+		       ;; If user or password is invalid, force getting it (again).
+		       (T
+			(CONDITION-CASE ()
+					(FILE-PROCESS-ERROR-NEW STR)
+			  (LOGIN-PROBLEMS
+			    ;; Since this password is wrong, flush it from list of remembered ones.
+			    (LET ((ALIST-ELEMENT
+				    (ASS 'EQUALP
+				      (LIST NEW-USER-ID (FUNCALL HOST ':NAME))
+				      USER-HOST-PASSWORD-ALIST)))
+			      (IF ALIST-ELEMENT
+				  (SETQ USER-HOST-PASSWORD-ALIST
+					(DELQ ALIST-ELEMENT USER-HOST-PASSWORD-ALIST))))
+			    (SETQ NEED-PASSWORD T))))))
+	     (SETQ SUCCESS T))
+	   (CHAOS:RETURN-PKT PKT)
+	   (SETQ PKT NIL))
+	 (COND ((NOT SUCCESS)
+		(AND PKT (CHAOS:RETURN-PKT PKT))
+		(CHAOS:CLOSE CONN "Login failed")))))
+  T)
+
+(DEFMACRO FILE-OPERATION-RETRY (&BODY BODY)
+  "Like ERROR-RESTART for condition FILE-ERROR, but uses proceed-type :RETRY-FILE-OPERATION."
+  (LET* ((TAG (GENSYM)))
+    `(BLOCK FILE-OPERATION-RETRY
+       (TAGBODY
+	RETRY
+	   (RETURN-FROM FILE-OPERATION-RETRY
+	     (CATCH-CONTINUATION-IF T ',TAG #'(LAMBDA (IGNORE) (GO RETRY)) NIL
+	       (WITH-STACK-LIST* (EH:CONDITION-RESUME-HANDLERS
+				   '(FILE-ERROR :RETRY-FILE-OPERATION T
+						("Retry the operation on the same file.")
+						SI:CATCH-ERROR-RESTART-THROW ,TAG)
+				   EH:CONDITION-RESUME-HANDLERS)
+	         . ,BODY)))))))
+
+;;; Functions to be called by pathname interface.
+;;; Commands without associated streams.
+(DEFUN DELETE-CHAOS (HOST PATHNAME ERROR-P &AUX HOST-UNIT PKT SUCCESS STRING)
+  (FILE-OPERATION-RETRY
+    (SETQ HOST-UNIT (FUNCALL HOST ':GET-HOST-UNIT))
+    (MULTIPLE-VALUE (PKT SUCCESS STRING)
+      (FUNCALL HOST-UNIT ':COMMAND NIL NIL NIL
+	       "DELETE" #\CR (FILE-PRINT-PATHNAME PATHNAME) #\CR))
+    (UNWIND-PROTECT
+      (OR SUCCESS
+	  (FILE-PROCESS-ERROR-NEW STRING PATHNAME NIL (NOT ERROR-P) ':DELETE))
+      (CHAOS:RETURN-PKT PKT))))
+
+;Problem is, it might exceed size of packet in the command or the reply.
+;(DEFUN DELETE-OR-UNDELETE-MULTIPLE-PATHNAMES-CHAOS (HOST PATHNAMES COMMAND OP ERROR-P
+;						    &AUX HOST-UNIT PKT SUCCESS STRING)
+;  (FILE-OPERATION-RETRY
+;    (SETQ HOST-UNIT (FUNCALL HOST ':GET-HOST-UNIT))
+;    (MULTIPLE-VALUE (PKT SUCCESS STRING)
+;      (FUNCALL HOST-UNIT ':COMMAND NIL NIL NIL
+;	       COMMAND #\CR
+;	       (MAPCAN #'(LAMBDA (PATHNAME)
+;			   (LIST (FILE-PRINT-PATHNAME PATHNAME) #\CR))
+;		       PATHNAMES)))
+;    (UNWIND-PROTECT
+;      (IF SUCCESS
+;	  (LET (RESULTS)
+;	    (DO ((I 0)
+;		 (PTAIL PATHNAMES (CDR PTAIL)))
+;		((NULL PTAIL))
+;	      (SETQ J (STRING-SEARCH-CHAR #\CR STRING I))
+;	      (IF (= J I)
+;		  (PUSH NIL RESULTS)
+;		(PUSH (FILE-PROCESS-ERROR-NEW (SUBSTRING STRING I J) (CAR PTAIL) NIL T OP)
+;		      RESULTS))
+;	      (SETQ I (1+ J)))
+;	    RESULTS)
+;	  (FILE-PROCESS-ERROR-NEW STRING PATHNAME NIL (NOT ERROR-P) ':DELETE))
+;      (CHAOS:RETURN-PKT PKT))))
+
+(DEFUN RENAME-CHAOS (HOST OLD-PATHNAME NEW-PATHNAME ERROR-P &AUX HOST-UNIT PKT SUCCESS STRING)
+  (FILE-OPERATION-RETRY
+    (SETQ HOST-UNIT (FUNCALL HOST ':GET-HOST-UNIT))
+    (MULTIPLE-VALUE (PKT SUCCESS STRING)
+      (FUNCALL HOST-UNIT ':COMMAND NIL NIL NIL
+	       "RENAME" #\CR (FILE-PRINT-PATHNAME OLD-PATHNAME) #\CR
+	       (FILE-PRINT-PATHNAME NEW-PATHNAME) #\CR))
+    (UNWIND-PROTECT
+	(IF SUCCESS
+	    ;; If there is a second line coming from the file server,
+	    ;; it is the new truename.
+	    (LET* ((FROM (STRING-SEARCH #\RETURN STRING))
+		   TRUENAME-STRING)
+	      (COND (FROM
+		     (SETQ TRUENAME-STRING
+			   (SUBSTRING STRING (1+ FROM)
+				      (STRING-SEARCH #\RETURN STRING (1+ FROM))))
+		     (PARSE-PATHNAME TRUENAME-STRING
+				     (FUNCALL OLD-PATHNAME ':HOST)))
+		    (T T)))
+	  (FILE-PROCESS-ERROR-NEW STRING OLD-PATHNAME NIL (NOT ERROR-P) ':RENAME))
+      (CHAOS:RETURN-PKT PKT))))
+
+(DEFUN COMPLETE-CHAOS (HOST PATHNAME STRING OPTIONS
+		       &AUX HOST-UNIT PKT FILE-STRING SUCCESS
+			    DELETED-P WRITE-P NEW-OK STRING-ORIGIN
+			    (DEFAULT-CONS-AREA BACKGROUND-CONS-AREA))
+  (DOLIST (KEY OPTIONS)
+    (SELECTQ KEY
+      (:DELETED
+       (SETQ DELETED-P T))
+      ((:READ :IN)
+       (SETQ WRITE-P NIL))
+      ((:PRINT :OUT :WRITE)
+       (SETQ WRITE-P T))
+      (:OLD
+       (SETQ NEW-OK NIL))
+      (:NEW-OK
+       (SETQ NEW-OK T))
+      (OTHERWISE
+       (FERROR NIL "~S is not a recognized option." KEY ':COMPLETE-STRING))))
+  (SETQ HOST-UNIT (FUNCALL HOST ':GET-HOST-UNIT))
+  (MULTIPLE-VALUE (PKT SUCCESS FILE-STRING)
+    (FUNCALL HOST-UNIT ':COMMAND NIL NIL NIL
+	     (FORMAT NIL "COMPLETE~:[ DELETED~]~:[ WRITE~]~:[ NEW-OK~]~%~A~%~A~%"
+		     (NOT DELETED-P) (NOT WRITE-P) (NOT NEW-OK)
+		     (FILE-PRINT-PATHNAME PATHNAME) STRING)))
+  (COND (SUCCESS
+	 (OR (SETQ STRING-ORIGIN (STRING-SEARCH-CHAR #\CR FILE-STRING))
+	     (FERROR NIL "Illegally formatted string ~S from file server." FILE-STRING))
+	 (SETQ SUCCESS (PKG-BIND SI:PKG-KEYWORD-PACKAGE
+			 (READ-FROM-STRING FILE-STRING NIL
+					   (FILE-CHECK-COMMAND "COMPLETE" FILE-STRING))))
+	 (SETQ STRING (SUBSTRING FILE-STRING
+				 (SETQ STRING-ORIGIN (1+ STRING-ORIGIN))
+				 (STRING-SEARCH-CHAR #\CR FILE-STRING STRING-ORIGIN)))))
+  (CHAOS:RETURN-PKT PKT)
+  (IF (EQ SUCCESS ':NIL) (SETQ SUCCESS NIL))
+  (VALUES STRING SUCCESS))
+
+(DEFUN CHANGE-PROPERTIES-CHAOS (HOST PATHNAME ERROR-P PROPERTIES
+				&AUX STRING HOST-UNIT PKT SUCCESS)
+  (FILE-OPERATION-RETRY
+    (SETQ HOST-UNIT (FUNCALL HOST ':GET-HOST-UNIT))
+    (SETQ STRING (CHANGE-PROPERTIES-STRING PROPERTIES PATHNAME))
+    (MULTIPLE-VALUE (PKT SUCCESS STRING)
+      (FUNCALL HOST-UNIT ':COMMAND NIL NIL NIL STRING))
+    (UNWIND-PROTECT
+      (OR SUCCESS
+	  (FILE-PROCESS-ERROR-NEW STRING PATHNAME NIL (NOT ERROR-P) ':CHANGE-PROPERTIES))
+      (CHAOS:RETURN-PKT PKT))))
+
+(DEFUN CHANGE-PROPERTIES-STRING (PROPERTIES &OPTIONAL PATHNAME)
+  (WITH-OUTPUT-TO-STRING (STREAM)
+    (FORMAT STREAM "CHANGE-PROPERTIES~%")
+    (AND PATHNAME (FORMAT STREAM "~A~%" (FILE-PRINT-PATHNAME PATHNAME)))
+    (TV:DOPLIST (PROPERTIES PROP IND)
+      (FORMAT STREAM "~A " IND)
+      (FUNCALL (DO ((L *KNOWN-DIRECTORY-PROPERTIES* (CDR L)))
+		   ((NULL L) 'PRINC)
+		 (AND (MEMQ IND (CDAR L))
+		      (RETURN (CADAAR L))))
+	       PROP STREAM)
+      (FUNCALL STREAM ':TYO #\CR))))
+
+(DEFUN CREATE-LINK-CHAOS (HOST LINK LINK-TO ERROR-P &AUX HOST-UNIT PKT SUCCESS STRING)
+  (FILE-OPERATION-RETRY
+    (SETQ HOST-UNIT (FUNCALL HOST ':GET-HOST-UNIT))
+    (MULTIPLE-VALUE (PKT SUCCESS STRING)
+      (FUNCALL HOST-UNIT ':COMMAND NIL NIL NIL
+	       "CREATE-LINK" #\CR (FILE-PRINT-PATHNAME LINK) #\CR
+	       (FILE-PRINT-PATHNAME LINK-TO)))
+    (UNWIND-PROTECT
+	(UNLESS SUCCESS
+	  (FILE-PROCESS-ERROR-NEW STRING LINK NIL (NOT ERROR-P) ':CREATE-LINK))
+      (CHAOS:RETURN-PKT PKT))))
+
+(DEFUN HOMEDIR-CHAOS (-HOST- &OPTIONAL (USER USER-ID))
+  (DECLARE (:SELF-FLAVOR CHAOS-PATHNAME))
+  (OR (CDR (ASSQ -HOST- USER-HOMEDIRS))
+      (WHEN (NOT (MEMBER USER-ID '(NIL "")))
+	;; Try logging in a file connection, in case that works.
+	(FUNCALL -HOST- ':GET-HOST-UNIT T)
+	(CDR (ASSQ -HOST- USER-HOMEDIRS)))
+      ;; If we fail to establish a connection and don't already know a homedir,
+      ;; return something innocuous.  Don't get an error.
+      (FUNCALL-SELF ':QUIET-HOMEDIR USER)))
+
+(DEFUN DIRECTORY-OPERATION-CHAOS (OPERATION HOST PATHNAME ERROR-P
+				  &AUX HOST-UNIT PKT SUCCESS FILE-STRING)
+  (FILE-OPERATION-RETRY
+    (SETQ HOST-UNIT (FUNCALL HOST ':GET-HOST-UNIT))
+    (MULTIPLE-VALUE (PKT SUCCESS FILE-STRING)
+      (FUNCALL HOST-UNIT ':COMMAND NIL NIL NIL
+	       (STRING OPERATION) #\CR (FILE-PRINT-DIRECTORY PATHNAME) #\CR))
+    (UNWIND-PROTECT
+      (COND (SUCCESS
+	     (LET ((START (FILE-CHECK-COMMAND (STRING OPERATION) FILE-STRING)))
+	       (PARSE-NUMBER FILE-STRING START)))
+	    (T
+	     (FILE-PROCESS-ERROR-NEW FILE-STRING PATHNAME NIL (NOT ERROR-P) OPERATION)))
+      (CHAOS:RETURN-PKT PKT))))
+
+(DEFUN CHANGE-CAPABILITIES-CHAOS (HOST CAPABILITIES ENABLE-P
+				  &OPTIONAL (HOST-UNIT NIL HOST-UNIT-SPECD)
+				  &AUX PKT SUCCESS FILE-STRING COMMAND
+				  CAP-STRING CURRENT-CAPABILITIES)
+  (SETQ COMMAND
+	(IF ENABLE-P "ENABLE-CAPABILITIES" "DISABLE-CAPABILITIES"))
+  (SETQ CAP-STRING "")
+  (SETQ CAPABILITIES (MAPCAR 'STRING-UPCASE 'CAPABILITIES))
+  (DOLIST (CAP CAPABILITIES)
+    (SETQ CAP-STRING (STRING-APPEND CAP " " CAP-STRING)))
+  (OR HOST-UNIT-SPECD (SETQ HOST-UNIT (FUNCALL HOST ':GET-HOST-UNIT)))
+  (MULTIPLE-VALUE (PKT SUCCESS FILE-STRING)
+    (FUNCALL HOST-UNIT ':COMMAND NIL NIL NIL
+		 COMMAND #\CR CAP-STRING))
+  (UNWIND-PROTECT
+    (COND (SUCCESS
+	   ;; Succeeded on one host unit.
+	   ;; Record what our capabilities are for this host.
+	   (SETQ CURRENT-CAPABILITIES (GET CHAOS-HOST-CAPABILITIES-PLIST HOST))
+	   (IF ENABLE-P
+	       (SETQ CURRENT-CAPABILITIES (SI:NUNION-EQUAL CURRENT-CAPABILITIES CAPABILITIES))
+	     (SETQ CURRENT-CAPABILITIES
+		   (SUBSET #'(LAMBDA (P) (NOT (MEMBER P CAPABILITIES))) CURRENT-CAPABILITIES)))
+	   (PUTPROP CHAOS-HOST-CAPABILITIES-PLIST CURRENT-CAPABILITIES HOST)
+	   ;; Also inform any other host units that are connected now.
+	   (OR HOST-UNIT-SPECD
+	       (LET ((UNITS (FUNCALL HOST ':HOST-UNITS)))
+		 (DOLIST (UNIT UNITS)
+		   (AND (NEQ UNIT HOST-UNIT)
+			(FUNCALL UNIT ':VALIDATE-CONTROL-CONNECTION T)
+			(FUNCALL UNIT ':COMMAND NIL NIL NIL
+				 COMMAND #\CR CAP-STRING)))))))
+    (CHAOS:RETURN-PKT PKT)))
+
+(DEFUN CWD-CHAOS (HOST PATHNAME ERROR-P ACCESS-P &OPTIONAL (HOST-UNIT NIL HOST-UNIT-SPECD)
+		  &AUX PKT SUCCESS FILE-STRING COMMAND
+		  (DEFAULT-CONS-AREA BACKGROUND-CONS-AREA))
+  (SETQ COMMAND (IF ACCESS-P "ACCESS" "CWD"))
+  (DO (NEED-PASSWORD) (())
+    (LET ((DIR (FILE-PRINT-DIRECTORY PATHNAME))
+	  (PASSWORD ""))
+      ;; If we have failed once, ask for a new password.
+      ;; The first time, if we remember a password, use it.
+      (COND (NEED-PASSWORD
+	     (MULTIPLE-VALUE (DIR PASSWORD)
+	       (FILE-GET-PASSWORD DIR HOST T))
+	     (SETQ PATHNAME (PARSE-PATHNAME DIR HOST))
+	     (SETQ DIR (FILE-PRINT-DIRECTORY PATHNAME)))
+	    ;; We know the user id; use remembered password if any.
+	    ((EQUAL PASSWORD "")
+	     (SETQ PASSWORD
+		   (OR (CADR (ASS 'EQUALP (LIST DIR (FUNCALL HOST ':NAME))
+				  USER-HOST-PASSWORD-ALIST))
+		       ""))))
+      (OR HOST-UNIT-SPECD (SETQ HOST-UNIT (FUNCALL HOST ':GET-HOST-UNIT)))
+      (MULTIPLE-VALUE (PKT SUCCESS FILE-STRING)
+	(FUNCALL HOST-UNIT ':COMMAND NIL NIL NIL
+		 COMMAND #\CR
+		 DIR #\CR
+		 PASSWORD #\CR))
+      (UNWIND-PROTECT
+	(COND (SUCCESS
+	       ;; Succeeded on one host unit.
+	       ;; Record what our connected or accessed directory is for this host.
+	       (PUTPROP (IF ACCESS-P CHAOS-HOST-ACCESS-PLIST CHAOS-HOST-CONNECT-PLIST)
+			PATHNAME HOST)
+	       ;; Also inform any other host units that are connected now.
+	       (OR HOST-UNIT-SPECD
+		   (LET ((UNITS (FUNCALL HOST ':HOST-UNITS)))
+		     (DOLIST (UNIT UNITS)
+		       (AND (NEQ UNIT HOST-UNIT)
+			    (FUNCALL UNIT ':VALIDATE-CONTROL-CONNECTION T)
+			    (FUNCALL UNIT ':COMMAND NIL NIL NIL
+				     COMMAND #\CR
+				     DIR #\CR
+				     PASSWORD #\CR)))))
+	       (RETURN T))
+	      (T
+	       (CONDITION-CASE-IF (NOT ERROR-P) (ERROR-OBJECT)
+		   (CONDITION-CASE ()
+				   (FILE-PROCESS-ERROR-NEW FILE-STRING)
+		     (LOGIN-PROBLEMS
+		       ;; Since this password is wrong, flush it from list of remembered ones.
+		       (LET ((ALIST-ELEMENT
+			       (ASS 'EQUALP (LIST DIR (FUNCALL HOST ':NAME))
+				    USER-HOST-PASSWORD-ALIST)))
+			 (IF ALIST-ELEMENT
+			     (SETQ USER-HOST-PASSWORD-ALIST
+				   (DELQ ALIST-ELEMENT USER-HOST-PASSWORD-ALIST))))
+		       (SETQ NEED-PASSWORD T)))
+		 (ERROR ERROR-OBJECT))))
+	(CHAOS:RETURN-PKT PKT)))))
+
+;;; Stream generating functions
+
+(DEFUN OPEN-CHAOS (HOST PATHNAME &REST OPTIONS &KEY (DIRECTION ':INPUT) (CHARACTERS T)
+		   (ERROR T) (ACCESS-ERROR (NOT ERROR))
+		   (ELEMENT-TYPE 'STRING-CHAR ELEMENT-TYPE-P)
+		   (IF-EXISTS (IF (MEMQ (PATHNAME-VERSION PATHNAME)
+					;; :UNSPECIFIC here is to prevent lossage
+					;; writing ITS files with no version numbers.
+					'(:NEWEST :UNSPECIFIC))
+				  ':NEW-VERSION ':ERROR))
+		   (IF-DOES-NOT-EXIST
+		     (COND ((MEMQ DIRECTION '(:PROBE :PROBE-LINK :PROBE-DIRECTORY))
+			    NIL)
+			   ((AND (EQ DIRECTION ':OUTPUT)
+				 (NOT (MEMQ IF-EXISTS '(:OVERWRITE :TRUNCATE :APPEND))))
+			    ':CREATE)
+			   ;; Note: if DIRECTION is NIL, this defaults to :ERROR
+			   ;; for compatibility with the past.
+			   ;; A Common-Lisp program would use :PROBE
+			   ;; and get NIL as the default for this.
+			   (T ':ERROR)))
+		   TEMPORARY DELETED RAW SUPER-IMAGE (BYTE-SIZE ':DEFAULT)
+		   PRESERVE-DATES INHIBIT-LINKS
+		   &AUX HOST-UNIT DATA-CONN PKT SUCCESS STRING NOT-ABORTED
+		   PHONY-CHARACTERS SIGN-EXTEND-BYTES IF-EXISTS-P
+		   (DEFAULT-CONS-AREA BACKGROUND-CONS-AREA))
+  (SI:CCASE DIRECTION
+    ((:INPUT :OUTPUT :PROBE-DIRECTORY :PROBE-LINK))
+    (:IO (FERROR NIL "Bidirectional file streams are not supported."))
+    ((NIL :PROBE) (SETQ DIRECTION NIL)))
+  (CHECK-TYPE IF-EXISTS (MEMBER :ERROR :NEW-VERSION :RENAME :RENAME-AND-DELETE
+				:OVERWRITE :APPEND :TRUNCATE :SUPERSEDE NIL))
+  (CHECK-TYPE IF-DOES-NOT-EXIST (MEMBER :ERROR :CREATE NIL))
+  ;; IF-EXISTS-P is T if we need to give the IF-EXISTS to the server.
+  (SETQ IF-EXISTS-P
+	(NEQ IF-EXISTS
+	     (IF (MEMQ (PATHNAME-VERSION PATHNAME)
+		       '(:NEWEST :UNSPECIFIC))
+		 ':NEW-VERSION ':SUPERSEDE)))
+  (WHEN ELEMENT-TYPE-P
+    (SETF (VALUES CHARACTERS BYTE-SIZE PHONY-CHARACTERS SIGN-EXTEND-BYTES)
+	  (DECODE-ELEMENT-TYPE ELEMENT-TYPE BYTE-SIZE)))
+  (FILE-OPERATION-RETRY
+    (CONDITION-CASE-IF ACCESS-ERROR (ERROR-OBJECT)
+        (PROGN
+	  (IF (MEMQ DIRECTION '(NIL :PROBE-DIRECTORY :PROBE-LINK))
+	      ;;PROBE mode implies no need for data connection
+	      (SETQ HOST-UNIT (FUNCALL HOST ':GET-HOST-UNIT))
+	    (MULTIPLE-VALUE (DATA-CONN HOST-UNIT)
+	      (FUNCALL HOST ':GET-DATA-CONNECTION DIRECTION))))
+      (REMOTE-NETWORK-ERROR ERROR-OBJECT)
+      (:NO-ERROR
+       (UNWIND-PROTECT
+	 (PROGN
+	   (MULTIPLE-VALUE (PKT SUCCESS STRING)
+	     (IF (TYPEP SELF '(OR LMFILE-PARSING-MIXIN LM-PARSING-MIXIN))
+		 (FUNCALL HOST-UNIT ':COMMAND NIL
+			  (SELECTQ DIRECTION
+			    (:INPUT (DATA-INPUT-HANDLE DATA-CONN))
+			    (:OUTPUT (DATA-OUTPUT-HANDLE DATA-CONN)))
+			  NIL "OPEN-FOR-LISPM " #\RETURN
+			  (FILE-PRINT-PATHNAME SELF) #\RETURN
+			  (LET ((BASE 10.) (*NOPOINT T) (PACKAGE SI:PKG-USER-PACKAGE)
+				(READTABLE SI:COMMON-LISP-READTABLE))
+			    (AND (EQ DIRECTION ':OUTPUT) (NULL IF-EXISTS)
+				 (SETQ OPTIONS (LIST* ':IF-EXISTS ':ERROR OPTIONS)))
+			    (AND (NOT IF-EXISTS-P)
+				 (GET-LOCATION-OR-NIL (LOCF OPTIONS) ':IF-EXISTS)
+				 (PROGN
+				   (SETQ OPTIONS (COPYLIST OPTIONS))
+				   (REMPROP (LOCF OPTIONS) ':IF-EXISTS)))
+			    (AND (NULL IF-DOES-NOT-EXIST)
+				 (SETQ OPTIONS (LIST* ':IF-DOES-NOT-EXIST ':ERROR OPTIONS)))
+			    (PRIN1-TO-STRING OPTIONS)))
+	       (FUNCALL HOST-UNIT ':COMMAND NIL
+			(SELECTQ DIRECTION
+			  (:INPUT (DATA-INPUT-HANDLE DATA-CONN))
+			  (:OUTPUT (DATA-OUTPUT-HANDLE DATA-CONN)))
+			NIL
+			"OPEN " (SELECTQ DIRECTION
+				  ((NIL) "PROBE")
+				  (:PROBE-DIRECTORY "PROBE-DIRECTORY")
+				  (:PROBE-LINK "PROBE INHIBIT-LINKS")
+				  (:INPUT "READ")
+				  (:OUTPUT "WRITE"))
+			" " (SELECTQ CHARACTERS
+			      ((NIL) "BINARY")
+			      (:DEFAULT "DEFAULT")
+			      (T "CHARACTER"))
+			(IF (AND (EQ DIRECTION ':OUTPUT)
+				 IF-EXISTS-P)
+			    (STRING-APPEND " IF-EXISTS "
+					   (IF (EQ IF-EXISTS NIL)
+					       ':ERROR
+					     IF-EXISTS))
+			  "")
+			(IF (OR IF-EXISTS-P
+				(NEQ IF-DOES-NOT-EXIST
+				     (SELECTQ DIRECTION
+				       ((:INPUT NIL :PROBE-DIRECTORY :PROBE-LINK) ':ERROR)
+				       (:OUTPUT ':CREATE))))
+			    (STRING-APPEND " IF-DOES-NOT-EXIST "
+					   (IF (EQ IF-DOES-NOT-EXIST NIL)
+					       ':ERROR
+					     IF-DOES-NOT-EXIST))
+			  "")
+			(IF INHIBIT-LINKS " INHIBIT-LINKS" "")
+			(FORMAT NIL "~:[ BYTE-SIZE ~D~;~*~]~:[~; TEMPORARY~]~:[~; DELETED~]~
+				~:[~; RAW~]~:[~; SUPER~]~:[~; PRESERVE-DATES~]~%~A~%"
+				(EQ BYTE-SIZE ':DEFAULT) BYTE-SIZE
+				TEMPORARY DELETED RAW SUPER-IMAGE PRESERVE-DATES
+				(FILE-PRINT-PATHNAME SELF)))))
+	   (COND ((NOT SUCCESS)
+		  (SETQ NOT-ABORTED T)
+		  (SETQ STRING (STRING-APPEND STRING))
+		  (AND PKT (CHAOS:RETURN-PKT PKT))
+		  (OR (NULL DATA-CONN)
+		      (SETF (DATA-STREAM DATA-CONN DIRECTION) NIL))
+		  (CONDITION-CASE-IF (NOT IF-DOES-NOT-EXIST)
+				     ()
+		      (CONDITION-CASE-IF (NOT IF-EXISTS)
+					 ()
+			  (FILE-PROCESS-ERROR-NEW STRING PATHNAME NIL (NOT ERROR) ':OPEN)
+			(FILE-ALREADY-EXISTS NIL))
+		    (FILE-NOT-FOUND NIL)))
+		 (T
+		  (LET ((PROPERTIES (READ-FILE-PROPERTY-LIST-STRING STRING "OPEN" PATHNAME)))
+		    (CHAOS:RETURN-PKT PKT)
+		    (AND (EQ CHARACTERS ':DEFAULT)
+			 (SETQ CHARACTERS (GET (LOCF PROPERTIES) ':CHARACTERS)))
+		    (UNLESS (OR (EQ BYTE-SIZE ':DEFAULT)
+				(GET (LOCF PROPERTIES) ':BYTE-SIZE))
+		      (SETF (GET (LOCF PROPERTIES) ':BYTE-SIZE) BYTE-SIZE))
+		    (PROG1
+		      (MAKE-INSTANCE (SELECTQ DIRECTION
+				       (:INPUT
+					(IF CHARACTERS
+					    'FILE-INPUT-CHARACTER-STREAM
+					  (COND (SIGN-EXTEND-BYTES
+						 'FILE-INPUT-SIGNED-BINARY-STREAM)
+						(PHONY-CHARACTERS
+						 'FILE-INPUT-PHONY-CHARACTER-STREAM)
+						(T
+						 'FILE-INPUT-BINARY-STREAM))))
+				       (:OUTPUT
+					(IF CHARACTERS
+					   'FILE-OUTPUT-CHARACTER-STREAM
+					  (IF PHONY-CHARACTERS
+					      'FILE-OUTPUT-PHONY-CHARACTER-STREAM
+					    'FILE-OUTPUT-BINARY-STREAM)))
+				       (T 'FILE-PROBE-STREAM))
+				     ':HOST-UNIT HOST-UNIT
+				     ':DATA-CONNECTION DATA-CONN
+				     ':PROPERTY-LIST PROPERTIES
+				     ':PATHNAME PATHNAME)
+		      (SETQ NOT-ABORTED T))))))
+	 (UNLESS (OR NOT-ABORTED
+		     (NULL DATA-CONN)
+		     (NULL (SEND HOST-UNIT ':CONTROL-CONNECTION)))
+	   ;; Here if aborted out of it and server may have file open.
+	   (CONDITION-CASE ()
+	       (PROGN
+		(AND (EQ DIRECTION ':OUTPUT)
+		     (FUNCALL HOST-UNIT ':COMMAND NIL
+			      (DATA-OUTPUT-HANDLE DATA-CONN) NIL "DELETE"))
+		(MULTIPLE-VALUE-BIND (NIL CLOSE-SUCCESS)
+		    (FUNCALL HOST-UNIT ':COMMAND
+			     NIL
+			     (SELECTQ DIRECTION
+			       (:INPUT (DATA-INPUT-HANDLE DATA-CONN))
+			       (:OUTPUT (DATA-OUTPUT-HANDLE DATA-CONN)))
+			     NIL "CLOSE")
+		  (WHEN CLOSE-SUCCESS
+		    (SELECTQ DIRECTION
+		      (:INPUT (READ-UNTIL-SYNCHRONOUS-MARK (DATA-CONNECTION DATA-CONN)))
+		      (:OUTPUT (CHAOS:SEND-PKT (DATA-CONNECTION DATA-CONN)
+					       (CHAOS:GET-PKT) %FILE-SYNCHRONOUS-MARK-OPCODE)))))
+		(FUNCALL HOST-UNIT ':FREE-DATA-CONNECTION DATA-CONN DIRECTION))
+	     (SYS:HOST-STOPPED-RESPONDING NIL))))))))
+
+(DEFUN DECODE-ELEMENT-TYPE (ELEMENT-TYPE BYTE-SIZE)
+  (DECLARE (VALUES CHARACTERS BYTE-SIZE PHONY-CHARACTERS SIGN-EXTEND-BYTES))
+  (IF (ATOM ELEMENT-TYPE)
+      (SELECTQ ELEMENT-TYPE
+	(:DEFAULT 
+	 (VALUES ':DEFAULT BYTE-SIZE))
+	(BIT
+	 (VALUES NIL 1))
+;No way to find out what byte size was used in this case.
+;	(SIGNED-BYTE
+;	 (VALUES NIL ':DEFAULT NIL T))
+	(UNSIGNED-BYTE
+	 (VALUES NIL ':DEFAULT))
+	(STRING-CHAR
+	 (VALUES T ':DEFAULT))
+	(STANDARD-CHAR
+	 (VALUES T ':DEFAULT))
+	(CHARACTER
+	 (VALUES NIL 16. T))
+	(T (FERROR 'UNIMPLEMENTED-OPTION "~S is not implemented as an ELEMENT-TYPE."
+		   ELEMENT-TYPE)))
+    (SELECTQ (CAR ELEMENT-TYPE)
+      (UNSIGNED-BYTE
+       (VALUES NIL (CADR ELEMENT-TYPE)))
+      (SIGNED-BYTE
+       (VALUES NIL (CADR ELEMENT-TYPE) NIL T))
+      (MOD
+       (VALUES NIL (HAULONG (1- (CADR ELEMENT-TYPE)))))
+      (T (FERROR 'UNIMPLEMENTED-OPTION "~S is not implemented as an ELEMENT-TYPE."
+		 ELEMENT-TYPE)))))
+
+(DEFUN READ-UNTIL-SYNCHRONOUS-MARK (CONN)
+  "Discard data from chaosnet connection CONN up thru synchronous mark.
+Used on file data connections when there is no stream yet."
+  (DO (PKT DONE) (DONE)
+    (SETQ PKT (CHAOS:GET-NEXT-PKT CONN NIL "File Input"))
+    (SELECT (CHAOS:PKT-OPCODE PKT)
+      ;; No data, but a synchronous mark
+      (%FILE-SYNCHRONOUS-MARK-OPCODE
+       (CHAOS:RETURN-PKT PKT)
+       (RETURN NIL))
+      ;; Received an asynchronous mark, meaning some sort of error condition
+      ((%FILE-ASYNCHRONOUS-MARK-OPCODE %FILE-EOF-OPCODE
+				       %FILE-BINARY-OPCODE %FILE-CHARACTER-OPCODE)
+       NIL)
+      ;; Connection closed or broken with message
+      ((CHAOS:CLS-OP CHAOS:LOS-OP)
+       (CHAOS:REPORT-BAD-CONNECTION-STATE CONN "read file data from"))
+      ;; Not a recognized opcode, huh?
+      (OTHERWISE
+       (FERROR NIL "Receieved data packet (~S) with illegal opcode for file data conn."
+	       PKT)))
+    (CHAOS:RETURN-PKT PKT)))
+
+(DEFUN FILE-PRINT-PATHNAME (PATHNAME)
+  "Return namestring for PATHNAME, including the host if it isn't an actual machine."
+  (LET ((HN (SEND (SEND PATHNAME ':HOST) ':SEND-IF-HANDLES ':REMOTE-HOST-NAME))
+	(SFH (SEND PATHNAME ':STRING-FOR-HOST)))
+    (IF HN (STRING-APPEND HN ": " SFH) SFH)))
+
+(DEFUN FILE-PRINT-DIRECTORY (PATHNAME)
+  "Return namestring for PATHNAME's dir, including the host if it isn't an actual machine."
+  (LET ((HN (SEND (SEND PATHNAME ':HOST) ':SEND-IF-HANDLES ':REMOTE-HOST-NAME))
+	(SFD (SEND PATHNAME ':STRING-FOR-DIRECTORY)))
+    (IF HN (STRING-APPEND HN ": " SFD) SFD)))
+
+;;; PATHNAME is only used as a source of a host with respect to which to parse
+(DEFUN READ-FILE-PROPERTY-LIST-STRING (STRING OPERATION PATHNAME
+				       &OPTIONAL
+				       (PROPERTIES-TO-READ
+					  '((:CREATION-DATE) (:CREATION-TIME)
+					    (:LENGTH T) (:QFASLP T)
+					    (:CHARACTERS T) (:AUTHOR T)))
+				       &AUX PATHNAME-ORIGIN PROPERTY-LIST
+				       (DEFAULT-CONS-AREA BACKGROUND-CONS-AREA))
+  (OR (SETQ PATHNAME-ORIGIN (STRING-SEARCH-CHAR #\CR STRING))
+      (FERROR NIL "Illegally formatted string ~S." STRING))
+  (DO ((I (FILE-CHECK-COMMAND OPERATION STRING))
+       (PROP PROPERTIES-TO-READ
+	     (CDR PROP))
+       (IBASE 10.)
+       (TYPE) (DATE-START))
+      ((OR (NULL I) (> I PATHNAME-ORIGIN) (NULL PROP)))
+    (SETQ TYPE (CAAR PROP))
+    (SELECTQ TYPE
+      (:CREATION-DATE (SETQ DATE-START I))
+      (:LENGTH (PUSH (IF (NOT (FBOUNDP 'TIME:PARSE-UNIVERSAL-TIME))
+			 ;;When bootstrapping, dates are recorded as strings.
+			 ;;Discard zero at front of month, so the format
+			 ;;matches that produced by PRINT-UNIVERSAL-TIME.
+			 (STRING-LEFT-TRIM #/0 (SUBSTRING STRING DATE-START I))
+			 (PARSE-DIRECTORY-DATE-PROPERTY STRING DATE-START I))
+		     PROPERTY-LIST)
+	       (PUSH ':CREATION-DATE PROPERTY-LIST)))
+    (COND ((CADAR PROP)
+	   (MULTIPLE-VALUE-BIND (PROPVAL ENDPOS)
+	       (READ-FROM-STRING STRING NIL I)
+	     (SETQ I ENDPOS)
+	     (PUSH PROPVAL PROPERTY-LIST)
+	     (PUSH TYPE PROPERTY-LIST)))
+	  (T (SETQ I (STRING-SEARCH-CHAR #\SP STRING (1+ I))))))
+  (PUSH (FUNCALL PATHNAME ':PARSE-TRUENAME
+		 (SUBSTRING STRING (SETQ PATHNAME-ORIGIN (1+ PATHNAME-ORIGIN))
+				   (STRING-SEARCH-CHAR #\CR STRING PATHNAME-ORIGIN)))
+	PROPERTY-LIST)
+  (PUSH ':TRUENAME PROPERTY-LIST)
+  PROPERTY-LIST)
+
+(DEFUN MULTIPLE-PLISTS-CHAOS (HOST PATHNAMES OPTIONS
+			      &AUX FILE-LIST CONNECTION (CHARACTERS T)
+			      (DEFAULT-CONS-AREA BACKGROUND-CONS-AREA))
+  (LOOP FOR (IND OPT) ON OPTIONS BY 'CDDR
+	DO (SELECTQ IND
+	     (:CHARACTERS (SETQ CHARACTERS OPT))
+	     (OTHERWISE (FERROR NIL "~S is not a known MULTIPLE-FILE-PLISTS option" IND))))
+  (SETQ CONNECTION (HOST-UNIT-CONTROL-CONNECTION (FUNCALL HOST ':GET-HOST-UNIT)))
+  (SETQ FILE-LIST (LOOP FOR PATHNAME IN PATHNAMES
+			COLLECT (LIST PATHNAME NIL)))
+  (DO ((LIST-TO-DO FILE-LIST (CDR LIST-TO-DO))
+       (PENDING-LIST (COPYLIST FILE-LIST))
+       (ELEM-TO-DO))
+      ((NULL PENDING-LIST))
+    (SETQ ELEM-TO-DO (CAR LIST-TO-DO))
+    (DO ((P-L PENDING-LIST (CDR P-L))
+	 (ELEM))
+	((OR (NULL P-L)
+	     (AND ELEM-TO-DO
+		  (NOT (CHAOS:DATA-AVAILABLE CONNECTION))
+		  (CHAOS:MAY-TRANSMIT CONNECTION))))
+      (SETQ ELEM (CAR P-L))
+      (LET ((TRANSACTION-ID (SECOND ELEM)))
+	(AND TRANSACTION-ID
+	     (LET* ((PKT (FILE-WAIT-FOR-TRANSACTION TRANSACTION-ID CONNECTION "Probe"))
+		    (PKT-STRING (CHAOS:PKT-STRING PKT))
+		    (STRING (NSUBSTRING PKT-STRING (1+ (STRING-SEARCH-CHAR #\SP PKT-STRING))))
+		    (FROM (1+ (STRING-SEARCH-SET '(#\SP #\CR) STRING)))
+		    (SUCCESS (NOT (STRING-EQUAL "ERROR" STRING 0 FROM 5
+						(STRING-SEARCH-SET '(#\SP #\CR)
+								   STRING FROM))))
+		    (PROPERTY-LIST NIL))
+	       (AND SUCCESS (SETQ PROPERTY-LIST (READ-FILE-PROPERTY-LIST-STRING
+						  STRING "OPEN" (FIRST ELEM))))
+	       (CHAOS:RETURN-PKT PKT)
+	       (SETF (CDR ELEM) PROPERTY-LIST)
+	       (SETQ PENDING-LIST (DELQ ELEM PENDING-LIST))))))
+    (AND ELEM-TO-DO
+	 (LET ((MODE (SELECTQ CHARACTERS
+		       ((NIL) ':BINARY)
+		       (:DEFAULT ':DEFAULT)
+		       (T ':CHARACTER)))
+	       (PKT (CHAOS:GET-PKT))
+	       (TRANSACTION-ID (FILE-MAKE-TRANSACTION-ID NIL)))
+	   (CHAOS:SET-PKT-STRING PKT TRANSACTION-ID
+				     "  OPEN PROBE " MODE #\CR
+				     (FILE-PRINT-PATHNAME (FIRST ELEM-TO-DO)) #\CR)
+	   (CHAOS:SEND-PKT CONNECTION PKT %FILE-COMMAND-OPCODE)
+	   (SETF (SECOND ELEM-TO-DO) TRANSACTION-ID))))
+  FILE-LIST)
+
+(DEFUN DIRECTORY-CHAOS (HOST PATHNAME OPTIONS
+			&AUX (NOERROR-P NIL) (DELETED-P NIL) (FAST-P NIL) (DIRS-ONLY-P NIL)
+			     (NO-EXTRA-INFO NIL) (SORTED-P NIL)
+			     DATA-CONN HOST-UNIT PKT SUCCESS STRING NOT-ABORTED
+			     (DEFAULT-CONS-AREA BACKGROUND-CONS-AREA))
+  (FILE-OPERATION-RETRY
+    (DO ((L OPTIONS (CDR L)))
+	((NULL L))
+      (SELECTQ (CAR L)
+	(:NOERROR (SETQ NOERROR-P T))
+	(:FAST (SETQ FAST-P T))
+	(:NO-EXTRA-INFO (SETQ NO-EXTRA-INFO T))
+	(:SORTED (SETQ SORTED-P T))
+	;; This is for the :ALL-DIRECTORIES message
+	(:DIRECTORIES-ONLY (SETQ DIRS-ONLY-P T))
+	;; This is for TOPS-20
+	(:DELETED (SETQ DELETED-P T))
+	(OTHERWISE (FERROR NIL "~S is not a known DIRECTORY option" (CAR L)))))
+    (MULTIPLE-VALUE (DATA-CONN HOST-UNIT)
+      (FUNCALL HOST ':GET-DATA-CONNECTION ':INPUT))
+    (UNWIND-PROTECT
+	(PROGN
+	  (MULTIPLE-VALUE (PKT SUCCESS STRING)
+	    (FUNCALL HOST-UNIT ':COMMAND
+		     NIL (DATA-INPUT-HANDLE DATA-CONN) NIL
+		     "DIRECTORY"
+		     (FORMAT NIL "~:[~; DELETED~]~:[~; FAST~]~:[~; DIRECTORIES-ONLY~]~
+			      ~:[~; NO-EXTRA-INFO~]~:[~; SORTED~]"
+			     DELETED-P FAST-P DIRS-ONLY-P NO-EXTRA-INFO SORTED-P)
+		     #\CR (FILE-PRINT-PATHNAME PATHNAME) #\CR))
+	  (COND ((NOT SUCCESS)
+		 (SETQ NOT-ABORTED T)
+		 (SETQ STRING (STRING-APPEND STRING))
+		 (CHAOS:RETURN-PKT PKT)
+		 (SETF (DATA-STREAM DATA-CONN ':INPUT) NIL)
+		 (FILE-PROCESS-ERROR-NEW STRING PATHNAME NIL NOERROR-P ':DIRECTORY-STREAM))
+		(T
+		 (FILE-CHECK-COMMAND "DIRECTORY" STRING)
+		 (CHAOS:RETURN-PKT PKT)
+		 (PROG1
+		   (MAKE-INSTANCE 'FILE-DIRECTORY-STREAM
+				  ':HOST-UNIT HOST-UNIT
+				  ':DATA-CONNECTION DATA-CONN
+				  ':PATHNAME PATHNAME)
+		   (SETQ NOT-ABORTED T)))))
+      ;; Both success and failure set NOT-ABORTED once they get past critical section.
+      (UNLESS (OR NOT-ABORTED
+		  (NULL DATA-CONN)
+		  (NULL (SEND HOST-UNIT ':CONTROL-CONNECTION)))
+	;; Here if aborted out of it and server may have directory stream open.
+	(CONDITION-CASE ()
+	    (MULTIPLE-VALUE-BIND (NIL CLOSE-SUCCESS)
+		(FUNCALL HOST-UNIT ':COMMAND
+			 NIL
+			 (DATA-INPUT-HANDLE DATA-CONN)
+			 NIL "CLOSE")
+	      (WHEN CLOSE-SUCCESS
+		(READ-UNTIL-SYNCHRONOUS-MARK (DATA-CONNECTION DATA-CONN)))
+	     (FUNCALL HOST-UNIT ':FREE-DATA-CONNECTION DATA-CONN ':INPUT))
+	  (SYS:HOST-STOPPED-RESPONDING NIL))))))
+
+(DEFFLAVOR FILE-STREAM-MIXIN
+	(HOST-UNIT
+	 STATUS)
+	(SI:PROPERTY-LIST-MIXIN SI:FILE-STREAM-MIXIN)
+  (:INITABLE-INSTANCE-VARIABLES HOST-UNIT))
+
+(DEFMETHOD (FILE-STREAM-MIXIN :QFASLP) ()
+  (GET (LOCF SI:PROPERTY-LIST) ':QFASLP))
+
+(DEFMETHOD (FILE-STREAM-MIXIN :TRUENAME) ()
+  (GET (LOCF SI:PROPERTY-LIST) ':TRUENAME))
+
+(DEFMETHOD (FILE-STREAM-MIXIN :LENGTH) ()
+  (GET (LOCF SI:PROPERTY-LIST) ':LENGTH))
+
+;;; Flavors that really have an open connection
+;;; STATUS is one of
+;;;  :OPEN - a file is currently open on this channel
+;;;  :CLOSED - no file is open, but the channel exists
+;;;  :EOF - a file is open, but is at its end (no more data available).
+;;;  :SYNC-MARKED - a mark that was requested has been received
+;;;  :ASYNC-MARKED - an asynchronous (error) mark has been received
+(DEFFLAVOR FILE-DATA-STREAM-MIXIN
+	((STATUS ':OPEN)
+	 DATA-CONNECTION
+	 FILE-HANDLE
+	 CHAOS:CONNECTION)
+	(FILE-STREAM-MIXIN)
+  (:INCLUDED-FLAVORS SI:FILE-DATA-STREAM-MIXIN)
+  (:SETTABLE-INSTANCE-VARIABLES STATUS)
+  (:GETTABLE-INSTANCE-VARIABLES FILE-HANDLE)
+  (:INITABLE-INSTANCE-VARIABLES DATA-CONNECTION))
+
+(DEFFLAVOR FILE-INPUT-STREAM-MIXIN
+	(CHAOS:INPUT-PACKET)
+	(FILE-DATA-STREAM-MIXIN)
+  (:INCLUDED-FLAVORS SI:INPUT-FILE-STREAM-MIXIN))
+
+(DEFFLAVOR FILE-OUTPUT-STREAM-MIXIN
+	()
+	(FILE-DATA-STREAM-MIXIN)
+  (:REQUIRED-METHODS :SEND-PKT-BUFFER)
+  (:INCLUDED-FLAVORS SI:OUTPUT-FILE-STREAM-MIXIN))
+
+(DEFMETHOD (FILE-DATA-STREAM-MIXIN :BEFORE :INIT) (IGNORE)
+  (LET ((DIRECTION (FUNCALL-SELF ':DIRECTION)))
+    (SETF (DATA-STREAM DATA-CONNECTION DIRECTION) SELF)
+    (SETQ FILE-HANDLE (DATA-HANDLE DATA-CONNECTION DIRECTION)
+	  CHAOS:CONNECTION (DATA-CONNECTION DATA-CONNECTION))))
+
+;;; Stream version of host unit :COMMAND, supplies file handle itself.
+;;; MARK-P is just T or NIL.
+(DEFMETHOD (FILE-DATA-STREAM-MIXIN :COMMAND) (MARK-P COM &REST STRINGS
+							 &AUX PKT SUCCESS STRING)
+  (DECLARE (RETURN-LIST STRING SUCCESS))
+  (MULTIPLE-VALUE (PKT SUCCESS STRING)
+    (LEXPR-FUNCALL HOST-UNIT ':COMMAND MARK-P SELF NIL COM STRINGS))
+  (LET ((DEFAULT-CONS-AREA BACKGROUND-CONS-AREA))
+    (SETQ STRING (STRING-APPEND STRING)))
+  (IF PKT (CHAOS:RETURN-PKT PKT))
+  (VALUES STRING SUCCESS))
+
+(DEFMETHOD (FILE-DATA-STREAM-MIXIN :SAFE-TO-USE-P) ()
+  (IF (NEQ (CHAOS:STATE (HOST-UNIT-CONTROL-CONNECTION HOST-UNIT)) 'CHAOS:OPEN-STATE)
+      (SETQ STATUS ':CLOSED))
+  (EQ STATUS ':OPEN))
+
+(DEFMETHOD (FILE-DATA-STREAM-MIXIN :CLOSE) (&OPTIONAL ABORTP)
+  (COND ((EQ STATUS ':CLOSED) NIL)
+	((OR (NULL (HOST-UNIT-CONTROL-CONNECTION HOST-UNIT))
+	     (NEQ (CHAOS:STATE (HOST-UNIT-CONTROL-CONNECTION HOST-UNIT)) 'CHAOS:OPEN-STATE))
+	 (SETQ STATUS ':CLOSED)
+	 T)
+        (T
+	 (FUNCALL-SELF ':REAL-CLOSE ABORTP))))
+
+(DEFMETHOD (FILE-INPUT-STREAM-MIXIN :REAL-CLOSE) (ABORTP &AUX SUCCESS STRING)
+  ABORTP
+  (IF (NEQ STATUS ':EOF)
+      (MULTIPLE-VALUE (STRING SUCCESS)
+	(FUNCALL-SELF ':COMMAND T "CLOSE"))
+    (FUNCALL HOST-UNIT ':COMMAND T SELF T "CLOSE")
+    (SETQ SUCCESS T))
+  (FUNCALL HOST-UNIT ':FREE-DATA-CONNECTION DATA-CONNECTION ':INPUT)
+  (SETQ STATUS ':CLOSED)
+  (COND (SUCCESS
+	 ;; For sake of Twenex, look for new truename after a rename.
+	 (IF (AND STRING
+		  (STRING-SEARCH-CHAR #\CR STRING))
+	     (SETQ SI:PROPERTY-LIST
+		   (NCONC (READ-FILE-PROPERTY-LIST-STRING STRING "CLOSE" SI:PATHNAME)
+			  SI:PROPERTY-LIST)))
+	 T)
+	(STRING
+	 (FILE-PROCESS-ERROR-NEW STRING SELF '(:NO-ACTION) NIL ':CLOSE))))
+
+
+(DEFMETHOD (FILE-OUTPUT-STREAM-MIXIN :SEND-OUTPUT-BUFFER) (&REST ARGS)
+  (LOOP DOING
+    (SELECTQ STATUS
+      ((:OPEN :EOF)
+       (PROCESS-WAIT "File Output"
+		     #'(LAMBDA (STAT CONNECTION)
+			 (OR (EQ (CAR STAT)':ASYNC-MARKED)
+			     (CHAOS:MAY-TRANSMIT CONNECTION)
+			     (NEQ (CHAOS:STATE CONNECTION) 'CHAOS:OPEN-STATE)))
+		     (LOCATE-IN-INSTANCE SELF 'STATUS) CHAOS:CONNECTION)
+       (AND (NEQ (CHAOS:STATE CHAOS:CONNECTION) 'CHAOS:OPEN-STATE)
+	    (CHAOS:REPORT-BAD-CONNECTION-STATE CHAOS:CONNECTION
+					       "output to file data connection"))
+       (AND (NEQ STATUS ':ASYNC-MARKED)
+	    (RETURN (LEXPR-FUNCALL-SELF ':SEND-PKT-BUFFER ARGS))))
+      (:ASYNC-MARKED
+       (FILE-PROCESS-OUTPUT-ASYNC-MARK))
+      (:CLOSED
+       (FERROR 'SYS:STREAM-CLOSED
+	       "Attempt to output to ~S, which is closed." SELF))
+      (OTHERWISE
+       (FERROR 'SYS:STREAM-INVALID
+	       "Attempt to output to ~S, which is in illegal state ~S." SELF STATUS)))))
+
+;;; Sent from inside the interrupt function, change our status and remember error message.
+(DEFMETHOD (FILE-OUTPUT-STREAM-MIXIN :ASYNC-MARK) (PKT)
+  (PUTPROP (LOCF SI:PROPERTY-LIST) PKT 'ASYNC-MARK-PKT)
+  (SETQ STATUS ':ASYNC-MARKED))
+
+(DEFMETHOD (FILE-INPUT-STREAM-MIXIN :READ-UNTIL-SYNCHRONOUS-MARK) ()
+  (LOOP UNTIL (EQ STATUS ':SYNC-MARKED)
+	AS PKT = (FILE-NEXT-READ-PKT NIL T)
+	WHEN PKT DO (CHAOS:RETURN-PKT PKT)
+	FINALLY (SETQ STATUS ':OPEN)))
+
+(DEFMETHOD (FILE-INPUT-STREAM-MIXIN :GET-NEXT-INPUT-PKT) (&OPTIONAL NO-HANG-P)
+  (LOOP WHEN (EQ STATUS ':EOF) RETURN NIL
+	THEREIS (SETQ CHAOS:INPUT-PACKET (FILE-NEXT-READ-PKT NO-HANG-P NIL))))
+
+(DEFUN FILE-NEXT-READ-PKT (NO-HANG-P FOR-SYNC-MARK-P)
+  (DECLARE (:SELF-FLAVOR FILE-INPUT-STREAM-MIXIN))
+  (SELECTQ (IF FOR-SYNC-MARK-P ':EOF STATUS)
+    ((:OPEN :EOF)
+     (LET ((PKT (CHAOS:GET-NEXT-PKT CHAOS:CONNECTION NO-HANG-P "File Input")))
+       (COND (PKT
+	      (SELECT (CHAOS:PKT-OPCODE PKT)
+		;; Received some sort of data, return it
+		((%FILE-BINARY-OPCODE %FILE-CHARACTER-OPCODE)
+		 PKT)
+
+		;; No data, but a synchronous mark
+		(%FILE-SYNCHRONOUS-MARK-OPCODE
+		 (SETQ STATUS ':SYNC-MARKED)
+		 (CHAOS:RETURN-PKT PKT)
+		 NIL)
+
+		;; Received an asynchronous mark, meaning some sort of error condition
+		(%FILE-ASYNCHRONOUS-MARK-OPCODE
+		 (SETQ STATUS ':ASYNC-MARKED)
+		 (OR FOR-SYNC-MARK-P (FILE-PROCESS-ASYNC-MARK PKT))
+		 (CHAOS:RETURN-PKT PKT)
+		 NIL)
+
+		;; EOF received, change channel state and return
+		(%FILE-EOF-OPCODE
+		 (SETQ STATUS ':EOF)
+		 (CHAOS:RETURN-PKT PKT)
+		 NIL)
+
+		;; Connection closed or broken with message
+		((CHAOS:CLS-OP CHAOS:LOS-OP)
+		 (CHAOS:REPORT-BAD-CONNECTION-STATE CHAOS:CONNECTION "read file data from"))
+
+		;; Not a recognized opcode, huh?
+		(OTHERWISE
+		 (FERROR NIL "Receieved data packet (~S) with illegal opcode for ~S."
+			 PKT SELF)))))))
+    (:CLOSED
+     (FERROR 'SYS:STREAM-CLOSED "Attempt to read from ~S, which is closed." SELF))
+    ((:ASYNC-MARKED :SYNC-MARKED)
+     (FERROR 'SYS:STREAM-INVALID
+	     "Attempt to read from ~S, which is in a marked state." SELF))
+    (OTHERWISE
+     (FERROR 'SYS:STREAM-INVALID
+	     "Attempt to read from ~S, which is in illegal state ~S." SELF STATUS))))
+
+(DEFMETHOD (FILE-OUTPUT-STREAM-MIXIN :WRITE-SYNCHRONOUS-MARK) ()
+  (LET-GLOBALLY ((STATUS ':EOF))		;In case :ASYNC-MARK now
+    (FUNCALL-SELF ':FORCE-OUTPUT))		;Send any partial buffer
+  (CHAOS:SEND-PKT CHAOS:CONNECTION (CHAOS:GET-PKT) %FILE-SYNCHRONOUS-MARK-OPCODE))
+
+(DEFUN FILE-PROCESS-OUTPUT-ASYNC-MARK ()
+  (DECLARE (:SELF-FLAVOR FILE-STREAM-MIXIN))
+  (LET ((PKT (CAR (REMPROP (LOCF SI:PROPERTY-LIST) 'ASYNC-MARK-PKT))))
+    (OR PKT (FERROR NIL "Output stream ~S in ASYNC-MARKED state, but no async mark pkt." SELF))
+    (UNWIND-PROTECT
+      (FILE-PROCESS-ASYNC-MARK PKT)
+      (CHAOS:RETURN-PKT PKT))))
+
+(DEFUN FILE-PROCESS-ASYNC-MARK (PKT)
+    (LET ((STRING (NSUBSTRING (CHAOS:PKT-STRING PKT)
+			      (1+ (STRING-SEARCH-CHAR #\SP (CHAOS:PKT-STRING PKT))))))
+      (FILE-PROCESS-ERROR-NEW STRING SELF '(:NO-ACTION)))	;Process error allowing proceeding
+    ;; If user says to continue, attempt to do so.
+    (FUNCALL-SELF ':CONTINUE))
+
+(DEFMETHOD (FILE-OUTPUT-STREAM-MIXIN :REAL-CLOSE) (ABORTP &AUX SUCCESS STRING)
+  ;; Closing an open output channel.  Finish sending the data.
+  (AND (EQ STATUS ':OPEN) (FUNCALL-SELF ':EOF))
+  ;; If aborting out of a file-writing operation before normal :CLOSE,
+  ;; delete the incomplete file.  Don't worry if it gets an error.
+  (AND (EQ ABORTP ':ABORT)
+       (FUNCALL-SELF ':COMMAND NIL "DELETE"))
+  (MULTIPLE-VALUE (STRING SUCCESS)
+    (FUNCALL-SELF ':COMMAND T "CLOSE"))
+  (FUNCALL HOST-UNIT ':FREE-DATA-CONNECTION DATA-CONNECTION ':OUTPUT)
+  (SETQ STATUS ':CLOSED)
+  (COND (SUCCESS
+	 (SETQ SI:PROPERTY-LIST
+	       (NCONC (READ-FILE-PROPERTY-LIST-STRING STRING "CLOSE" SI:PATHNAME
+						      '((:CREATION-DATE) (:CREATION-TIME)
+							(:LENGTH T) (:LISPM-LENGTH T)))
+		      SI:PROPERTY-LIST))
+	 T)
+	(T
+	 (FILE-PROCESS-ERROR-NEW STRING SELF '(:NO-ACTION) NIL ':CLOSE))))
+
+(DEFMETHOD (FILE-DATA-STREAM-MIXIN :DELETE) (&OPTIONAL (ERROR-P T) &AUX SUCCESS STRING)
+  (FILE-OPERATION-RETRY
+    (SELECTQ STATUS
+      ((:OPEN :EOF :SYNC-MARKED :ASYNC-MARKED)
+       (MULTIPLE-VALUE (STRING SUCCESS)
+	 (FUNCALL-SELF ':COMMAND NIL "DELETE"))
+       (OR SUCCESS
+	   (FILE-PROCESS-ERROR-NEW STRING SELF NIL (NOT ERROR-P) ':DELETE)))
+      (OTHERWISE (FERROR NIL "~S in illegal state for delete." SELF)))))
+
+(DEFMETHOD (FILE-DATA-STREAM-MIXIN :RENAME) (NEW-NAME &OPTIONAL (ERROR-P T)
+					     &AUX SUCCESS STRING)
+  (FILE-OPERATION-RETRY
+    (SELECTQ STATUS
+      ((:OPEN :EOF :SYNC-MARKED :ASYNC-MARKED)
+       (MULTIPLE-VALUE (STRING SUCCESS)
+	 (FUNCALL-SELF ':COMMAND NIL "RENAME" #\CR (FILE-PRINT-PATHNAME NEW-NAME) #\CR))
+       (COND (SUCCESS
+	      ;; If there is a second line coming from the file server,
+	      ;; it is the new truename.
+	      (LET* ((FROM (STRING-SEARCH #\RETURN STRING))
+		     TRUENAME-STRING)
+		(COND (FROM
+		       (SETQ TRUENAME-STRING
+			     (SUBSTRING STRING (1+ FROM)
+					(STRING-SEARCH #\RETURN STRING (1+ FROM))))
+		       (FUNCALL-SELF ':PUTPROP
+				     (PARSE-PATHNAME TRUENAME-STRING
+						     (SEND (GET SELF ':TRUENAME) ':HOST))
+				     ':TRUENAME))))
+	      (SETQ SI:PATHNAME NEW-NAME)
+	      (FUNCALL TV:WHO-LINE-FILE-STATE-SHEET ':CLOBBERED)
+	      T)
+	     (T (FILE-PROCESS-ERROR-NEW STRING SELF NIL (NOT ERROR-P) ':RENAME))))
+      (OTHERWISE (FERROR NIL "~S in illegal state for rename." SELF)))))
+
+(DEFMETHOD (FILE-DATA-STREAM-MIXIN :CHANGE-PROPERTIES)
+	   (ERROR-P &REST PROPERTIES &AUX SUCCESS STRING)
+  (FILE-OPERATION-RETRY
+    (SELECTQ STATUS
+      ((:OPEN :EOF :SYNC-MARKED :ASYNC-MARKED)
+       (MULTIPLE-VALUE (STRING SUCCESS)
+	 (FUNCALL-SELF ':COMMAND NIL (CHANGE-PROPERTIES-STRING PROPERTIES)))
+       (OR SUCCESS
+	   (FILE-PROCESS-ERROR-NEW STRING SELF NIL (NOT ERROR-P) ':CHANGE-PROPERTIES)))
+      (OTHERWISE (FERROR NIL "~S in illegal state for change properties." SELF)))))
+
+(DEFMETHOD (FILE-DATA-STREAM-MIXIN :CONTINUE) (&AUX SUCCESS STRING)
+  (COND ((EQ STATUS ':ASYNC-MARKED)
+	 (SETF STATUS ':OPEN)
+	 (MULTIPLE-VALUE (STRING SUCCESS)
+	   (FUNCALL-SELF ':COMMAND NIL "CONTINUE"))
+	 (COND ((NULL SUCCESS)
+		(SETQ STATUS ':ASYNC-MARKED)
+		(FILE-PROCESS-ERROR-NEW STRING SELF))))))	;not proceedable
+
+(DEFMETHOD (FILE-INPUT-STREAM-MIXIN :SET-BUFFER-POINTER) (NEW-POINTER &AUX STRING SUCCESS)
+  (SELECTQ STATUS
+    ((:OPEN :EOF)
+     (AND (EQ STATUS ':EOF) (SETQ STATUS ':OPEN))
+     (MULTIPLE-VALUE (STRING SUCCESS)
+       (FUNCALL-SELF ':COMMAND T "FILEPOS " (FORMAT NIL "~D" NEW-POINTER)))
+     (OR SUCCESS (FILE-PROCESS-ERROR-NEW STRING SELF NIL NIL ':SET-POINTER))	;Cannot proceed
+     NEW-POINTER)
+    (OTHERWISE
+     (FERROR NIL ":SET-POINTER attempted on ~S which is in state ~S." SELF STATUS))))
+
+(DEFMETHOD (FILE-OUTPUT-STREAM-MIXIN :FINISH) ()
+  (DO () ((CHAOS:FINISHED-P CHAOS:CONNECTION))
+    (PROCESS-WAIT "File Finish"
+		  #'(LAMBDA (CONN STAT)
+		      (OR (CHAOS:FINISHED-P CONN)
+			  (EQ (CAR STAT) ':ASYNC-MARKED)))
+		  CHAOS:CONNECTION (LOCATE-IN-INSTANCE SELF 'STATUS))
+    (AND (EQ STATUS ':ASYNC-MARKED) (FILE-PROCESS-OUTPUT-ASYNC-MARK))))
+
+(DEFMETHOD (FILE-OUTPUT-STREAM-MIXIN :EOF) ()
+  (FUNCALL-SELF ':FORCE-OUTPUT)
+  (CHAOS:SEND-PKT CHAOS:CONNECTION (CHAOS:GET-PKT) CHAOS:EOF-OP)
+  (SETQ STATUS ':EOF)
+  (FUNCALL-SELF ':FINISH))
+
+(DEFFLAVOR FILE-CHARACTER-STREAM-MIXIN () (FILE-DATA-STREAM-MIXIN))
+
+(DEFMETHOD (FILE-CHARACTER-STREAM-MIXIN :ELEMENT-TYPE) ()
+  'STRING-CHAR)
+
+(DEFFLAVOR FILE-BINARY-STREAM-MIXIN () (FILE-DATA-STREAM-MIXIN))
+
+(DEFMETHOD (FILE-BINARY-STREAM-MIXIN :SET-BYTE-SIZE) (NEW-BYTE-SIZE)
+  (CHECK-ARG NEW-BYTE-SIZE (AND (NUMBERP NEW-BYTE-SIZE)
+				(> NEW-BYTE-SIZE 0) ( NEW-BYTE-SIZE 16.))
+	     "A positive number less than or equal to 16.")
+  (FUNCALL-SELF ':COMMAND T "SET-BYTE-SIZE "
+		(FORMAT NIL "~D ~D" NEW-BYTE-SIZE (FUNCALL-SELF ':READ-POINTER)))
+  NEW-BYTE-SIZE)
+
+(DEFMETHOD (FILE-BINARY-STREAM-MIXIN :ELEMENT-TYPE) ()
+  `UNSIGNED-BYTE)
+
+(DEFFLAVOR FILE-INPUT-CHARACTER-STREAM-MIXIN ()
+	   (FILE-INPUT-STREAM-MIXIN FILE-CHARACTER-STREAM-MIXIN))
+
+(DEFFLAVOR FILE-INPUT-BINARY-STREAM-MIXIN ()
+	   (FILE-INPUT-STREAM-MIXIN FILE-BINARY-STREAM-MIXIN))
+
+(DEFFLAVOR FILE-INPUT-SIGNED-BINARY-STREAM-MIXIN (CURRENT-BYTE-SIZE)
+	   (FILE-INPUT-STREAM-MIXIN FILE-BINARY-STREAM-MIXIN)
+  (:REQUIRED-FLAVORS SI:BASIC-BUFFERED-INPUT-STREAM)
+  :INITTABLE-INSTANCE-VARIABLES)
+
+(DEFMETHOD (FILE-INPUT-SIGNED-BINARY-STREAM-MIXIN :AFTER :INIT) (IGNORE)
+  (SETQ CURRENT-BYTE-SIZE (GET (LOCF SI:PROPERTY-LIST) ':BYTE-SIZE)))
+
+(DEFMETHOD (FILE-INPUT-SIGNED-BINARY-STREAM-MIXIN :AFTER :SET-BYTE-SIZE) (NEW-BYTE-SIZE)
+  (SETQ CURRENT-BYTE-SIZE NEW-BYTE-SIZE))
+
+(DEFMETHOD (FILE-INPUT-SIGNED-BINARY-STREAM-MIXIN :ELEMENT-TYPE) ()
+  `(SIGNED-BYTE ,CURRENT-BYTE-SIZE))
+
+(DEFMETHOD (FILE-INPUT-SIGNED-BINARY-STREAM-MIXIN :AROUND :TYI) (CONT MT ARGS &REST IGNORE)
+  (LET ((BYTE (AROUND-METHOD-CONTINUE CONT MT ARGS)))
+    (WHEN BYTE
+      (IF (LDB-TEST (BYTE 1 (1- CURRENT-BYTE-SIZE)) BYTE)
+	  (- BYTE (LSH 1 CURRENT-BYTE-SIZE))
+	BYTE))))
+
+(DEFMETHOD (FILE-INPUT-SIGNED-BINARY-STREAM-MIXIN :STRING-IN)
+	   (EOF STRING &OPTIONAL (START 0) END)
+  (OR END (SETQ END (ARRAY-LENGTH STRING)))
+  (LOOP WHILE (< START END)
+	WHILE (LOOP UNTIL (AND SI:STREAM-INPUT-BUFFER
+			       (< SI:STREAM-INPUT-INDEX SI:STREAM-INPUT-LIMIT))
+		    ;Out of input, get some more
+		    UNTIL (FUNCALL-SELF ':SETUP-NEXT-INPUT-BUFFER)
+		    DO (AND EOF (FERROR 'SYS:END-OF-FILE-1 "End of file on ~S." SELF))
+		    RETURN NIL
+		    FINALLY (RETURN T))
+	AS AMT = (MIN (- END START) (- SI:STREAM-INPUT-LIMIT SI:STREAM-INPUT-INDEX))
+	DO (COPY-ARRAY-PORTION SI:STREAM-INPUT-BUFFER SI:STREAM-INPUT-INDEX
+			       (SETQ SI:STREAM-INPUT-INDEX (+ SI:STREAM-INPUT-INDEX AMT))
+			       STRING START (SETQ START (+ START AMT)))
+	;; Sign-extend each byte.
+	(DO ((I START (1+ I))
+	     (END1 (+ START AMT)))
+	    ((= I END1))
+	  (LET ((BYTE (AREF STRING I)))
+	    (IF (LDB-TEST (BYTE 1 (1- CURRENT-BYTE-SIZE)) BYTE)
+		(SETF (AREF STRING I) (- BYTE (LSH 1 CURRENT-BYTE-SIZE))))))
+	FINALLY (AND (ARRAY-HAS-LEADER-P STRING)
+		     (STORE-ARRAY-LEADER START STRING 0))
+		(RETURN (VALUES START (NULL SI:STREAM-INPUT-BUFFER)))))
+
+(DEFFLAVOR FILE-INPUT-PHONY-CHARACTER-STREAM-MIXIN ()
+	   (FILE-INPUT-STREAM-MIXIN FILE-CHARACTER-STREAM-MIXIN))
+
+(DEFMETHOD (FILE-INPUT-PHONY-CHARACTER-STREAM-MIXIN :ELEMENT-TYPE) ()
+  'CHARACTER)
+
+(DEFMETHOD (FILE-INPUT-PHONY-CHARACTER-STREAM-MIXIN :AROUND :TYI) (CONT MT ARGS &REST IGNORE)
+  (LET ((CH1 (AROUND-METHOD-CONTINUE CONT MT ARGS))
+	(CH2 (AROUND-METHOD-CONTINUE CONT MT ARGS))
+	(CH3 (AROUND-METHOD-CONTINUE CONT MT ARGS))
+	(CH4 (AROUND-METHOD-CONTINUE CONT MT ARGS)))
+    (DPB CH4 3010 (DPB CH3 2010 (DPB CH2 1010 CH1)))))
+
+(DEFFLAVOR FILE-OUTPUT-CHARACTER-STREAM-MIXIN ()
+	   (FILE-OUTPUT-STREAM-MIXIN FILE-CHARACTER-STREAM-MIXIN))
+
+(DEFFLAVOR FILE-OUTPUT-PHONY-CHARACTER-STREAM-MIXIN ()
+	   (FILE-OUTPUT-BINARY-STREAM-MIXIN))
+
+(DEFMETHOD (FILE-OUTPUT-PHONY-CHARACTER-STREAM-MIXIN :ELEMENT-TYPE) ()
+  'CHARACTER)
+
+(DEFMETHOD (FILE-OUTPUT-PHONY-CHARACTER-STREAM-MIXIN :AROUND :TYO) (CONT MT ARGS CHAR)
+  ARGS
+  (FUNCALL-WITH-MAPPING-TABLE CONT MT ':TYO (LDB 0010 CHAR))
+  (FUNCALL-WITH-MAPPING-TABLE CONT MT ':TYO (LDB 1010 CHAR))
+  (FUNCALL-WITH-MAPPING-TABLE CONT MT ':TYO (LDB 2010 CHAR))
+  (FUNCALL-WITH-MAPPING-TABLE CONT MT ':TYO (LDB 3010 CHAR)))
+
+(DEFFLAVOR FILE-OUTPUT-BINARY-STREAM-MIXIN ()
+	   (FILE-OUTPUT-STREAM-MIXIN FILE-BINARY-STREAM-MIXIN))
+
+(DEFMETHOD (FILE-OUTPUT-CHARACTER-STREAM-MIXIN :SEND-PKT-BUFFER) CHAOS:SEND-CHARACTER-PKT)
+
+(DEFMETHOD (FILE-OUTPUT-BINARY-STREAM-MIXIN :SEND-PKT-BUFFER) CHAOS:SEND-BINARY-PKT)
+
+(DEFFLAVOR FILE-INPUT-CHARACTER-STREAM
+	()
+	(FILE-INPUT-CHARACTER-STREAM-MIXIN SI:INPUT-FILE-STREAM-MIXIN
+	 CHAOS:CHARACTER-INPUT-STREAM-MIXIN SI:BUFFERED-INPUT-CHARACTER-STREAM))
+
+(DEFFLAVOR FILE-INPUT-PHONY-CHARACTER-STREAM
+	   ()
+	   (FILE-INPUT-PHONY-CHARACTER-STREAM-MIXIN SI:INPUT-FILE-STREAM-MIXIN
+	    CHAOS:BINARY-INPUT-STREAM-MIXIN SI:BUFFERED-TYI-INPUT-STREAM))
+
+(DEFFLAVOR FILE-OUTPUT-CHARACTER-STREAM
+	()
+	(FILE-OUTPUT-CHARACTER-STREAM-MIXIN SI:OUTPUT-FILE-STREAM-MIXIN
+	 CHAOS:CHARACTER-OUTPUT-STREAM-MIXIN SI:BUFFERED-OUTPUT-CHARACTER-STREAM))
+
+(DEFFLAVOR FILE-OUTPUT-PHONY-CHARACTER-STREAM
+	()
+	(FILE-OUTPUT-PHONY-CHARACTER-STREAM-MIXIN SI:OUTPUT-FILE-STREAM-MIXIN
+	 CHAOS:BINARY-OUTPUT-STREAM-MIXIN SI:BUFFERED-TYO-OUTPUT-STREAM))
+
+(DEFFLAVOR FILE-INPUT-BINARY-STREAM
+	()
+	(FILE-INPUT-BINARY-STREAM-MIXIN SI:INPUT-FILE-STREAM-MIXIN
+	 CHAOS:BINARY-INPUT-STREAM-MIXIN SI:BUFFERED-INPUT-STREAM))
+
+(DEFFLAVOR FILE-INPUT-SIGNED-BINARY-STREAM
+	()
+	(FILE-INPUT-SIGNED-BINARY-STREAM-MIXIN SI:INPUT-FILE-STREAM-MIXIN
+	 CHAOS:BINARY-INPUT-STREAM-MIXIN SI:BASIC-BUFFERED-INPUT-STREAM))
+
+(DEFFLAVOR FILE-OUTPUT-BINARY-STREAM
+	()
+	(FILE-OUTPUT-BINARY-STREAM-MIXIN SI:OUTPUT-FILE-STREAM-MIXIN
+	 CHAOS:BINARY-OUTPUT-STREAM-MIXIN SI:BUFFERED-OUTPUT-STREAM))
+
+(DEFFLAVOR FILE-PROBE-STREAM
+	((STATUS ':CLOSED))
+	(FILE-STREAM-MIXIN SI:STREAM)
+  (:GETTABLE-INSTANCE-VARIABLES STATUS)
+  (:INIT-KEYWORDS :DATA-CONNECTION))		;Will be NIL, but makes life easier
+
+(DEFMETHOD (FILE-PROBE-STREAM :DIRECTION) () NIL)
+
+(DEFFLAVOR FILE-DIRECTORY-STREAM () (FILE-INPUT-CHARACTER-STREAM))
+
+(COMPILE-FLAVOR-METHODS FILE-INPUT-CHARACTER-STREAM FILE-INPUT-BINARY-STREAM
+			FILE-INPUT-SIGNED-BINARY-STREAM FILE-INPUT-PHONY-CHARACTER-STREAM
+			FILE-OUTPUT-CHARACTER-STREAM FILE-OUTPUT-BINARY-STREAM
+			FILE-OUTPUT-PHONY-CHARACTER-STREAM
+			FILE-PROBE-STREAM FILE-DIRECTORY-STREAM)
+
+;;; Operating system particular host flavors
+(DEFFLAVOR FILE-HOST-ITS-MIXIN () (FILE-HOST-MIXIN))
+
+(DEFMETHOD (FILE-HOST-ITS-MIXIN :PATHNAME-FLAVOR) ()
+  'ITS-PATHNAME)
+
+(DEFMETHOD (FILE-HOST-ITS-MIXIN :MAX-DATA-CONNECTIONS) () 3)
+
+(DEFMETHOD (FILE-HOST-ITS-MIXIN :LOGIN-UNIT) (UNIT LOGIN-P)
+  (LOGIN-HOST-UNIT UNIT LOGIN-P 'ITS))
+
+(DEFMETHOD (FILE-HOST-ITS-MIXIN :HSNAME-INFORMATION) (UNIT STR IDX)
+  (LET* ((HOST (HOST-UNIT-HOST UNIT))
+	 (DEFAULT-CONS-AREA BACKGROUND-CONS-AREA)
+	 (HSNAME (SUBSTRING STR (SETQ IDX (1+ IDX))
+			    (SETQ IDX (STRING-SEARCH-CHAR #\CR STR IDX))))
+	 (HSNAME-PATHNAME (MAKE-PATHNAME ':HOST HOST ':DEVICE "DSK" ':DIRECTORY HSNAME))
+	 (PERSONAL-NAME (SUBSTRING STR (SETQ IDX (1+ IDX))
+				   (SETQ IDX (STRING-SEARCH-CHAR #\CR STR IDX))))
+	 (GROUP-AFFILIATION (AREF STR (1+ IDX))))
+    (SETQ IDX (STRING-SEARCH ", " PERSONAL-NAME)
+	  STR (NSUBSTRING PERSONAL-NAME 0 IDX))
+    (AND IDX (SETQ STR (STRING-APPEND (NSUBSTRING PERSONAL-NAME (+ IDX 2)) #\SP STR)))
+    (VALUES HSNAME-PATHNAME PERSONAL-NAME GROUP-AFFILIATION STR)))
+
+(DEFFLAVOR FILE-HOST-TOPS20-MIXIN () (FILE-HOST-MIXIN))
+
+(DEFMETHOD (FILE-HOST-TOPS20-MIXIN :PATHNAME-FLAVOR) ()
+  'TOPS20-PATHNAME)
+
+(DEFMETHOD (FILE-HOST-TOPS20-MIXIN :LOGIN-UNIT)
+	   (UNIT LOGIN-P &AUX (CONN (HOST-UNIT-CONTROL-CONNECTION UNIT)))
+  ;; Connection is used up when logging out
+  (AND CONN (EQ (CHAOS:STATE CONN) 'CHAOS:OPEN-STATE)
+       (IF LOGIN-P
+	   (LOGIN-HOST-UNIT UNIT LOGIN-P SELF)
+	   (SETF (HOST-UNIT-CONTROL-CONNECTION UNIT) NIL)
+	   (CHAOS:CLOSE CONN "Logging out")))
+  T)
+
+(DEFMETHOD (FILE-HOST-TOPS20-MIXIN :HSNAME-INFORMATION) (UNIT STR IDX)
+  (LET* ((HSNAME (SUBSTRING STR (SETQ IDX (1+ IDX))
+			    (SETQ IDX (STRING-SEARCH-CHAR #\CR STR IDX))))
+	 (DEFAULT-CONS-AREA BACKGROUND-CONS-AREA)
+	 (HSNAME-PATHNAME (FUNCALL-SELF ':HSNAME-PATHNAME HSNAME (HOST-UNIT-HOST UNIT)))
+	 (PERSONAL-NAME (SUBSTRING STR (SETQ IDX (1+ IDX))
+				   (SETQ IDX (STRING-SEARCH-CHAR #\CR STR IDX))))
+	 (GROUP-AFFILIATION (IF (OR (NULL IDX) (EQ IDX (1- (STRING-LENGTH STR))))
+				#\SP
+			      (AREF STR (1+ IDX)))))
+    (SETQ IDX (STRING-SEARCH ", " PERSONAL-NAME)
+	  STR (NSUBSTRING PERSONAL-NAME 0 IDX))
+    (AND IDX (SETQ STR (STRING-APPEND (NSUBSTRING PERSONAL-NAME (+ IDX 2)) #\SP STR)))
+    (VALUES HSNAME-PATHNAME PERSONAL-NAME GROUP-AFFILIATION STR)))
+
+(DEFMETHOD (FILE-HOST-TOPS20-MIXIN :MAX-DATA-CONNECTIONS) () 8)
+
+(DEFFLAVOR FILE-HOST-TENEX-MIXIN () (FILE-HOST-TOPS20-MIXIN))
+
+(DEFMETHOD (FILE-HOST-TENEX-MIXIN :PATHNAME-FLAVOR) ()
+  'TENEX-PATHNAME)
+
+(DEFFLAVOR FILE-HOST-VMS-MIXIN () (FILE-HOST-TOPS20-MIXIN))
+
+(DEFMETHOD (FILE-HOST-VMS-MIXIN :PATHNAME-FLAVOR) ()
+  'VMS-PATHNAME)
+
+;; FOO, This could be any number at all, depending on the quota assigned.....
+(DEFMETHOD (FILE-HOST-VMS-MIXIN :MAX-DATA-CONNECTIONS) () 10.)
+
+;; like TOPS-20 is a good guess
+(DEFFLAVOR FILE-HOST-UNIX-MIXIN () (FILE-HOST-TOPS20-MIXIN))
+
+(DEFMETHOD (FILE-HOST-UNIX-MIXIN :PATHNAME-FLAVOR) ()
+  'UNIX-PATHNAME)
+
+(DEFFLAVOR FILE-HOST-MULTICS-MIXIN () (FILE-HOST-TOPS20-MIXIN))
+
+(DEFMETHOD (FILE-HOST-MULTICS-MIXIN :PATHNAME-FLAVOR) ()
+  'MULTICS-PATHNAME)
+
+; Support for the Symbolics LMFS file system (Bernie's system)
+(DEFFLAVOR FILE-HOST-LMFS-MIXIN () (FILE-HOST-TOPS20-MIXIN))
+
+(DEFMETHOD (FILE-HOST-LMFS-MIXIN :PATHNAME-FLAVOR) () 'LMFS-PATHNAME)
+
+(DEFMETHOD (FILE-HOST-LMFS-MIXIN :SYSTEM-TYPE) () ':LMFS)
+
+;; Mixin for hosts that knows how to name itself.
+(DEFFLAVOR FILE-HOST-LISPM-MIXIN () (FILE-HOST-MIXIN))
+
+(DEFMETHOD (FILE-HOST-LISPM-MIXIN :PATHNAME-HOST-NAMEP) (STRING)
+  (AND (EQ SELF SI:LOCAL-HOST)
+       (STRING-EQUAL STRING "LM")))
+
+(DEFMETHOD (FILE-HOST-LISPM-MIXIN :PRIMARY-DEVICE) () "DSK")
+
+;; FILE protocol support.
+(DEFMETHOD (FILE-HOST-LISPM-MIXIN :MAX-DATA-CONNECTIONS) () 37777777)
+
+(DEFMETHOD (FILE-HOST-LISPM-MIXIN :LOGIN-UNIT)
+	   (UNIT LOGIN-P &AUX (CONN (HOST-UNIT-CONTROL-CONNECTION UNIT)) TEM
+	    (DEFAULT-CONS-AREA BACKGROUND-CONS-AREA))
+  ;; Don't confuse the user by asking for UNAME and PASSWORD if he's logged in elsewhere.
+  (AND (SETQ TEM (COND ((NOT (EQUAL USER-ID "")) USER-ID)
+		       ((CDR (ASSQ 'ITS USER-UNAMES)))
+		       ((CDAR USER-UNAMES))))
+       (PUSH (CONS SELF TEM) USER-UNAMES))
+  ;; Connection is used up when logging out
+  (AND CONN (EQ (CHAOS:STATE CONN) 'CHAOS:OPEN-STATE)
+       (IF LOGIN-P
+	   (LOGIN-HOST-UNIT UNIT LOGIN-P SELF)
+	   (SETF (HOST-UNIT-CONTROL-CONNECTION UNIT) NIL)
+	   (CHAOS:CLOSE CONN "Logging out")))
+  T)
+
+;; The Fileserver doesn't supply the user name information, so might as well use
+;; whatever's hanging around.
+(DEFMETHOD (FILE-HOST-LISPM-MIXIN :HSNAME-INFORMATION) (IGNORE STR IDX)
+  (VALUES (PARSE-PATHNAME (SUBSTRING STR (SETQ IDX (1+ IDX))
+				     (STRING-SEARCH-CHAR #\CR STR IDX)))
+	  USER-PERSONAL-NAME USER-GROUP-AFFILIATION
+	  USER-PERSONAL-NAME-FIRST-NAME-FIRST))
+
+(DEFMETHOD (FILE-HOST-LISPM-MIXIN :PATHNAME-FLAVOR) ()
+  (IF (AND (EQ SELF SI:LOCAL-HOST)
+	   (NOT *LOCAL-SERVER-VIA-NET*)
+	   (GET 'LM-PATHNAME 'SI:FLAVOR))
+      'LM-PATHNAME
+    'REMOTE-LM-PATHNAME))
+
+;;; This is here to make the COMPILE-FLAVOR-METHODS below win when loading.
+;;; The actual function is in PEEKFS.
+(DEFMETHOD (FILE-HOST-MIXIN :PEEK-FILE-SYSTEM) FILE-HOST-PEEK-FILE-SYSTEM)
+
+;;; Predefined host flavors
+(DEFFLAVOR ITS-CHAOS-HOST
+	()
+	(SI:HOST-ITS-MIXIN CHAOS:HOST-CHAOS-MIXIN FILE-HOST-ITS-MIXIN SI:HOST))
+
+(SI:SET-HOST-FLAVOR-KEYWORDS 'ITS-CHAOS-HOST '(:ITS :CHAOS))
+
+(DEFMETHOD (ITS-CHAOS-HOST :LOGICALLY-BACKTRANSLATE-HOST-DEV-DIR)
+	   (PHYSICAL-HOST PHYSICAL-DEVICE PHYSICAL-DIRECTORY)
+  (IF (AND (EQ PHYSICAL-HOST SELF)
+	   (MEMQ PHYSICAL-DEVICE '(NIL :UNSPECIFIC)))
+      (VALUES SELF "DSK" PHYSICAL-DIRECTORY)))
+
+(DEFMETHOD (ITS-CHAOS-HOST :GENERIC-BASE-TYPE) (FILE-TYPE)
+  (IF (ASSOC FILE-TYPE *GENERIC-BASE-TYPE-ALIST*)
+      ':UNSPECIFIC  ;on ITS, we cant distinguish base types, since name2 is frequently
+    FILE-TYPE))	    ; used as a version number.
+
+(DEFFLAVOR TOPS20-CHAOS-HOST
+	()
+	(SI:HOST-TOPS20-MIXIN CHAOS:HOST-CHAOS-MIXIN FILE-HOST-TOPS20-MIXIN SI:HOST))
+
+(SI:SET-HOST-FLAVOR-KEYWORDS 'TOPS20-CHAOS-HOST '(:TOPS-20 :CHAOS))
+
+(DEFFLAVOR TENEX-CHAOS-HOST
+	()
+	(SI:HOST-TENEX-MIXIN CHAOS:HOST-CHAOS-MIXIN FILE-HOST-TENEX-MIXIN SI:HOST))
+
+(SI:SET-HOST-FLAVOR-KEYWORDS 'TENEX-CHAOS-HOST '(:TENEX :CHAOS))
+
+(DEFFLAVOR VMS-CHAOS-HOST
+	()
+	(SI:HOST-VMS-MIXIN CHAOS:HOST-CHAOS-MIXIN FILE-HOST-VMS-MIXIN SI:HOST))
+
+(SI:SET-HOST-FLAVOR-KEYWORDS 'VMS-CHAOS-HOST '(:VMS :CHAOS))
+
+(DEFFLAVOR UNIX-CHAOS-HOST
+	()
+	(SI:HOST-UNIX-MIXIN CHAOS:HOST-CHAOS-MIXIN FILE-HOST-UNIX-MIXIN SI:HOST))
+
+(SI:SET-HOST-FLAVOR-KEYWORDS 'UNIX-CHAOS-HOST '(:UNIX :CHAOS))
+
+(DEFFLAVOR MULTICS-CHAOS-HOST
+	()
+	(SI:HOST-MULTICS-MIXIN CHAOS:HOST-CHAOS-MIXIN FILE-HOST-MULTICS-MIXIN SI:HOST))
+
+(SI:SET-HOST-FLAVOR-KEYWORDS 'MULTICS-CHAOS-HOST '(:MULTICS :CHAOS))
+
+(DEFFLAVOR LISPM-CHAOS-HOST
+	()
+	(SI:HOST-LISPM-MIXIN CHAOS:HOST-CHAOS-MIXIN FILE-HOST-LISPM-MIXIN SI:HOST))
+
+(SI:SET-HOST-FLAVOR-KEYWORDS 'LISPM-CHAOS-HOST '(:LISPM :CHAOS))
+
+(DEFPROP :LISPM LISPM-CHAOS-HOST FILE-SYSTEM-HOST-FLAVOR)
+
+(DEFFLAVOR LMFS-CHAOS-HOST
+	   ()
+	   (SI:HOST-LMFS-MIXIN CHAOS:HOST-CHAOS-MIXIN FILE-HOST-LMFS-MIXIN SI:HOST))
+
+(SI:SET-HOST-FLAVOR-KEYWORDS 'LMFS-CHAOS-HOST '(:LMFS :CHAOS))
+
+(DEFPROP :LMFS LMFS-CHAOS-HOST FILE-SYSTEM-HOST-FLAVOR)
+
+(COMPILE-FLAVOR-METHODS ITS-CHAOS-HOST TOPS20-CHAOS-HOST TENEX-CHAOS-HOST VMS-CHAOS-HOST
+			UNIX-CHAOS-HOST MULTICS-CHAOS-HOST LISPM-CHAOS-HOST LMFS-CHAOS-HOST)
+
+;; Interface to the LMFILE file system.
+;; The host used for access to a remote machine's LMFILE
+;; is NOT a host table host.
+
+(DEFFLAVOR LMFILE-CHAOS-HOST
+	   (HOST-NAME
+	    CHAOS-ADDRESS
+	    REMOTE-HOST-NAME
+	    (OPEN-STREAMS NIL))
+	   (FILE-HOST-MIXIN SI:BASIC-HOST)
+  (:GETTABLE-INSTANCE-VARIABLES HOST-NAME CHAOS-ADDRESS REMOTE-HOST-NAME OPEN-STREAMS)
+  (:INITABLE-INSTANCE-VARIABLES HOST-NAME CHAOS-ADDRESS REMOTE-HOST-NAME))
+
+;; These three operations are only used locally.
+(DEFMETHOD (LMFILE-CHAOS-HOST :ADD-STREAM) (STREAM)
+  (WITHOUT-INTERRUPTS
+    (PUSH STREAM OPEN-STREAMS)))
+
+(DEFMETHOD (LMFILE-CHAOS-HOST :REMOVE-STREAM) (STREAM)
+  (WITHOUT-INTERRUPTS
+    (SETQ OPEN-STREAMS (DELQ STREAM OPEN-STREAMS))))
+
+(DECLARE (*EXPR CLEAR-FILE-SYSTEM) (*EXPR STOP-FILE-SYSTEM))
+
+(DEFMETHOD (LMFILE-CHAOS-HOST :SHUT-DOWN) (&OPTIONAL DRASTIC)
+  (SETQ OPEN-STREAMS NIL)
+  (IF (NEQ (SEND SELF ':PATHNAME-FLAVOR) 'LMFILE-PATHNAME)
+      (IF DRASTIC
+	  (CLEAR-FILE-SYSTEM)
+	(STOP-FILE-SYSTEM))))
+
+;;; This is here to make compile-flavor-methods win before PEEK is loaded.
+;;; The function is defined in PEEKCH.
+(DEFMETHOD (LMFILE-CHAOS-HOST :PEEK-FILE-SYSTEM-HEADER)
+	   CHAOS:HOST-CHAOS-PEEK-FILE-SYSTEM-HEADER)
+
+(DEFMETHOD (LMFILE-CHAOS-HOST :NAME) NIL HOST-NAME)
+(DEFMETHOD (LMFILE-CHAOS-HOST :PATHNAME-FLAVOR) ()
+  (IF (AND (EQ CHAOS-ADDRESS CHAOS:MY-ADDRESS)
+	   (EQUALP HOST-NAME REMOTE-HOST-NAME))
+      'LOCAL-FILE-PATHNAME
+    'LMFILE-PATHNAME))
+
+(DEFMETHOD (LMFILE-CHAOS-HOST :SYSTEM-TYPE) () ':LMFILE)
+
+(DEFMETHOD (LMFILE-CHAOS-HOST :MAX-DATA-CONNECTIONS) () 8)
+
+;; The Fileserver doesn't supply the user name information, so might as well use
+;; whatever's hanging around.  Also, use this host as the host in the homedir,
+;; since the fileserver may use its own machine's hostname.
+(DEFMETHOD (LMFILE-CHAOS-HOST :HSNAME-INFORMATION) (IGNORE STR IDX)
+  (VALUES (SEND (PARSE-PATHNAME (SUBSTRING STR (SETQ IDX (1+ IDX))
+					   (STRING-SEARCH-CHAR #\CR STR IDX)))
+		':NEW-PATHNAME ':HOST SELF)
+	  USER-PERSONAL-NAME USER-GROUP-AFFILIATION
+	  USER-PERSONAL-NAME-FIRST-NAME-FIRST))
+
+(DEFINE-SITE-VARIABLE LMFILE-SERVER-HOSTS :LMFILE-SERVER-HOSTS)
+
+(DEFUN ADD-LMFILE-CHAOS-HOST (NAME CHAOS-ADDRESS REMOTE-NAME)
+  (DOLIST (OHOST *PATHNAME-HOST-LIST*
+		 (LET ((HOST (MAKE-INSTANCE 'LMFILE-CHAOS-HOST ':HOST-NAME NAME
+					    ':REMOTE-HOST-NAME REMOTE-NAME
+					    ':CHAOS-ADDRESS CHAOS-ADDRESS)))
+		   (PUSH HOST *PATHNAME-HOST-LIST*)
+		   HOST))
+    (WHEN (AND (TYPEP OHOST 'LMFILE-CHAOS-HOST)
+	     (EQ (SEND OHOST ':CHAOS-ADDRESS) CHAOS-ADDRESS)
+	     (EQ (SEND OHOST ':HOST-NAME) NAME)
+	     (EQ (SEND OHOST ':REMOTE-HOST-NAME) REMOTE-NAME))
+      (SETQ *PATHNAME-HOST-LIST*
+	    (CONS OHOST
+		  (DELQ OHOST *PATHNAME-HOST-LIST*)))
+      (RETURN OHOST))))
+
+;; Add a host to reach each machine that should have one,
+;; except for this machine, if it is one of them,
+;; add "-R" to the name of the host, so that the specified name
+;; will still work for local LMFILE.
+;; The name used should be present in the host table as a nickname
+;; but should not be that host's primary name.
+;; Also deletes any such hosts that no longer belong.
+
+;; It is assumed that this is called AFTER the ordinary chaos hosts are put on
+;; so that this host will override the ordinary chaos host for this host's name.
+
+;; Now this is called directly by SITE-CHAOS-PATHNAME-INITIALIZE.
+(DEFUN ADD-LMFILE-CHAOS-HOSTS (&AUX HOSTS-WANTED)
+  (DOLIST (HN LMFILE-SERVER-HOSTS)
+    (LET ((HOST (SI:PARSE-HOST HN T)))
+      (WHEN HOST
+	;; If this is that host,
+	;; add a second one which has "-R" in its name
+	;; and says to go thru the net back to this host.
+	(AND (EQ HOST SI:LOCAL-HOST)
+	     (PUSH (ADD-LMFILE-CHAOS-HOST (STRING-APPEND HN "-R") (SEND HOST ':CHAOS-ADDRESS) HN)
+		   HOSTS-WANTED))
+	(PUSH (ADD-LMFILE-CHAOS-HOST HN (SEND HOST ':CHAOS-ADDRESS) HN)
+	      HOSTS-WANTED))))
+  ;; Discard any hosts of this type that aren't supposed to be there.
+  (DOLIST (HOST *PATHNAME-HOST-LIST*)
+    (AND (TYPEP HOST 'LMFILE-CHAOS-HOST)
+	 (NOT (MEMQ HOST HOSTS-WANTED))
+	 (SETQ *PATHNAME-HOST-LIST* (DELQ HOST *PATHNAME-HOST-LIST*)))))
+
+(COMPILE-FLAVOR-METHODS LMFILE-CHAOS-HOST)
+
+;;; Pathname interface
+
+(DEFFLAVOR CHAOS-PATHNAME () (DIRECTORY-STREAM-MIXIN REMOTE-PATHNAME))
+
+
+(DEFMETHOD (CHAOS-PATHNAME :DIRECTORY-STREAM-DEFAULT-PARSER) ()
+  #'SUBSTRING)
+
+;;; PATHNAME is supplied as an argument here so that the :PATHNAME message to the stream
+;;; will return a logical pathname, if that is what was OPEN'ed.
+(DEFMETHOD (CHAOS-PATHNAME :OPEN) (PATHNAME &REST OPTIONS)
+  (APPLY 'OPEN-CHAOS HOST PATHNAME OPTIONS))
+
+(DEFMETHOD (CHAOS-PATHNAME :RENAME) (NEW-PATHNAME &OPTIONAL (ERROR-P T))
+  (RENAME-CHAOS HOST SELF NEW-PATHNAME ERROR-P))
+
+(DEFMETHOD (CHAOS-PATHNAME :DELETE) (&OPTIONAL (ERROR-P T))
+  (DELETE-CHAOS HOST SELF ERROR-P))
+
+(DEFMETHOD (CHAOS-PATHNAME :COMPLETE-STRING) (STRING OPTIONS &AUX SUCCESS)
+  (MULTIPLE-VALUE (STRING SUCCESS)
+    (COMPLETE-CHAOS HOST SELF STRING OPTIONS))
+  (LET ((DEFAULT-CONS-AREA BACKGROUND-CONS-AREA))
+    (VALUES (STRING-APPEND (FUNCALL HOST ':NAME-AS-FILE-COMPUTER) ": " STRING) SUCCESS)))
+
+(DEFMETHOD (CHAOS-PATHNAME :CHANGE-PROPERTIES) (ERROR-P &REST PROPERTIES)
+  (CHANGE-PROPERTIES-CHAOS HOST SELF ERROR-P PROPERTIES))
+
+(DEFMETHOD (CHAOS-PATHNAME :DIRECTORY-STREAM) (OPTIONS)
+  (DIRECTORY-CHAOS HOST SELF OPTIONS))
+
+(DEFMETHOD (CHAOS-PATHNAME :HOMEDIR) (&OPTIONAL (USER USER-ID))
+  USER
+  (HOMEDIR-CHAOS HOST))
+
+;;; Perhaps this would be a reasonable default for the way all hosts should work?
+(DEFMETHOD (CHAOS-PATHNAME :ALL-DIRECTORIES) (OPTIONS)
+  (LET ((DIRS (FUNCALL-SELF ':DIRECTORY-LIST (CONS ':DIRECTORIES-ONLY OPTIONS))))
+    (IF (ERRORP DIRS) DIRS
+      (SETQ DIRS (CDR DIRS))
+      (DOLIST (X DIRS)
+	(RPLACA X (FUNCALL (CAR X) ':NEW-PATHNAME ':NAME ':UNSPECIFIC ':TYPE ':UNSPECIFIC
+			   ':VERSION ':UNSPECIFIC)))
+      DIRS)))
+
+(DEFMETHOD (CHAOS-PATHNAME :MULTIPLE-FILE-PLISTS) (FILES OPTIONS)
+  (MULTIPLE-PLISTS-CHAOS HOST FILES OPTIONS))
+
+(DEFFLAVOR ITS-PATHNAME () (ITS-PATHNAME-MIXIN CHAOS-PATHNAME))
+
+(DEFFLAVOR TOPS20-PATHNAME () (TOPS20-PATHNAME-MIXIN CHAOS-PATHNAME))
+
+(DEFMETHOD (ITS-PATHNAME :CREATE-LINK) (LINK-TO &KEY (ERROR T))
+  (CREATE-LINK-CHAOS HOST SELF LINK-TO ERROR))
+
+(DEFMETHOD (TOPS20-PATHNAME :EXPUNGE) (&KEY &OPTIONAL (ERROR T))
+  (DIRECTORY-OPERATION-CHAOS ':EXPUNGE HOST SELF ERROR))
+
+(DEFMETHOD (TOPS20-PATHNAME :REMOTE-CONNECT) (&OPTIONAL &KEY (ERROR T) ACCESS)
+  (CWD-CHAOS HOST SELF ERROR ACCESS))
+
+(DEFMETHOD (TOPS20-PATHNAME :CREATE-DIRECTORY) (&KEY &OPTIONAL (ERROR T))
+  (DIRECTORY-OPERATION-CHAOS ':CREATE-DIRECTORY HOST SELF ERROR))
+
+(DEFMETHOD (TOPS20-PATHNAME :ENABLE-CAPABILITIES) (&REST CAPABILITIES)
+  (CHANGE-CAPABILITIES-CHAOS HOST (OR CAPABILITIES '("OPERATOR" "WHEEL")) T))
+
+(DEFMETHOD (TOPS20-PATHNAME :DISABLE-CAPABILITIES) (&REST CAPABILITIES)
+  (CHANGE-CAPABILITIES-CHAOS HOST (OR CAPABILITIES '("OPERATOR" "WHEEL")) NIL))
+
+(DEFFLAVOR TENEX-PATHNAME () (TENEX-PATHNAME-MIXIN CHAOS-PATHNAME)) 
+
+(DEFMETHOD (TENEX-PATHNAME :EXPUNGE) (&KEY &OPTIONAL (ERROR T))
+  (DIRECTORY-OPERATION-CHAOS ':EXPUNGE HOST SELF ERROR))
+
+(DEFFLAVOR VMS-PATHNAME () (VMS-PATHNAME-MIXIN CHAOS-PATHNAME))
+
+(DEFMETHOD (VMS-PATHNAME :ENABLE-CAPABILITIES) (&REST CAPABILITIES)
+  (CHANGE-CAPABILITIES-CHAOS HOST (OR CAPABILITIES '("SYSPRV")) T))
+
+(DEFMETHOD (VMS-PATHNAME :DISABLE-CAPABILITIES) (&REST CAPABILITIES)
+  (CHANGE-CAPABILITIES-CHAOS HOST (OR CAPABILITIES '("SYSPRV")) NIL))
+
+(DEFFLAVOR UNIX-PATHNAME () (UNIX-PATHNAME-MIXIN CHAOS-PATHNAME))
+
+(DEFMETHOD (UNIX-PATHNAME :CREATE-DIRECTORY) (&KEY &OPTIONAL (ERROR T))
+  (DIRECTORY-OPERATION-CHAOS ':CREATE-DIRECTORY HOST SELF ERROR))
+
+(DEFFLAVOR MULTICS-PATHNAME () (MULTICS-PATHNAME-MIXIN CHAOS-PATHNAME)) 
+
+(DEFMETHOD (MULTICS-PATHNAME :CREATE-LINK) (LINK-TO &KEY (ERROR T))
+  (CREATE-LINK-CHAOS HOST SELF LINK-TO ERROR))
+
+(DEFFLAVOR REMOTE-LM-PATHNAME () (LM-PARSING-MIXIN CHAOS-PATHNAME))
+
+;This pathname flavor is not always the right one for its host.
+(DEFPROP REMOTE-LM-PATHNAME T PATHNAME-FLAVOR-CHANGES)
+(DEFPROP LM-PATHNAME T PATHNAME-FLAVOR-CHANGES)	;So do these.
+(DEFPROP RM-PATHNAME T PATHNAME-FLAVOR-CHANGES)
+
+(DEFMETHOD (REMOTE-LM-PATHNAME :EXPUNGE) (&KEY &OPTIONAL (ERROR T))
+  (DIRECTORY-OPERATION-CHAOS ':EXPUNGE HOST SELF ERROR))
+
+(DEFMETHOD (REMOTE-LM-PATHNAME :CREATE-DIRECTORY) (&KEY &OPTIONAL (ERROR T))
+  (DIRECTORY-OPERATION-CHAOS ':CREATE-DIRECTORY HOST SELF ERROR))
+
+(DEFFLAVOR LMFS-PATHNAME () (LMFS-PATHNAME-MIXIN CHAOS-PATHNAME))
+
+(DEFMETHOD (LMFS-PATHNAME :CREATE-LINK) (LINK-TO &KEY (ERROR T))
+  (CREATE-LINK-CHAOS HOST SELF LINK-TO ERROR))
+
+(DEFFLAVOR LMFILE-PATHNAME () (LMFILE-PARSING-MIXIN CHAOS-PATHNAME))
+
+(DEFMETHOD (LMFILE-PATHNAME :EXPUNGE) (&KEY &OPTIONAL (ERROR T))
+  (DIRECTORY-OPERATION-CHAOS ':EXPUNGE HOST SELF ERROR))
+
+(DEFMETHOD (LMFILE-PATHNAME :CREATE-DIRECTORY) (&KEY &OPTIONAL (ERROR T))
+  (DIRECTORY-OPERATION-CHAOS ':CREATE-DIRECTORY HOST SELF ERROR))
+
+(DEFMETHOD (LMFILE-PATHNAME :CREATE-LINK) (LINK-TO &KEY (ERROR T))
+  (CREATE-LINK-CHAOS HOST SELF LINK-TO ERROR))
+
+(COMPILE-FLAVOR-METHODS ITS-PATHNAME TOPS20-PATHNAME TENEX-PATHNAME
+			VMS-PATHNAME UNIX-PATHNAME MULTICS-PATHNAME
+			REMOTE-LM-PATHNAME LMFS-PATHNAME
+			LMFILE-PATHNAME)
+
+;;; Initializations
+
+;;; This defines all the local chaosnet FILE protocol hosts.
+(DEFVAR *CHAOS-FILE-HOSTS* NIL)
+
+(DEFUN SITE-CHAOS-PATHNAME-INITIALIZE ()
+  ;; Flush all old hosts
+  (SETQ *PATHNAME-HOST-LIST* (DEL-IF #'(LAMBDA (X)
+					 (MEMQ X *CHAOS-FILE-HOSTS*))
+				     *PATHNAME-HOST-LIST*))
+  (SETQ *CHAOS-FILE-HOSTS* NIL)
+  ;; And add new ones
+  (DOLIST (HOST (SI:GET-SITE-OPTION ':CHAOS-FILE-SERVER-HOSTS))
+    (ADD-CHAOSNET-FILE-COMPUTER HOST))
+  ;; Now add the FC host, which has to be in front on the list.
+  (ADD-LMFILE-CHAOS-HOSTS))
+
+(DEFUN ADD-CHAOSNET-FILE-COMPUTER (HOST-SPEC &AUX FILE-HOST HOST)
+  "Add HOST-SPEC to the list of chaosnet hosts that can act as FILE servers.
+HOST-SPEC is either a host name or a list.
+If the HOST-SPEC is a list, the first element is the host name, and the second
+element is the file-system type to use for the file server host object.
+This host's name becomes available for use in pathnames."
+  (SETQ HOST (SI:PARSE-HOST (IF (LISTP HOST-SPEC) (FIRST HOST-SPEC) HOST-SPEC) NIL T))
+  (SETQ FILE-HOST (IF (LISTP HOST-SPEC)
+		      (MAKE-INSTANCE (GET (SECOND HOST-SPEC) 'FILE-SYSTEM-HOST-FLAVOR)
+				     ':ALIST-ELEM (SEND HOST ':EVAL-INSIDE-YOURSELF
+							'SI:ALIST-ELEM))
+		    HOST))
+  (OR (MEMQ FILE-HOST *PATHNAME-HOST-LIST*)
+      (PUSH FILE-HOST *PATHNAME-HOST-LIST*))
+  (OR (MEMQ FILE-HOST *CHAOS-FILE-HOSTS*)
+      (PUSH FILE-HOST *CHAOS-FILE-HOSTS*))
+  HOST)
+
+(DEFUN FILE-LOGIN (LOGIN-P)
+  "Log all open host units in or out.  LOGIN-P = NIL means log out, otherwise log in."
+  (CLEAR-CONNECT-AND-ACCESS-MEMORY)
+  (DOLIST (HOST *CHAOS-FILE-HOSTS*)
+    (DOLIST (UNIT (FUNCALL HOST ':SEND-IF-HANDLES ':HOST-UNITS))
+      (FUNCALL HOST ':LOGIN-UNIT UNIT LOGIN-P))))
+
+(ADD-INITIALIZATION "File Login" '(FILE-LOGIN T) '(LOGIN))
+(ADD-INITIALIZATION "File Logout" '(FILE-LOGIN NIL) '(LOGOUT))
+
+(DEFUN FILE-SYSTEM-INIT ()
+  (WITHOUT-INTERRUPTS
+   (DO ((L *FILE-PENDING-TRANSACTIONS* (CDR L))
+	(PKT))
+       ((NULL L)
+	(SETQ *FILE-PENDING-TRANSACTIONS* NIL))
+     (AND (SETQ PKT (FILE-TRANSACTION-ID-PKT (CAR L)))
+	  (CHAOS:RETURN-PKT PKT))))
+  (DOLIST (HOST *CHAOS-FILE-HOSTS*)
+    (FUNCALL HOST ':RESET)))
+
+(ADD-INITIALIZATION "FILE-SYSTEM-INIT" '(FILE-SYSTEM-INIT) '(SYSTEM))
+
+;;; These functions take care of closing connections that have not been used for a while.
+(DEFUN RESET-DORMANT-HOST-UNITS ()
+  (ERRSET
+    (DOLIST (HOST *CHAOS-FILE-HOSTS*)
+      (FUNCALL HOST ':SEND-IF-HANDLES ':RESET-DORMANT-HOST-UNITS))
+    NIL))
+
+(DEFCONST HOST-UNIT-LIFETIME 214500)   ;20 MINUTES.
+
+(DEFCONST DATA-CONNECTION-LIFETIME 3600.)
+
+(DEFUN HOST-UNIT-DORMANT (HOST-UNIT)
+  (AND (NOT (HOST-UNIT-LOCK HOST-UNIT))
+       ;; Don't kill a host unit if it has more than one data connection still,
+       (NULL (CDR (HOST-UNIT-DATA-CONNECTIONS HOST-UNIT)))
+       ;; or if that data connection is doing anything.
+       (LET ((DATA-CONNECTION (CAR (HOST-UNIT-DATA-CONNECTIONS HOST-UNIT))))
+	 (OR (NULL DATA-CONNECTION)
+	     (AND (NULL (DATA-STREAM DATA-CONNECTION ':INPUT))
+		  (NULL (DATA-STREAM DATA-CONNECTION ':OUTPUT)))))
+       (> (TIME-DIFFERENCE (TIME) (HOST-UNIT-LAST-USE-TIME HOST-UNIT))
+	  HOST-UNIT-LIFETIME)))
+
+(DEFUN DATA-CONNECTION-DORMANT (DATA-CONNECTION)
+  (AND (NULL (DATA-STREAM DATA-CONNECTION ':INPUT))
+       (NULL (DATA-STREAM DATA-CONNECTION ':OUTPUT))
+       (> (TIME-DIFFERENCE (TIME) (DATA-LAST-USE-TIME DATA-CONNECTION))
+	  DATA-CONNECTION-LIFETIME)))
+
+
+(DEFMETHOD (FILE-HOST-MIXIN :RESET-DORMANT-HOST-UNITS) ()
+  (DOLIST (HU HOST-UNITS)
+    ;; If host unit has extra data connections, close them.
+    (IF (CDR (HOST-UNIT-DATA-CONNECTIONS HU))
+	(FUNCALL HU ':SEND-IF-HANDLES ':CLOSE-DORMANT-DATA-CONNECTIONS))
+    (LET (DO-IT)
+      (WITHOUT-INTERRUPTS
+	(AND (FUNCALL HU ':CONTROL-CONNECTION)	; Don't bother, if already reset.
+	     (HOST-UNIT-DORMANT HU)	; Don't reset if being used or used recently.
+	     (SETQ DO-IT T)
+	     (SETF (HOST-UNIT-LOCK HU) 'LOCKED-FOR-SUICIDE)))
+      (IF DO-IT
+	  (FUNCALL HU ':SEND-IF-HANDLES ':RESET)))))
+
+;Close any data connections that have not been used for a while,
+;exempting only the first data connection on any host unit.
+(DEFMETHOD (HOST-UNIT :CLOSE-DORMANT-DATA-CONNECTIONS) ()
+  (LOCK-HOST-UNIT (SELF)
+    (DOLIST (DATA-CONNECTION (CDR DATA-CONNECTIONS))
+      (COND ((DATA-CONNECTION-DORMANT DATA-CONNECTION)
+	     (FUNCALL-SELF ':COMMAND NIL (DATA-INPUT-HANDLE DATA-CONNECTION) NIL
+			   "UNDATA-CONNECTION")
+	     (LET ((CONN (DATA-CONNECTION DATA-CONNECTION)))
+	       (CHAOS:CLOSE CONN "Done")
+	       (CHAOS:REMOVE-CONN CONN))
+	     (SETQ DATA-CONNECTIONS (DELQ DATA-CONNECTION DATA-CONNECTIONS)))))))
+
+;;; The following takes care of the process to do the above stuff every minute.
+
+(DEFVAR DORMANT-HOST-CONNECTION-GC-WAIT-ARG-LIST (LIST NIL 3600.))
+
+(DEFUN DORMANT-HOST-CONNECTION-GC-TOP-LEVEL ()
+  (IF (ANY-DORMANT-HOST-UNITS)
+      (PROCESS-RUN-FUNCTION "Flush file connections" 'RESET-DORMANT-HOST-UNITS))
+  (RPLACA DORMANT-HOST-CONNECTION-GC-WAIT-ARG-LIST (TIME))
+  (SI:SET-PROCESS-WAIT CURRENT-PROCESS
+		       'WAIT-UNTIL-TIME
+		       DORMANT-HOST-CONNECTION-GC-WAIT-ARG-LIST)
+  (SETF (SI:PROCESS-WHOSTATE DORMANT-HOST-GC-PROCESS) "Sleep"))
+
+(DEFUN WAIT-UNTIL-TIME (TIME DELAY)
+  (> (TIME-DIFFERENCE (TIME) TIME) DELAY))
+
+(DEFUN ANY-DORMANT-HOST-UNITS ()
+  (PROG TOP ()
+	(DOLIST (HOST *CHAOS-FILE-HOSTS*)
+	  (DOLIST (HU (FUNCALL HOST ':SEND-IF-HANDLES ':HOST-UNITS))
+	    (DOLIST (DC (CDR (HOST-UNIT-DATA-CONNECTIONS HU)))
+	      (IF (DATA-CONNECTION-DORMANT DC)
+		  (RETURN-FROM TOP T)))
+	    (AND (HOST-UNIT-DORMANT HU)
+		 (RETURN-FROM TOP T))))))
+
+(DEFVAR DORMANT-HOST-GC-PROCESS)
+
+(DEFUN INIT-DORMANT-HOST-GC-PROCESS ()
+  (OR (BOUNDP 'DORMANT-HOST-GC-PROCESS)
+      (SETQ DORMANT-HOST-GC-PROCESS (MAKE-PROCESS "Dormant FILE connection GC" ':SIMPLE-P T)))
+  (PROCESS-PRESET DORMANT-HOST-GC-PROCESS 'DORMANT-HOST-CONNECTION-GC-TOP-LEVEL)
+  (PROCESS-RESET-AND-ENABLE DORMANT-HOST-GC-PROCESS))
+
+(ADD-INITIALIZATION 'DORMANT-HOST-GC
+		    `(INIT-DORMANT-HOST-GC-PROCESS)
+		    '(:NORMAL))

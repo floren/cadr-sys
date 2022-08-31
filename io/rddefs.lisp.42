@@ -1,0 +1,201 @@
+;;; Definitions for the -*- Mode:LISP; Common-Lisp:NIL; Package:SYSTEM-INTERNALS; Base:8 -*- machine reader
+
+;;; WARNING! if you change anything in this file, not only might you
+;;; have to recompile READ and PRINT, but RTC as well, and then you
+;;; may have to load RTC and recompile the readtable from RDTBL
+;;; using RTC-FILE.
+
+(DEFSTRUCT (READTABLE :ARRAY-LEADER :NAMED
+		      (:CONSTRUCTOR MAKE-RDTBL)
+		      (:MAKE-ARRAY (:DIMENSIONS (RDTBL-ARRAY-DIMS) :TYPE 'ART-16B))
+		      (:DEFAULT-POINTER RDTBL)
+		      (:SIZE-MACRO RDTBL-SIZE)
+		      (:PRINT-FUNCTION
+			#'(LAMBDA (RDTBL STREAM IGNORE)
+			    (SI:PRINTING-RANDOM-OBJECT (RDTBL STREAM :TYPEP)))))
+
+	   RDTBL-FSM					;sacred
+	   RDTBL-N-STATES
+	   RDTBL-N-BUCKETS
+	   RDTBL-STARTING-STATE
+	   RDTBL-SLASH-CODE
+	   RDTBL-EOF-CODE
+	   RDTBL-BREAK-CODE
+	   RDTBL-MACRO-ALIST
+	   RDTBL-READ-FUNCTION-PROPERTY
+	   RDTBL-PLIST
+           RDTBL-DEFINITION
+	   RDTBL-MAKE-SYMBOL
+	   RDTBL-MAKE-SYMBOL-BUT-LAST
+           RDTBL-SLASH   ;; Not used.
+           RDTBL-WHITESPACE    ;; Not used.
+           RDTBL-CIRCLECROSS   ;; Not used.
+	   (PTTBL-SPACE			40	)
+	   (PTTBL-NEWLINE		215	)
+	   (PTTBL-CONS-DOT 		" . "	)
+	   (PTTBL-MINUS-SIGN 		#/-	)
+	   (PTTBL-DECIMAL-POINT 	#/.	)
+	   (PTTBL-SLASH 		#//	)
+	   (PTTBL-PRINLEVEL 		"**"	)
+	   (PTTBL-PRINLENGTH 		"..."	)
+	   (PTTBL-OPEN-RANDOM 		"#<"	)
+	   (PTTBL-CLOSE-RANDOM 		">"	)
+	   (PTTBL-OPEN-PAREN 		#/(	)
+	   (PTTBL-CLOSE-PAREN 		#/)	)
+	   (PTTBL-OPEN-QUOTE-STRING 	#/"	)
+	   (PTTBL-CLOSE-QUOTE-STRING	#/"	)
+	   (PTTBL-OPEN-QUOTE-SYMBOL 	#/|	)
+	   (PTTBL-CLOSE-QUOTE-SYMBOL 	#/|	)
+	   (PTTBL-PACKAGE-PREFIX        ":"	)
+	   (PTTBL-PACKAGE-INTERNAL-PREFIX ":"	)
+	   (PTTBL-CHARACTER-PREFIX      "//"   )
+	   (PTTBL-CHARACTER-BEFORE-FONT "#"     )
+	   (PTTBL-RATIONAL-INFIX        #/\     )
+	   (PTTBL-COMPLEX		'("" NIL "i"))
+	   (PTTBL-RATIONAL-RADIX	10.	)
+	   (PTTBL-OPEN-VECTOR		"#("	)
+	   (PTTBL-CLOSE-VECTOR          ")"	)
+	   (PTTBL-ARRAY			'("#" :RANK "A" :SEQUENCES))
+	   (PTTBL-OPEN-BIT-VECTOR	"#*"	)
+	   (PTTBL-UNINTERNED-SYMBOL-PREFIX "#:" )
+	   (PTTBL-STRUCTURE		NIL     )  ;Don't know what this should mean yet.
+	   RDTBL-ESCAPE-CODE
+	   RDTBL-MULTIPLE-ESCAPE-CODE
+	   RDTBL-CHARACTER-CODE-ESCAPE-CODE
+	   )
+
+(DEFVAR RDTBL-ARRAY-SIZE 240)
+
+(DEFMACRO RDTBL-ARRAY (&OPTIONAL (P 'RDTBL))
+	  P)
+
+(DEFMACRO RDTBL-ARRAY-DIMS ()
+	  `',(LIST 3 RDTBL-ARRAY-SIZE))
+
+(DEFMACRO RDTBL-BITS (RDTBL CHAR)
+	    `(AREF ,RDTBL 0 ,CHAR))
+
+(DEFMACRO RDTBL-CODE (RDTBL CHAR)
+	    `(AREF ,RDTBL 1 ,CHAR))
+
+(DEFMACRO RDTBL-TRANS (RDTBL CHAR)
+	    `(AREF ,RDTBL 2 ,CHAR))
+
+;;; Names of special characters, as an a-list.  FORMAT searches this list to
+;;; get the inverse mapping (numbers to names), so the preferred name for a value
+;;; should be earliest in the list.  New-keyboard names are preferred.  Names (not
+;;; necessarily the prefered ones) should include those in the manual, in "The Lisp Machine
+;;; Character Set".  This variable is used by quite a few other programs as well, even though
+;;; it may look like it is internal to READ.  Here rather than in READ, because this
+;;; expression cannot be evaluated in the cold-load.
+
+(DEFCONST %%XR-SPECIAL-CHARACTER-NAMES-MOUSE-BIT 2401
+  "This should be used ONLY for defining XR-SPECIAL-CHARACTER-NAMES.")
+
+(DEFCONST XR-SPECIAL-CHARACTER-NAMES
+  (APPEND '((:NULL . 200) (:NULL-CHARACTER . 200)
+	    (:BREAK . 201) (:BRK . 201)
+	    (:CLEAR-INPUT . 202) (:CLEAR . 202) (:CLR . 202)
+	    (:CALL . 203)
+	    (:TERMINAL . 204) (:ESC . 204) (:ESCAPE . 204) (:TERMINAL-ESCAPE . 204)
+	    (:MACRO . 205) (:BACK-NEXT . 205) (:BACKNEXT . 205)
+	    (:HELP . 206)
+	    (:RUBOUT . 207)
+	    (:OVERSTRIKE . 210) (:BACKSPACE . 210) (:BS . 210)
+	    (:TAB . 211)
+	    (:LINE . 212) (:LF . 212) (:LINEFEED . 212) (:LINE-FEED . 212)
+	    (:DELETE . 213) (:VT . 213)
+	    ;; The keyboard says "CLEAR SCREEN", but it should type out as "PAGE".
+	    (:PAGE . 214) (:CLEAR-SCREEN . 214) (:FORM . 214) (:FF . 214)
+	    (:RETURN . 215) (:CR . 215) (:NEWLINE . 215)
+	    (:QUOTE . 216)
+	    (:HOLD-OUTPUT . 217)
+	    (:STOP-OUTPUT . 220)
+	    (:ABORT . 221)
+	    (:RESUME . 222)
+	    (:STATUS . 223)
+	    (:END . 224)
+	    (:ROMAN-I . 225) (:ROMAN-II . 226) (:ROMAN-III . 227) (:ROMAN-IV . 230)
+	    (:HAND-UP . 231) (:HAND-DOWN . 232)
+	    (:HAND-LEFT . 233) (:HAND-RIGHT . 234)
+	    (:SYSTEM . 235) (:NETWORK . 236)
+
+	    (:CENTER-DOT . 0) (:DOWN-ARROW . 1)
+	    (:ALPHA . 2) (:BETA . 3) (:AND-SIGN . 4) (:NOT-SIGN . 5)
+	    (:EPSILON . 6) (:PI . 7) (:LAMBDA . 10) (:GAMMA . 11) (:DELTA . 12)
+	    (:UP-ARROW . 13) (:UPARROW . 13)
+	    (:PLUS-MINUS . 14) (:CIRCLE-PLUS . 15)
+	    (:INFINITY . 16) (:PARTIAL-DELTA . 17)
+	    (:LEFT-HORSESHOE . 20) (:RIGHT-HORSESHOE . 21)
+	    (:UP-HORSESHOE . 22) (:DOWN-HORSESHOE . 23)
+	    (:UNIVERSAL-QUANTIFIER . 24) (:EXISTENTIAL-QUANTIFIER . 25)
+	    (:CIRCLE-X . 26) (:CIRCLE-CROSS . 26) (:TENSOR . 26)
+	    (:DOUBLE-ARROW . 27) (:LEFT-ARROW . 30) (:RIGHT-ARROW . 31)
+	    (:NOT-EQUAL . 32)(:NOT-EQUALS . 32)
+	    (:ALTMODE . 33) (:ALT . 33) (:DIAMOND . 33)
+	    (:LESS-OR-EQUAL . 34) (:GREATER-OR-EQUAL . 35) (:EQUIVALENCE . 36)
+	    (:OR-SIGN . 37) (:OR . 37)
+
+	    (:SPACE . 40) (:SP . 40)
+	    (:INTEGRAL . 177)
+	    )
+	  (MAPCAR #'(LAMBDA (X) (CONS (CAR X)
+				      (DPB 1 %%XR-SPECIAL-CHARACTER-NAMES-MOUSE-BIT
+					   (CDR X))))
+	      '((:MOUSE-L . 0) (:MOUSE-L-1 . 0) (:MOUSE-L-2 . 10) (:MOUSE-L-3 . 20)
+		(:MOUSE-M . 1) (:MOUSE-M-1 . 1) (:MOUSE-M-2 . 11) (:MOUSE-M-3 . 21)
+		(:MOUSE-R . 2) (:MOUSE-R-1 . 2) (:MOUSE-R-2 . 12) (:MOUSE-R-3 . 22)
+		(:MOUSE-1-1 . 0) (:MOUSE-1-2 . 10)
+		(:MOUSE-2-1 . 1) (:MOUSE-2-2 . 11)
+		(:MOUSE-3-1 . 2) (:MOUSE-3-2 . 12))))
+  "Alist of names of special characters, in the form of symbols in the keyword pkg,
+and the character values they correspond to.")
+
+(DEFMACRO PRINTING-RANDOM-OBJECT ((OBJECT STREAM . OPTIONS) &BODY BODY)
+  "A macro for aiding in the printing of random objects.
+This macro generates a form which:
+   1.  Uses the print-table to find the things in which to enclose your randomness.
+   2.  (by default) includes the virtual address in the printed representation.
+   3.  Obeys PRINT-READABLY
+ Options are	:NO-POINTER to suppress the pointer
+		:TYPEP princs the typep of the object first.
+ 		:FASTP <fastp> if the variable happens to be sitting around.
+
+ Example:
+ (DEFSELECT ((:PROPERTY HACKER :NAMED-STRUCTURE-INVOKE))
+   (:PRINT-SELF (HACKER STREAM IGNORE IGNORE)
+     (SI:PRINTING-RANDOM-OBJECT (HACKER STREAM :TYPEP)
+       (PRIN1 (HACKER-NAME HACKER) STREAM))))
+ ==> #<HACKER /"MMcM/" 6172536765>"
+  (LET ((%POINTER T)
+	(TYPEP NIL)
+	(FASTP NIL))
+    (DO ((L OPTIONS (CDR L)))
+	((NULL L))
+      (SELECTQ (CAR L)
+	(:NO-POINTER (SETQ %POINTER NIL))
+	(:TYPEP (SETQ TYPEP T))
+	(:FASTP (SETQ L (CDR L) FASTP (CAR L)))
+	(OTHERWISE (FERROR NIL "~S is an unknown keyword in PRINTING-RANDOM-OBJECT"
+			   (CAR L)))))
+    `(PROGN
+       (AND PRINT-READABLY (PRINT-NOT-READABLE ,OBJECT))
+       (PRINT-RAW-STRING (PTTBL-OPEN-RANDOM *READTABLE*) ,STREAM ,FASTP)
+       ,@(AND TYPEP
+	      `((PRINT-PNAME-STRING (TYPEP ,OBJECT) ,STREAM ,FASTP)))
+       ,@(AND TYPEP BODY
+	      `((FUNCALL ,STREAM ':TYO (PTTBL-SPACE *READTABLE*))))
+       ,@BODY
+       ,@(AND %POINTER
+	      `((FUNCALL ,STREAM ':TYO (PTTBL-SPACE *READTABLE*))
+		(LET ((*PRINT-BASE* 8.)
+		      (*PRINT-RADIX* NIL)
+		      (*NOPOINT T))
+		  (PRINT-FIXNUM (%POINTER ,OBJECT) ,STREAM))))
+       (PRINT-RAW-STRING (PTTBL-CLOSE-RANDOM *READTABLE*) ,STREAM ,FASTP)
+       ,OBJECT)))
+
+(DEFSUBST DECODE-PRINT-ARG (ARG)
+  (COND ((NULL ARG) *STANDARD-OUTPUT*)
+	((EQ ARG T) *TERMINAL-IO*)
+	(T ARG)))

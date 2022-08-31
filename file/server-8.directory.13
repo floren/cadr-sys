@@ -1,0 +1,14 @@
+;;; -*- Mode: Lisp; Package: User; Base: 10.; Common-Lisp: NIL; Patch-File: T -*-
+;;; Patch directory for FILE-Server version 8
+;;; Written 5/26/84 06:38:54 by LMFile,
+;;; while running on Lisp Machine Filecomputer from band 1
+;;; with System 98.48, CADR 3.6, ZMail 53.17, MIT-Specific 22.0, Experimental Local-File 48.4, Experimental FILE-Server 8.2, Experimental LFS 3.3, Experimental MagTape 22.6, microcode 309, XFS/C.
+
+(:EXPERIMENTAL
+ ((0 "FILE-Server Loaded" "RMS" NIL)
+  (1 "FILE-SERVER-OPEN defaulting of :BYTE-SIZE." "LMFile" NIL)
+  (2 "Disk-full handling." "LMFile" NIL)
+  (3 "(neq si:pkg-user-package si:pkg-keyword-package) => t" "Mly" T)
+  (4 "Once and for all, do (INIT-LOCAL-HOST-PATHNAME) at warm boot.  ARGH !!" "LMFile" NIL)
+  (5 "parsing file properties" "Mly" NIL)
+  ))
