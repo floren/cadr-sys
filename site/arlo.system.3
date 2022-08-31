@@ -1,0 +1,22 @@
+;;; -*- Mode:LISP; Base:8 -*-
+
+(fs:add-logical-pathname-host
+  "Arlo" "Pygmalion"
+  '(("Sources" "usrd$:[kwh.arlo]")
+    ("AI"      "usrd$:[kwh.arlo.smarts]")
+    ("Ancient" "usrd$:[kwh.arlo.rll]")
+    ("Doc"     "usrd$:[kwh.arlo.doc]")
+    ("LmLib"   "usrd$:[lmlib]")
+    ("Patches" "usrd$:[kwh.arlo.mpatches]")))
+
+(si:set-system-source-file "ARLO" "ARLO: Sources; SysDef LISP")
+(si:set-system-source-file "ARLOX" "ARLO: AI; SysDef LISP")
+
+;;; Stop silly NIL/LISPM error from "Readtable:" file attribute.
+(defprop readtable T fs:known-file-attribute)
+
+;;; Let files be read in without complaints.
+(defprop Knowledge-Base T fs:known-file-attribute)
+(defprop KB T fs:known-file-attribute)
+(defprop KBase T fs:known-file-attribute)
+

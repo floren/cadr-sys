@@ -1,0 +1,2346 @@
+;-*- Mode:LISP; Package:SI; Lowercase:T; Base:8; Cold-Load:T; Readtable:T -*-
+
+;;;??? What exactly should an UNSPECIAL declaration leave as the value.
+
+;;; Simple lexical evaluator.  Written by RMS.
+;;; You can use it, provided you return all improvements to me.
+
+;;; NOTE: it is vital that every link of INTERPRETER-ENVIRONMENT
+;;; and of INTERPRETER-FUNCTION-ENVIRONMENT be a full two-word pair.
+
+(defvar interpreter-environment nil
+  "The current lexical environment for evaluation.
+The value is a list of environment frames, each of which looks like
+ (CELL VALUE CELL VALUE ...)
+Each CELL is a locative (usually to a value cell),
+and the following VALUE is the lexical value for that cell.
+For a special binding, the VALUE is actually a DTP-ONE-Q-FORWARD to the cell.
+
+Each place where a group of variables is bound (each LET, LAMBDA, PROG,...)
+makes its own environment frame.
+
+Other entries on the list represent BLOCKs and TAGBODYs.
+These entries start with the symbol BLOCK or TAGBODY;
+the second element is a list of further data:
+ for a BLOCK: (NAME CATCH-TAG-ADDR-ON-STACK)
+ for a TAGBODY: (BODY CATCH-TAG-ADDR-ON-STACK)
+These special entries are not confusing because in a real binding frame
+the first element is always a locative to a cell.
+UNSTACKIFY-ENVIRONMENT needs to recognize these special kinds
+of frames; if you add more, you may need to change it.
+
+The tail of the list can be T rather than NIL.  This means
+that all variables should be considered special if not found
+in the entries in the environment.")
+
+;;; This is a separate variable because usually will be NIL
+;;; and that way the search for functions is not slowed down by local variables.
+(defvar interpreter-function-environment nil
+  "Like SI::INTERPRETER-ENVIRONMENT but contains lexical functions rather than variables.")
+
+(defconst lambda-parameters-limit 60.
+  "Functions accepting less than this many arguments are allowed.")
+(defconst call-arguments-limit 60.
+  "Passing fewer than this many arguments in a function call is guaranteed to be ok.
+Note that elements of a &rest arg that is never actually spread
+do not count in this limit.")
+(defconst multiple-values-limit 60.
+  "Ostensible upper bound on number of values a function call can return.
+In fact, this is not what is limited, and you can get away with three times
+as many if you don't fill up the maximum stack frame size in other ways.")
+
+(defconst lambda-list-keywords
+	  '(&optional &rest &key &allow-other-keys &aux
+	    &special &local &functional &eval &quote
+	    &environment &list-of &body &whole)
+  "List of all &-keywords that have special meanings in argument lists of functions.")
+
+(defvar *evalhook* nil "Value is function used on calls to EVAL, inside calls to EVALHOOK.")
+(defvar evalhook :unbound
+  "Value is function used on calls to EVAL, inside calls to EVALHOOK.")
+(forward-value-cell 'evalhook '*evalhook*)
+
+(defvar *applyhook* nil
+  "Value is function used on applications performed by EVAL, inside calls to EVALHOOK.
+The function receives two arguments, like those which APPLY would receive.")
+(defvar applyhook :unbound
+  "Value is function used on applications performed by EVAL, inside calls to EVALHOOK.
+The function receives two arguments, like those which APPLY would receive.")
+(forward-value-cell 'applyhook '*applyhook*)
+
+;;; Produce code to evaluate a special form body, found as the value of BODYVAR.
+;;; The code produced will return multiple values from the last element of the body.
+(defmacro eval-body (bodyvar)
+  `(if (null ,bodyvar) nil
+     (do ((l ,bodyvar (cdr l)))
+	 ((null (cdr l))
+	  (eval1 (car l)))			;Note: this works for multiple values now!
+       (eval1 (car l)))))
+
+;;;; Basic primitives for operating on interpreter variables.
+
+(defsubst interpreter-symeval (symbol)
+  (let (mumble)
+    (do ((tail interpreter-environment (cdr tail)))
+	((atom tail)				;assume free references are special
+	 (or tail (getl symbol '(special system-constant))
+	     (var-not-special symbol))
+	 (symeval symbol))
+      (and (setq mumble (get-lexical-value-cell (car tail) (locf (symbol-value symbol))))
+	   (return (car mumble))))))
+
+(defun interpreter-boundp (symbol &aux mumble)
+  (do ((tail interpreter-environment (cdr tail)))
+      ((atom tail)				;assume free references are special
+       (or tail (getl symbol '(special system-constant))
+	   (var-not-special symbol))
+       (boundp symbol))
+    (and (setq mumble (get-lexical-value-cell (car tail) (locf (symbol-value symbol))))
+	 (return t))))
+
+(defsubst interpreter-set (symbol value)
+  (let (mumble)
+    (do ((tail interpreter-environment (cdr tail)))
+	((atom tail)				;assume free references are special
+	 (or tail (getl symbol '(special system-constant))
+	     (var-not-special symbol))
+	 (set symbol value))
+      (and (setq mumble (get-lexical-value-cell (car tail) (locf (symbol-value symbol))))
+	   (return (setf (car mumble) value))))))
+
+(defun interpreter-external-value-cell (symbol &aux mumble)
+  (do ((tail interpreter-environment (cdr tail)))
+      ((atom tail)				;assume free references are special
+       (or tail (getl symbol '(special system-constant))
+	   (var-not-special symbol))
+       (%external-value-cell symbol))
+    (and (setq mumble (get-lexical-value-cell (car tail) (locf (symbol-value symbol))))
+	 (return mumble))))
+
+(defprop var-not-special t :error-reporter)
+(defun var-not-special (symbol)
+  (multiple-cerror '(variable-not-special) ()
+		   ("~S is referenced as a free variable but not declared special." symbol)
+    ("Use ambient dynamic binding and proceed.")
+    ("Make symbol globally special, and use ambient dynamic binding."
+     (putprop symbol t 'special)))
+  t)
+
+;;; T if there was a special declaration made in the current construct.
+;;; FRAME-INTERPRETER-ENVIRONMENT should be specified as the NEWENV-VAR
+;;; of the GOBBLE-DECLARATIONS-FROM-BODY done in that construct.
+;;; Or it should be NIL if this construct doesn't process declarations,
+;;; though in general a construct that binds variables ought to allow declarations!
+
+;;; This one is unusual, as it is passed a locative to a cell rather than a symbol.
+;;; It is interfaced this way due to the way the code works out in PARALLEL-BINDING-LIST.
+(defsubst interpreter-special-in-frame-p (cell frame-interpreter-environment)
+  (let ((mumble (compiler:undefined-value)))
+    (setq mumble (get-lexical-value-cell (car frame-interpreter-environment) cell))
+    (if mumble
+	(= (%p-data-type mumble) dtp-one-q-forward)
+      (cadr (getl (%find-structure-header cell) '(special system-constant))))))
+
+;;;; Processing of local declarations in special forms.
+
+;;; When (PROGN (DECLARE (SPECIAL A)) ...) is seen,
+;;; it is necessary to push a binding frame onto INTERPRETER-ENVIRONMENT
+;;; containing a binding for A to mark A as special.
+;;; This binding contains as its value
+;;; a one-q forward to the special value cell of A.
+
+;;; GOBBLE-DECLARATIONS-FROM-BODY is the form PROGN uses to accomplish this.
+;;; (GOBBLE-DECLARATIONS-FROM-BODY (decls-env-var body-exp)
+;;;   (EVAL-BODY body-exp))
+;;; causes the appropriate binding frame to be pushed
+;;; for declarations at the front of body-exp's value
+;;; before the EVAL-BODY is done.
+
+;;; Forms such as LET which do variable binding
+;;; must process the declarations FIRST so they know which vars are special.
+;;; Also, these forms should note that the decls-env-var
+;;; is bound to a list whose car is a frame that describes any SPECIAL declarations found.
+;;; The decls-env-var's value should be passed to INTERPRETER-SPECIAL-IN-FRAME-P
+;;; in order to decide whether a binding done in this frame should be special.
+;;; All macros for binding variables for Common Lisp (SERIAL-BINDING-LIST, etc.)
+;;; expect the decls-env-var as an argument.
+
+;;; UNSPECIAL declarations also work!
+
+(defvar interpreter-declaration-type-alist
+  '(("SPECIAL" special//unspecial-interpreter-declaration)
+    ("UNSPECIAL" special//unspecial-interpreter-declaration)
+
+    ("SELF-FLAVOR" self-flavor-interpreter-declaration)
+    ("FUNCTION-PARENT" ignore)
+
+    ("TYPE" ignore)
+    ("ARRAY" ignore)
+    ("ATOM" ignore)
+    ("BIGNUM" ignore)
+    ("BIT" ignore)
+    ("BIT-VECTOR" ignore)
+    ("CHARACTER" ignore)
+    ("COMMON" ignore)
+    ("COMPILED-FUNCTION" ignore)
+    ("COMPLEX" ignore)
+    ("CONS" ignore)
+    ("DOUBLE-FLOAT" ignore)
+    ("FIXNUM" ignore)
+    ("FLOAT" ignore)
+    ("FUNCTION" ignore)
+    ("HASH-TABLE" ignore)
+    ("INTEGER" ignore)
+    ("KEYWORD" ignore)
+    ("LIST" ignore)
+    ("LONG-FLOAT" ignore)
+    ("NIL" ignore)
+    ("NULL" ignore)
+    ("NUMBER" ignore)
+    ("PACKAGE" ignore)
+    ("PATHNAME" ignore)
+    ("RANDOM-STATE" ignore)
+    ("RATIO" ignore)
+    ("RATIONAL" ignore)
+    ("READTABLE" ignore)
+    ("SEQUENCE" ignore)
+    ("SHORT-FLOAT" ignore)
+    ("SIMPLE-ARRAY" ignore)
+    ("SIMPLE-BIT-VECTOR" ignore)
+    ("SIMPLE-STRING" ignore)
+    ("SIMPLE-VECTOR" ignore)
+    ("SINGLE-FLOAT" ignore)
+    ("STANDARD-CHAR" ignore)
+    ("STREAM" ignore)
+    ("STRING" ignore)
+    ("STRING-CHAR" ignore)
+    ("SYMBOL" ignore)
+    ("T" ignore)
+    ("VECTOR" ignore)
+
+    ("FTYPE" ignore)
+    ("FUNCTION" ignore)
+    ("INLINE" ignore)
+    ("NOTINLINE" ignore)
+    ("IGNORE" ignore)
+    ("OPTIMIZE" ignore)
+    ("DECLARATION" define-declaration)
+
+    ("*EXPR" ignore)
+    ("*FEXPR" ignore)
+    ("*LEXPR" ignore)
+    )
+  "Alist of elements (decl-type-string handler-function)
+decl-type-string is a string such as /"SPECIAL/" or /"TYPE/".
+The handler-function is called with the declaration and INTERPRETER-ENVIRONMENT as args.")
+
+(defmacro gobble-declarations-from-body ((decls-env-var caller-body-exp) &body macro-body)
+  `(with-stack-list* (,decls-env-var nil interpreter-environment)
+     (when (eq (caar-safe ,caller-body-exp) 'declare)
+       (%bind (locf local-declarations) local-declarations)
+       (%bind (locf interpreter-environment) ,decls-env-var)
+       (gobble-declarations-internal ,caller-body-exp ,decls-env-var))
+     . ,macro-body))
+
+;;; This is called from expansions of the preceding macro.
+;;; LOCAL-DECLARATIONS and INTERPRETER-ENVIRONMENT have already been rebound
+;;; but this function actually puts the declaration info into their values.
+;;; BODY is the body of the special form that the user is evaluating,
+;;; at the front of which appear the declarations if any.
+(defun gobble-declarations-internal (body &optional (env interpreter-environment))
+  (dolist (bodyelt body)
+    (unless (eq (car-safe bodyelt) 'declare)
+      (return nil))
+    (setq local-declarations
+	  (append (cdr bodyelt) local-declarations))
+    (dolist (decl (cdr bodyelt))
+      (let ((tem (assoc-equal (symbol-name (car decl)) interpreter-declaration-type-alist)))
+	(if tem
+	    (funcall (cadr tem) decl env)
+	  (cerror :yes nil nil
+	    "The interpreter encountered the unknown declaration ~S" decl))))))
+
+(defun special//unspecial-interpreter-declaration (declaration environment)
+  (dolist (var (cdr declaration))
+    (setf (car environment)
+	  (list*-in-area background-cons-area
+			 (locf (symbol-value var))
+			 nil
+			 (car environment)))
+    (if (eq (car declaration) 'special)
+	(let ((slot (locf (cadr (car environment)))))
+	  (%p-store-pointer slot (locf (symbol-value var)))
+	  (%p-store-data-type slot dtp-one-q-forward)))))
+
+(defun self-flavor-interpreter-declaration (decl ignore)
+  (unless (typep self (cadr decl))
+    (cerror :yes nil nil "SELF-FLAVOR is declared to be ~S,~% but SELF is of type ~S"
+	    (cadr decl) (type-of self))))
+
+(defun define-declaration (declaration ignore)
+  (dolist (decl (cdr declaration))
+    (push (list (symbol-name decl) 'ignore) interpreter-declaration-type-alist)))
+
+(defun constantp (form)
+  "T if FORM always evaluates to the same thing.
+This includes keyword symbols, and lists starting with QUOTE."
+  (cond ((consp form)
+	 (eq (car form) 'quote))
+	((symbolp form)
+	 (or (null form) (eq form t)
+	     (keywordp form)
+	     (get form 'system-constant)))
+	(t t)))
+
+;;; EVAL cannot safely call LIST, since that would lose
+;;; if the interpreter needs to pass an explicit rest arg
+;;; (such as if there are more than 64 args).
+;;; So it calls LIST-FOR-EVAL instead.
+;;; Perhaps a new entry point named INTERNAL-LIST should be made
+;;; and the compiler should make uses of LIST call INTERNAL-LIST instead.
+;;; Then, once things are recompiled, LIST-FOR-EVAL could be renamed to LIST.
+
+; must use setq rather than defvar so the cold-load builder has an evaluator!
+(defconst list-etc-function-mappings nil)
+(setq list-etc-function-mappings
+      (list (cons #'list 'list-for-eval)
+	    (cons #'list* 'list*-for-eval)
+	    (cons #'list-in-area 'list-in-area-for-eval)
+	    (cons #'list*-in-area 'list*-in-area-for-eval)
+	    (cons #'*catch '*catch-for-eval)))
+
+(defun list-for-eval (&rest elements)
+  (copylist elements))
+
+(defun list-in-area-for-eval (default-cons-area &rest elements)
+  (copylist elements))
+
+(defun list*-for-eval (&rest elements)
+  (cond ((null elements) nil)
+	((null (cdr elements))
+	 (car elements))
+	(t
+	 (let* ((l (copylist elements))
+		(last (last l)))
+	   (%p-dpb-offset cdr-error %%q-cdr-code last 0)
+	   (%p-dpb-offset cdr-normal %%q-cdr-code last -1)
+	   l))))
+
+(defun list*-in-area-for-eval (default-cons-area &rest elements)
+  (cond ((null elements) nil)
+	((null (cdr elements))
+	 (car elements))
+	(t
+	 (let* ((l (copylist elements))
+		(last (last l)))
+	   (%p-dpb-offset cdr-error %%q-cdr-code last 0)
+	   (%p-dpb-offset cdr-normal %%q-cdr-code last -1)
+	   l))))
+
+;;; EVAL cannot just call *CATCH, since then only one value of the
+;;; body would be returned.  Instead it calls *CATCH-FOR-EVAL,
+;;; which takes a quoted rest arg (unlike *CATCH).  It can
+;;; eval the body carefully and return all the values.
+
+;;; The cleaner solution that would work for LIST is not as easy for *CATCH
+;;; since there are things (in the error handler, and maybe elsewhere)
+;;; that know that they can find catch frames by looking for
+;;; frames that call #'*CATCH.  So #'*CATCH must be the real thing,
+;;; or those places must be fixed up.
+
+(defun *catch-for-eval (tag &quote &rest body)
+  (*catch tag
+    (eval-body body)))
+
+;;; The standard externally called forms of EVAL are here.
+;;; They handle all kinds of atoms themselves,
+;;; to save the extra function call.
+;;; They use EVAL1 to handle combinations.
+
+(defun eval (form &optional nohook)
+  "Evaluate FORM in the global environment, returning its value(s).
+Free variables in FORM must be special.
+If there is an *EVALHOOK*, it is invoked to do the work, unless NOHOOK is true."
+  (cond ((and *evalhook* (not nohook))
+	 (let ((tem *evalhook*)
+	       *evalhook* *applyhook*)
+	   (funcall tem form '(nil nil))))
+	((symbolp form)
+	 (symeval form))
+	((atom form) form)
+	(t
+	 (let (interpreter-function-environment
+	       interpreter-environment)
+	   (eval1 form)))))
+
+(defun evalhook (form *evalhook* *applyhook*
+		 &optional environment
+		 &aux (interpreter-environment (car environment))
+		      (interpreter-function-environment (cadr environment)))
+  "Evaluate FORM, using specified *EVALHOOK* and *APPLYHOOK* except at the top level.
+ENVIRONMENT is the lexical environment to eval in.  (Its car is used for
+   SI::INTERPRETER-ENVIRONMENT and its cadr for SI::INTERPRETER-FUNCTION-ENVIRONMENT.)
+ Or use the environment argument passed to an *evalhook* function."
+  (eval1 form t))
+
+(defun applyhook (function args *evalhook* *applyhook*
+		  &optional environment
+		  &aux (interpreter-environment (car environment))
+		       (interpreter-function-environment (cadr environment)))
+  "Apply FUNCTION to ARGS, using specified *EVALHOOK* and *APPLYHOOK* except at the top level.
+ENVIRONMENT is the lexical environment to eval in.  (Its car is used for
+   SI::INTERPRETER-ENVIRONMENT and its cadr for SI::INTERPRETER-FUNCTION-ENVIRONMENT.)
+ Or use the environment argument passed to an EVALHOOK function."
+  (apply function args))
+
+;;; This is the real guts of eval.  It uses the current lexical context.
+;;; If that context includes INTERPRETER-FUNCTION-ENVIRONMENT = T,
+;;; then Zetalisp evaluation is done.
+;;; All special forms call EVAL1 directly to eval their arguments.
+
+(defun eval1 (form &optional nohook)
+  "Evaluate FORM in the current lexical environment, returning its value(s).
+If the current environment says /"traditional Zetalisp/", we do that.
+This is the function that special forms such as COND use to evaluate
+their subexpressions, as it allows the subexpressions to access
+lexical variables of the containing code.  Contrast with EVAL."
+  ;; Make sure all instances of ARGNUM, below, are local slot 0.
+  (let (argnum) argnum)
+  (cond ((and *evalhook* (not nohook))
+	 (let ((tem *evalhook*)
+	       *evalhook* *applyhook*)
+	   (with-stack-list (env interpreter-environment interpreter-function-environment)
+	     (funcall tem form env))))
+	((symbolp form)
+	 (if (keywordp form)
+	     form
+	   (if (eq interpreter-function-environment t)
+	       (symeval form)
+	     (interpreter-symeval form))))
+	((atom form) form)
+	((eq (car form) 'quote)
+	 (cadr form))
+	(t (let ((fctn (car form)) arg-desc num-args closure-passed)
+	     ;; Trace FCTN through symbols and closures to get the ultimate function
+	     ;; which will tell us whether to evaluate the args.
+	     ;; When we actually call the function, we call FCTN
+	     ;; unless CLOSURE-PASSED is set.  In that case, we call (CAR FORM).
+	     (do-forever
+	       (typecase fctn
+		 (symbol
+		  (setq fctn
+			(if (eq interpreter-function-environment t)
+			    (fsymeval fctn)
+			  (interpreter-fsymeval fctn))))
+		 ((or closure entity)
+		  (setq fctn (closure-function fctn)
+			closure-passed (or closure-passed fctn)))
+		 (t (return))))
+	     (setq arg-desc (%args-info fctn))
+	     (if (bit-test %arg-desc-interpreted arg-desc)
+		 ;; Here if not a FEF.
+		 (progn
+		   ;; Detect ucode entry that is not actually microcoded.
+		   (if (and (typep fctn 'microcode-function)
+			    (not (integerp (system:micro-code-entry-area (%pointer fctn)))))
+		       (setq fctn (system:micro-code-entry-area (%pointer fctn))))
+		   (typecase fctn
+		     (cons
+		       (case (car fctn)
+			 ((lambda subst cli:subst named-lambda named-subst)
+			  (let ((lambda-list
+				  (if (memq (car fctn)
+					    '(named-lambda named-subst))
+				      (caddr fctn) (cadr fctn))))
+			    (setq num-args 0)
+			    ;; Figure out whether there is a quoted rest argument,
+			    ;; and open the call block with or without adi accordingly.
+			    ;; Set NUM-ARGS to number of args excluding any quoted rest arg.
+			    (do ((ll lambda-list (cdr ll))
+				 (quote-status '&eval)
+				 rest-flag)
+				((or (null ll)
+				     (memq (car ll) '(&aux &key)))
+				 (if *applyhook*
+				     (progn (%open-call-block 'applyhook1 0 4)
+					    (%push (or closure-passed fctn)))
+				   (%open-call-block (or closure-passed fctn) 0 4))
+				 (setq num-args (length (cdr form)))
+				 (%assure-pdl-room num-args))
+			      (cond ((memq (car ll) '(&eval &quote))
+				     (setq quote-status (car ll)))
+				    ((eq (car ll) '&rest)
+				     (setq rest-flag t))
+				    ((memq (car ll) lambda-list-keywords))
+				    (rest-flag
+				     ;; Here if we encounter a rest arg.
+				     (if ( (length (cdr form))
+					    (if (eq quote-status '&quote)
+						num-args
+					      63.))
+					 ;; If there aren't enough args supplied to actually
+					 ;; reach it, arrange to exit via the DO's end-test.
+					 (setq ll nil)
+				       ;; If the quoted rest arg is non-nil,
+				       ;; set NUM-ARGS to number of spread args,
+				       ;; and call with ADI.
+				       (if *applyhook*
+					   (progn (%open-call-block 'applyhook2 0 4)
+						  (%push (or closure-passed fctn)))
+					 (%push 0)
+					 (%push #o14000000)
+					 (%open-call-block (or closure-passed fctn) 1 4))
+				       (%assure-pdl-room (1+ num-args))
+				       (return)))
+				    (t (incf num-args))))
+			    ;; Now push the args, evalling those that need it.
+			    (do ((ll lambda-list (cdr ll))
+				 (argl (cdr form) (cdr argl))
+				 (quote-status '&eval)
+				 (argnum 0 (1+ argnum)))
+				(())
+			      (do () ((null ll))
+				(cond ((memq (car ll) '(&eval &quote))
+				       (setq quote-status (car ll)))
+				      ((memq (car ll) '(&rest &aux &key))
+				       (setq ll nil))
+				      ((memq (car ll) lambda-list-keywords))
+				      (t (return)))
+				(pop ll))
+			      (when (= argnum num-args)
+				;; Done with spread args => push the rest arg.
+				(return
+				  (when argl
+				    (%push
+				      (if (eq quote-status '&eval)
+					  (mapcar #'eval1 argl)
+					argl)))))
+			      (if (eq quote-status '&eval)
+				  (%push (eval1 (car argl)))
+				(%push (car argl))))
+			    (%activate-open-call-block)))
+			 (macro (eval1 (error-restart (error "Retry macro expansion.")
+					 (automatic-displace (cdr fctn) form))
+				       t))
+			 ((curry-before curry-after)
+			  (if *applyhook*
+			      (progn (%open-call-block 'applyhook1 0 4)
+				     (%push (or closure-passed fctn)))
+			    (%open-call-block (or closure-passed fctn) 0 4))
+			  (%assure-pdl-room (length (cdr form)))
+			  (do ((argl (cdr form) (cdr argl))
+			       (argnum 0 (1+ argnum)))
+			      ((null argl))
+			    (%push (eval1 (car argl))))
+			  (%activate-open-call-block))
+			 (t (if (lambda-macro-call-p fctn)
+				(eval1 (cons (lambda-macro-expand fctn) (cdr form)))
+			      (invalid-function form)))))
+		     ((or select-method instance)
+		      (if *applyhook*
+			  (progn (%open-call-block 'applyhook1 0 4)
+				 (%push (or closure-passed fctn)))
+			(%open-call-block (or closure-passed fctn) 0 4))
+		      (%assure-pdl-room (length (cdr form)))
+		      (do ((argl (cdr form) (cdr argl))
+			   (argnum 0 (1+ argnum)))
+			  ((null argl))
+			(%push (eval1 (car argl))))
+		      (%activate-open-call-block))
+		     (t (invalid-function form))))
+	       ;; FEF (or ucode entry that's microcoded or a FEF).
+	       ;; Open call block accordingly to whether there's a quoted rest arg.
+	       ;; Also, if more than 64 args to fn taking evaled rest arg,
+	       ;; we must make an explicit rest arg to avoid lossage.
+	       ;; LIST, etc., may not be called directly because the ucode versions
+	       ;; do not deal with explicitly passed rest arguments.
+	       (and list-etc-function-mappings
+		    (cdr (assq fctn list-etc-function-mappings))
+		    (setq fctn (fsymeval
+				 (cdr (assq fctn list-etc-function-mappings)))
+			  arg-desc (%args-info fctn)))
+	       (cond ((or (and (bit-test %arg-desc-quoted-rest arg-desc)
+			       (> (length (cdr form)) (ldb %%arg-desc-max-args arg-desc)))
+			  (and (bit-test %arg-desc-evaled-rest arg-desc)
+			       (> (length (cdr form)) 63.)))
+		      ;; NUM-ARGS includes only the spread args.
+		      (setq num-args (ldb %%arg-desc-max-args arg-desc))
+		      (if *applyhook*
+			  (progn (%open-call-block 'applyhook2 0 4)
+				 (%push (or closure-passed fctn)))
+			;; ADI for fexpr-call.
+			(%push 0)
+			(%push #o14000000)
+			(%open-call-block (or closure-passed fctn) 1 4))
+		      ;; We need room for the spread args, plus one word for the rest arg.
+		      (%assure-pdl-room (1+ num-args)))
+		     (t
+		      (setq num-args (length (cdr form)))
+		      (if *applyhook*
+			  (progn (%open-call-block 'applyhook1 0 4)
+				 (%push (or closure-passed fctn)))
+			(%open-call-block (or closure-passed fctn) 0 4))
+		      (%assure-pdl-room num-args)))
+	       ;; If some spread args are quoted, use the ADL to tell which.
+	       (cond ((bit-test %arg-desc-fef-quote-hair arg-desc)
+		      ;; Get the ADL pointer.
+		      (let ((adl (get-macro-arg-desc-pointer fctn)))
+			(do ((argl (cdr form) (cdr argl))
+			     (argnum 0 (1+ argnum)))
+			    ((= argnum num-args)
+			     ;; Done with spread args => push rest arg if any.
+			     (when argl
+			       (%push
+				 (if (bit-test %arg-desc-evaled-rest arg-desc)
+				     (mapcar #'eval1 argl)
+				   argl))))
+			  (let ((item (or (car adl) fef-qt-eval)))
+			    ;; Figure out how many extra words of ADL to skip for this arg.
+			    (if (bit-test %fef-name-present item) (pop adl))
+			    (selector (logand %fef-arg-syntax item) =
+			      (fef-arg-opt
+			       (if (memq (logand item %fef-init-option)
+					 '(#.fef-ini-pntr #.fef-ini-c-pntr
+					   #.fef-ini-opt-sa #.fef-ini-eff-adr))
+				   (pop adl)))
+			      (fef-arg-req)
+			      ;; Note: does not get here for quoted rest arg.
+			      ;; Gets here for evalled rest arg, or if no more args wanted
+			      ;; (eval extra args supplied here; get error later).
+			      (t (setq adl nil)))
+			    (pop adl)
+			    ;; Eval the arg if the ADL says to do so.
+			    (%push (if ( (logand %fef-quote-status item) fef-qt-qt)
+				       (eval1 (car argl))
+				     (car argl)))))))
+		     (t
+		      ;; No quoted args except possibly the rest arg.  Don't look at ADL.
+		      (do ((argnum 0 (1+ argnum))
+			   (argl (cdr form) (cdr argl)))
+			  ((= argnum num-args)
+			   ;; Done with spread args => push the rest arg.
+			   (when argl
+			     (%push
+			       (if (bit-test %arg-desc-evaled-rest arg-desc)
+				   (mapcar #'eval1 argl)
+				 argl))))
+			(%push (eval1 (car argl))))))
+	       (%activate-open-call-block))))))
+
+(defun invalid-function (form)
+  "Report an invalid-function error in FORM and reevaluate with the function the user gives us."
+  (eval1 (cons (cerror :new-function nil 'sys:invalid-function
+		       (if (symbolp (car form))
+			   "The function ~S has an invalid function definition"
+			 "The object ~S is not a valid function")
+		       (car form))
+	       (cdr form))
+	 t))
+
+;;; Invoke the applyhook on a function which does not have an explicitly passed rest arg.
+(defun applyhook1 (function &rest args)
+  (let (*evalhook* *applyhook*
+	(tem *applyhook*))
+    (with-stack-list (environment interpreter-environment interpreter-function-environment)
+      (funcall tem function args environment))))
+
+;;; Invoke the applyhook for a function with an explicitly passed rest arg.
+;;; ARGS* is like the arguments to LIST*.
+(defun applyhook2 (function &rest args*)
+  (let ((args (apply #'list* args*))
+	*evalhook* *applyhook*
+	(tem *applyhook*))
+    (with-stack-list (environment interpreter-environment interpreter-function-environment)
+      (funcall tem function args environment))))
+
+(defun setq (&quote &rest symbols-and-values)
+  "Given alternating variables and value expressions, sets each variable to following value.
+Each variable is set before the following variable's new value is evaluated.
+See also PSETQ which computes all the new values and then sets all the variables."
+  (prog (val)
+     l	(cond ((null symbols-and-values) (return val))
+	      ((null (cdr symbols-and-values))
+	       (ferror nil "Odd number of arguments to SETQ"))
+	      ;; checking for setqing defconstants would make life too hard for hacking
+	      ((or (memq (car symbols-and-values) '(t nil))
+		   (keywordp (car symbols-and-values)))
+	       (ferror nil "Setting ~A is not allowed."
+		       (if (keywordp (car symbols-and-values)) "keywords"
+			 (car symbols-and-values)))))
+	(if (eq interpreter-function-environment t)
+	    (set (car symbols-and-values)
+		 (setq val (eval1 (cadr symbols-and-values))))
+	  (interpreter-set (car symbols-and-values)
+			   (setq val (eval1 (cadr symbols-and-values)))))
+	(setq symbols-and-values (cddr symbols-and-values))
+	(go l)))
+
+(defun variable-boundp (&quote variable)
+  "Return T if VARIABLE has a value (is not unbound)."
+  (if (eq interpreter-function-environment t)
+      (boundp variable)
+    (interpreter-boundp variable)))
+
+(defun variable-location (&quote variable)
+  "Return a locative pointer to the place where the value of VARIABLE is stored."
+  (if (eq interpreter-function-environment t)
+      (%external-value-cell variable)
+    (interpreter-external-value-cell variable)))
+
+(defun variable-makunbound (&quote variable)
+  "Make the VARIABLE unbound.  References to it will get errors."
+  (if (eq interpreter-function-environment t)
+      (location-makunbound (%external-value-cell variable))
+    (location-makunbound (interpreter-external-value-cell variable))))
+
+(defun multiple-value (&quote var-list exp)
+  "Evaluate EXP, collecting multiple values, and set the variables in VAR-LIST to them.
+Returns the first value of EXP."
+  (let ((val-list (multiple-value-list (eval1 exp))))
+    (do ((vars var-list (cdr vars))
+	 (vals val-list (cdr vals)))
+	((null vars))
+      (when (car vars)				;allow (multiple-value-setq (nil foo) ...)
+	(if (eq interpreter-function-environment t)
+	    (set (car vars) (car vals))
+	    (interpreter-set (car vars) (car vals)))))
+    (car val-list)))
+
+(deff multiple-value-setq 'multiple-value)
+
+(defun nth-value (value-number &quote exp)
+  "Returns the VALUE-NUMBER'th (0-based) value of EXP.
+Compiles fast when VALUE-NUMBER is a constant."
+  (nth value-number (multiple-value-list (eval1 exp))))
+
+(defun multiple-value-list (&quote exp)
+  "Evaluate the expression EXP and return a list of the values it returns."
+  (multiple-value-list (eval1 exp)))
+
+(defun multiple-value-prog1 (&quote value-form &rest forms)
+  "Evaluates VALUE-FORM followed by the FORMs, then returns ALL the values of VALUE-FORM."
+  (multiple-value-prog1 (eval1 value-form)
+			(mapc #'eval1 forms)))
+
+(defun values (&rest values)
+  "Return multiple values -- as many values as we have arguments."
+  (values-list values))
+
+(defun values-list (list-of-values)
+  "Return multiple values -- each element of our arg is a separate value."
+  (values-list list-of-values))
+
+;;; Bind variables, given a list of variables and separate list of (already evaluated) values.
+;;; This is needed for MULTIPLE-VALUE-BIND, which appears below.
+
+;;; It does not work to have a CATCH around an invocation of this macro.
+;;; It works properly only when compiled to exit to D-RETURN.
+;;; Otherwise, it leave the stack screwed up due to the unknown number of %PUSHes executed.
+
+(defmacro bind-variables-spread ((varlist value-list-exp decls-env) &body body)
+  `(prog (vars-left bindframe vals-left thisvarloc)
+	 ;; Trivial case of empty varlist would lose in code below.
+	 (unless ,varlist
+	   (go long))
+	 (when (nthcdr #o20 ,varlist)
+	   (setq bindframe
+		 (mapcan #'list*
+			 ,varlist ,value-list-exp
+			 (circular-list nil)))
+	   (go long))
+	 ;; The following code is equivalent to the above mapcar
+	 ;; except that the list is constructed on the stack
+	 ;; by pushing the elements one by one and fiddling with cdr codes.
+	 (with-stack-list (tem nil)
+	   ;; BINDFRAME gets a pointer to where the list will go.
+	   (setq bindframe tem))
+	 ;; Now loop over the varlist, computing and pushing initiali values.
+	 (setq vars-left ,varlist)
+	 (setq vals-left ,value-list-exp)
+      short-nextvar
+	 (unless vars-left (go short-varsdone))
+	 (setq thisvarloc (locf (symbol-value (car vars-left))))
+	 (%push thisvarloc)
+	 (%push (car vals-left))
+	 (pop vars-left)
+	 (pop vals-left)
+	 (go short-nextvar)
+      short-varsdone
+	 ;; Modify cdr-code of last word pushed, to terminate the list.
+	 (with-stack-list (tem nil)
+	   (%p-dpb-offset cdr-nil %%q-cdr-code tem -1))
+      long
+	 ;; Here BINDFRAME has the correct variables and values.
+	 ;; Now for each variable that is supposed to be special
+	 ;; bind it to its value (as found in BINDFRAME)
+	 ;; and forward the BINDFRAME slot to the variable's value cell.
+
+	 (setq vals-left bindframe)
+      bindloop
+	 (when vals-left
+	   (setq thisvarloc (car vals-left))
+	   (if (eq thisvarloc (locf (symbol-value nil)))
+	       ;; allow (multiple-value-bind (foo nil bar) ...)
+	       nil
+	     (when (interpreter-special-in-frame-p thisvarloc ,decls-env)
+	       (%bind thisvarloc
+		      (cadr vals-left))
+	       (%p-store-data-type (locf (cadr vals-left))
+				   dtp-one-q-forward)
+	       (%p-store-pointer (locf (cadr vals-left))
+				 thisvarloc)))
+	   (setq vals-left (cddr vals-left))
+	   (go bindloop))
+	 (return
+	   (with-stack-list* (interpreter-environment bindframe interpreter-environment)
+	     . ,body))))
+
+(defmacro zl-bind-variables-spread ((varlist value-list-exp) &body body)
+ `(prog (vars-left vals-left)
+	;; Now loop over the varlist, computing and pushing initial values.
+        (setq vars-left ,varlist)
+	(setq vals-left ,value-list-exp)
+     short-nextvar
+	(unless vars-left
+	  (return (progn . ,body)))
+	(if (eq (car vars-left) 'nil)
+	    ;; allow (multiple-value-bind (foo nil bar) ...)
+	    nil
+	  (%bind (locf (symbol-value (car vars-left)))
+		 (car vals-left)))
+	(pop vars-left)
+	(pop vals-left)
+	(go short-nextvar)))
+
+(defun multiple-value-bind (&quote var-list exp &rest body)
+  "Evaluate EXP, collecting multiple values, and set the variables to them."
+  (let ((val-list (multiple-value-list (eval1 exp))))
+    (if (eq interpreter-function-environment t)
+	(zl-bind-variables-spread (var-list val-list)
+	  (eval-body body))
+      (gobble-declarations-from-body (decls-env body)
+	(bind-variables-spread (var-list val-list decls-env)
+	  (eval-body body))))))
+
+;;; Produce code to bind a single variable in a special form.
+;;; VARIABLE-EXP should be an expression that computes the variable (a symbol)
+;;; and VALUE-EXP should compute the value for the variable (NOT code to compute the value).
+(defmacro bind-variable ((variable-exp value-exp decls-env) &body body)
+  `(with-stack-list (frame (locf (symbol-value ,variable-exp)) ,value-exp)
+     (when (interpreter-special-in-frame-p (car frame) ,decls-env)
+       (%bind (car frame)
+	      (cadr frame))
+       (%p-store-data-type (locf (cadr frame)) dtp-one-q-forward)
+       (%p-store-pointer (locf (cadr frame)) (car frame)))
+     (with-stack-list* (interpreter-environment frame interpreter-environment)
+       . ,body)))
+
+(defun dont-optimize (&quote &rest body)
+  "Prevent all optimization or open coding of our arguments.
+Aside from that effect, it is equivalent to PROGN."
+  (eval-body body))
+
+(defun progn (&quote &rest body)
+  "Evaluate all the arguments in order and return the value of the last one.
+Multiple values are passed along from that argument's evaluation."
+  (gobble-declarations-from-body (decls-env body)
+    (eval-body body)))
+
+;;; These functions have hair to implement the correct rules for multiple values
+
+(defun prog2 (ignored value &rest ignored)
+  "Return the second argument."
+  value)
+
+(defun prog1 (value &rest ignored)
+  "Return the first argument."
+  value)
+
+(defun comment (&quote &rest ignore)
+  "Ignores all arguments and returns the symbol COMMENT.  It is usually
+preferable to comment code using the semicolon-macro feature of the
+standard input syntax.  Comments using semicolons are ignored by the
+Lisp reader."
+  'comment)
+
+(defun with-stack-list (&quote variable-and-elements &rest body)
+  "Executes BODY with VARIABLE bound to a temporary list containing ELEMENTS.
+In compiled code, the temporary list lives inside the stack, like a &REST argument.
+It disappears when the WITH-STACK-LIST is exited.  No garbage is produced.
+In interpreted code, this is equivalent to (LET ((VARIABLE (LIST ELEMENTS...))) BODY...)."
+  (declare (arglist ((variable . elements) &rest body)))
+  (if (eq interpreter-function-environment t)
+      (progn
+	(%bind (locf (symbol-value (car variable-and-elements)))
+	       (mapcar #'eval1 (cdr variable-and-elements)))
+	(eval-body body))
+    (gobble-declarations-from-body (decls-env body)
+      (bind-variable ((car variable-and-elements)
+		      (mapcar #'eval1 (cdr variable-and-elements))
+		      decls-env)
+        (eval-body body)))))
+
+(defun with-stack-list* (&quote variable-and-elements &rest body)
+  "Executes BODY with VARIABLE bound to a temporary list equal to LIST* of ELEMENTS.
+The temporary list lives inside the stack, like a &REST argument.
+It disappears when the WITH-STACK-LIST is exited.  No garbage is produced."
+  (declare (arglist ((variable . elements) &rest body)))
+  (if (eq interpreter-function-environment t)
+      (progn
+	(%bind (locf (symbol-value (car variable-and-elements)))
+	       (apply #'list* (mapcar #'eval1 (cdr variable-and-elements))))
+	(eval-body body))
+    (gobble-declarations-from-body (decls-env body)
+      (bind-variable ((car variable-and-elements)
+		      (apply #'list* (mapcar #'eval1 (cdr variable-and-elements)))
+		      decls-env)
+	(eval-body body)))))
+
+(defun and (&quote &rest expressions)
+  "Evaluates the EXPRESSIONS until one returns NIL or they are all done.
+Returns NIL in the first case; the values of the last expression in the second."
+  (if (null expressions) t
+    (do ((l expressions (cdr l)))
+	((null (cdr l))
+	 (eval1 (car l)))
+      (or (eval1 (car l))
+	  (return nil)))))
+
+(defun or (&quote &rest expressions)
+  "Evaluates the EXPRESSIONS until one returns non-NIL or they are all done.
+Returns the value of the last expression evaluated.
+If all the expressions are evaluated, then all the multiple values of the
+last expression are passed along."
+  (if (null expressions) nil
+    (do ((l expressions (cdr l))
+	 (val))
+	((null (cdr l))
+	 (eval1 (car l)))
+      (and (setq val (eval1 (car l)))
+	   (return val)))))
+
+(defun cond (&quote &rest clauses)
+  "Looks for the first CLAUSE whose predicate is true, and executes that clause.
+Each element of the body of a COND is called a CLAUSE.
+
+The first element of each clause is a PREDICATE-EXPRESSION.
+This is evaluated to see whether to execute the clause.
+If the predicate's value is non-NIL, all the remaining elements of the clause
+are executed, as in a PROGN, and the value(s) of the last one are returned by COND.
+If the clause contains only one element, the predicate, then
+the predicate's value is returned if non-NIL.
+In this case, unless it is the last clause, the predicate is not
+being called tail-recursively and so only its first value is returned.
+
+If no clause's predicate evaluates non-NIL, the COND returns NIL."
+  (do ((clauses clauses (cdr clauses))
+       (predval) (expressions))
+      ((null clauses) nil)
+    (cond ((atom (car clauses))
+	   (ferror nil "The atom ~S is not a valid COND clause." (car clauses)))
+	  ((and (null (cdr clauses)) (null (cdar clauses)))
+	   ;; If this is the last clause, then treat its predicate as part of
+	   ;; the body instead of as the predicate, so that multiple values
+	   ;; get propagated properly.
+	   (setq expressions (car clauses)))
+	  ((setq predval (eval1 (caar clauses)))
+	   (or (setq expressions (cdar clauses))
+	       (return predval)))
+	  (t (go nextloop)))
+    ;; Predicate true
+    (return (eval-body expressions))
+   nextloop
+    ))
+
+(defun if (&quote test then &rest elses)
+  "Execute THEN if TEST comes out non-NIL; otherwise, execute the ELSES."
+  (if (eval1 test)
+      (eval1 then)
+    (eval-body elses)))
+
+;;;; Basic variable binding primitives.
+
+;;; The following two macros implement binding variables according to a LET binding list,
+;;; either in parallel or sequentially.
+
+;;; It does not work to have a CATCH (such as ENTER-BLOCK)
+;;; around an invocation of these macros.
+;;; They work properly only when compiled to exit to D-RETURN.
+;;; Otherwise, they leave the stack screwed up due to the unknown number of %PUSHes executed.
+;;; (The compiler changes in system 98 will eliminate this problem).
+
+(defmacro parallel-binding-list ((varlist decls-env) &body body)
+  `(prog (vars-left bindframe vals-left thisvarloc)
+	 ;; Trivial case of empty varlist would lose in code below.
+	 (unless ,varlist
+	   (go long))
+	 (when (nthcdr #o20 ,varlist)
+	   (setq bindframe
+		 (mapcan #'(lambda (var)
+			     (if (consp var)
+				 (list* (locf (symbol-value (car var)))
+					(eval1 (cadr var)) nil)
+			       (list* (locf (symbol-value var)) nil nil)))
+			 ,varlist))
+	   (go long))
+	 ;; The following code is equivalent to the above mapcar
+	 ;; except that the list is constructed on the stack
+	 ;; by pushing the elements one by one and fiddling with cdr codes.
+	 (with-stack-list (tem nil)
+	   ;; BINDFRAME gets a pointer to where the list will go.
+	   (setq bindframe tem))
+	 ;; Now loop over the varlist, computing and pushing initial values.
+	 (setq vars-left ,varlist)
+      short-nextvar
+	 (unless vars-left (go short-varsdone))
+	 (setq thisvarloc
+	       (locf (symbol-value (if (consp (car vars-left))
+				       (caar vars-left) (car vars-left)))))
+	 (%push thisvarloc)
+	 (%push (if (consp (car vars-left)) (eval1 (cadar vars-left))))
+	 (pop vars-left)
+	 (go short-nextvar)
+      short-varsdone
+	 ;; Modify cdr-code of last word pushed, to terminate the list.
+	 (with-stack-list (tem nil)
+	   (%p-dpb-offset cdr-nil %%q-cdr-code tem -1))
+      long
+	 ;; Here BINDFRAME has the correct variables and values.
+	 ;; Now for each variable that is supposed to be special
+	 ;; bind it to its value (as found in BINDFRAME)
+	 ;; and forward the BINDFRAME slot to the variable's value cell.
+
+	 (setq vals-left bindframe)
+      bindloop
+	 (when vals-left
+	   (setq thisvarloc (car vals-left))
+	   (when (eq thisvarloc (locf (symbol-value nil)))
+	     (ferror nil "Attempt to bind NIL"))
+	   (when (interpreter-special-in-frame-p thisvarloc ,decls-env)
+	     (%bind thisvarloc (cadr vals-left))
+	     (%p-store-data-type (locf (cadr vals-left))
+				 dtp-one-q-forward)
+	     (%p-store-pointer (locf (cadr vals-left))
+			       thisvarloc))
+	   (setq vals-left (cddr vals-left))
+	   (go bindloop))
+
+	 (return
+	   (with-stack-list* (interpreter-environment bindframe interpreter-environment)
+	     . ,body))))
+
+(defmacro serial-binding-list ((varlist decls-env) &body body)
+  `(with-stack-list* (interpreter-environment nil interpreter-environment)
+     (prog (bindframe vars-left vals-left thisvar thisval this-specialp)
+	   ;; Trivial case of empty varlist would lose in code below.
+	   (unless ,varlist
+	     (go trivial))
+	   (when (nthcdr #o20 ,varlist)
+	     (go long))
+
+	   ;; Here if varlist is less than 16. long.
+	   ;; Construct BINDFRAME on the stack
+	   ;; by pushing the elements one by one and fiddling with cdr codes.
+	   (with-stack-list (tem nil)
+	     ;; BINDFRAME gets a pointer to where the list will go.
+	     (setq bindframe tem))
+	   ;; Now loop over the varlist, computing and pushing initiali values.
+	   (setq vars-left ,varlist)
+	short-nextvar
+	   (unless vars-left (go varsdone))
+	   (setq thisvar (if (symbolp (car vars-left)) (car vars-left)
+			   (caar vars-left)))
+	   (setq this-specialp (interpreter-special-in-frame-p
+				 (locf (symbol-value thisvar)) ,decls-env))
+	   (%push (locf (symbol-value thisvar)))
+	   (%push (if (consp (car vars-left)) (eval1 (cadar vars-left))))
+	   (setf (car interpreter-environment) bindframe)
+	   ;; Modify cdr-code of last word pushed, to terminate the list.
+	   (with-stack-list (tem nil)
+	     (%p-dpb-offset cdr-next %%q-cdr-code tem -3)
+	     (%p-dpb-offset cdr-nil  %%q-cdr-code tem -1)
+	     (setq thisval tem))
+	   ;; Bind the variable as special, if appropriate.
+	   (unless thisvar (ferror nil "Attempt to bind NIL"))
+	   (when this-specialp
+	     (%bind (locf (symbol-value thisvar)) (%p-contents-offset thisval -1))
+	     (%p-store-data-type (%make-pointer-offset dtp-list thisval -1)
+				 dtp-one-q-forward)
+	     (%p-store-pointer (%make-pointer-offset dtp-list thisval -1)
+			       (locf (symbol-value thisvar))))
+	   (pop vars-left)
+	   (go short-nextvar)
+	long
+	   ;; Now loop over the varlist, computing and pushing initial values.
+	   (setq bindframe (make-list (* 2 (length ,varlist))))
+	   (setf (car interpreter-environment) bindframe)
+	   (setq vars-left ,varlist)
+	   (setq vals-left bindframe)
+	long-nextvar
+	   (unless vars-left (go varsdone))
+	   (setq thisvar (if (symbolp (car vars-left)) (car vars-left)
+			   (caar vars-left)))
+	   (setq this-specialp (interpreter-special-in-frame-p
+				 (locf (symbol-value thisvar)) ,decls-env))
+	   (setf (car vals-left) (locf (symbol-value thisvar)))
+	   (setf (cadr vals-left)
+		 (if (consp (car vars-left)) (eval1 (cadar vars-left))))
+	   ;; Bind the variable as special, if appropriate.
+	   (unless thisvar (ferror nil "Attempt to bind NIL"))
+	   (when this-specialp
+	     (%bind (locf (symbol-value thisvar)) (cadr vals-left))
+	     (%p-store-data-type (locf (cadr vals-left))
+				 dtp-one-q-forward)
+	     (%p-store-pointer (locf (cadr vals-left))
+			       (locf (symbol-value thisvar))))
+	   (pop vars-left)
+	   (setq vals-left (cddr vals-left))
+	   (go long-nextvar)
+
+	varsdone
+	trivial
+	   (return
+	     (progn . ,body)))))
+
+(defmacro zl-serial-binding-list ((varlist) &body body)
+  `(prog (vars-left)
+	 (setq vars-left ,varlist)
+      bindloop
+	 (when vars-left
+	   (cond ((atom (car vars-left))
+		  (and (null (car vars-left)) (ferror nil "Attempt to bind NIL"))
+		  (%bind (locf (symbol-value (car vars-left)))
+			 nil))
+		 (t (and (null (caar vars-left)) (ferror nil "Attempt to bind NIL"))
+		    (%bind (locf (symbol-value (caar vars-left)))
+			   (eval (cadar vars-left)))))
+	   (setq vars-left (cdr vars-left))
+	   (go bindloop))
+	 
+	 (return
+	   (progn . ,body))))
+
+(defmacro zl-parallel-binding-list ((varlist) &body body)
+  `(prog (vars-left)
+	 ;; Now bind all the prog-variables.
+	 ;; DO cannot be used, since the scope of the BINDs would be wrong.
+	 (setq vars-left ,varlist)
+      bindloop
+	 (when vars-left
+	   ;; For each symbol, push 2 words on stack:
+	   ;; value cell location and new value.
+	   (cond ((atom (car vars-left))
+		  (or (car vars-left) (ferror nil "Attempt to bind NIL"))
+		  (%push (locf (symbol-value (car vars-left))))
+		  (%push nil))
+		 (t (or (caar vars-left) (ferror nil "Attempt to bind NIL"))
+		    (%push (locf (symbol-value (caar vars-left))))
+		    (%push (eval (cadar vars-left)))))
+	   (pop vars-left)
+	   (go bindloop))
+	 
+	 (setq vars-left ,varlist)
+      bindloop1
+	 (when vars-left
+	   ;; Pop off next symbol and value, and bind them.
+	   (%bind (%pop) (%pop))
+	   ;; Step down VARS-LEFT just so we pop as many pairs as we pushed.
+	   (pop vars-left)
+	   (go bindloop1))
+	 (return (progn . ,body))))
+
+(defun let (&quote varlist &rest body)
+  "Binds some variables and then evaluates the BODY.
+VARLIST is a list of either variables or lists (variable init-exp).
+The init-exps are evaluated, and then the variables are bound.
+Then the body is evaluated sequentially and the values
+of the last expression in it are returned."
+  (if (eq interpreter-function-environment t)
+      (zl-parallel-binding-list (varlist)
+	(eval-body body))
+    (gobble-declarations-from-body (decls-env body)
+      (parallel-binding-list (varlist decls-env)
+	(eval-body body)))))
+
+(defun let* (&quote varlist &rest body)
+  "Like LET, but binds each variable before evaluating the initialization for the next.
+Thus, each variable's initialization can refer to the values of the previous ones."
+  (if (eq interpreter-function-environment t)
+      (zl-serial-binding-list (varlist)
+	(eval-body body))
+    (gobble-declarations-from-body (decls-env body)
+      (serial-binding-list (varlist decls-env)
+	(eval-body body)))))
+
+;;;; Support for lexical function definitions (FLET and LABELS).
+
+(defun interpreter-fsymeval (symbol &aux mumble)
+  (dolist (frame interpreter-function-environment
+		 (fsymeval symbol))
+    (and (setq mumble (get-location-or-nil (locf frame) (locf (symbol-function symbol))))
+	 (return (car mumble)))))
+
+(defmacro parallel-function-binding-list ((varlist eval-now macroflag) &body body)
+  `(prog (vars-left bindframe)
+	 ;; Trivial case of empty varlist would lose in code below.
+	 (unless ,varlist
+	   (go long))  
+	 (when (nthcdr #o20 ,varlist)
+	   (setq bindframe
+		 (mapcan #'(lambda (var)
+			     (list* (locf (symbol-function (car var)))
+				    (if ,macroflag
+					`(macro . ,(expand-defmacro var))
+				      (if ,eval-now
+					  (eval1
+					    `(function (lambda . ,(cdr var))))
+					`(lambda . ,(cdr var))))
+				    nil))
+			 ,varlist))
+	   (go long))
+	 ;; The following code is equivalent to the above mapcar
+	 ;; except that the list is constructed on the stack
+	 ;; by pushing the elements one by one and fiddling with cdr codes.
+	 (with-stack-list (tem nil)
+	   ;; BINDFRAME gets a pointer to where the list will go.
+	   (setq bindframe tem))
+	 ;; Now loop over the varlist, computing and pushing initiali values.
+	 (setq vars-left ,varlist)
+      short-nextvar
+	 (when vars-left
+	   (%push (locf (symbol-function (caar vars-left))))
+	   (%push (if ,macroflag
+		      `(macro . ,(expand-defmacro (car vars-left)))
+		    (if ,eval-now
+			(eval1
+			  `(function (lambda . ,(cdar vars-left))))
+		      `(lambda . ,(cdar vars-left)))))
+	   (pop vars-left)
+	   (go short-nextvar))
+	 ;; Modify cdr-code of last word pushed, to terminate the list.
+	 (with-stack-list (tem nil)
+	   (%p-dpb-offset cdr-nil %%q-cdr-code tem -1))
+      long
+	 ;; Here BINDFRAME has the correct variables and values.
+	 (return
+	   (with-stack-list* (interpreter-function-environment
+			       bindframe interpreter-function-environment)
+	     . ,body))))
+
+(defmacro zl-parallel-function-binding-list ((varlist ignore macroflag) &body body)
+  `(prog (vars-left)
+	 ;; Now bind all the prog-variables.
+	 ;; DO cannot be used, since the scope of the BINDs would be wrong.
+	 (setq vars-left ,varlist)
+      bindloop
+	 (when vars-left
+	   ;; For each symbol, push 2 words on stack:
+	   ;; value cell location and new value.
+	   (%push (locf (symbol-function (caar vars-left))))
+	   (%push (if ,macroflag
+		      `(macro . ,(expand-defmacro (car vars-left)))
+		    `(lambda . ,(cdar vars-left))))
+	   (pop vars-left)
+	   (go bindloop))
+	 
+	 (setq vars-left ,varlist)
+      bindloop1
+	 (when vars-left
+	   ;; Pop off next symbol and value, and bind them.
+	   (%bind (%pop) (%pop))
+	   ;; Step down VARS-LEFT just so we pop as many pairs as we pushed.
+	   (pop vars-left)
+	   (go bindloop1))
+	 (return (progn . ,body))))
+
+(defun flet (&quote function-list &rest body)
+  "Execute BODY with local function definitions as per FUNCTION-LIST.
+Each element of FUNCTION-LIST looks like (NAME (ARGS...) BODY...).
+FLET rebinds the function definition of each NAME lexically to
+ (LAMBDA (ARGS...) BODY...), closed in the environment outside the FLET.
+See also LABELS."
+  (if (eq interpreter-function-environment t)
+      (zl-parallel-function-binding-list (function-list nil nil)
+	(eval-body body))
+    (gobble-declarations-from-body (decls-env body)
+      (parallel-function-binding-list (function-list t nil)
+	(eval-body body)))))
+
+(defun macrolet (&quote macro-list &rest body)
+  "Execute BODY with macro function definitions as per MACRO-LIST.
+Each element of MACRO-LIST looks like (NAME (ARGS...) BODY...).
+MACROLET rebinds the function definition of each NAME lexically to
+ a macro like the one you would get by doing
+ (DEFMACRO NAME (ARGS...) BODY...)."
+  (if (eq interpreter-function-environment t)
+      (zl-parallel-function-binding-list (macro-list t t)
+	(eval-body body))
+    (gobble-declarations-from-body (decls-env body)
+      (parallel-function-binding-list (macro-list t t)
+	(eval-body body)))))
+
+(defun labels (&quote function-list &rest body)
+  "Execute BODY with local function definitions as per FUNCTION-LIST.
+Each element of FUNCTION-LIST looks like (NAME (ARGS...) BODY...).
+LABELS rebinds the function definition of each NAME lexically to
+ (LAMBDA (ARGS...) BODY...), closed in the environment inside the LABELS.
+This means that the functions defined by the LABELS can refer to
+themselves and to each other.  See also FLET."
+  (if (eq interpreter-function-environment t)
+      (zl-parallel-function-binding-list (function-list nil nil)
+	(eval-body body))
+    (gobble-declarations-from-body (decls-env body)
+      (parallel-function-binding-list (function-list nil nil)
+	;; The values were not evaluated yet.
+	;; The binding frame contains the expressions.
+	;; Eval them now and store the values in their places.
+ (cerror "Yow!" "Lose big!")
+	(do ((frametail (car interpreter-function-environment) (cddr frametail)))
+	    ((null frametail))
+ (cerror "Foo" "Before frametail: ~S" frametail)
+	  (setf (cadr frametail)
+		(eval1 `(function ,(cadr frametail))))
+ (cerror "Foo" "After frametail: ~S" frametail)
+    )
+	(eval-body body)))))
+
+(defun progv (vars vals &quote &rest body)
+  "Bind the VARS to the VALS and then execute the BODY.
+Note that the expressions you write for VARS and VALS
+are evaluated on each entry to PROGV,
+so the variables bound may be different each time.
+The variables are always bound as specials if they are bound;
+therefore, strictly speaking only variables declared special should be used."
+  ;; This still always binds them as specials!
+  ;; This function has to work that way.
+  (do ((vars vars (cdr vars))
+       (vals vals (cdr vals)))
+      ((null vars)
+       (eval-body body))
+    (%bind (locf (symbol-value (car vars))) (car vals))))
+
+;;; (PROGW '((VAR-1 VAL-1) (VAR-2 VAL-2) ... (VAR-N VAL-N)) &BODY BODY)
+;;; Binds VAR-I to VAL-I (evaluated) during execution of BODY
+(defun progw (vars-and-vals &quote &rest body)
+  "Perform bindings from a list of variables and expressions, then execute the BODY.
+VARS-AND-VALS is a list of elements like (VARIABLE VALUE-FORM).
+The VALUE-FORMs are all evaluated by PROGW, even when compiled.
+Note that the value of VARS-AND-VALS is computed each time.
+The variables are always bound as specials if they are bound;
+therefore, strictly speaking only variables declared special should be used."
+  (do ((vars-and-vals vars-and-vals (cdr vars-and-vals)))
+      ((null vars-and-vals)
+       (eval-body body))
+    (%bind (locf (symbol-value (caar vars-and-vals)))
+	   (eval1 (cadar vars-and-vals)))))
+
+;;; (LET-IF <COND> ((VAR-1 VAL-1) (VAR-2 VAL-2) ... (VAR-N VAL-N)) &BODY BODY)
+;;; If <COND> is not nil, binds VAR-I to VAL-I (evaluated) during execution of BODY,
+;;; otherwise just evaluates BODY.
+(defun let-if (cond &quote var-list &quote &rest body)
+  "Perform the bindings in VAR-LIST only if COND is non-NIL; the execute the BODY.
+Aside from the presence of COND, LET-IF is just like LET.
+The variables are always bound as specials if they are bound;
+therefore, strictly speaking only variables declared special should be used."
+  (progw (and cond var-list)
+    (eval-body body)))
+
+;;; Interpreter version of UNWIND-PROTECT
+;;; (UNWIND-PROTECT risky-stuff forms-to-do-when-unwinding-this-frame...)
+;;; If risky-stuff returns, we return what it returns, doing forms-to-do
+;;; (just as PROG1 would do).  If risky-stuff does a throw, we let the throw
+;;; function as specified, but make sure that forms-to-do get done as well.
+(defun unwind-protect (&quote body-form &rest cleanup-forms)
+  "Execute BODY-FORM, and on completion or nonlocal exit execute the CLEANUP-FORMS."
+  (unwind-protect (eval1 body-form)
+    (dolist (form cleanup-forms)
+      (eval1 form))))
+
+(defun *throw (tag &quote value-expression)
+  "Throw the values of VALUE-EXPRESSION to TAG.
+The innermost catch for TAG will return these values to its caller."
+  (*throw tag (eval1 value-expression)))
+
+;;;; PROG, GO, RETURN, RETURN-LIST, RETURN-FROM
+
+(defmacro enter-block (name-exp &body body)
+  `(with-stack-list (tem ,name-exp nil)
+     (with-stack-list (bindframe 'block tem)
+       (with-stack-list* (interpreter-environment bindframe interpreter-environment)
+	 (*catch (cdr tem)
+	   (with-stack-list (tem1 nil)
+	     (setf (cadr tem) (%make-pointer-offset dtp-locative tem1 -1)))
+	   (progn . ,body))))))
+
+(defun block (&quote name &rest body)
+  "Make nonlocal exit point named NAME for use with RETURN-FROM within BODY.
+BODY is evaluated, and the value(s) of the last form in it are returned,
+except that if RETURN-FROM is used with our NAME as its argument
+during the execution of BODY, control immediately exits from this BLOCK
+with values specified by the arguments to RETURN-FROM.
+If NAME is NIL, RETURN can also be used to exit this block."
+  (check-type name symbol)
+  (enter-block name
+    (if (eq interpreter-function-environment t)
+	(eval-body body)
+      (gobble-declarations-from-body (decls-env body)
+	(eval-body body)))))
+
+(defun return-from (&quote blockname &rest vals)
+  "Return from a BLOCK named BLOCKNAME, or from a named PROG or DO.
+The first arg (not evaluated) is the name.
+If that is the only argument, zero values are returned.
+With exactly one additional argument, its value(s) are returned.
+With more arguments, each argument (except the first) produces
+one value to be returned."
+  (check-type blockname symbol)
+  (let ((values (cond ((or (null vals) (cdr vals))
+		       (mapcar #'eval1 vals))
+		      (t (multiple-value-list (eval1 (car vals)))))))
+    (do ((tail interpreter-environment (cdr tail)))
+	((atom tail))
+      (let ((bindframe (car tail)))
+	(and (eq (car bindframe) 'block)
+	     (eq blockname (car (cadr bindframe)))
+	     (*throw (cdr (cadr bindframe))
+		     (values-list values)))))
+    (ferror nil "There is no lexically-visible active BLOCK named ~S." blockname)))
+
+(defun return (&quote &rest vals)
+  "Return from a BLOCK named NIL, or from the innermost PROG or DO.
+Exactly the same as RETURN-FROM with NIL as first argument.
+BLOCKs are candidates for RETURN only if named NIL,
+but any PROG or DO is a candidate regardless of its name.
+With exactly one argument, its value(s) are returned.
+With zero or multiple arguments, each argument produces
+one value to be returned."
+  (let ((values (cond ((or (null vals) (cdr vals))
+		       (mapcar #'eval1 vals))
+		      (t (multiple-value-list (eval1 (car vals)))))))
+    (do ((tail interpreter-environment (cdr tail)))
+	((atom tail))
+      (let ((bindframe (car tail)))
+	(and (eq (car bindframe) 'block)
+	     (null (car (cadr bindframe)))
+	     (*throw (cdr (cadr bindframe))
+		     (values-list values)))))
+    (ferror nil "There is no lexically-visible active BLOCK named NIL.")))
+
+(defun return-list (values)
+  "Return the elements of VALUES from a BLOCK named NIL, or from the innermost PROG or DO.
+BLOCKs are candidates for RETURN only if named NIL,
+but any PROG or DO is a candidate regardless of its name.
+Each element of VALUES becomes a single returned value.
+It is preferable to write (RETURN (VALUES-LIST values))."
+  (do ((tail interpreter-environment (cdr tail)))
+      ((atom tail))
+    (let ((bindframe (car tail)))
+      (and (eq (car bindframe) 'block)
+	   (null (car (cadr bindframe)))
+	   (*throw (cdr (cadr bindframe))
+		   (values-list values)))))
+  (ferror nil "There is no lexically-visible active BLOCK named NIL."))
+
+(defun tagbody (&quote &rest body)
+  "Execute BODY, allowing GO to transfer control to go-tags in BODY.
+Lists in BODY are expressions to be evaluated (/"statements/").
+Symbols in BODY are tags, which are ignored when reached sequentially.
+However, GO may be used within any of the statements
+to transfer control to any of the tags in BODY.
+After a GO, execution of the TAGBODY form will continue with
+the next statement in BODY following the tag.
+
+TAGBODY returns only when execution reaches the end.
+Its value is always NIL.  A nonlocal exit of some sort
+is the only way to get out with any other value."
+  (tagbody-internal body))
+
+;;; Execute the body of a TAGBODY (or, a PROG).
+;;; Puts a TAGBODY entry on INTERPRETER-ENVIRONMENT so that GO can find
+;;; which tags are available to go to, and where they are in the TAGBODY.
+;;; The TAGBODY entry also contains a catch tag that GO can throw to
+;;; to do a GO.  The arg thrown is the pointer to the spot in the TAGBODY
+;;; where the desired tag appears.
+(defun tagbody-internal (body)
+  (with-stack-list (tem body nil)
+    (with-stack-list (bindframe 'tagbody tem)
+      (with-stack-list* (interpreter-environment bindframe interpreter-environment)
+	(do ((pc body))
+	    (())
+	  (cond ((null pc) (return nil))
+		((atom pc)
+		 (ferror nil "Non-NIL atomic cdr in TAGBODY form ~S." body)
+		 (return nil)))
+	  (let ((exp (car pc)))
+	    (setq pc (cdr pc))
+	    (if (atom exp) nil
+	      (catch-continuation (cdr tem)
+		  #'(lambda (gotag-pointer) (setq pc (cdr gotag-pointer)))
+		  nil
+		(with-stack-list (tem1 nil)
+		  (setf (cadr tem) (%make-pointer-offset dtp-locative tem1 -1)))
+		(eval1 exp)))))))))
+
+(defun go (&quote tag &aux tem)
+  "Transfer control to the tag TAG in a lexically containing TAGBODY or PROG, etc.
+May be used within TAGBODY, PROG, PROG*, DO, DO*, or anything expanding into them.
+TAG is not evaluated.
+Control transfers instantaneously; the remainder of this statement
+of the TAGBODY or PROG is not completed.
+See the documentation of TAGBODY for more info."
+  (check-type tag symbol)
+  (do ((tail interpreter-environment (cdr tail)))
+      ((atom tail))
+    (let ((bindframe (car tail)))
+      (and (eq (car bindframe) 'tagbody)
+	   (setq tem (memq tag (car (cadr bindframe))))
+	   (*throw (cdr (cadr bindframe)) tem))))
+  (ferror nil "Unseen GO tag ~S." tag))
+
+(defun prog (&quote &rest prog-arguments)
+  "Old-fashioned form that combines a LET, a BLOCK and a TAGBODY.
+Usage is (PROG name varlist body...) or (PROG varlist body...).
+A non-NIL symbol is interpreted as a NAME; NIL or a cons is a VARLIST.
+These two forms of usage are equivalent to
+  (BLOCK name
+    (BLOCK NIL
+      (LET varlist
+        (TAGBODY body...))))
+or, in the case with no specified NAME,
+  (BLOCK NIL
+    (LET varlist
+      (TAGBODY body...)))
+BLOCK establishes the RETURN-point, LET binds the variables,
+and TAGBODY executes the body and handles GO tags.
+See the documentation of BLOCK, LET and TAGBODY for more information.
+PROG is semi-obsolete, but too ancient to be flushed."
+  (declare (arglist /[progname/] varlist &body body))
+  (let* ((progname (and (atom (car prog-arguments))
+			(car prog-arguments)))
+	 (varlist (if progname
+		      (second prog-arguments)
+		    (first prog-arguments)))
+	 (progbody (if progname
+		       (cddr prog-arguments)
+		     (cdr prog-arguments))))
+    (check-type progname symbol)
+    (prog ()
+	  (return
+	    (if (eq interpreter-function-environment t)
+		(enter-block (if (eq progname t) t nil)
+		  (enter-block progname
+		    (zl-parallel-binding-list (varlist)
+		      (tagbody-internal progbody))))
+	      (gobble-declarations-from-body (decls-env progbody)
+		(parallel-binding-list (varlist decls-env)
+		  (enter-block (if (eq progname t) t nil)
+		    (enter-block progname
+		      (tagbody-internal progbody)
+		      (return nil))))))))))
+
+(defun prog* (&quote &rest prog-arguments)
+  "Old fashioned form that combines a LET*, a BLOCK and a TAGBODY.
+PROG* is the same as PROG except that the variables are bound sequentially,
+as in LET*, whereas PROG binds them in parallel, like LET."
+  (declare (arglist /[progname/] varlist &body body))
+  (let* ((progname (and (atom (car prog-arguments))
+			(car prog-arguments)))
+	 (varlist (if progname
+		      (second prog-arguments)
+		    (first prog-arguments)))
+	 (progbody (if progname
+		       (cddr prog-arguments)
+		     (cdr prog-arguments))))
+    (check-type progname symbol)
+    (prog ()
+	  (return
+	    (if (eq interpreter-function-environment t)
+		(enter-block (if (eq progname t) t nil)
+		  (enter-block progname
+		    (zl-serial-binding-list (varlist)
+		      (tagbody-internal progbody))))
+	      (gobble-declarations-from-body (decls-env progbody)
+		(serial-binding-list (varlist decls-env)
+		  (enter-block (if (eq progname t) t nil)
+		    (enter-block progname
+		      (tagbody-internal progbody)
+		      (return nil))))))))))
+
+;;;; Various sorts of DOs.
+
+(defun do (&quote &rest x)
+  (do-internal x nil))
+
+(defun do-named (&quote name &rest x)
+  (enter-block name
+    (do-internal x name)))
+
+(defun do-internal (x name &aux varlist endtest retvals oncep)
+  (if (and (car x) (atom (car x)))		;"OLD STYLE"
+      (progn
+	(%bind (locf (symbol-value (car x))) (eval1 (cadr x)))
+	(do-body nil nil (cadddr x) nil  t x (cddddr x)))
+    (setq varlist (car x))
+    (setq oncep (null (cadr x)))
+    (or oncep (setq endtest (caadr x) retvals (cdadr x)))
+    (if (eq interpreter-function-environment t)
+	(zl-parallel-binding-list (varlist)
+	  (do-body name oncep endtest retvals nil varlist (cddr x)))
+      (gobble-declarations-from-body (decls-env (cddr x))
+	(parallel-binding-list (varlist decls-env)
+	  (do-body name oncep endtest retvals  nil varlist (cddr x)))))))
+
+(defun do* (&quote &rest x)
+  (do*-internal x nil))
+
+(defun do*-named (&quote name &rest x)
+  (enter-block name
+    (do*-internal x name)))
+
+(defun do*-internal (x name &aux varlist endtest retvals oncep)
+  (if (and (car x) (atom (car x)))		;"OLD STYLE"
+      (progn
+	(%bind (locf (symbol-value (car x))) (eval1 (cadr x)))
+	(do-body nil nil (cadddr x) nil t x (cddddr x)))
+    (setq varlist (car x))
+    (setq oncep (null (cadr x)))
+    (or oncep (setq endtest (caadr x) retvals (cdadr x)))
+    (if (eq interpreter-function-environment t)
+	(zl-serial-binding-list (varlist)
+	  (do-body name oncep endtest retvals nil varlist (cddr x) t))
+      (gobble-declarations-from-body (decls-env (cddr x))
+	(serial-binding-list (varlist decls-env)
+	  (do-body name oncep endtest retvals nil varlist (cddr x) t))))))
+
+(defun do-body (name oncep endtest retvals oldp varlist body &optional serial-stepping)
+  (enter-block (eq name t)
+    (do ()
+	((and (not oncep) (eval1 endtest))
+	 ;; Now evaluate the exit actions.
+	 ;; The last one should return its values out of the DO.
+	 (eval-body retvals))
+      ;; Now execute the body.
+      (tagbody-internal body)
+      
+      ;; Here after finishing the body to step the DO-variables.
+      (and oncep (return nil))
+      (cond (oldp (if (eq interpreter-function-environment t)
+		      (set (car varlist) (eval (caddr varlist)))
+		    (interpreter-set (car varlist) (eval1 (caddr varlist)))))
+	    (serial-stepping
+	     (dolist (elt varlist)
+	       (and (consp elt) (cddr elt)
+		    (if (eq interpreter-function-environment t)
+			(set (car elt) (eval (caddr elt)))
+		      (interpreter-set (car elt) (eval1 (caddr elt)))))))
+	    (t (do ((vl varlist (cdr vl))
+		    (vals (do ((vl varlist (cdr vl))
+			       (vals nil (cons (and (consp (car vl)) (cdar vl) (cddar vl)
+						    (eval1 (caddar vl)))
+					       vals)))	;******* CONS *******
+			      ((null vl) (nreverse vals)))
+			  (cdr vals)))
+		   ((null vl))
+		 (cond ((and (consp (car vl)) (cdar vl) (cddar vl))
+			(if (eq interpreter-function-environment t)
+			    (set (caar vl) (car vals))
+			  (interpreter-set (caar vl) (car vals)))))))))))
+
+(defun function (&quote function)
+  "Quotes FUNCTION for use as a function.
+If FUNCTION is a symbol, its function definition in the current environment is returned.
+If FUNCTION is a list (presumably starting with LAMBDA or some lambda-macro),
+ the compiler will compile it; the interpreter will make it into a closure
+ that records the lexical variables of the current lexical context."
+  (cond ((symbolp function)
+	 (if (eq interpreter-function-environment t)
+	     (fsymeval function)
+	   (interpreter-fsymeval function)))
+	((functionp function t)
+	 (if (eq interpreter-function-environment t)
+	     function
+	   (let ((interpreter-environment
+		   (unstackify-environment interpreter-environment))
+		 (interpreter-function-environment
+		   (unstackify-environment interpreter-function-environment)))
+	     (closure '(interpreter-environment interpreter-function-environment) function))))
+	((validate-function-spec function)		;Function spec
+	 (fdefinition function))
+	(t (ferror nil "~S is not a function nor the name of a function" function))))
+
+(defun quote (&quote x)
+  "(quote X) returns X.  This is useful because X is not evaluated.  This is the same
+thing as 'X"
+  x)
+
+(defun functional-alist (&quote x)
+  "Works like quote interpreted.  However, the compiler is tipped off to
+break off and compile separately functions which appear in the cdr
+position of an alist element"
+  x)     
+
+;;; Make sure that none of ENV lives in a stack.
+;;; Copy any parts that do, forwarding the old parts to the new ones,
+;;; and returning a pointer to the new one in case the first link was copied.
+;;; NOTE: this function knows specially about frames made by BLOCK or TAGBODY
+;;;  and bashes them appropriately
+(defun unstackify-environment (env &aux (newenv env))
+  (when (consp env)
+    (when (stack-list-p env)
+      (setq newenv (cons (car env) (cdr env)))
+      (%p-dpb dtp-one-q-forward %%q-data-type env)
+      (%p-dpb newenv %%q-pointer env)
+      (%p-dpb dtp-one-q-forward %%q-data-type (1+ (%pointer env)))
+      (%p-dpb (1+ (%pointer newenv)) %%q-pointer (1+ (%pointer env)))
+    (let* ((frame (car newenv))
+	   (newframe frame))
+      (when (stack-list-p frame)
+	(setq newframe (make-list (length frame)))
+	;; Copy each word of the old frame to the new, then
+	;; forward each word of the old frame to the new.
+	;; Uses %BLT-TYPED to copy in case what's there is a DTP-ONE-Q-FORWARD.
+	(do ((l newframe (cdr l))
+	     (m frame (cdr m)))
+	    ((null l))
+	  (%blt-typed m l 1 0)
+	  (%p-store-pointer m l)
+	  (%p-store-data-type m dtp-one-q-forward))
+	(setf (car newenv) newframe)
+	;; Special kinds of frames contain additional stack lists
+	;; which point at words on the stack which hold catch tags.
+	;; Copy the list and stick the in as the catch's tag.
+	(when (and (memq (car newframe) '(block tagbody))
+		   (stack-list-p (cadr newframe)))
+	  (let ((newtem (copylist (cadr newframe))))
+	    (setf (cadr newframe) newtem)
+	    (setf (car (cadr newtem)) (cdr newtem))))))
+    (when (cdr newenv)
+      (let ((newrest (unstackify-environment (cdr newenv))))
+	(unless (eq (cdr newenv) newrest)
+	  (setf (cdr newenv) newrest)))))
+    newenv))
+
+(defun stack-list-p (list)
+  "T if LIST resides in the stack of the current stack group."
+  (and (plusp (%pointer-difference list (sg-regular-pdl current-stack-group)))
+       (plusp (%pointer-difference (%stack-frame-pointer) list))))
+
+;;; Ucode interpreter trap comes here.
+;;; Note will never be called by fexpr-call; instead, the ucode
+;;; will pseudo-spread the rest-argument-list by hacking the cdr codes.
+
+;;; The non-special variable slots-bound-instance-1
+;;; is bound lexically to the instance (if any)
+;;; whose instance variables are lexically bound
+;;; in the same environment.
+
+;;; This function uses that fact to return T
+;;; if SELF's instance variables are bound lexically in the current environment.
+(defun interpreter-instance-vars-boundp (instance &aux tem)
+  (do ((tail interpreter-environment (cdr tail)))
+      ((atom tail) nil)
+    (and (setq tem
+	       (get-lexical-value-cell (car tail)
+				       ;; all this to avoid a compiler warning...
+				       (locally
+					 (declare (special slots-bound-instance-1))
+					 (inhibit-style-warnings
+					   (locf (symbol-value 'slots-bound-instance-1))))))
+	 (return (eq (contents tem) instance)))))
+
+(defmacro apply-lambda-bindvar (var value decls-env &optional force-special)
+  `(progn
+     (setq this-specialp (or ,force-special
+			     (interpreter-special-in-frame-p
+			       (locf (symbol-value ,var)) ,decls-env)))
+     (unless (car interpreter-environment)
+       (with-stack-list (tem1 t)
+	 (setf (car interpreter-environment) tem1)))
+     (%push (locf (symbol-value ,var)))
+     (%push ,value)
+     ;; Modify cdr-code of last word pushed, to terminate the list.
+     (with-stack-list (tem1 nil)
+       (%p-dpb-offset cdr-next %%q-cdr-code tem1 -3)
+       (%p-dpb-offset cdr-next %%q-cdr-code tem1 -2)
+       (%p-dpb-offset cdr-nil %%q-cdr-code tem1 -1)
+       (setq thisval tem1))
+     ;; Bind the variable as special, if appropriate.
+     (unless ,var (ferror nil "Attempt to bind NIL"))
+     (when this-specialp
+       (%bind (locf (symbol-value ,var)) (%p-contents-offset thisval -1))
+       (%p-store-data-type (%make-pointer-offset dtp-list thisval -1)
+			   dtp-one-q-forward)
+       (%p-store-pointer (%make-pointer-offset dtp-list thisval -1)
+			 (locf (symbol-value ,var))))))
+
+(defmacro apply-lambda-bindvar-1 (varloc valloc)
+  `(progn
+     (unless (car interpreter-environment)
+       (with-stack-list (tem1 t)
+	 (setf (car interpreter-environment) tem1)))
+     (%push ,varloc)
+     (%push ,valloc)
+     ;; Modify cdr-code of last word pushed, to terminate the list.
+     (with-stack-list (tem1 nil)
+       (%p-dpb-offset cdr-nil %%q-cdr-code tem1 -1)
+       (%p-dpb-offset cdr-next %%q-cdr-code tem1 -2)
+       (%p-dpb-offset cdr-next %%q-cdr-code tem1 -3))))
+
+(defun apply-lambda (fctn a-value-list)
+  (prog (tem)
+	(unless (consp fctn) (go bad-function))
+   tail-recurse
+	(case (car fctn)
+	  (curry-after
+	   (tagbody
+	       (setq tem (cddr fctn))
+	       (%open-call-block (cadr fctn) 0 4)
+	       (%assure-pdl-room (+ (length tem) (length a-value-list)))
+
+	    loop1
+	       (or a-value-list (go loop2))
+	       (%push (car a-value-list))
+	       (and (setq a-value-list (cdr a-value-list))
+		    (go loop1))
+
+	    loop2
+	       (or tem (go done))
+	       (%push (eval1 (car tem)))
+	       (and (setq tem (cdr tem))
+		    (go loop2))
+
+	    done
+	       (%activate-open-call-block)))
+	  (curry-before
+	   (tagbody
+	       (setq tem (cddr fctn))
+	       (%open-call-block (cadr fctn) 0 4)
+	       (%assure-pdl-room (+ (length tem) (length a-value-list)))
+
+	    loop1
+	       (or tem (go loop2))
+	       (%push (eval1 (car tem)))
+	       (and (setq tem (cdr tem))
+		    (go loop1))
+
+	    loop2
+	       (or a-value-list (go done))
+	       (%push (car a-value-list))
+	       (and (setq a-value-list (cdr a-value-list))
+		    (go loop2))
+
+	    done
+	       (%activate-open-call-block)))
+	  ((lambda named-lambda subst cli:subst named-subst)
+	   (let-if (memq (car fctn) '(named-lambda named-subst))
+		   ((interpreter-environment nil)
+		    (interpreter-function-environment nil)
+		    (local-declarations nil))
+	     (let* (optionalf quoteflag tem restf init this-restf specialf
+		    (fctn1 (cond ((eq (car fctn) 'named-lambda) (cdr fctn))
+				 ((eq (car fctn) 'named-subst) (cdr fctn))
+				 (t fctn)))
+		    (lambda-list (cadr fctn1))
+		    (body (cddr fctn1))
+		    (value-list a-value-list)
+		    (local-declarations local-declarations)
+		    this-specialp thisval  ;Used by expansion of apply-lambda-bindvar
+		    keynames keyinits keykeys keyflags
+		    keynames1 keykeys1 keyflags1 (unspecified '(()))
+		    allow-other-keys)
+	       (and (cdr body) (stringp (car body)) (pop body))	;and doc string.
+	       ;; Make a binding frame to represent any SPECIAL declarations.
+	       (with-stack-list* (decls-env nil interpreter-environment)
+		 ;; Find any declarations at the front of the function body
+		 ;; and put them onto LOCAL-DECLARATIONS and into DECLS-ENV.
+		 (gobble-declarations-internal body decls-env)
+		 (with-stack-list* (interpreter-environment nil decls-env)
+		   (prog (thisvar)		; THISVAR is name of argument being processed.
+			 ;; If SELF is an instance, and instance vars aren't bound, bind them.
+			 (when (and (typep self 'instance)
+				    (not (interpreter-instance-vars-boundp self)))
+			   ;;??? Here should take care of special instance variables!!!
+			   ;; Probably just omit them, since they were bound when
+			   ;; the message was sent, weren't they?
+			   (tagbody
+			       (setq tem (self-binding-instances))
+			    loop
+			       (when tem
+				 (apply-lambda-bindvar-1 (car tem) (cadr tem))
+				 (setq tem (cddr tem))
+				 (go loop)))
+			   (apply-lambda-bindvar-1
+			     ;; all this to avoid a compiler warning...
+			     (locally
+			       (declare (special slots-bound-instance-1))
+			       (inhibit-style-warnings
+				 (locf (symbol-value 'slots-bound-instance-1))))
+			     self)
+			 )
+		      l
+			 (cond ((null value-list) (go lp1))
+			       ((or (null lambda-list)
+				    (eq (car lambda-list) '&aux)) 
+				(cond (restf (go lp1)))
+				(return-from apply-lambda
+				  (signal-proceed-case
+				    ((args)
+				     (make-condition 'sys:too-many-arguments
+						     "Function ~S called with too many arguments (~D)."
+						     fctn (length a-value-list) a-value-list))
+				    (:fewer-arguments
+				     (apply fctn (append a-value-list args)))
+				    (:return-value args)
+				    (:new-argument-list (apply fctn args)))))
+			       ((eq (car lambda-list) '&key)
+				(go key))
+			       ((eq (car lambda-list) '&optional)
+				(setq optionalf t)
+				(go l1))	;Do next value.
+			       ((eq (car lambda-list) '&quote)
+				(setq quoteflag t)
+				(go l1))
+			       ((eq (car lambda-list) '&eval)
+				(setq quoteflag nil)
+				(go l1))
+			       ((memq (car lambda-list) '(&special &local))
+				(setq specialf (eq (car lambda-list) '&special))
+				(go l1))
+			       ((eq (car lambda-list) '&rest)
+				(setq this-restf t)
+				(go l1))	;Do next value.
+			       ((memq (car lambda-list) lambda-list-keywords)
+				(go l1))
+			       ((atom (car lambda-list))
+				(setq thisvar (car lambda-list)))
+			       ((atom (caar lambda-list))
+				(setq thisvar (caar lambda-list))
+				;; If it's &OPTIONAL (FOO NIL FOOP),
+				;; bind FOOP to T since FOO was specified.
+				(when (and optionalf (cddar lambda-list))
+				  (and (null (caddar lambda-list)) (go bad-lambda-list))
+				  (apply-lambda-bindvar (caddar lambda-list)
+							t decls-env specialf)))
+			       (t (go bad-lambda-list)))
+			 ;; Get here if there was a real argname in (CAR LAMBDA-LIST).
+			 ;;  It is in THISVAR.
+			 (and (null thisvar) (go bad-lambda-list))
+			 (cond (restf
+				;; Something follows a &REST arg???
+				(go bad-lambda-list))
+			       (this-restf	;This IS the &REST arg.
+				;; If quoted arg, and the list of values is in a pdl, copy it.
+				(and quoteflag
+				     (ldb-test %%pht2-map-access-code
+					       (area-region-bits (%area-number value-list)))
+				     (let ((default-cons-area background-cons-area))
+				       (setq value-list (copylist value-list))))
+				(apply-lambda-bindvar thisvar value-list decls-env specialf)
+				;; We don't clear out VALUE-LIST
+				;; in case keyword args follow.
+				(setq this-restf nil restf t)
+				(go l1)))
+
+			 (apply-lambda-bindvar thisvar (car value-list) decls-env specialf)
+			 (pop value-list)
+		      l1 (pop lambda-list)
+			 (go l)
+
+		      key
+			 (setf (values nil nil lambda-list nil nil
+				       keykeys keynames nil keyinits keyflags
+				       allow-other-keys)
+			       (decode-keyword-arglist lambda-list))
+			 ;; Process the special keyword :ALLOW-OTHER-KEYS if present as arg.
+			 (if (get (locf value-list) :allow-other-keys)
+			     (setq allow-other-keys t))
+
+			 (setq keykeys1 keykeys	;life is tough without LET...
+			       keynames1 keynames
+			       keyflags1 keyflags)
+		      key1
+			 (when keykeys1
+			   (setq tem (getf value-list (pop keykeys1) unspecified))
+			   (setq init (if (eq tem unspecified) (eval1 (car keyinits)) tem))
+			   (apply-lambda-bindvar (car keynames1) init decls-env)
+			   (if (car keyflags1)
+			       (apply-lambda-bindvar (car keyflags1)
+						     (neq tem unspecified)
+						     decls-env))
+			   (pop keynames1)
+			   (pop keyflags1)
+			   (pop keyinits)
+			   (go key1))
+			 (do ((x value-list (cddr x))
+			      keyword)
+			     ((null x))
+			   (unless (cdr x)
+			     (ferror 'sys:bad-keyword-arglist
+				     "No argument after keyword ~S"
+				     (car x)))
+			   (setq keyword (car x))
+			   (setq tem (find-position-in-list keyword keykeys))
+			   (unless (or tem allow-other-keys)
+			     (do-forever
+			       (setq keyword (cerror :new-keyword nil
+						     'sys:undefined-keyword-argument
+						     "Keyword arg keyword ~S, with value ~S, is unrecognized."
+						     keyword
+						     (cadr value-list)))
+			       (when (and keyword
+					  (setq tem (find-position-in-list keyword keykeys)))
+				 (interpreter-set (nth tem keynames) (cadr x))
+				 (and (setq tem (nth tem keyflags))
+				      (interpreter-set tem t))
+				 (return)))))
+			 ;; Keyword args always use up all the values that are left...
+
+			 ;; Here when all values used up.
+		      lp1
+			 (cond ((null lambda-list) (go ex1))
+			       ((eq (car lambda-list) '&rest)
+				(and restf (go bad-lambda-list))
+				(setq this-restf t)
+				(go lp2))
+			       ((eq (car lambda-list) '&key)
+				(go key))
+			       ((memq (car lambda-list) '(&optional &aux))
+				(setq optionalf t)	;Suppress too few args error
+				(go lp2))
+			       ((memq (car lambda-list) '(&special &local))
+				(setq specialf (eq (car lambda-list) '&special))
+				(go lp2))
+			       ((memq (car lambda-list) lambda-list-keywords)
+				(go lp2))
+			       ((and (null optionalf) (null this-restf))
+				(and restf (go bad-lambda-list))
+				(return-from apply-lambda
+				  (signal-proceed-case
+				    ((args)
+				     (make-condition 'sys:too-few-arguments
+						     "Function ~S called with only ~D argument~1@*~P."
+						     fctn (length a-value-list) a-value-list))
+				    (:additional-arguments
+				     (apply fctn (append a-value-list args)))
+				    (:return-value args)
+				    (:new-argument-list (apply fctn args)))))
+			       ((atom (car lambda-list)) (setq tem (car lambda-list))
+							 (setq init nil))
+			       ((atom (caar lambda-list))
+				(setq tem (caar lambda-list))
+				(setq init (eval1 (cadar lambda-list)))
+				;; For (FOO NIL FOOP), bind FOOP to NIL since FOO missing.
+				(when (cddar lambda-list)
+				  (and (null (caddar lambda-list)) (go bad-lambda-list))
+				  (apply-lambda-bindvar (caddar lambda-list)
+							nil decls-env specialf)))
+			       (t (go bad-lambda-list)))
+		      lp3
+			 (and (null tem) (go bad-lambda-list))
+			 (apply-lambda-bindvar tem init decls-env specialf)
+			 (and this-restf (setq restf t))
+			 (setq this-restf nil)
+		      lp2
+			 (setq lambda-list (cdr lambda-list))
+			 (go lp1)
+
+		      ex1
+			 ;; Here to evaluate the body.
+			 (return-from apply-lambda (eval-body body))
+		      bad-lambda-list
+			 (setq fctn
+			       (cerror :new-function nil 'sys:invalid-lambda-list
+				       "~S has an invalid LAMBDA list" fctn))
+		      retry
+			 (return-from apply-lambda (apply fctn a-value-list))))))))
+	  (macro
+	   (ferror 'sys:funcall-macro
+		   "Funcalling the macro ~S."
+		   (function-name (cdr fctn)))
+	   (return-from apply-lambda
+	     (eval1 (cons fctn (mapcar #'(lambda (arg) `',arg) a-value-list))))))
+
+	;; A list, but don't recognize the keyword.  Check for a LAMBDA position macro.
+	(when (lambda-macro-call-p fctn)
+	  (setq fctn (lambda-macro-expand fctn))
+	  (go retry))
+
+   bad-function
+	;; Can drop through to here for a totally unrecognized function.
+	(setq fctn
+	      (cerror :new-function nil 'sys:invalid-function
+		      "~S is an invalid function." fctn))
+	(go retry)
+
+	;; Errors jump out of the inner PROG to unbind any lambda-vars bound with %BIND.
+   bad-lambda-list
+	(setq fctn
+	      (cerror :new-function nil 'sys:invalid-lambda-list
+		      "~S has an invalid LAMBDA list" fctn))
+   retry
+	(and (consp fctn) (go tail-recurse))
+	(return (apply fctn a-value-list))
+
+   too-few-args
+	(return (signal-proceed-case
+		  ((args)
+		   (make-condition 'sys:too-few-arguments
+				   "Function ~S called with only ~D argument~1@*~P."
+				   fctn (length a-value-list) a-value-list))
+		  (:additional-arguments
+		   (apply fctn (append a-value-list args)))
+		  (:return-value args)
+		  (:new-argument-list (apply fctn args))))
+
+   too-many-args
+	(return (signal-proceed-case
+		  ((args)
+		   (make-condition 'sys:too-many-arguments
+				   "Function ~S called with too many arguments (~D)."
+				   fctn (length a-value-list) a-value-list))
+		  (:fewer-arguments
+		   (apply fctn (append a-value-list args)))
+		  (:return-value args)
+		  (:new-argument-list (apply fctn args))))))
+
+(defun cl-apply-lambda (ignore ignore)
+  (ferror nil "This shouldn't be called."))
+
+;;;; DECODE-KEYWORD-ARGLIST
+
+;;; Given a lambda list, return a decomposition of it and a description
+;;; of all the keyword args in it.
+;;; POSITIONAL-ARGS is the segment of the front of the arglist before any keyword args.
+;;; KEYWORD-ARGS is the segment containing the keyword args.
+;;; AUXVARS is the segment containing the aux vars.
+;;; REST-ARG is the name of the rest arg, if any, else nil.
+;;; POSITIONAL-ARG-NAMES is a list of all positional args
+;;;  and the supplied-flags of all optional positional args.
+;;; The rest of the values describe the keyword args.
+;;; There are several lists, equally long, with one element per arg.
+;;; KEYNAMES contains the keyword arg variable names.
+;;; KEYKEYS contains the key symbols themselves (in the keyword package).
+;;; KEYOPTFS contains T for each optional keyword arg, NIL for each required one.
+;;; KEYINITS contains for each arg the init-form, or nil if none.
+;;; KEYFLAGS contains for each arg its supplied-flag's name, or nil if none.
+;;; Finally,
+;;;  ALLOW-OTHER-KEYS is T if &ALLOW-OTHER-KEYS appeared among the keyword args.
+(defun decode-keyword-arglist (lambda-list)
+  (declare (values positional-args keyword-args auxvars
+		   rest-arg positional-arg-names
+		   keykeys keynames keyoptfs keyinits keyflags allow-other-keys))
+  (let (positional-args keyword-args auxvars
+	optionalf this-rest rest-arg positional-arg-names
+	keykeys keynames keyoptfs keyinits keyflags allow-other-keys)
+    (setq auxvars (memq '&aux lambda-list))
+    (setq positional-args (ldiff lambda-list auxvars))
+    (setq keyword-args (memq '&key positional-args))
+    (setq positional-args (ldiff positional-args keyword-args))
+    
+    (setq keyword-args (ldiff keyword-args auxvars))
+    ;; Get names of all positional args and their supplied-flags.
+    ;; Get name of rest arg if any.  Find out whether they end optional.
+    (dolist (a positional-args)
+      (cond ((eq a '&optional) (setq optionalf t))
+	    ((eq a '&rest) (setq this-rest t))
+	    ((memq a lambda-list-keywords))
+	    (t (cond ((symbolp a) (push a positional-arg-names))
+		     (t (and (cddr a) (push (caddr a) positional-arg-names))
+			(push (car a) positional-arg-names)))
+	       (and this-rest (not rest-arg) (setq rest-arg (car positional-arg-names))))))
+    (setq positional-arg-names (nreverse positional-arg-names))
+    ;; Decode the keyword args.  Set up keynames, keyinits, keykeys, keyflags.
+    (dolist (a (cdr keyword-args))
+      (cond ((eq a '&optional) (setq optionalf t))
+	    ((eq a '&allow-other-keys) (setq allow-other-keys t))
+	    ((memq a lambda-list-keywords))
+	    (t (let (keyname keyinit keyflag keykey)
+		 (if (and (consp a) (consp (car a)))	;((:foo foo) bar)
+		     ;; Key symbol specified explicitly.
+		     (setq keykey (caar a) keyname (cadar a))
+		   ;; Else determine it from the variable name.
+		   (setq keyname (if (consp a) (car a) a))	;(foo bar)
+		   (unless (setq keykey (get keyname 'keykey))
+		     (setq keykey (intern (symbol-name keyname) pkg-keyword-package))
+		     (putprop keyname keykey 'keykey)))
+		 (if (consp a)
+		     (setq keyinit (cadr a) keyflag (caddr a)))
+		 (push keyname keynames)
+		 (push optionalf keyoptfs)
+		 (push keyinit keyinits)
+		 (push keyflag keyflags)
+		 (push keykey keykeys)))))
+    ;; Get everything about the keyword args back into forward order.
+    (setq keynames (nreverse keynames)
+	  keyinits (nreverse keyinits)
+	  keyoptfs (nreverse keyoptfs)
+	  keykeys (nreverse keykeys)
+	  keyflags (nreverse keyflags))
+    (values positional-args keyword-args auxvars
+	    rest-arg positional-arg-names
+	    keykeys keynames keyoptfs keyinits keyflags allow-other-keys)))
+
+
+;;;; old dynamic-binding code from apply-lambda
+;	     (let* (optionalf quoteflag tem restf init this-restf
+;		    (fctn (cond ((eq (car fctn) 'named-lambda) (cdr fctn))
+;				((eq (car fctn) 'named-subst) (cdr fctn))
+;				(t fctn)))
+;		    (lambda-list (cadr fctn))
+;		    (value-list a-value-list)
+;		    (local-declarations local-declarations)
+;		    keynames keyinits keykeys keyflags
+;		    keynames1 keykeys1 keyflags1 (unspecified '(()))
+;		    allow-other-keys)
+;	       (setq fctn (cddr fctn))	;throw away lambda list
+;	       (do-forever
+;		 (cond ((and (cdr fctn) (stringp (car fctn)))
+;			(pop fctn))	;and doc string.
+;		       ;; Process any (DECLARE) at the front of the function.
+;		       ;; This does not matter for SPECIAL declarations,
+;		       ;; but for MACRO declarations it might be important
+;		       ;; even in interpreted code.
+;		       ((and (not (atom (car fctn)))
+;			     (memq (caar fctn) '(declare :declare)))
+;			(setq local-declarations (append (cdar fctn) local-declarations))
+;			(pop fctn))
+;		       (t (return))))
+;	       (prog ()
+;		 (when (memq (car fctn) '(named-lambda named-subst))
+;		   (%bind (locf interpreter-environment) nil)
+;		   (%bind (locf interpreter-function-environment) t))
+;		 ;; If SELF is an instance, and its instance vars aren't bound, bind them.
+;		 (and (typep self 'instance)
+;		      (neq self slots-bound-instance)
+;		      (progn (%using-binding-instances (self-binding-instances))
+;			     (%bind (locf slots-bound-instance) self)))
+;	    l    (cond ((null value-list) (go lp1))
+;		       ((or (null lambda-list)
+;			    (eq (car lambda-list) '&aux)) 
+;			(cond (restf (go lp1))
+;			      (t (go too-many-args))))
+;		       ((eq (car lambda-list) '&key)
+;			(go key))
+;		       ((eq (car lambda-list) '&optional)
+;			(setq optionalf t)
+;			(go l1))		    ;Do next value.
+;		       ((memq (car lambda-list) '(&quote &eval))
+;			(setq quoteflag (eq (car lambda-list) '&quote))
+;			(go l1))
+;		       ((eq (car lambda-list) '&rest)
+;			(setq this-restf t)
+;			(go l1))		    ;Do next value.
+;		       ((memq (car lambda-list) lambda-list-keywords)
+;			(go l1))
+;		       ((atom (car lambda-list)) (setq tem (car lambda-list)))
+;		       ((atom (caar lambda-list))
+;			(setq tem (caar lambda-list))
+;			;; If it's &OPTIONAL (FOO NIL FOOP),
+;			;; bind FOOP to T since FOO was specified.
+;			(cond ((and optionalf (cddar lambda-list))
+;			       (and (null (caddar lambda-list)) (go bad-lambda-list))
+;			       (%bind (locf (symbol-value (caddar lambda-list))) t))))
+;		       (t (go bad-lambda-list)))
+;		 ;; Get here if there was a real argname in (CAR LAMBDA-LIST).
+;		 ;;  It is in TEM.
+;		 (and (null tem) (go bad-lambda-list))
+;		 (cond (restf (go bad-lambda-list))	;Something follows a &REST arg???
+;		       (this-restf			;THIS is the &REST arg.
+;			;; If quoted arg, and the list of values is in a pdl, copy it.
+;			(and quoteflag
+;			     (ldb-test %%pht2-map-access-code
+;				       (area-region-bits (%area-number value-list)))
+;			     (let ((default-cons-area background-cons-area))
+;			       (setq value-list (copylist value-list))))
+;			(%bind (locf (symeval tem)) value-list)
+;			;; We don't clear out VALUE-LIST
+;			;; in case keyword args follow.
+;			(setq this-restf nil restf t)
+;			(go l1)))
+;		 (%bind (locf (symbol-value tem)) (car value-list))
+;		 (setq value-list (cdr value-list))
+;	    l1   (setq lambda-list (cdr lambda-list))
+;		 (go l)
+  
+;	    key  (setf (values nil nil lambda-list nil nil
+;			       keykeys keynames nil keyinits keyflags
+;			       allow-other-keys)
+;		       (decode-keyword-arglist lambda-list))
+;		 ;; Process the special keyword :ALLOW-OTHER-KEYS if present as an arg.
+;		 (if (get (locf value-list) :allow-other-keys)
+;		     (setq allow-other-keys t))
+  
+;		 (setq keykeys1 keykeys	;life is tough without LET...
+;		       keynames1 keynames
+;		       keyflags1 keyflags)
+;	    key1 (when keykeys1
+;		   (setq tem (get (locf value-list) (pop keykeys1) unspecified))
+;		   (%bind (locf (symeval (car keynames1)))
+;			 (if (eq tem unspecified) (eval1 (car keyinits))
+;			   tem))
+;		   (if (car keyflags1)
+;		       (%bind (locf (symeval (car keyflags1))) (neq tem unspecified)))
+;		   (pop keynames1)
+;		   (pop keyflags1)
+;		   (pop keyinits)
+;		   (go key1))
+;		 (do ((x value-list (cddr x))
+;		      keyword)
+;		     ((null x))
+;		   (unless (cdr x)
+;		     (ferror 'sys:bad-keyword-arglist
+;			     "No argument after keyword ~S"
+;			     (car x)))
+;		   (setq keyword (car x))
+;		   (setq tem (find-position-in-list keyword keykeys))
+;		   (unless (or tem allow-other-keys)
+;		     (do-forever
+;		       (setq keyword (cerror :new-keyword nil
+;					     'sys:undefined-keyword-argument
+;					     "Keyword arg keyword ~S, with value ~S, is unrecognized."
+;					     keyword
+;					     (cadr value-list)))
+;		       (when (and keyword (setq tem (find-position-in-list keyword keykeys)))
+;			 (set (nth tem keynames) (cadr x))
+;			 (and (setq tem (nth tem keyflags))
+;			      (set tem t))
+;			 (return)))))
+;		 ;; Keyword args always use up all the values that are left...
+  
+;		 ;; Here when all values used up.
+;	    lp1  (cond ((null lambda-list) (go ex1))
+;		       ((eq (car lambda-list) '&rest)
+;			(and restf (go bad-lambda-list))
+;			(setq this-restf t)
+;			(go lp2))
+;		       ((eq (car lambda-list) '&key)
+;			(go key))
+;		       ((memq (car lambda-list) '(&optional &aux))
+;			(setq optionalf t)		;Suppress too few args error
+;			(go lp2))
+;		       ((memq (car lambda-list) lambda-list-keywords)
+;			(go lp2))
+;		       ((and (null optionalf) (null this-restf))
+;			(and restf (go bad-lambda-list))
+;			(go too-few-args))
+;		       ((atom (car lambda-list)) (setq tem (car lambda-list))
+;			(setq init nil))
+;		       ((atom (caar lambda-list))
+;			(setq tem (caar lambda-list))
+;			(setq init (eval1 (cadar lambda-list)))
+;			;; For (FOO NIL FOOP), bind FOOP to NIL since FOO is missing.
+;			(cond ((cddar lambda-list)
+;			       (and (null (caddar lambda-list)) (go bad-lambda-list))
+;			       (%bind (locf (symbol-value (caddar lambda-list))) nil))))
+;		       (t (go bad-lambda-list)))
+;	    lp3  (and (null tem) (go bad-lambda-list))
+;		 (%bind (locf (symbol-value tem) init)
+;		 (and this-restf (setq restf t))
+;		 (setq this-restf nil)
+;	    lp2  (setq lambda-list (cdr lambda-list))
+;		 (go lp1)
+  
+;	    ex1  (do ((l fctn (cdr l)))
+;		     ((null (cdr l))
+;		      (return-from apply-lambda (eval1 (car l))))
+;		   (eval1 (car l)))))

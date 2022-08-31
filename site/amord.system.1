@@ -1,0 +1,16 @@
+;;; -*- mode: LISP; package: USER -*-
+
+
+(package-declare AMORD global 1000 ()
+		 (shadow inspect explain run))
+
+(defsystem amord
+  (:pathname-default "oz:src:<amord>")
+  (:patchable "oz:src:<amord>")
+  (:package "amord")
+  (:module tms ("tms"))
+  (:module amord ("nnmord"))
+  (:module other-stuff ("funcs" "rules"))
+  (:compile-load tms)
+  (:compile-load-init amord (tms) (:fasload tms) (:fasload tms))
+  (:compile-load-init other-stuff (tms amord) (:fasload tms amord) (:fasload tms amord)))

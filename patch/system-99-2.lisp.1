@@ -1,0 +1,40 @@
+;;; -*- Mode:Lisp; Readtable:T; Package:User; Base:8.; Patch-File:T -*-
+;;; Patch file for System version 99.2
+;;; Reason: Printing of package objects.
+;;; Chaosnet retransmission every 1/2 second.
+;;; Written 9/12/84 11:42:34 by RMS,
+;;; while running on Lisp Machine Twenty-five from band 5
+;;; with Experimental System 99.0, CADR 4.0, Experimental ZMail 54.0, MIT-Specific 23.0, microcode 320, MIT GC@0.
+
+
+
+; From file CLPACK.LISP OZ:<L.SYS> OZ:
+#8R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: SYS; CLPACK  "
+
+(defun package-named-structure-invoke (op pkg &rest args)
+  (selectq-with-which-operations op
+    (:describe 
+     (describe-package pkg))
+    (:print-self
+     (let ((stream (car args)))
+       (if *print-escape*
+	   (sys:printing-random-object (pkg stream)
+	     (princ "Package " stream)
+	     (princ (pkg-name pkg) stream))
+	 (princ (pkg-name pkg) stream))))
+    ((:get :get-location-or-nil :get-location :getl :putprop :remprop :push-property :plist
+	   :plist-location :property-list-location :setplist :set)
+     (apply #'property-list-handler op (locf (pkg-plist pkg)) args))))
+
+))
+
+; From file CHSNCP.LISP OZ:<L.NETWORK.CHAOS> OZ:
+#8R CHAOS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "CHAOS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: NETWORK; CHAOS; CHSNCP  "
+
+(DEFCONST RETRANSMISSION-INTERVAL 30.)		;  1/2 second
+
+))

@@ -1,0 +1,17 @@
+;;; -*- Mode:LISP; Package:(dpl :use global :shadow ("THE" "POSITION" "IDENTITY" "DEFTYPE")); Base:10. -*-
+
+(fs:add-logical-pathname-host
+  "DPL"
+  "MIT-OZ"
+  '(("DPL" "<DPL.mit>")
+    ("NODES" "<DPL.mit.NODES>")
+    ("PATCH" #+symbolics "<dpl.mit.patch>" #+mit "<dpl.mit.mit-patch>")
+;    ("dpath" "<dpl.mit.dpath>")
+;    ("pla" "<dpl.mit.pla>")
+))
+
+(SI:SET-SYSTEM-SOURCE-FILE "Daedalus" "DPL: DPL; DEFSYSTEM")
+(SI:SET-SYSTEM-SOURCE-FILE "nodes" "DPL: NODES; DEFSYSTEM")
+;(SI:SET-SYSTEM-SOURCE-FILE "pla" "DPL: PLA; DEFSYSTEM")
+;(SI:SET-SYSTEM-SOURCE-FILE "DATA-PATH" "DPL: DPATH; DEFSYSTEM")
+

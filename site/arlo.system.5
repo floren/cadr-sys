@@ -1,0 +1,33 @@
+;;; -*- Mode:LISP; Base:8 -*-
+
+; (fs:make-logical-pathname-host "ARLO")
+
+;(fs:add-logical-pathname-host
+;  "ARLO" "Pygmalion"
+;  '(("SOURCES;" "usrd$:[kwh.arlo]")
+;    ("AI;"      "usrd$:[kwh.arlo.smarts]")
+;    ("ANCIENT;" "usrd$:[kwh.arlo.rll]")
+;    ("DOC;"     "usrd$:[kwh.arlo.doc]")
+;    ("LMLIB;"   "usrd$:[lmlib]")
+;    ("PATCHES;" "usrd$:[kwh.arlo.mpatches]")))
+
+(fs:add-logical-pathname-host
+  "ARLO" "Pygmalion"
+  '(("SOURCES" "usrd$:[kwh.arlo]")
+    ("AI"      "usrd$:[kwh.arlo.smarts]")
+    ("ANCIENT" "usrd$:[kwh.arlo.rll]")
+    ("DOC"     "usrd$:[kwh.arlo.doc]")
+    ("LMLIB"   "usrd$:[lmlib]")
+    ("PATCHES" "usrd$:[kwh.arlo.mpatches]")))
+
+(si:set-system-source-file "ARLO" "ARLO: Sources; MIT-SysDef LISP")
+(si:set-system-source-file "ARLOX" "ARLO: AI; SysDef LISP")
+
+;;; Stop silly NIL/LISPM error from "Readtable:" file attribute.
+(defprop readtable T fs:known-file-attribute)
+
+;;; Let files be read in without complaints.
+(defprop Knowledge-Base T fs:known-file-attribute)
+(defprop KB T fs:known-file-attribute)
+(defprop KBase T fs:known-file-attribute)
+
