@@ -1,0 +1,888 @@
+;;; -*- Mode: Lisp; Package: File-System; Base: 8; Lowercase: T; -*-
+
+;; Disk addressing.
+
+;; Actual I/O is done in units of pages and is controlled by page numbers.
+;; Page numbers count from the beginning of the disk.
+
+;; However, page numbers are used only for the actual disk transfers.
+;; Everywhere else, the units of allocation and transfer are blocks.
+;; A block is a certain number of pages; how many is fixed for each pack.
+;; Block numbers count from the beginning of the file partition.
+;; File maps contain block numbers.
+
+;; Record numbers count within a file.  A record is the same size as a block
+;; but consecutive records of a file are not necessarily consecutive blocks
+;; on the disk.  Record numbers are translated into disk block numbers
+;; by the file's disk map.
+
+;This is the area to create new nodes in.
+;The file AREA contains code for allocating one area per user
+;and SERVER uses that and sets this variable.
+(defvar current-file-area working-storage-area)
+
+;;; PACKs
+
+;; This is the data structure that represents, in core,
+;; a pack which is mounted.  The elements of PACK-LIST are these.
+
+;;; Although we use the term "pack", it is really just a partition on the disk,
+;;; and two partitions on the same pack can in fact be in use at once
+;;; as two different "packs".  In fact, it makes no difference whether
+;;; two "packs" live on the same pack or different ones.
+
+(DEFSTRUCT (PACK-STRUCTURE :ARRAY :NAMED (:CONSTRUCTOR MAKE-PACK-STRUCTURE))
+	PACK-UNIT-NUMBER			;Physical drive number mounted on
+	(PACK-LOCK NIL)				;Lock cell
+		;Relatively static data such as the volume name, etc.
+		; are not protected by this lock.
+		;The maps, available table, and pack-open-files, are interlocked.
+	PACK-COMMENT				;Copied from the header
+	PACK-INCARNATION-NUMBER			;Changes each time the pack is mounted
+	;; Relations with other PACKs
+	PACK-VOLUME-NAME			;A string
+	PACK-NUMBER-WITHIN-VOLUME		;Rel pack number starting from 0
+	PACK-NUMBER-OF-PACKS-IN-VOLUME		;Number of packs for complete volume
+	PACK-PARENT-VOLUME-NAME			;A string or NIL
+						;Cross-volume references can only
+						;come from the parent* volume
+	PACK-PAGES-PER-BLOCK			;Controls size of blocks on this pack.
+	PACK-FIRST-ABS-PAGE-NUMBER		;First page used for file system
+	PACK-NUMBER-OF-BLOCKS			;Length in blocks of file system area.
+	;; The free map, a bit map stored on the disk
+	PACK-FREE-MAP-FIRST-BLOCK		;Address of free block map
+	PACK-FREE-MAP-NUMBER-OF-BLOCKS		;Size of free block map
+	PACK-NUMBER-OF-FREE-BLOCKS		;Number free in the free block map
+	PACK-FREE-MAP-SCANNING-INDEX		;Block number at which scanning the map
+						;when we load blocks into the avail table.
+	;; The available table, stored in core
+	PACK-AVAILABLE-TABLE			;An array, AVAILABLE-TABLE-SIZE by 2
+						; (x,0) is block number, (x,1) is n-blocks
+						; (x,1)=0 indicates a free entry.
+	PACK-NUMBER-OF-AVAILABLE-BLOCKS		;Number of blocks in the available table
+	PACK-MINIMUM-AVAILABLE-BLOCKS		;If falls below this, get more from free map
+	PACK-MAXIMUM-AVAILABLE-BLOCKS		;If rises above this, put some into free map
+	PACK-DESIRABLE-AVAILABLE-BLOCKS		;If must get or put some,
+						;aim to end up with this many qta available.
+	PACK-DANGER-AVAILABLE-BLOCKS		;Less than this => only allow deletion.
+	(PACK-GC-BIT-MAP NIL)			;NIL or bit map being used by the gc
+						;or T if a GC is needed.
+	(PACK-AVAILABLE-TABLE-SCAN-BLOCK 0)	;Used for scanning avail table cyclically.
+						;This is a block number.
+						;We look for one bigger than this, then
+						;bump this.
+	(PACK-ROOT-FIRST-BLOCK 0)		;1st block number for finding the root.
+						;0 if this pack doesn't hold the root dir.
+	PACK-OPEN-FILES				;List of FILE objects open on this pack.
+	PACK-BLOCK-STARTS-FILE-MAP-FIRST-BLOCK	;Like free-map, but a 1 bit
+						;indicates the first block of a file.
+	PACK-BLOCK-STARTS-FILE-MAP-ARRAY	;Array holding contents of this map.
+	PACK-LOCKED-BLOCK-MAP-FIRST-BLOCK	;Another map, containing 1 for blocks
+	PACK-LOCKED-BLOCK-MAP-ARRAY		;that should not be re-used.
+	PACK-LOCKED-BLOCK-FILES			;List of 1st blocks of files
+						;that contain (ed) locked blocks.
+						;Can also be T, if GC is not in progress,
+						;which means that some file contains a locked
+						;block, but we don't know which.
+	PACK-PARTITION-NAME			;The partition this "pack" lives in.
+	PACK-FREE-MAP-RQB			;This is an RQB whose buffer contains
+						;the pack's free map.
+						;This makes it easy to write out the
+						;whole free map fast.
+	;; [Other "magic files" on the disk.]
+)
+
+(DEFUN (PACK-STRUCTURE NAMED-STRUCTURE-INVOKE) (MSG STR &REST ARGS)
+  ARGS
+  (SELECTQ MSG
+    (:WHICH-OPERATIONS '(:PRINT-SELF))
+    (:PRINT-SELF (FORMAT (CAR ARGS) "#<PACK-STRUCTURE ~A-~D ~O>"
+			 (PACK-VOLUME-NAME STR) (PACK-NUMBER-WITHIN-VOLUME STR)
+			 (%POINTER STR)))
+    (OTHERWISE (FERROR NIL "~S is an unknown message" MSG))))
+
+;; T if file system is in operation.
+(DEFVAR FILE-SYSTEM-RUNNING NIL)
+
+;; This is the number of units that we physically support.
+(DEFCONST N-UNITS 8)
+
+;;; PACK-LIST contais all the PACK structures which are mounted.
+;;; This table is only referenced in a few places,
+(DEFVAR PACK-LIST NIL)
+
+;This list holds PACK structures for packs which have been looked at
+;but which are not yet considered actually mounted for use by the file system.
+(DEFVAR TENTATIVE-PACK-LIST NIL)
+
+;This pack is the one the root is on.  Used only during initialization.
+;While the file system is up, the root node knows which pack it is on.
+(defvar root-pack nil)
+
+;This is the volume which the root is on.  It must be the only
+;volume which has no parent volume.
+;If the root node is supposed to be on the volume, but has not
+;been created yet, then this will be non-nil but root-pack will be nil.
+;That is the signal to offer to create a root node on pack 0 of this volume.
+(defvar root-volume nil)
+
+;;; Interlocking
+
+;;; This special form locks the specified PACK around the body
+(defmacro with-pack-lock (pack &body body)
+  `(unwind-protect (progn (process-lock (locf (pack-lock ,pack))) . ,body)
+		   (process-unlock (locf (pack-lock ,pack)))))
+
+;T if running the salvager.
+(defvar now-salvaging nil)
+
+;;; FILEs
+
+;A file is simply a sequence of records regarded as a sequence of words.
+;The file map, which says which blocks the file occupies, lives in the first
+;(or first few) records of the file.
+
+;A file map looks like:
+;Any number of words containing
+;in the low 24 bits, the starting block number,
+;and in the high 8 bits, the number of consecutive blocks.
+;The length is determined from (file-map-length).
+;While the file is being operated on, a copy of the map
+;information is kept in the array disk-map.
+;The copy of the map in the file is updated only infrequently.
+
+;There are two kinds of files: live ones and half-dead ones.
+;Half-dead files are being created or deleted.
+;They can be distinguished by the contents of the first word.
+;For a half-dead file, the first word contains 5454.
+;The first word of a normal file always contains the number 6969.
+;If the first word is anything else, lossage is occurring.
+
+;A half-dead file contains no map or contents, only a pointer back
+;to the file which contains the directory which may or may not
+;still (or yet) point to this file.
+
+;The second word of every file is the pointer to the file
+;containing the node which points at this file.
+;The low 24 bits are the first block number of that file.
+;The high 8 bits contain the pack number in their low 3 bits
+;and the very highest bit is set if the superfile resides
+
+(defsubst file-superfile-pointer ()
+  (file-fetch-word 1))
+
+(defsubst file-superfile-pack-spec ()
+  (file-ldb-word 3010 1))
+
+;The rest applies only to live files.
+
+;The third word of the file is the offset of the "contents" of the file.
+
+(defsubst file-contents-offset ()
+  (file-fetch-word 2))
+
+;The fourth word is the offset of the start of the file map.
+;The fifth word of the file is the length of the file map
+;Both are measured in words.
+
+(defsubst file-map-offset ()
+  (file-fetch-word 3))
+
+(defsubst file-map-length ()
+  (file-fetch-word 4))
+
+(defsetf file-fetch-word file-store-word)
+(defsetf file-ldb-word file-store-ldb-word)
+
+(defsubst file-store-ldb-word (ppss word-number value)
+  (file-modify-word word-number #'file-dpb-word-1 value ppss))
+
+(defsubst file-dpb-word (value ppss word-number)
+  (file-modify-word word-number #'file-dpb-word-1 value ppss))
+
+;Immediately after the map comes the file's pathname.
+;The length in characters is recorded in word six.
+;Then comes some redundant info from the node's directory entry.
+;Its format is: top 8 bits, unused
+;		next 8 bits, node flags (see DIREAD)
+;		next 8 bits, node flavor code number
+;		bottom 8 bits, byte size.
+;The file's contents length is stored redundantly in word eight.
+
+;In old files, the redundant info is absent.
+;Such files are distinguished by having file-map-offset equal to 5.
+
+(defsubst file-redundant-name-length ()
+  (file-maybe-fetch-word 5))
+
+(defsubst file-redundant-dir-info ()
+  (file-maybe-fetch-word 6))
+
+(defsubst file-redundant-contents-length ()
+  (file-maybe-fetch-word 7))
+
+(defsetf file-maybe-fetch-word file-maybe-store-word)
+
+(defsubst file-fetch-top-8-bits (word-number)
+  (file-ldb-word 3010 word-number))
+
+(defconst file-initial-map-offset 10)
+(defconst file-initial-contents-offset 24)
+
+;As of now, no other words at the front of a file are defined.
+
+;;; reading and writing files.
+
+;The file IO deals with transferring data in and out.
+
+;Files are operated on using a FILE object.
+
+(defstruct (file-object :array :named (:constructor make-file-object) (:default-pointer node-file))
+
+;This points to the node object for the top level node in the file.
+  file-top-level-node
+
+;This holds the size in words of records in this file.
+;This number is the same as the size of blocks on the file's pack.
+;Both allocation and transfer are in units of blocks or records.
+  file-record-size
+
+;This is the length of the file in records.
+  file-n-records
+
+;This is the length of the contents of the file, in words.
+;The length in records must be big enough to accomodate this many words,
+;but there can be extra records.
+  file-contents-length
+
+;This holds the disk-map vector of the file being processed.
+;It is a list of elements of the form (starting-record ending-record starting-block).
+;Such an element means that record starting-record is
+;stored at starting-block, and successive records are consecutive
+;until (but not including) ending-record.
+  file-disk-map
+
+;This holds-the core-map list of the file being processed.
+;It is a list of elements of the form (starting-record ending-record array).
+;Such an element means that the records from starting-record
+;to (but not incl) ending-record are stored in array.
+  file-core-map
+
+;This is an array of length file-n-records of bits which are 1
+;if the record has been modified.
+  file-modified-map
+
+;This is the pack on which the file resides.
+  file-pack
+
+;This list contains blocks to be freed after the file's map is written on disk.
+;They must not be reused while the file still claims, on disk, to contain them.
+;Each element of this list is of the form (pack first-block-number number-of-blocks).
+;This is how we update several blocks of a file atomically:
+;choose new blocks to write them into, put the old blocks on this list.
+;After the file is all written out pointing at the new blocks,
+;we can free the old ones.
+  file-blocks-to-be-freed
+
+;If an atomic update involves only one record of the file,
+;there is no need to go through the hair of reassigning the space.
+;This variable is NIL when no update is in progress.
+;When we change one record, that record's number goes here.
+;When we change another record, we do atomic update processing
+;on that record and the one remembered here, and set this to -1.
+  file-atomic-update-record
+
+;If this is T, then there is a check word at the end of
+;each record which contains the number of the file's first block.
+;This is not really implemented, yet, so it is always nil.
+  file-check-words-p
+
+;If this is T, the map, node pathname or node's directory entry
+;has changed, and must be updated on disk.
+  file-header-changed-p
+)
+
+(defun (file-object named-structure-invoke) (msg str &rest args)
+  args
+  (selectq msg
+    (:which-operations '(:print-self))
+    (:print-self (format (car args) "#<file-object ~s ~o>"
+			 (if (file-top-level-node str)
+			     (pathlist-to-string
+			       (funcall (file-top-level-node str)
+					'dont-lock ':standard-pathlist)
+			       t)
+			     nil)
+			 (%pointer str)))
+    (otherwise (ferror nil "~S is an unknown message" msg))))
+
+;Maximum number of consecutive records to group together
+;for most purposes.
+(defconst consec-records-include-max 40)
+
+;When a file is made longer in core, we usually add this many records
+;at once, to avoid having to make the file longer very often.
+(defconst file-record-increment 40)
+
+;This is the largest number of PAGES we should put in any RQB.
+(defconst max-transfer-size 100)
+
+;Expunging binds this and freeing blocks increments this
+;by the number of PAGES in the blocks being freed.
+(defvar blocks-being-freed 0)
+
+;This structure applies to both disk maps and core maps.
+(defstruct (mapelt :list)
+  mapelt-start
+  mapelt-end
+  mapelt-data)
+
+;;; Variables used by FILE-PTR- functions such as FILE-PTR-FETCH-WORD.
+
+;These functions are in FILES.  Their purpose is to scan through the
+;data in a file a word at a time, reading or writing.  Before using the
+;functions, you must bind these variables appropriately.
+
+;This is the index in the file of the next word
+;for FILE-PTR-PREPARE-NEXT-WORD to prepare for.
+(declare (special file-ptr-next-word))
+
+;After FILE-PTR-PREPARE-NEXT-WORD, this is the array in which this word is found.
+;It is ART-16B.
+(declare (special file-ptr-access-array))
+
+;After FILE-PTR-PREPARE-NEXT-WORD, this is the number of array elements
+;in the array that can be used for following words (2 elts per word).
+(declare (special file-ptr-elements-following))
+
+;After FILE-PTR-PREPARE-NEXT-WORD, this is the index of the first of the two
+;elements for the desired word.
+(declare (special file-ptr-access-index))
+
+;If this is T, scanning past the end of the file should extend the file.
+(declare (special file-ptr-extend-file nil))
+
+;;; Nodes.
+
+;The file structure is composed of nodes.  A node is an abstract object which
+;defines certain operations.  Each node can have text, properties, and subnodes.
+;Right now, flavor instances are used.
+
+;Unfortunately, closures can't bind default-cons-area.  So, instead of
+;the actual flavor instance, we use a DTP-ENTITY
+;whose definition is to bind default-cons-area and call the class instance.
+;These are the closure variables of that entity.
+(defvar node-node)		;The class instance to call.
+(defvar node-area)		;The new value for default-cons-area
+(defvar node-closure)		;The entity which closes over these variables.
+(defvar node-lock)		;Lock for mutual process exclusion at this level.
+(defvar node-caller-area)	;The area which was default-cons-area in our caller.
+;The variable SELF still refers to the class instance.
+;(funcall-self ...) is ok, but when the node wants to pass itself to
+;others (such as the supernode or a subnode), it must use node-closure
+;so that when the other calls this node back the cons area is bound.
+
+;The DTP-ENTITY also provides mutual exclusion by locking NODE-LOCK.
+;Because mutual exclusion is provided at this level, it is possible to
+;replace one flavor instance with another in an existing node, thus changing
+;it to a different type of node, without the users of the node noticing.
+
+;The entity has one other function: it recognizes the operation DONT-LOCK.
+;When a message is sent with this operation, the remainder of the message
+;is passed on to the flavor instance, without first locking the node.
+;Thus, (funcall node 'dont-lock ':add-reason 'foo) adds the reason foo
+;without interlocking at the node level.  (This is ok because manipulation
+;of reasons-why-open is interlocked with without-interrupts also).
+;This is the only way to send a message to the node without excluding
+;other processes.
+
+;The locking discipline is that the subnode is always locked
+;before the supernode.  Any node can freely send messages to its supernode.
+;Wherever a supernode sends a message to a subnode,
+;it is necessary to show that no deadly embrace can result.
+;This can be done in any of these ways:
+; 1) show that the subnode has no reasons-why-open, so nobody
+;    else is currently sending it any messages.
+; 2) send the message with 'dont-lock.
+;    It is then necessary to show that use of 'dont-lock
+;    is safe in this case.  This is done for printing the name of the node.
+; 3) show that the subnode is already locked.
+;    This is so if we are processing a message sent by the subnode itself,
+;    which is a common case.
+; 4) lock the other node with gobble-another-lock, before doing
+;    any other sort of processing that can have permanent side effects.
+
+;GOBBLE-ANOTHER-LOCK:
+;Lock another node in addition to the one now locked.
+;If the other node cannot be locked immediately,
+;we unlock this node, and relock it again later.
+;Therefore, this cannot be used at a time when the
+;current node must remain locked.
+
+;If the other node was not already locked by us,
+;a locative to its lock is returned, and that should be
+;unlocked later.
+(defun gobble-another-lock (other-node)
+  (let ((other-lock (locate-in-closure other-node 'node-lock)))
+    (and (neq (car other-lock) current-process)
+	 (do ()
+	     ((%store-conditional other-lock nil current-process)
+	      other-lock)
+	   (process-unlock (locf node-lock))
+	   (process-wait "LOCK"
+			 #'(lambda (lock1 lock2)
+			     (and (null (car lock1)) (null (car lock2))))
+			 node-lock other-lock)
+	   (process-lock (locf node-lock))))))
+
+;Wait for there to be disk space available, above the danger level,
+;without actually trying to allocate any.
+(defun unlock-node-and-wait-for-disk-space (pack)
+  (do ()
+      ((>= (+ (pack-number-of-free-blocks pack)
+	      (pack-number-of-available-blocks pack))
+	   (pack-danger-available-blocks pack)))
+    ;; Unlock this node and report a shortage of space.
+    (process-unlock (locf node-lock))
+    (cerror ':no-action nil 'no-more-room
+	    "Disk full on ~A"
+	    (format nil "~A-~D" (pack-volume-name pack)
+		    (pack-number-within-volume pack)))
+    ;; Wait until space is available and this node is not locked.
+    (process-wait "LOCK"
+		  #'(lambda (pack lock)
+		      (and (null (car lock))
+			   (>= (+ (pack-number-of-free-blocks pack)
+				  (pack-number-of-available-blocks pack))
+			       (pack-danger-available-blocks pack))))
+		  pack (locate-in-closure node-closure (locf node-lock)))
+    ;; Report space available and relock this node.
+    (signal 'more-room "Disk no longer full.")
+    (process-lock (locf node-lock))))
+
+;This node is the root of the hierarchy.
+(defvar root-node nil)
+
+;This is the root of all flavors of nodes.
+(defflavor node
+  (supernode supernode-info
+   byte-size length-in-bytes
+   (reasons-why-open nil)) ()
+  :initable-instance-variables
+  (:gettable-instance-variables
+    ;; Don't include LENGTH-IN-BYTES because we provide a hairier method for getting that.
+    supernode supernode-info
+    byte-size
+    reasons-why-open))
+
+;The SUPERNODE is the node whose subnode this is.  The sequence
+;or supernodes leads eventually to the root node.
+;The SUPERNODE-INFO is the information which most conveniently
+;allows our supernode to find us in its tables.  Its format
+;is understood only by the supernode itself.
+;BYTE-SIZE and LENGTH-IN-BYTES describe the text of the node.
+;REASONS-WHY-OPEN is a list of the reasons for which this
+;node is being kept open (existing in core, not just on disk).
+;Adding to and deleting from this variable is interlocked
+;by turning off interrupts.
+
+;The flavor NODE contains no information on how to access the text.
+;That is the job of other more detailed flavors built on it.
+
+;The flavor FILE-NODE deals with a node that stores its information
+;somehow in a file.  It takes care of managing the file
+;but doesn't deal with how information is represented in the file.
+(defflavor file-node (file-node-offset node-file)
+  (node)
+  (:special-instance-variables node-file)
+  :gettable-instance-variables)
+
+;This one is used free by lots of functions in FILES.
+(declare (special node-file))
+
+;The flavor TEXT-NODE treats the contents of the file directly as
+;text, using byte size and length taken from BYTE-SIZE and LENGTH-IN-BYTES.
+
+(defflavor text-node () (file-node)
+  :gettable-instance-variables)
+
+;This sort of node pretents to be a file stored on a PDP10.
+;Actually, the node is not capable of simulating this
+;in a completely modular fashion, because the character
+;translation does not translate one character into one character.
+;The stream has to collaborate with it.
+(defflavor pdp10-file-node () (text-node))
+
+;The flavor STRING-NODE stores its text in a string (or array)
+;which is given to it as its pointer-info when it is created.
+;On disk, the contents of the string are stored as part of the
+;directory entry in the supernode.
+
+(defflavor string-node (text-string (text-changed nil)) (node)
+  :gettable-instance-variables)
+
+(defvar max-string-node-length-in-bits (* 32. 1000))
+
+;Last temp-reason returned by gen-tem-reason.  Incremented to make the next one.
+(defvar last-temp-reason 0)
+
+;Cons up a unique "reason why open" to give to a node.
+(defun gen-temp-reason ()
+  (setq last-temp-reason (1+ last-temp-reason)))
+
+;When a node instance is created, it should be sent an INIT-NODE message.
+;This message tells the instance to find and decode the node contents
+;on the disk.  The argument to the INIT-NODE operation is the node's
+;pointer-info, which is found in the directory entry in the supernode.
+;the pointer-info is in the form of a plist, but the property names and
+;their meanings are totally dependent on the particular flavor of node.
+;For a FILE-NODE, the pointer info includes the volume name, pack number
+;and first block number.  For a STRING-NODE, it contains the string itself.
+
+;Instantiating a node flavor and not sending it an INIT-NODE message is a good
+;way of asking it questions about itself and its directory entry (if you bother
+;to feed it the info from the directory entry) without actually accessing
+;the data on the disk (or taking the time for the disk ops to do so).
+;This is used in getting the right kind of pointer-info into the directory entry.
+;The creator of the node can optionally specify some pointer info, with
+;whatever properties he wants to give.  Then the flavor is instantiated
+;and the instance is told to process that and return the pointer-info
+;it thinks it should have.  The result is stored in the dir entry.
+
+;The root node is given a supernode of this flavor.
+;It basically does nothing no matter what you tell it.
+(defflavor root-supernode () (node)
+  (:default-handler return-nil))
+
+(defun return-nil (&rest ignore) nil)
+
+;Root-mixin makes a node expect to have no supernode.
+;Actually, it still does have a supernode, of type root-supernode.
+(defflavor root-mixin () ()
+  (:included-flavors dir-node))
+
+;Directories
+
+;A directory flavor implements the :OPEN-SUBNODE, whose arguments are
+;1) a reason why the subnode will be open, and
+;2) a pathstep to be decoded arbitrarily by the directory
+;to figure out what subnode you want.
+;A pathlist is just a list of pathsteps, each of which is
+;interpreted by the directory reached by the path so far.
+
+;Directories use the DIRECTORY-LIST instance variable as a data structure
+;to keep track of subnodes.  They construct this structure from data on the disk
+;as part of the INIT-NODE operation and store it back on the disk in :FINISH.
+
+;Each directory flavor is responsible for keeping track of its subnodes
+;in any way it likes.  However, it is advised that for each subnode
+;there be a DIR-ENTRY structure so that a few standard functions can be used.
+(defstruct (dir-entry :named :array (:default-pointer entry))
+  dir-entry-node			;Node, or nil if this subnode not open now.
+  dir-entry-full-pathstep		;Standardized name info which
+					;identifies this subnode, in a form
+					;which :OPEN-SUBNODE would accept.
+  dir-entry-deleted			;T if entry is deleted.
+  dir-entry-flags			;List of symbols representing flags.
+					;They include :DELETE-PROTECT,
+					;:SUPERSEDE-PROTECT and :CHARACTERS.
+  dir-entry-length			;Length of subnode contents, in bytes.
+  dir-entry-byte-size			;Byte size of subnode contents.
+  dir-entry-creation-date		;Creation date of subnode.
+  dir-entry-reference-date
+  dir-entry-plist
+  dir-entry-dir-index			;Index in dir file of data for this entry.
+					;So we can rewrite the creation date
+					;or pointer info "in place".
+  dir-entry-subnode-flavor
+  dir-entry-pointer-info		;Information telling how to find subnode.
+					;A list, whose contents depends on subnode flavor.
+  dir-entry-changed			;T if entry must be updated on disk.
+					; :PLIST if the plist data must be updated
+					; (but its length is unchenged).
+					; :FULL if the entry's length or name is changed.
+  dir-entry-dir-plist			;A plist for the dir to use rather than the node.
+  )
+
+(defun (dir-entry named-structure-invoke) (msg str &rest args)
+  args
+  (selectq msg
+    (:which-operations '(:print-self))
+    (:print-self (format (car args) "#<dir-entry ~s ~o>"
+			 (dir-entry-full-pathstep str)
+			 (%pointer str)))
+    (otherwise (ferror nil "~S is an unknown operation" msg))))
+
+;Given a dir-entry, return T if it is an entry for a subnode which is a directory.
+(defmacro dir-entry-dir-p (entry)
+  `(not (null (memq (dir-entry-subnode-flavor ,entry)
+		    dir-flavor-list))))
+
+;The variable DIRECTORY-LIST holds the data structure which contains
+;the DIR-ENTRY structures.  How it contains them is up to the
+;specific type of directory.
+;If DIRECTORY-CHANGED is T, we must do a STORE-DIR to update the data on disk.
+(defflavor dir-node (directory-list (directory-changed nil))
+                    (file-node)
+  (:required-methods find-entry delete-entry insert-entry
+		     reposition-entry loop-over-directory
+		     read-dir store-dir)
+  :initable-instance-variables)
+
+;This mixin makes a directory keep its subnodes in alphabetical order.
+;It works with any kind of directory whose DIRECTORY-LIST is at the top
+;an alist by subnode name, regardless of what the lower levels look like.
+(defflavor alphabetical-dir-mixin () ()
+  (:included-flavors dir-node))
+
+;This variable contains a list of the open directory nodes.
+;Directory nodes don't close themselves automatically when they
+;have no reason to be open.  They have to be closed later
+;(if it appears they have not been used for a while).
+;On a single-user system, there may be no need ever to close them.
+(defvar open-dir-nodes nil)
+
+;Files can be expunged automatically after this many seconds.
+;Right now set at two days.
+(defvar auto-expunge-interval
+  (* 3600. 48.))
+
+(defflavor name-and-version-dir-node
+  ((dir-last-added-entry nil) (dir-last-added-entry-index nil))
+  (dir-node))
+
+(defflavor ordinary-dir-node () (name-and-version-dir-node))
+
+;This kind of directory stores its directory-list as
+;an alist of (name-as-string installed-version-number . list-of-versions)
+;where list-of-versions is an alist of (version-number . list-of-entries)
+;in order of decreasing version number.
+;and list-of-entries is a list of dir-entries,
+;at most one of which can be non-deleted.
+
+(defflavor alphabetical-dir-node
+  () (alphabetical-dir-mixin name-and-version-dir-node))
+
+;The format of a full-pathstep is a list (:VERSION (:NAME name) version).
+;A pathstep is an unparsed string, a list (:VERSION pathstep version),
+;or a full-pathstep.  The other forms of pathstep are canonicalized
+;into looking like full-pathsteps before anything else is done with them.
+
+;The directory is stored on the disk as follows:
+
+;For each name in the directory list,
+ ;One word containing the installed version number for the name
+ ;in the low 24 bits, and the name length in chars in the top 8 bits.
+ ;The name, taking ceiling(length/4) words.
+ ;For each version number,
+  ;One word containing the version number.
+  ;For each entry,
+   ;Word 0 contains the creation-date.
+   ;Word 1 contains the reference date.
+   ;Word 2 contains the subnode flavor code number in top 8 bits,
+   ;         low 24 bits -- length of plist data.
+   ;Word 3 -- top 8 bits -- byte size
+   ;          next 8 bits -- flags
+   ;          low 16 bits -- length of pointer info data.
+   ;Word 4 -- subnode contents length in bytes of specified size.
+   ;Word 5 -- start of pointer info data
+   ;  after that comes the plist data.
+  ;Then a zero to indicate no more entries.
+ ;Then a zero to indicate no more versions.
+;Then a zero to indicate no more names.
+
+(defconst dir-max-name-length 377)
+
+(defconst flavor-name-translation-alist
+  '((:text . text-node)
+    (:directory . alphabetical-dir-node)
+    (:dir . alphabetical-dir-node)
+    (:pdp10 . pdp10-file-node)
+    (:pdir . ordinary-dir-node)
+    (:string . string-node)
+    (:link . name-link-node)
+    (:hard-link . hard-link-node)))
+
+;A node flavor code is an index down this list.
+(defconst node-flavor-list
+  '(text-node string-node ordinary-dir-node
+    alphabetical-dir-node name-link-node
+    hard-link-node pdp10-file-node))
+
+;These flavors are directories.
+(defconst dir-flavor-list
+  '(ordinary-dir-node alphabetical-dir-node))
+
+;The plist data, and also the pointer info data, have this format:
+
+(defconst node-max-plist-length (ash 1 24.))
+(defconst node-max-propname-length 377)
+
+;In the first word of each property:
+ ;Top 6 bits are the type code.  They say which property it is.
+  ;0 means that the property name appears as a string.
+ ;The next 2 bits give the type of value.
+  ;0 => value is a fixnum.
+  ;1 => value is a string
+  ;2 => value is a node!  The node is actually a another subnode
+  ;  of the node containing this directory entry, and it has its own entry.
+  ;  The filename will be <this node's name>/<property name>
+  ;3 => value is a date.
+
+ ;Next 8 bits are the length of the property name.
+  ;This is applicable only if the type-code is zero.
+  ;Otherwise, the type-code itself says what property this is.
+ ;The bottom 16 bits are the length of the value, in 8-bit bytes.
+;; The next two lines not implemented yet!
+;; ;If they are zero, the following word (or the word after the name)
+;; ;gives the length instead.
+
+;Property type-codes:
+(defconst node-propname-code-alist
+  '((:author . 1)
+    (:earliest-deleted-file . 2)
+    (:date-last-expunge . 3)
+;And some that are used in pointer info.
+    (:string . 6)
+    (:volume-name . 7)
+    (:pack-number . 10)
+    (:first-block-number . 11)
+    (:link-to . 12)
+    (:in-link-dirs . 13)))
+
+;List of names that have no special codes but appear reasonably often
+;in property lists.
+(defconst node-frequent-property-names ())
+
+;;; ERRORs.
+
+(defsignal more-room condition ()
+  "Signaled when disk space appears, after having signaled no-more-room.")
+
+;;; These properties are used in computing the error code to return
+;;; for remote users on ITS.  Each condition name of the error condition
+;;; is checked for a property.
+(defprop invalid-pathname-syntax 11 file-pdp10-error)
+(defprop not-available 16 file-pdp10-error)
+(defprop dont-delete-flag-set 26 file-pdp10-error)
+(defprop file-already-exists 26 file-pdp10-error)
+(defprop file-not-found 4 file-pdp10-error)
+(defprop dir-not-found 20 file-pdp10-error)
+(defprop link-target-not-found 47 file-pdp10-error)
+(defprop no-file-system 10 file-pdp10-error)
+(defprop invalid-operation-for-directory 2 file-pdp10-error)
+(defprop inconsistent-options 12 file-pdp10-error)
+(defprop pathname-parse-error 11 file-pdp10-error)
+;circular-link should be in this list.
+
+;;The following signal names are not condition names.
+;;LMFILE signals using these, but on another machine
+;;some other condition will be signaled.
+
+(defsignal bad-link-target file-operation-failure
+	   (pathname operation)
+  "The recorded target of a link was nonsensical.")
+
+(defsignal bad-cross-volume-ref
+	   (file-operation-failure file-creation-failure bad-cross-volume-ref)
+	   (pathname operation)
+  "Attempt to make a cross-volume ref to a volume
+which this volume is not the parent of.")
+
+(defsignal bad-byte-size (file-operation-failure unimplemented-option invalid-byte-size)
+	   (byte-size)
+	   "Specified a byte size that the file system cannot handle.")
+
+(defsignal pack-not-mounted (file-operation-failure not-available)
+	   (volume-name pack-number)
+  "A pack is not mounted.")
+
+;Define our type of host.
+;Note: in system 92 this will not get used; the LMFILE-CHAOS-HOST will do it all.
+
+(defflavor lfs-host
+	(device-name (alternate-name "LFS") (open-streams nil))
+	(si:basic-host)
+  (:gettable-instance-variables open-streams device-name)
+  (:initable-instance-variables device-name))
+
+(defmethod (lfs-host :name) nil device-name)
+(defmethod (lfs-host :pathname-flavor) ()
+  (values 'local-file-pathname ()))
+
+(defmethod (lfs-host :system-type) () ':lmfile)
+
+;We recognize the alternate name "LFS" for the sake of old REMOTEs.
+(defmethod (lfs-host :pathname-host-namep) (string)
+  (or (and alternate-name (string-equal string alternate-name))
+      (string-equal string device-name)))
+
+(defmethod (lfs-host :add-stream) (stream)
+  (without-interrupts
+    (push stream open-streams)))
+
+(defmethod (lfs-host :remove-stream) (stream)
+  (without-interrupts
+    (setq open-streams (delq stream open-streams))))
+
+(defmethod (lfs-host :shut-down) (&optional drastic)
+  (setq open-streams nil)
+  (if drastic
+      (clear-file-system)
+      (stop-file-system)))
+
+(compile-flavor-methods lfs-host)
+
+;This is the host object for the local file system
+(defvar lfs-host)
+
+;Define an LFS-HOST, not flushing an existing host definition
+;if it is an lfs-host, but flushing any previous host with the same name
+;that is some other sort of host.
+;This function's purpose is to make sure that the host is present
+;if you happen to run LMFILE on a host not normally recorded as running it.
+(defun add-lfs-host (name)
+  (if (get 'lmfile-chaos-host 'si:flavor)
+      ;; This is for system 92 and on.
+      (setq lfs-host
+	    (or (dolist (host *pathname-host-list*)
+		  ;; Accept any host of the right kind that is for this machine.
+		  (and (typep host 'lmfile-chaos-host)
+		       (eq (send host ':chaos-address) chaos:my-address)
+		       (return host)))
+		(add-lmfile-chaos-host name chaos:my-address name)))
+    ;; This is for systems thru 91.
+    (let ((oldhost (get-pathname-host name t)))
+      (if (or (atom oldhost)
+	      (not (typep (car oldhost) 'lfs-host)))
+	  (let ((host (make-instance 'lfs-host ':device-name name)))
+	    (setq *pathname-host-list* (delq oldhost *pathname-host-list*))
+	    (setq lfs-host host)
+	    (push host *pathname-host-list*))))))
+
+(defun add-this-lfs-host ()
+  (if (get 'lmfile-chaos-host 'si:flavor)
+      (add-lfs-host (send si:local-host ':name))))
+
+(add-initialization 'add-this-lfs-host '(add-this-lfs-host) '(site))
+
+;Short cuts
+
+(defvar file-partition-name "FILE")
+
+;This is used for debugging an LMFILE on a machine that is not
+;a file computer.  Avoid using the name "FC".
+(defun start ()
+  (consider-unit 0 file-partition-name)
+  (start-file-system))
+
+;Arrange to avoid random lossage in warm boot by clearing and reiniting.
+(defun lmfile-warm-boot ()
+  (if file-system-running
+      (let ((packs (copylist pack-list)))
+	(clear-file-system)
+	(dolist (pack packs)
+	  (consider-unit (pack-unit-number pack) (pack-partition-name pack)))
+	(start-file-system))))
+
+(add-initialization "Reinit LMFILE after warm boot" '(lmfile-warm-boot) '(warm))

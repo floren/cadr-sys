@@ -1,0 +1,143 @@
+;-*- Mode:LISP; Package:FS; Base:8; Lowercase:T -*-
+
+;Manage areas for the Lisp machine file server.
+
+;For each individual "user", we keep one area going.
+;All nodes opened by that user use his area.
+;When the user logs out, the area becomes "detached"
+;but it cannot be reset until all the nodes that were
+;read into it are closed or closeable.
+
+(defvar file-areas nil)
+(defvar free-file-areas nil)
+
+(defvar user-file-area-alist nil)
+
+(defvar file-areas-last-access-times nil)
+
+(defvar file-areas-open-nodes nil)
+
+(defvar file-areas-open-servers nil)
+
+(defvar file-area-counter 0)
+
+;Don't try to free an area until this long after last use.
+(defvar free-area-delay (* 60. 30.))
+
+(defvar default-file-area working-storage-area)
+
+;Return the area number to use as the file area for a given user,
+;allocating a new area if necessary.
+(defun get-file-area (user)
+  (without-interrupts
+    (or (cdr (assoc user user-file-area-alist))
+        (let ((area (if free-file-areas
+			(pop free-file-areas)
+		      (let ((default-cons-area background-cons-area))
+			(push (make-area
+				':name (intern (format nil "FILE-AREA-~D" file-area-counter)
+					       (find-package "FS"))
+				':gc ':temporary)
+			      file-areas)
+			(si:set-swap-recommendations-of-area (car file-areas) 4))
+		      (incf file-area-counter)
+		      (car file-areas))))
+	  (let ((default-cons-area background-cons-area))
+	    (push (cons user area)
+		  user-file-area-alist)
+	    (push (ncons area) file-areas-open-nodes)
+	    (push (cons area (time:get-universal-time)) file-areas-last-access-times))
+	  area))))
+
+;Free the file area for a given user.
+(defun free-file-area (area)
+  (without-interrupts
+    (setq file-areas-open-nodes
+	  (delq (assq area file-areas-open-nodes)
+		file-areas-open-nodes))
+    (setq file-areas-open-servers
+	  (delq (assq area file-areas-open-servers)
+		file-areas-open-servers))
+    (setq file-areas-last-access-times
+	  (delq (assq area file-areas-last-access-times)
+		file-areas-last-access-times))
+    (setq user-file-area-alist
+	  (delq (rassq area user-file-area-alist)
+		user-file-area-alist))
+    (reset-temporary-area area)
+    (setq free-file-areas
+	  (cons-in-area area free-file-areas background-cons-area))))
+
+(defun free-all-file-areas ()
+  (mapc 'reset-temporary-area file-areas)
+  (setq free-file-areas file-areas)
+  (setq file-areas-last-access-times nil)
+  (setq user-file-area-alist nil)
+  (setq file-areas-open-nodes nil)
+  (setq file-areas-open-servers nil))
+
+;Add one server to the list of those using a certain area.
+(defun file-area-open-server (area server-process &aux tem)
+  (or (= area default-file-area)	;This processing does not go on for FILE-AREA itself.
+      (without-interrupts
+	(setq tem (assq area file-areas-open-servers))
+	(cond (tem (setf (cdr tem) (cons-in-area server-process (cdr tem)
+						 background-cons-area))
+		   (rplacd (assq area file-areas-last-access-times)
+			   (time:get-universal-time)))))))
+
+;Add one node to the list of those that reside in a certain area.
+(defun file-area-open-node (area node &aux tem)
+  (or (= area default-file-area)	;This processing does not go on for FILE-AREA itself.
+      (without-interrupts
+	(setq tem (assq area file-areas-open-nodes))
+	(cond (tem (and (memq node (cdr tem))
+			(ferror nil "~S already on file-areas-open-nodes" node))
+		   (setf (cdr tem) (cons-in-area node (cdr tem) background-cons-area))
+		   (rplacd (assq area file-areas-last-access-times)
+			   (time:get-universal-time)))))))
+
+;Remove one server from the list of those using a certain area.
+(defun file-area-close-server (area server-process &aux tem)
+  (without-interrupts
+    (setq tem (assq area file-areas-open-servers))
+    (and tem (setf (cdr tem) (delq server-process (cdr tem))))))
+
+;Remove one node from the list of those that reside in a certain area.
+(defun file-area-close-node (area node &aux tem)
+  (without-interrupts
+    (setq tem (assq area file-areas-open-nodes))
+    (and tem (or (memq node (cdr tem))
+		 (ferror nil "~S not on file-areas-open-nodes" node)))
+    (and tem (setf (cdr tem) (delq node (cdr tem))))))
+
+;Free any non-free file-areas that can safely be freed.
+(defun maybe-free-some-file-areas ()
+  (let ((time-now (time:get-universal-time)))
+    (dolist (elt file-areas-last-access-times)
+      (maybe-free-file-area (car elt) time-now))))
+
+;Free a file area if it is safe to do so now.
+;This is if no server is using it
+;and no node that should not be closed resides in it
+;and it has not been used for a while.
+(defun maybe-free-file-area (area time-now &aux tem assq-value)
+  (without-interrupts
+    (setq assq-value (assq area file-areas-last-access-times))
+    (and assq-value
+	 (> (- time-now free-area-delay)
+	    (cdr assq-value))
+	 (null (cdr (assq area file-areas-open-servers)))
+	 (not (dolist (node (cdr (setq tem (assq area file-areas-open-nodes))))
+		(if (funcall node ':any-reasons-p)
+		    (return t))))
+	 (try-to-free-file-area area time-now))))
+
+(defun try-to-free-file-area (area time-now &aux tem)
+  (cond ((null (cdr (assq area file-areas-open-servers)))
+	 (dolist (node (cdr (setq tem (assq area file-areas-open-nodes))))
+	   (funcall node ':expunge t)
+	   (funcall node ':close-if-no-reasons))
+	 (if (cdr tem)
+	     (setf (cdr (assq area file-areas-last-access-times)) time-now)
+	   (free-file-area area)))))

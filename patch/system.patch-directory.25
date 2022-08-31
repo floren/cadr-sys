@@ -1,0 +1,7 @@
+;;; -*- Mode: Lisp; Package: User; Base: 10.; Patch-File: T -*-
+;;; Written 6/06/84 07:25:19 by RMS,
+;;; while running on Lisp Machine One from band 6
+;;; with Don't-dump-a-band! Inconsistent (unreleased patches loaded) System 98.60, CADR 3.6, ZMail 53.17, MIT-Specific 22.1, microcode 309.
+
+
+("System" 99.) 

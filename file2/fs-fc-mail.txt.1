@@ -1,0 +1,388 @@
+ 3-Apr-83 03:02:22-EST,1040;000000000000
+Return-path: <LMFILE@MIT-OZ>
+Date: Sunday, 3 April 1983, 03:02-EST
+From:  <LMFILE@MIT-OZ>
+To: bug-file-computer@MIT-OZ
+
+In MIT-Specific 18.1, System 93.36, ZMail 49.15, Local-File 43.2,
+MagTape 14.1, FILE-Server 6.2, microcode 226, FC,
+on Lisp Machine Filecomputer:
+
+
+I warm booted the FC.   Barf!!
+
+>>ERROR: The area FS:FILE-AREA-2 (76) was not created as temporary.
+Backtrace from the debugger:
+
+SYS:RESET-TEMPORARY-AREA (P.C. = 55)
+
+ Arg 0 (AREA): 76
+Local 0 (REGION): NIL
+
+
+MAPC (P.C. = 60)
+
+ Arg 0 (FCN): SYS:RESET-TEMPORARY-AREA
+ Rest arg (LISTS): ((75 74))
+Local 1 (LP): NIL
+Local 2 (RES): (76 75 74)
+
+
+FS:FREE-ALL-FILE-AREAS (P.C. = 37)
+
+
+
+FS:CLEAR-FILE-SYSTEM (P.C. = 72)
+
+Local 0 (G5746): NIL
+Local 1 (STR): NIL
+
+
+FS:LMFILE-WARM-BOOT (P.C. = 42)
+
+Local 0 (PACKS): (#<PACK-STRUCTURE ROOT-0 30034151>)
+Local 1 (G5544): NIL
+Local 2 (PACK): NIL
+
+
+Remainder of stack:
+
+SI:*EVAL (P.C. = 1145)
+INITIALIZATIONS (P.C. = 137)
+LISP-REINITIALIZE (P.C. = 1346)
+SI:LISP-TOP-LEVEL (P.C. = 30)
+ 3-Apr-83 15:54:00-EST,2374;000000000000
+Return-path: <LMFile@MIT-OZ>
+Date: Sunday, 3 April 1983, 07:32-EST
+From: The AI File Server <LMFile@MIT-OZ>
+To: bug-file-computer@MIT-OZ
+
+In MIT-Specific 18.1, System 93.39, ZMail 49.17, Local-File 43.2,
+MagTape 14.2, FILE-Server 6.4, microcode 226, FileComputer,
+on Lisp Machine Filecomputer:
+
+
+I booted the latest software on fc.
+I tested the fileserver and mail server from oz.
+The file server looked OK, but the mail server got this error.
+
+>>ERROR: The object #<FC-LISPM-CHARACTER-OUTPUT-STREAM "FC: PS: hdt; hdt|MAIL#>" 30130517> received a :NEXT-INPUT-BUFFER message, which went unclaimed.
+The rest of the message was (NIL).
+Backtrace from the debugger:
+
+#<FC-LISPM-CHARACTER-OUTPUT-STREAM "FC: PS: hdt; hdt|MAIL#>" 30130517>:
+   Arg 0: :NEXT-INPUT-BUFFER
+   Arg 1: NIL
+
+
+SI:INSTANCE-HASH-FAILURE (P.C. = 126)
+
+ Arg 0 (OP): :NEXT-INPUT-BUFFER
+ Rest arg (ARGS): (NIL)
+Local 1 (HT): #<EQ-HASH-ARRAY (Funcallable) 17676166>
+Local 2 (FN-LOCATION): NIL
+Local 3 (FUNC): NIL
+
+
+(:METHOD FC-OUTPUT-STREAM :GET-OLD-DATA) (P.C. = 36)
+  (SELF is #<FC-LISPM-CHARACTER-OUTPUT-STREAM "FC: PS: hdt; hdt|MAIL#>" 30130517>)
+
+ Arg 0 (OPERATION): :GET-OLD-DATA
+ Arg 1 (ARRAY): #<ART-8B-3720 30127264>
+ Arg 2 (COUNT): 0
+Local 0 (PRESERVE-PTR): 5052
+Local 1 (PRESERVE-STATUS): 0
+
+
+(:METHOD SI:OUTPUT-POINTER-REMEMBERING-MIXIN :SET-POINTER) (P.C. = 74)
+  (SELF is #<FC-LISPM-CHARACTER-OUTPUT-STREAM "FC: PS: hdt; hdt|MAIL#>" 30130517>)
+
+ Arg 0 (OPERATION): :SET-POINTER
+ Arg 1 (NEW-POINTER): 5052
+Local 0 (BUFFER-RELOADED): T
+Local 1 (NEW-RELATIVE-POINTER): 0
+
+
+(:METHOD NODE :MAKE-STREAM) (P.C. = 411)
+  (SELF is #<TEXT-NODE hdt\hdt MAIL#1 30130467>)
+
+ Arg 0 (OPERATION): :MAKE-STREAM
+ Arg 1 (PATHNAME): #FS:LOCAL-FILE-PATHNAME "FC: PS: hdt; hdt|MAIL#>"
+ Arg 2 (CREATING): NIL
+ Rest arg (G8275): (:VOLUME-NAME "PS" :DIRECTION :OUTPUT ...)
+Local 1 (CHARACTERS): T
+Local 2 (PDP10-FORMAT): NIL
+Local 3 (SPC-BYTE-SIZE): 10
+Local 4 (DIRECTION): :OUTPUT
+Local 5 (OLD-FILE): APPEND
+
+
+Remainder of stack:
+
+NODE-ENCAPSULATION (P.C. = 142)
+MAKE-NODE-STREAM (P.C. = 66)
+OPEN-NODE-STREAM (P.C. = 64)
+(:METHOD LOCAL-FILE-PATHNAME OPEN) (P.C. = 217)
+OPEN (P.C. = 223)
+MAIL-TO-RCPT (P.C. = 124)
+MAIL-SERVE-1 (P.C. = 157)
+MAIL-SERVE (P.C. = 162)
+SI:PROCESS-RUN-FUNCTION-INTERNAL (P.C. = 102)
+SI:PROCESS-TOP-LEVEL (P.C. = 121)
+ 6-Jul-83 13:40:30-EDT,2763;000000000000
+Return-path: <LMFile@MIT-OZ>
+Date: Wednesday, 6 July 1983, 13:38-EDT
+From: ??? <LMFile@MIT-OZ>
+Subject: The File Server can't boot
+To: BUG-FC@MIT-OZ
+CC: RpK-L@MIT-OZ
+
+In Bad MIT-Specific 19.5, Inconsistently updated System 94.35,
+ZMail 50.16, Experimental Local-File 44.2, FILE-Server 6.6, MagTape 14.4,
+Experimental LFS 2.1, microcode 238, FC, on Lisp Machine Filecomputer:
+
+
+Insert your description of the circumstances here:
+
+The file server won't boot.  Also, while trying to send this bug report, I had
+to proceed past two bad CDR-CODE errors.
+
+It probably has something to do with the new disk label format or functions
+for the new format.
+
+>>TRAP 11125 (SUBSCRIPT-OOB M-R M-S)
+The index, 2742, was beyond the length, 1742, in COPY-ARRAY-PORTION.
+Backtrace from the debugger:
+
+SI:READ-DISK-LABEL (P.C. = 117)
+
+ Arg 0 (RQB): #<ART-16B-1742 7014416>
+ Arg 1 (UNIT): 2
+Local 0 (RQB1): #<ART-16B-1742 7327416>
+Local 1 (BFR): NIL
+
+
+Additional information supplied with call:
+ Expecting 2 values
+
+SYS:FIND-DISK-PARTITION (P.C. = 140)
+
+ Arg 0 (NAME): "SRVR"
+ Arg 1 (RQB): #<ART-16B-1742 7014416>
+ Arg 2 (UNIT): 2
+   --Defaulted args:--
+ Arg 3 (ALREADY-READ-P): NIL
+ Arg 4 (CONFIRM-WRITE): NIL
+Local 0 (RETURN-RQB): NIL
+Local 1 (N-PARTITIONS): NIL
+Local 2 (WORDS-PER-PART): NIL
+Local 3 (I): NIL
+Local 4 (LOC): NIL
+
+
+FS:CONSIDER-UNIT (P.C. = 454)
+
+ Arg 0 (UNIT): 2
+ Arg 1 (PARTITION-NAME): "SRVR"
+Local 0 (RQB): #<ART-16B-1742 7014416>
+Local 1 (G5669): NIL
+Local 2 (PACK): #<PACK-STRUCTURE NIL-NIL 16775716>
+Local 3 (TB): NIL
+Local 4 (PART-BASE): NIL
+Local 5 (PART-SIZE): NIL
+Local 6 (PACK): NIL
+Local 7 (AVAILABLE-TABLE-SIZE): NIL
+Local 8 (I): NIL
+Local 9 (*SELECTQ-ITEM*): NIL
+
+
+FS:BRING-UP-SERVER (P.C. = 430)
+
+   --Defaulted args:--
+ Arg 0 (FOR-WARM-BOOT): NIL
+Local 0 (.PROC.): NIL
+Local 1: (#<DTP-LOCATIVE 177556>...error printing #<LIST 177566>...
+Local 2: (24000000...error printing #<LIST 177563>...
+Local 3 (*SELECTQ-ITEM*): NIL
+Local 4 (UNDO-FORM): (SETQ FS:USER-HOST-PASSWORD-ALIST (DELQ ** FS:USER-HOST-PASSWORD-ALIST))
+Local 5 (RESULT): NIL
+Local 6 (RESULT): NIL
+
+
+SI:*EVAL (P.C. = 1234)
+
+ Arg 0 (FORM): (FS:BRING-UP-SERVER)
+Local 0 (ARGNUM): 0
+Local 1 (FCTN): #<DTP-FEF-POINTER FS:BRING-UP-SERVER 5037352>
+Local 2 (ARG-DESC): 1
+Local 3 (NUM-ARGS): 0
+Local 4 (CLOSURE-PASSED): NIL
+Local 5 (LAMBDA-LIST): NIL
+Local 6 (LL): NIL
+Local 7 (QUOTE-STATUS): NIL
+Local 8 (REST-FLAG): NIL
+Local 9 (ARGL): NIL
+Local 10: NIL
+Local 11: NIL
+Local 12 (IGNORE): NIL
+Local 13 (ADL): NIL
+Local 14 (ITEM): NIL
+Local 15 (*SELECTQ-ITEM*): NIL
+
+
+Remainder of stack:
+
+SI:EVAL-ABORT-TRIVIAL-ERRORS (P.C. = 44)
+SI:LISP-TOP-LEVEL1 (P.C. = 254)
+SI:LISP-TOP-LEVEL (P.C. = 35)
+ 7-Nov-84 18:35:02-EST,2507;000000000000
+Received: from MIT-LISPM-27 by MIT-OZ via Chaosnet; 7 Nov 84 18:35-EST
+Date: Wednesday, 7 November 1984, 18:28-EST
+From: The Lisp Machine <"Hdt%Buffalo-CS.SUNYAB.CSNET" at UDEL-RELAY.ARPA>
+Sender: Lispm at UDEL-RELAY.ARPA
+To: BUG-filecomputer at MIT-OZ
+
+In System 98.76, CADR 3.10, ZMail 53.19, MIT-Specific 22.5,
+Experimental Local-File 48.5, Experimental FILE-Server 8.5,
+Experimental LFS 3.3, Experimental MagTape 22.6, microcode 309,
+Yow! (FS/FC), on Lisp Machine Filecomputer:
+
+FileComputer is OK.   Disk error during try to bring up LMFile...
+
+>>ERROR: Disk read error unit 2, cyl 0., surf 0., sec 0.,
+  status Start-Block-Error  Transfer-Aborted
+ Type control-C to retry.
+Backtrace from the debugger:
+
+SI:DISK-RUN (P.C. = 343)
+
+ Arg 0 (RQB): #<ART-16B-1742 7602016>
+ Arg 1 (UNIT): 2
+ Arg 2 (ADDRESS): 0
+ Arg 3 (SECTORS-PER-TRACK): 21
+ Arg 4 (HEADS-PER-CYLINDER): 5
+ Arg 5 (CMD): 4000
+ Arg 6 (CMD-NAME): "read"
+   --Defaulted args:--
+ Arg 7 (NO-ERROR-CHECKING): NIL
+Local 0 (ADR): 0
+Local 1 (CYLINDER): 0
+Local 2 (SURFACE): 0
+Local 3 (SECTOR): 0
+Local 4 (ERROR-COUNT): 23
+Local 5 (ER-H): 400
+Local 6 (ER-L): 30011
+Local 7 (TEM): NIL
+Local 8 (FINAL-ADDRESS): 0
+Local 9 (FINAL-CYLINDER): 0
+Local 10 (FINAL-SURFACE): 0
+Local 11 (FINAL-SECTOR): 0
+Local 12 (MICROCODE-ERROR-RECOVERY): T
+
+
+SI:DISK-READ-WIRED (P.C. = 100)
+
+ Arg 0 (RQB): #<ART-16B-1742 7602016>
+ Arg 1 (UNIT): 2
+ Arg 2 (ADDRESS): 0
+ Arg 3 (MICROCODE-ERROR-RECOVERY): T
+Local 0 (SECTORS-PER-TRACK): 21
+Local 1 (HEADS-PER-CYLINDER): 5
+
+
+SYSTEM:DISK-READ (P.C. = 63)
+
+ Arg 0 (RQB): #<ART-16B-1742 7602016>
+ Arg 1 (UNIT): 2
+ Arg 2 (ADDRESS): 0
+   --Defaulted args:--
+ Arg 3 (MICROCODE-ERROR-RECOVERY): T
+
+
+SI:READ-DISK-LABEL (P.C. = 60)
+
+ Arg 0 (RQB): #<ART-16B-3740 7604416>
+ Arg 1 (UNIT): 2
+Local 0 (RQB1): #<ART-16B-1742 7602016>
+Local 1 (BFR): NIL
+
+
+Additional information supplied with call:
+ Expecting 2 values
+
+SYSTEM:FIND-DISK-PARTITION (P.C. = 132)
+
+ Arg 0 (NAME): "SRVR"
+ Arg 1 (RQB): #<ART-16B-3740 7604416>
+ Arg 2 (UNIT): 2
+   --Defaulted args:--
+ Arg 3 (ALREADY-READ-P): NIL
+ Arg 4 (CONFIRM-WRITE): NIL
+Local 0 (RETURN-RQB): T
+Local 1 (N-PARTITIONS): NIL
+Local 2 (WORDS-PER-PART): NIL
+Local 3 (I): NIL
+Local 4 (LOC): NIL
+
+
+Remainder of stack:
+
+FS:CONSIDER-UNIT (P.C. = 362)
+BRING-UP-SERVER (P.C. = 423)
+SI:EVAL1 (P.C. = 1324)
+EVAL (P.C. = 62)
+INITIALIZATIONS (P.C. = 135)
+LISP-REINITIALIZE (P.C. = 1424)
+SI:LISP-TOP-LEVEL (P.C. = 36)
+16-Nov-84 03:43:47-EST,1479;000000000000
+Received: from MIT-LISPM-27 by MIT-OZ via Chaosnet; 16 Nov 84 03:43-EST
+Date: Friday, 16 November 1984, 03:44-EST
+From: The AI File Server <LMFile at MIT-OZ>
+To: BUG-filecomputer at MIT-OZ
+
+In System 98.76, CADR 3.10, ZMail 53.19, MIT-Specific 22.5,
+Experimental Local-File 48.5, Experimental FILE-Server 8.5,
+Experimental LFS 3.3, Experimental MagTape 22.6, microcode 309,
+Really Kludged 98.76 but it should boot, on Lisp Machine Filecomputer:
+
+
+control-break; and then abort
+echo- nil, and then this.
+
+>>TRAP 2260 (THROW-TRAP)
+There was no pending *CATCH for the tag RUBOUT-HANDLER.
+The value being thrown was T.Backtrace from the debugger:
+
+(:METHOD TV:STREAM-MIXIN :RESTORE-RUBOUT-HANDLER-BUFFER) (P.C. = 71)
+  (SELF is #<LISP-LISTENER Lisp Listener 1 2200000 exposed>)
+
+ Arg 0 (OPERATION): :RESTORE-RUBOUT-HANDLER-BUFFER
+ Arg 1 (STRING): #<ART-Q-1000 16006055>
+ Arg 2 (POINTER): 4
+Local 0 (LENGTH): 4
+
+
+BREAK (P.C. = 702)
+
+ Arg 0 (FORMAT-STRING): "BREAK."
+ Rest arg (ARGS): NIL
+Local 1 (SAVED-BUFFER): #<ART-Q-1000 16006055>
+Local 2 (SAVED-BUFFER-POSITION): 4
+Local 3: NIL
+Local 4 (LAST-TIME-DEFAULT-COMMON-LISP): NIL
+Local 5 (CHAR): 222
+Local 6 (THROW-FLAG): NIL
+Local 7: NIL
+Local 8: NIL
+Local 9 (TEM1): NIL
+Local 10 (TEM): NIL
+Local 11 (VALUES): NIL
+Local 12: NIL
+Local 13 (VALUE): NIL
+
+
+TV:KBD-INTERCEPT-BREAK (P.C. = 35)
+
+ Arg 0 (CHAR): 10000201
+ Rest arg (IGNORE): (#<LISP-LISTENER Lisp Listener 1 2200000 exposed>)
+

@@ -1,0 +1,46 @@
+(defun dcheck-loop ()
+	(do () (())
+  ;; Part 6 - Write and read block 1 of the disk.  Use a floating 1's and 0's
+  ;;          pattern, and then an address pattern, and check for Xbus data path
+  ;;	      and addressing failures.
+  ;; This doesn't check high-order address bits
+  (DO I 0 (1+ I) (= I 40)	;Loc 0-37 get floating 1's
+    (PHYS-MEM-WRITE I (#M LSH #Q ASH 1 I)))
+  (DO I 0 (1+ I) (= I 40)	;Loc 40-77 get floating 0's
+    (PHYS-MEM-WRITE (+ 40 I) (- (#M LSH #Q ASH 1 32.) (#M LSH #Q ASH 1 I))))
+  (DO I 100 (1+ I) (= I 400)	;Loc 100-377 get address pattern
+    (PHYS-MEM-WRITE I (+ (LSH (LOGXOR 377 I) 8) I)))
+  (PRINT 'WRITE)
+  (DC-EXEC DC-WRITE 0 0 1 CCW-LOC 0 DC-ALL-ERROR-BITS)
+  (LET ((MA (DC-READ-MA)))
+    #M (DECLARE (FIXNUM MA))
+    (COND ((NOT (= MA 377))
+	   (TERPRI) (PRINC '|MA wrong on write of pattern, correct=377, actual=|)
+	   (PRIN1 MA))))
+  (DO I 0 (1+ I) (= I 400)	;Clear buffer
+    (PHYS-MEM-WRITE I 0))
+  (PRINT 'READ)
+  (DC-EXEC DC-READ 0 0 1 CCW-LOC 0 DC-ALL-ERROR-BITS)
+  (LET ((MA (DC-READ-MA)))
+    #M (DECLARE (FIXNUM MA))
+    (COND ((NOT (= MA 377))
+	   (TERPRI) (PRINC '|MA wrong on read of pattern, correct=377, actual=|)
+	   (PRIN1 MA) (TERPRI))))
+  ;; Check pattern read back into core, see if it's correct
+  (LET ((DCHECK-AND 37777777777) (DCHECK-IOR 0)  ;Accumulate error bits here
+	(DCHECK-ADR-AND 377) (DCHECK-ADR-IOR 0))
+    (DO I 0 (1+ I) (= I 40)	;Loc 0-37 get floating 1's
+      (DCHECK-COMPARE I (#M LSH #Q ASH 1 I)))
+    (DO I 0 (1+ I) (= I 40)	;Loc 40-77 get floating 0's
+      (DCHECK-COMPARE (+ 40 I) (- (#M LSH #Q ASH 1 32.) (#M LSH #Q ASH 1 I))))
+    (DO I 100 (1+ I) (= I 400)	;Loc 100-377 get address pattern
+      (DCHECK-COMPARE I (+ (#M LSH #Q ASH (LOGXOR 377 I) 8) I)))
+    (DCHECK-PM '|Data bits dropped during write to or read from disk: |
+	       (LOGXOR 37777777777 DCHECK-IOR))
+    (DCHECK-PM '|Data bits picked during write to or read from disk: |
+	       DCHECK-AND)
+    (DCHECK-PM '|Address bits 0 with bad data during write to or read from disk: |
+	       (LOGXOR 377 DCHECK-ADR-AND))
+    (DCHECK-PM '|Address bits 1 with bad data during write to or read from disk: |
+	       DCHECK-ADR-IOR))
+	))

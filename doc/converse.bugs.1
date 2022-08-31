@@ -1,0 +1,171 @@
+25-Dec-84 23:02:19-EST,5098;000000000000
+Received: from MIT-MC by MIT-OZ via Chaosnet; 25 Dec 84 23:02-EST
+Date: Tuesday, 25 December 1984, 23:02-EST
+From: Howard D. Trachtman <Hdt at MIT-MC>
+To: BUG-zwei at MIT-OZ
+CC: bug-converse at MIT-MC
+
+In System 98.78, CADR 3.10, ZMail 53.19, MIT-Specific 22.5,
+microcode 309, ZM MIT d, on Ford Prefect:
+
+
+I really didn't do anything unusual, except I had piles and piles of stuff
+in the buffer and did a meta-< to plan to send a new message to a new person.
+
+>>TRAP 14101 (ARGTYP NUMBER M-T 1 QILSP0)
+The second argument to <, ZWEI:DELETED, was of the wrong type.
+The function expected a number.
+Backtrace from the debugger:
+
+ZWEI:REDISPLAY-BLT (P.C. = 154)
+
+Local 0 (NEW-FIRST-LINE): "To: "
+Local 1 (FIRST-CHANGED-LINE): ""
+Local 2 (FIRST-CHANGED-PLINE): 25
+Local 3 (LAST-OCCUPIED-PLINE): NIL
+Local 4 (FIRST-UNCHANGED-PLINE): NIL
+Local 5 (FIRST-UNCHANGED-LINE): NIL
+Local 6 (FIRST-UNCHANGED-LINE-NEW-PLINE): NIL
+Local 7 (PLINE): 25
+Local 8 (LINE): ""
+Local 9 (I): NIL
+Local 10 (PLINE-OFFSET): NIL
+Local 11 (LH): NIL
+Local 12 (OFFSET): NIL
+Local 13 (INC): NIL
+Local 14 (NEW-START): NIL
+Local 15 (NEW-PLINE): NIL
+Local 16 (OLD-PLINE): NIL
+
+
+(:METHOD ZWEI:WINDOW :REDISPLAY) (P.C. = 1153)
+  (SELF is #<ZWEI-WINDOW-PANE Converse 2755264 exposed>)
+
+ Arg 0 (OPERATION): :REDISPLAY
+ Arg 1 (RECENTER-TYPE): :POINT
+ Arg 2 (RC1): NIL
+ Arg 3 (RC2): NIL
+ Arg 4 (FORCE-TO-COMPLETION-P): NIL
+Local 0 (LH): 16
+Local 1 (NOW): 100357
+Local 2 (POINT-PLINE): 0
+Local 3 (POINT-LINE): "To: "
+Local 4 (POINT-INDEX): 0
+Local 5 (TOP-LINE): "To: "
+Local 6 (TOP-INDEX): 0
+Local 7 (LAST-BP): ("" 0 :MOVES)
+Local 8 (INITIAL-DEGREE): 4
+Local 9 (POINT-NODE): NIL
+Local 10 (START-BP-NODE): NIL
+Local 11 (BUF): NIL
+Local 12 (NEW-TOP-INDEX): NIL
+Local 13 (Y): NIL
+Local 14 (LINE): NIL
+Local 15 (INDEX): NIL
+Local 16 (P): NIL
+Local 17 (LINE-LENGTH): NIL
+Local 18 (LEN): NIL
+Local 19 (DWID): NIL
+Local 20 (CH): NIL
+Local 21 (FONT): NIL
+Local 22 (CWT): NIL
+Local 23 (CWID): NIL
+Local 24 (RWID): NIL
+Local 25 (I): NIL
+Local 26 (TW): NIL
+Local 27 (L): NIL
+Local 28 (FROM-INDEX): NIL
+Local 29 (TO-INDEX): NIL
+Local 30 (PLINE): NIL
+Local 31 (STOP-LINE): NIL
+Local 32 (FROB): NIL
+Local 33 (PLINE): NIL
+Local 34: NIL
+Local 35 (BL): NIL
+
+
+ZWEI:REDISPLAY (P.C. = 70)
+
+ Arg 0 (WINDOW): #<ZWEI-WINDOW-PANE Converse 2755264 exposed>
+   --Defaulted args:--
+ Arg 1 (RECENTER-TYPE): :POINT
+ Arg 2 (RC1): NIL
+ Arg 3 (RC2): NIL
+ Arg 4 (FORCE-TO-COMPLETION-P): NIL
+
+
+ZWEI:REDISPLAY-ALL-WINDOWS (P.C. = 75)
+
+   --Defaulted args:--
+ Arg 0 (FORCE-TO-COMPLETION-P): NIL
+ Arg 1 (SELECT-P): T
+Local 0: (#<ZWEI-WINDOW-PANE Converse 2755264 exposed>)
+Local 1 (WINDOW): #<ZWEI-WINDOW-PANE Converse 2755264 exposed>
+
+
+(:METHOD ZWEI:WINDOW :EDIT) (P.C. = 413)
+  (SELF is #<ZWEI-WINDOW-PANE Converse 2755264 exposed>)
+
+ Arg 0 (OPERATION): :EDIT
+   --Defaulted args:--
+ Arg 1 (IGNORE): NIL
+ Arg 2 (*COMTAB*): #<COMTAB ZWEI:MODE-COMTAB 43507065>
+ Arg 3 (*MODE-LINE-LIST*): ("Converse " (ZWEI:*CONVERSE-GAGGED* "[Gagged]") "(" ZWEI:*MODE-NAME-LIST* ...)
+ Arg 4 (TOP-LEVEL-P): T
+Local 0 (TEM1): ((** ** T ** ...) (CONDITION ** T ** ...))
+Local 1: ("Return to top level editor command loop.")
+Local 2: ((SYSTEM:ABORT ERROR) ("Return to top level editor command loop.") T ("Return to top level editor command loop.") ...)
+Local 3 (CH): NIL
+
+
+(:INTERNAL (:METHOD ZWEI:ZWEI-WINDOW-PANE :COMBINED :EDIT) 0) (P.C. = 74)
+
+ Rest arg (.DAEMON-CALLER-ARGS.): (:EDIT)
+Local 1 (.DAEMON-MAPPING-TABLE.): #<ART-16B-4 23300472>
+
+
+FUNCALL (P.C. = 25)
+
+ Arg 0 (FN): #<DTP-FEF-POINTER (:INTERNAL (:METHOD ZWEI:ZWEI-WINDOW-PANE :COMBINED :EDIT) 0) 21655661>
+ Rest arg (ARGS): (:EDIT)
+
+
+(:METHOD ZWEI:DISPLAYER :AROUND :EDIT) (P.C. = 31)
+  (SELF is #<ZWEI-WINDOW-PANE Converse 2755264 exposed>)
+
+ Arg 0 (OPERATION): :EDIT
+ Arg 1 (CONT): #<DTP-FEF-POINTER (:INTERNAL (:METHOD ZWEI:ZWEI-WINDOW-PANE :COMBINED :EDIT) 0) 21655661>
+ Arg 2 (MT): #<ART-16B-4 23300472>
+ Arg 3 (ARGS): (:EDIT)
+   --Defaulted args:--
+ Arg 4 (EDITOR-CLOSURE-1): NIL
+ Rest arg (IGNORE): NIL
+
+
+(:METHOD ZWEI:ZWEI-WINDOW-PANE :COMBINED :EDIT) (P.C. = 47)
+  (SELF is #<ZWEI-WINDOW-PANE Converse 2755264 exposed>)
+
+ Rest arg (.DAEMON-CALLER-ARGS.): (:EDIT)
+Local 1 (.DAEMON-MAPPING-TABLE.): #<ART-16B-4 23300472>
+
+
+(:METHOD ZWEI:ZWEI-FRAME :EDIT) (P.C. = 33)
+  (SELF is #<CONVERSE-FRAME Converse Frame 1 2754633 exposed>)
+
+ Arg 0 (OPERATION): :EDIT
+ Rest arg (ARGS): NIL
+
+
+ZWEI:CONVERSE-WINDOW-TOP-LEVEL (P.C. = 24)
+
+ Arg 0 (*CONVERSE-FRAME*): #<CONVERSE-FRAME Converse Frame 1 2754633 exposed>
+
+
+SI:PROCESS-TOP-LEVEL (P.C. = 246)
+
+ Arg 0 (IGNORE): NIL
+Local 0: ("Reset and arrest process ~A." "Converse Frame 1")
+Local 1: (CONDITION ("Reset and arrest process ~A." "Converse Frame 1") T ("Reset and arrest process ~A." "Converse Frame 1") ...)
+Local 2: ("Restart process ~A." "Converse Frame 1")
+Local 3: ((SYSTEM:ABORT CONDITION) ("Restart process ~A." "Converse Frame 1") T ("Restart process ~A." "Converse Frame 1") ...)
+Local 4 (IGNORE): NIL
