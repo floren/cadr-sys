@@ -1,0 +1,2442 @@
+Date: 14 July 1982 15:59-EDT
+From: Jeffrey J Tyrone Sealy <TY at MIT-AI>
+Subject: Cadr 4,6,& 29 powered down
+To: INFO-LISPM at MIT-AI
+cc: NINTH-FLOOR at MIT-AI
+
+These three machines will be moved from their present location,sometime early morning
+Monday 19,July. There is work being done to an A/C duct under the floor and it should not
+take all day. The machines will be moved back as soon as the work (the floor and balancing of
+the disk)is finished.
+
+
+Date: 9 July 1982 03:03-EDT
+From: Richard M. Stallman <RMS at MIT-AI>
+Subject: Several new features in 86.56
+To: INFO-LISPM at MIT-AI
+
+*) Default filetype is LISP.
+
+If you specify a name but no type in a pathname, the default (when not
+specified explicitly by the program) is now LISP rather than
+:UNSPECIFIC.  This change is in the functions FS:MERGE-PATHNAME-DEFAULTS
+and FS:MERGE-AND-SET-PATHNAME-DEFAULTS.
+
+Actually, the default is the value of the variable
+FS:*NAME-SPECIFIED-TYPE-DEFAULT*, whose value is initially "LISP".
+The old behavior is obtained by setting this variable to :UNSPECIFIC.
+
+This change is usually not visible if FS:*ALWAYS-MERGE-TYPE-AND-VERSION*
+is non-nil, since then the type defaults from the previously used
+pathname even if the name is specified.  However, this new default
+may eliminate your motivation for setting that variable.
+
+*) Twenex pathname handling is improved.
+
+The device name DSK is now canonicalized to PS in all Twenex pathnames.
+This avoids problems of duplicate pathnames that are different but completely
+synonymous.
+
+You can now specify a filetype of :UNSPECIFIC (that is, a null type)
+by ending the filename with a period.  This is different from omitting the
+type entirely: a specified null type overrides all defaults; an omitted
+type is defaulted (to "LISP" or something else).
+
+In other words, "FOO" means "FOO.LISP.0" or some other default, but "FOO."
+means "FOO..0".
+
+*) Unix pathname handling is improved.
+
+Case is now completely significant in Unix pathnames, as it ought to be.
+You can now rename FOO to Foo and it should work.
+
+*) Compiled functions record macros.
+
+The macros found in a function being compiled are recorded in the debugging
+info alist of the compiled function, under the key :MACROS-EXPANDED.
+Thus, WHO-CALLS will work on macros if the places they were used were
+compiled in 86.56 or later.
+
+*) If you get an error in a background process, and a notification cannot be printed,
+you can now type Terminal Call to cause the error handler to be run using the
+cold load stream (which is what it would have done in any case before system 86).
+
+Terminal Call's normal meaning is to enter a break loop using the cold load stream.
+If there are pending background errors, it asks you about each one, one by one,
+whether you want to handle that error.  If you say "N" to all of them,
+you get the break loop.
+
+Another useful strategy for handling this circumstance is to type
+Terminal Control-Clear-Input, which unlocks the window system locks.
+After that, the notification may print; or you may be able to select a window
+or do Terminal 0 S.
+
+You can tell there is an error in a background process which cannot
+print its notification because stars at the ends of the mouse
+documentation line flash.  The text of the line will tell you to try
+Terminal Call.
+
+*) SXHASH now accepts a second argument which, if T, says that SXHASH should use
+the address of an object as its hash code if there is no other way to handle it.
+This applies to everything but numbers, symbols, strings and lists.
+
+In addition, flavor instances and named structures can now define the :SXHASH
+operation.  This operation takes one argument, the new flag, and should return
+the SXHASH value for the object.  This overrides use of the object's address.
+
+If the second argument is NIL, the SXHASH of an array will now be the array's
+active length, rather than zero.
+
+Use a second argument of T if you are not going to save the SXHASH
+values in files, and you are prepared to deal with the possibility that
+GC will move an object (or you don't intend to use GC).  If you want to
+be completely safe, omit the second argument.
+
+Date: 2 July 1982 19:55-EDT
+From: Jerry Roylance <GLR at MIT-AI>
+Subject: New conditionalization scheme
+To: DLA at SCRC-TENEX
+cc: INFO-LISPM at MIT-AI
+
+
+Why flush the site names?  What advantage is there?
+Just make your readtime conditionals for software and
+hardware have different names, for example
+
+   #+LMI-SOFTWARE		#+LMI-HARDWARE
+   #+SYMBOLICS-SOFTWARE		#+SYMBOLICS-HARDWARE
+   #+MIT-SOFTWARE		#+MIT-HARDWARE,
+
+and both site and software-hardware initializations can
+coexist in peace.
+
+Date: Friday, 2 July 1982, 09:25-EDT
+From: David L. Andre <DLA at SCRC-TENEX>
+Subject: New conditionalization scheme
+To: INFO-LISPM at MIT-AI
+
+Patches 210.104 and 86.52 implement the new software conditionalization
+scheme for lisp machines.  This new scheme will affect users who use the
+#+x or #-x reader macros, or the (STATUS FEATURE x) special form (in
+other words, any statement herein which refers to #+x refers to all
+three constructs).  The changes are:
+
+1.  Read-time conditionalization by site name is no longer possible.
+Most notably the forms #+SYM and #+XEROX will no longer work.
+
+2.  Conditionalization by site name can be done at run time, using the
+new global variable SITE-NAME.  Typical site names are :MIT, :SCRC, and
+:LMI.  The names :EE and :SYM are obsolete.
+
+3.  Read time conditionalization can now be done on software type, with
+the #+MIT, #+SYMBOLICS, and #+LMI forms.  These forms will work at any
+site.
+
+4.  Read time conditionalization can now be done on hardware type, with
+the #+CADR, #+3600, and (I think) #+LAMBDA.  #+LISPM is true on all of
+these systems.
+
+5.  It is now possible to do read time conditionalization on supported
+network protocols.  Currently there are only two protocols which run on
+the lisp machine: #+ETHER, which currently only runs at XEROX PARC, and
+#+CHAOS, which runs everywhere else.  Currently, they are mutually
+exclusive, but your software shouldn't depend on this fact.
+
+Date: 29 Jun 1982 1533-EDT
+From: David C. Plummer <DCP at MIT-EECS>
+Subject: TWENEX systems.
+To: r11-users at MIT-MC, ktv-users at MIT-MC, info-lispm at MIT-AI,
+    bug-twenex at MIT-XX
+
+I think all the TWENEX systems on campus (I just did EE) now have
+the SUPDUP server that does more of the right things for SPACE
+CADET keyboards.  I.e., C-9 C-N will go down 9 lines instead of
+inserting a 9 in the buffer and going down one line.  I think it
+also sets the SUPDUP Graphics word so that DPRESS (especially)
+will do the right thing, even from strangely sized LISPM SUPDUP
+windows.
+-------
+
+Date: 28 June 1982 17:50-EDT
+From: "The Software Staff (TM) of Symbolic Lisp Machines Inc." at MIT-AI
+Sender: AGRE at MIT-AI
+To: INFO-LISPM at MIT-AI
+
+
+Symbolic Lisp Machines Inc. System 286 (TM) is now released for users.  
+You can find the release notes in either of the following files:
+
+    EE:LIB:<LISPM.DOCUMENTATION>SYSTEM-286.RELEASE
+    AI: LMDOC; SYS286 MSG
+
+Please take a look at the release notes before using System 286 (TM).
+
+(c) 1982 SLiMi
+
+Date: 24 Jun 1982 0358-PDT
+From: Ganesha at OFFICE-1
+Subject: Re: Flame level
+To:   Deutsch at PARC-MAXC, INFO-LISPM at MIT-AI
+cc:   GANESHA
+
+In response to the message sent  24 Jun 1982 0346-PDT from Ganesha
+
+Sorry I just did what I told everyone it was unwise to do...
+Havefun
+Sends Steve
+-------
+
+Date: 24 Jun 1982 0346-PDT
+From: Ganesha at OFFICE-1
+Subject: Re: Flame level
+To:   Deutsch at PARC-MAXC, INFO-LISPM at MIT-AI
+cc:   GANESHA
+
+In response to the message sent  23 Jun 1982 16:57 PDT from Deutsch@PARC-MAXC
+
+
+I AGREE...It's a pain to hear people flame sometimes when you
+want info BUT adding to it is throwing gasoline on a fire
+expecting it to go out.
+
+Have fun
+Sends Steve
+
+-------
+
+Date: 24 June 1982 00:51-EDT
+From: George J. Carrette <GJC at MIT-MC>
+Subject:  Flame level
+To: Deutsch at PARC-MAXC
+cc: INFO-LISPM at MIT-MC
+
+    Date: 23 Jun 1982 16:57 PDT
+    From: Deutsch at PARC-MAXC
+    To:   INFO-LISPM at MIT-AI
+    Re:   Flame level
+
+    As a relatively detached observer ...
+
+Hold it, haven't I seen advertisements for lispmachines being built by Xerox?
+Chuckle. Anyway, these people flaming aren't assholes, they are artists,
+which brings me to an advertisement for my new book: "The Art of Computer Flaming."
+
+
+
+Date: 23 Jun 1982 16:57 PDT
+From: Deutsch at PARC-MAXC
+Subject: Re: Flame level
+In-reply-to: SOLEY's message of 23 June 1982 17:19-EDT
+To: INFO-LISPM at MIT-AI
+
+As a relatively detached observer, I am mildly distressed at two recent exchanges
+of messages on INFO-LISPM.  They both had the following form:
+	- Party A makes a statement that is restrained in tone, but indicates that
+he has strong feelings about some situation.
+	- Party B comments on Party A's statement at a much higher decibel
+level, without adding any useful information to the discussion.
+
+C'mon, folks.  When you feel like acting like Party A, stop and consider whether
+what you're putting out is useful, helpful, likely to encourage people to consider
+the situation in a balanced way, etc.  When you feel like acting like Party B, do
+the same.  If you think Party A is out of line, maybe you should speak to him
+privately.  If that doesn't help, just bear with it.  We're all assholes now and
+then; I don't think raising the decibel level helps matters.
+
+
+Date: 23 June 1982 17:19-EDT
+From: Richard Mark Soley <SOLEY at MIT-MC>
+To: RMS at MIT-AI
+cc: INFO-LISPM at MIT-AI
+
+    Date: 20 June 1982 03:08-EDT
+    From: Richard M. Stallman <RMS at MIT-AI>
+    To:   INFO-LISPM at MIT-AI
+
+    I recently learned something helps to explain why ALAN so strongly
+    condemns the use of BUG-LISPM-MIT, which does not go to Symbolics:
+
+    He is on their payroll.
+
+    I supply this background information in the hope that it may help
+    illuminate recent (and future) events.
+
+Oh my God, on THEIR payroll?!  How terrible, will he live?  Can he
+be saved from such reckless actions?  Perhaps we ought to revert
+this mailing list from a flame session to info-lispm?
+
+
+Date: Wednesday, 23 June 1982, 16:10-EDT
+From: Gregor J. Kiczales <Gregor at MIT-AI>
+Subject: Lispm Documentation
+To: INFO-LISPM at MIT-AI
+Cc: BUG-LISPM at MIT-AI, DLW at MIT-AI, KAREN at MIT-AI
+
+
+Symbolics has given the AI lab permission to copy and distribute to lab
+members some of their Lispm documentation. Since their documentation
+effort is not complete the documentation which will be available is
+somewhat limited, and probably only useful for beginning Lispm users.
+
+The documents which will be available are:
+
+  ZMACS Manual   -- this describes the very basics of ZMACS, if you
+                    have been using Lispms for a while you know 
+                    everything in this.
+
+  FONT Editor    -- this describes the Symbolics font editor.
+
+  Scroll Windows -- this describes tv:scroll windows.
+
+These should be available in the AI publications office in about a week.
+
+Date: 20 June 1982 03:08-EDT
+From: Richard M. Stallman <RMS at MIT-AI>
+To: INFO-LISPM at MIT-AI
+
+I recently learned something helps to explain why ALAN so strongly
+condemns the use of BUG-LISPM-MIT, which does not go to Symbolics:
+
+He is on their payroll.
+
+I supply this background information in the hope that it may help
+illuminate recent (and future) events.
+
+Date: 18 June 1982 08:17-EDT
+From: Eugene C. Ciccarelli <ECC at MIT-AI>
+Subject: ZVAL library
+To: INFO-LISPM at MIT-AI
+
+I recently made a few changes to the ZVAL library.  For a
+description of these and future changes, you can look at the top
+of the source file.  If people want, I could make up a mailing
+list of users, though I doubt there are many, and send out brief
+announcements.  Probably best to avoid mailing them (after this)
+to INFO-LISPM.
+
+Date: 16 June 1982 11:52-EDT
+From: Philip E. Agre <AGRE at MIT-MC>
+Subject: SELECTP -- a useful new utility for pattern-matching   (long)
+To: INFO-LISPM at MIT-MC
+
+Living in LMLIB;SELECT is a new macro called SELECTP, which is sort of a
+generalization of SELECTQ.  I have found it extremely useful in writing
+compilers and that sort of thing.  Here's an example of its use from the file
+AGRE;SCDP, where many more examples can be found:
+
+(defun unary-operation (command)
+  (selectp command
+    ((#?op #?r) (memq op '(push pop)) t)
+    ((assign #?r1 #?r2) (symbolp r2) (eq r1 r2))
+    ((assign #?r (continuation-pointer #?label)) t t)
+    ((assign #?r1 (#?ignore #?r2 #?r3)) t
+     (or (and (eq r1 r2) (eq r2 r3))
+	 (and (constant-register-p r2) (constant-register-p r3))
+	 (and (eq r1 r2) (constant-register-p r3))
+	 (and (eq r1 r3) (constant-register-p r2))))
+    ((assign #?r1 (#?ignore #?r2)) t (or (eq r1 r2) (constant-register-p r2)))
+    ((#?ignore #?x #?y) (and (register-p x) (register-p y))
+     (or (eq x y) (constant-register-p x) (constant-register-p y)))
+    ((#?ignore #?x) (register-p x) t)
+    (otherwise (ferror nil "Unrecognized command format: ~A" command))))
+
+The syntax is 
+   (SELECTP <object>
+     (<pattern> <condition> <sexp> ... <sexp>)
+     (<pattern> <condition> <sexp> ... <sexp>)
+     ...
+     (<pattern> <condition> <sexp> ... <sexp>)
+     (OTHERWISE <sexp> <sexp>))
+
+The value of <object> is matched against the <pattern>s one at a time until a
+match succeeds and the accompanying <condition> evaluates to something
+non-null, at which point the <sexp>'s associated with the <pattern> and
+<condition> are evaluated one at a time and the last value is returned.  The
+<pattern>s can be arbitrary s-expressions, with variables signified by
+#?variable.  When the pattern is matched against the <object>'s value, the
+variables are to bound to their matched values.  Different occurences of the
+same variable in a given pattern must match to the same thing, so that
+
+    (SELECTP '(A B C) 
+      ((#?X B #?X) T 'LOSE)
+      ((#?X B #?Y) T 'WIN)
+      (OTHERWISE 'LOSE-BIG))
+
+returns WIN.  The variables mentioned in the <pattern>s need not be bound by
+the user; they are bound by the expression resulting from the expansion of the
+macro.  (The variable #?IGNORE matches everything and doesn't become bound.
+Using #?IGNORE for a variable you don't intend to make any use of avoids
+"bound but not used" warnings from the compiler.) There is no actual pattern
+matcher involved in the matching process; rather, an s-expression is consed up
+by the macro which has the same effect.  For example, the call to SELECTP just
+presented expands to:
+
+((LAMBDA (OBJECT &AUX X Y)
+     (COND ((AND (LISTP OBJECT) (PROGN (SETQ X (CAR OBJECT)) T)
+                 (LISTP (CDR OBJECT)) (EQ (CAR (CDR OBJECT)) 'B)
+                 (LISTP (CDR (CDR OBJECT))) (EQUAL X (CAR (CDR (CDR OBJECT))))
+                 (NULL (CDR (CDR (CDR OBJECT)))))
+            'LOSE) 
+           ((AND (LISTP OBJECT) (PROGN (SETQ X (CAR OBJECT)) T)
+                 (LISTP (CDR OBJECT)) (EQ (CAR (CDR OBJECT)) 'B)
+                 (LISTP (CDR (CDR OBJECT)))
+	         (PROGN (SETQ Y (CAR (CDR (CDR OBJECT)))) T)
+                 (NULL (CDR (CDR (CDR OBJECT)))))
+            'WIN)
+           (T 'LOSE-BIG)))
+ '(A B C))
+
+(In case your terminal lost, those control characters are greek letters.)
+
+It seems to work in all Lisp Machine systems.  Bugs/suggestions to AGRE@MIT-AI.
+
+Date: 16 June 1982 07:01-EDT
+From: Richard M. Stallman <RMS at MIT-AI>
+Subject: System 86 announcement
+To: INFO-LISPM at MIT-AI
+
+The announcement for system 86 is finished.
+System 86 has no known new bugs now,
+and several interesting new features,
+including tail recursion as a run-time option.
+
+See LMDOC;SYS86 MSG.
+
+Date: 16 June 1982 00:45-EDT
+From: Alan Bawden <ALAN at MIT-MC>
+Subject:  Free to choose
+To: INFO-LISPM at MIT-AI
+
+    Date: 15 June 1982 05:16-EDT
+    From: Richard M. Stallman <rms at MIT-AI>
+
+    The people who are not on BUG-LISPM-MIT are likely to be able to help
+    you -- but will probably say that they own whatever solution they
+    provide for your problem.
+
+    So include them or not?  That's up to you.
+
+I have formed a new mailing list:  BUG-LISPM-EXCEPT-RMS
+
+The person who is not on BUG-LISPM-EXCEPT-RMS is likely to be able to help 
+you -- but will probably try to involve you in his own simplistic paranoid
+politics of good guys vs. bad guys.
+
+So include him or not?  That's up to you.
+
+
+Date: 15 June 1982 05:16-EDT
+From: Richard M. Stallman <rms at MIT-AI>
+Subject: bug-reports
+To: INFO-LISPM at MIT-AI
+
+  Mailing to
+  BUG-LISPM-MIT simply excludes a large number of people who are just as likely
+  to be able to help you as anyone else.
+
+The people who are not on BUG-LISPM-MIT are likely to be able to help
+you -- but will probably say that they own whatever solution they
+provide for your problem.
+
+So include them or not?  That's up to you.
+
+Date: 14 June 1982 03:13-EDT
+From: Alan Bawden <ALAN at MIT-MC>
+Subject:  Bug reports
+To: INFO-LISPM at MIT-MC
+
+Recently I have noticed several Lisp Machine bug reports were directed to the
+mailing list BUG-LISPM-MIT.  There is no reason to ever mail to this list.  It
+is an internal redistribution list for distributing BUG-LISPM mail to people
+who happen to read their mail at MIT.  (The "-MIT" refers to the location of
+the recipients of the mail, NOT the location of the sender.)  Mailing to
+BUG-LISPM-MIT simply excludes a large number of people who are just as likely
+to be able to help you as anyone else.  All bug reports should be sent to
+BUG-LISPM.
+
+
+Date: 6 June 1982 03:08-EDT
+From: Patrick G. Sobalvarro <PGS at MIT-AI>
+To: INFO-LISPM at MIT-AI
+
+CADR-18 now has 256K on it, thanks to Dave Custer.
+
+Date: Sunday, 23 May 1982, 02:43-EDT
+From: David A. Moon <Moon at SCRC-TENEX>
+Subject: Compatibility
+To: info-lispm at MIT-AI
+
+Patches 79.48, 85.44, 204.74, and 210.52 make it possible for all of
+those systems to debug each other via CC.  Needless to say, this is
+difficult to test completely.  It's been tested with systems 85 and
+210, but if I blew it please let me know.
+
+Date: Thursday, 20 May 1982, 01:37-EDT
+From: Daniel L. Weinreb <dlw at SCRC-TENEX>
+Reply-to: BUG-LISPM-SCRC at SCRC-TENEX
+Subject: System 210 is released to users.
+To: INFO-LISPM at MIT-AI
+
+
+Symbolics System 210 is now released for users.  This system has been
+installed on all of the EE CADRs, and will run on any CADR at MIT.
+You can find the release notes in either of the following files:
+
+    EE:LIB:<LISPM.DOCUMENTATION>SYSTEM-210.RELEASE
+    AI: LMDOC; SYS210 MSG
+
+Please take a look at the release notes before using System 210.
+
+As with previous Symbolics releases, the sources are stored on the
+MIT-EECS (EE) machine.  If you attempt to access the sources, EE will
+ask you for a user name to log in as; if you don't have your own
+account, you can tell it "Anonymous"; no password is necessary (if
+you provide one, it will be ignored).  If you want write-access to
+the sources on EE, send mail to LISPM-ACCOUNTS at EE.
+
+Date: 12 May 1982 04:52-EDT
+From: Richard M. Stallman <RMS at MIT-AI>
+To: INFO-LISPM at MIT-AI
+
+System 85 is now released.  It appears to work reliably.
+For full details, see LMDOC;SYS85 MSG.
+
+MIT System 85 comes with microcode 122.
+
+  Table of contents of additions to system 85 as compared to 83:
+  Things you should take note of:
+   [1] A new rubout handler installed by default.
+   [2] There is a new compressed format for bands.
+   [3] A new LOGIN syntax is being introduced.
+
+  Things you may safely ignore:
+   [A] During a QC-FILE the compile and run time flavor environments are segregated.
+   [B] Flavor instantiation has been sped up, and the number of conses reduced.
+   [C] Many new ZWEI features.
+   [D] TV:SET-DEFAULT-FONT improved, TV:SET-STANDARD-FONT introduced.
+   [E] DRIBBLE-ALL
+
+Announcements for system 83.
+
+  Things you should take note of:
+   [0] Operational notes
+   [1] File connections go away if unused for a period of time.
+   [2] Flavors have been sped up considerably.
+   [3] EQ hash tables have been improved.
+   [4] &KEY and duplicate keywords.
+   [5] Converse no longer appears by default.
+
+  Things you may safely ignore:
+   [A] New functions GETDECL, PUTDECL, DEFDECL.
+   [B] DO* a sequential version of DO exists.
+   [C] WITH-LOCK.
+   [D] TYPECASE.
+   [E] :NAMED-STRUCTURE is now allowed as a second argument for TYPEP.
+   [F] PRESS:PRINT-FILE, PRESS:SPOOL-FILE and PRESS:PRINT-FROM-STREAM
+   [G] Generic pathnames have been reimplemented.
+   [H] Interlocking of garbage collector operations has been improved.
+   [I] MAPHASH-EQUAL-RETURN
+   [J] INTERSECTION and UNION.
+   [K] Error level appears in error handler prompt.  EH:PDL-GROW-RATIO.
+   [L] FQUERY:  :ANY as choice, and :STREAM option.
+   [M] new ZWEI command SOURCE COMPARE CHANGES.
+   [N] FILLARRAY creates array if first arg is NIL.
+
+Date: 8 May 1982 16:06-EDT
+From: Mark J. Dulcey <Dulcey at MIT-AI>
+Subject: New minor mode Return Indents
+To: INFO-LISPM at MIT-AI, INFO-ZWEI at MIT-AI
+
+I have made some changes (as of 85.19) to the command Indent New Line
+(the function normally found on Line).
+
+1.  The variables Indent New Line New Line Function and 
+    Indent New Line Indent Function control how the Indent New Line
+    function works.  If they are NIL (the default) Indent New Line performs
+    the function placed on Return, then the function placed on Line (just
+    like before).  If either is not NIL, the command named is executed
+    instead.  Among other things, this allows Indent New Line to be
+    placed on the Return key without causing infinite recursion.
+
+2.  The new minor mode Return Indents Mode makes it easy to set up your
+    ZMACS to cause the Return key to indent the new line (like the default
+    definition of Line), and to put the normal definition of Return on Line
+    (so you don't lose it altogether).  This wins (at least I think so) in
+    Lisp Mode, and loses horribly in Text Mode.  It probably also wins in
+    other programming language modes (but I haven't tried it).
+
+This supersedes my previous announcement about a file to allow this in
+LMLIB;.  That file is now considered obsolete and will go away soon.
+
+Date: 5 May 1982 23:20-EDT
+From: Richard M. Stallman <RMS at MIT-AI>
+Subject: ZWEI question
+To: INFO-LISPM at MIT-AI
+
+Right now, Select Buffer is different from all other commands that do completion
+in that if you type a name that does not exist, and end with Return,
+it beeps, but if you type a second Return, it creates the buffer you specified.
+
+In other commands that do completion, you would type End to request completion
+and Return to submit the exact string you typed.
+
+Would you like Select Buffer to be made compatible with those other commands?
+
+Date: 29 April 1982 22:38-EDT
+From: Mark J. Dulcey <DULCEY at MIT-AI>
+Subject: Operating the Lisp Machine manual
+To: INFO-LISPM at MIT-AI
+cc: DULCEY at MIT-ML
+
+A new batch of printed copies of Working Paper 209 showed up in
+Room 907.  Take these, rather than :DOVERing it yourself.
+
+dulcey@MIT-ML 04/27/82 04:16:44 Re: Operating the Lisp Machine manual
+To: INFO-LISPM at MIT-AI
+CC: DULCEY at MIT-ML
+A copy of the out-of-print Working Paper "Operating the Lisp Machine"
+is available in a form suitable for :dover'ing.  This document is
+somewhat out of date, but it's all we've got.
+
+You can get one on ITS by
+:DOVER FC:DULCEY;OPERAT XGP
+
+(For some reason unknown to me, 
+  (press:print-xgp-file "FC:DULCEY;OPERAT XGP" ':spool t)
+loses completely on this file.)
+
+
+Date: Wednesday, 21 April 1982, 20:15-EST
+From: levitt at MIT-AI, zvona at MIT-AI
+Sender: Zvona at MIT-AI
+Subject: LMLIB;DO&
+To: info-lispm at MIT-AI
+
+DO& is an interation macro with many of the features of LOOP and a
+LISPy syntax similar to DO*.  User-definable keywords allow common
+iterative constructs -- like CDRing down a list, CONSing a new list,
+or counting -- to be implemented more simply and readably.  Automatic
+generation of end tests makes the DO/DO* end-test form unnecessary.  
+
+The programs below, equivalent to common LISP functions, give a feel for
+DO& style:
+
+(defun length (list)
+  (do& ((i &count0)
+	(l &pop list &return i))))
+
+(defun reverse (list)
+  (do& ((elt &pop list &return accum)
+	(accum &push elt))))
+
+(defun listarray (array)
+  (do& ((elt &aref array
+	     &return (nreverse list))
+	(list &push elt))))
+
+(defun remq (item list)
+  (do& ((a &pop list &return (nreverse out))
+	(out &push a
+	     &only-if (neq a item)))))
+
+DO& allows most relevant information to appear within the
+variable specifications, improving program clarity, and doing
+away with the need for formulaic and complex bodies.
+
+DO& has evolved over more than two years and reimplemented many times.
+The rough corners have been worn off, and we now believe the current
+implementation is clean enough for general release.
+
+DO& is documented in detail in LMLIB;DO&DOC.  Bugs to BUG-DO&@AI;
+users may wish to add themselves to INFO-DO&.
+
+Here is a partial comparison of features of DO& and LOOP.  It is
+perhaps not perfectly impartial.  Also, many of the features of LOOP
+which DO& lacks could be added if there were demand for them.
+
+DO& syntax is a natural extension of DO*.  LOOP is a non-LISPy
+sublanguage.  Partly as a consequence, it is easier to determine
+the scope of DO& keywords than that of LOOP keywords.  Since
+keywords all begin with ``&'' it is easy to separate them from
+non-keywords.  The simplicity of DO& syntax makes it trivial to
+learn and often immediately understandably by non-users.  Also it
+indents better than LOOP in Zmacs.
+
+LOOP and DO& have roughly comparable numbers predefined iteration
+keywords.  The sets are not identical; LOOP has a package mapping
+keyword, and DO& has one for mapping over plists.  In any case, both
+make it relatively easy to define your own keywords, so exactly which
+keywords are defined by default is not very important.
+
+LOOP supports parallel binding; DO& does not.  Of course you can
+always use an extra variable to get the same effect.
+
+DO& guarantees that variables have sensible values at all times; LOOP
+does not.  In particular, in a LOOP epilogue, the values of iteration
+variables may be undefined, whereas in a DO& &RETURN form, they are
+always defined and take on the obvious value.
+
+Both LOOP and DO& achieve package independence by using pname equality
+in looking for keywords.
+
+LOOP supports destructuring; DO& does not.  DO& generates automatic
+dummy variables when none is supplied in a variable specification;
+LOOP does not.
+
+LOOP does more code optimization than DO& does.
+
+DO& has many other features that are described in detail in DO&DOC. 
+
+Date: 15 April 1982 05:15-EST
+From: Richard M. Stallman <RMS at MIT-AI>
+Subject: System 79 and 83 QFASL files now compatible.
+To: INFO-LISPM at MIT-AI
+
+Both system 79 and system 83 have been patched so that files compiled
+in either one will load into the other and work; but you must use
+microcode 862 with system 79 to be sure of success.
+
+If a file compiled in system 79 is loaded into system 83,
+some of system 83's speed advantage in flavors with methods in that file
+will be forfeit.  Also, in the unlikely case that you load old
+compiled DECLARE-FLAVOR-INSTANCE-VARIABLES functions for a flavor
+but do not load any old compiled methods for that flavor, it will
+not work automatically.  Contact me if you think this is happening to you.
+
+If a file compiled in system 83 is loaded into system 79,
+combined methods produced by COMPILE-FLAVOR-METHODS will be ignored.
+This may make your program slower to start up than it used to be,
+but will have no other effects.
+
+It is therefore best to compile your files in system 83, so that
+they will get the full speed advantage when run in that system.
+
+It should be noted that system 83 has the same compatibility definitions
+that system 79 has, for the functions DEFUN-METHOD and INSTANCE-VARIABLE-BOUNDP
+needed in brand S systems.  So code that has been changed to work in those
+systems will also work in system 83.  QFASL files are not compatible
+between 79/83 and 204, however.
+
+I would like to apologize for not mentioning the now eliminated
+incompatibility of QFASL files in the system message for system 83.
+Sometimes when I know something by heart, I forget that other people
+don't know it.
+
+Date: 12 April 1982 16:49-EST
+From: Richard M. Stallman <RMS at MIT-AI>
+To: INFO-LISPM at MIT-AI
+
+System 83 belongs to MIT, like previous versions of the Lisp
+machine system.  People should not be misled by ZVONA's reference
+to it as an "LMI/MIT" system; it is an MIT system.
+(I wouldn't have worked, and so hard, on something that would
+belong to LMI!)
+
+Date: 12 April 1982 16:49-EST
+From: Richard M. Stallman <RMS at MIT-AI>
+To: INFO-LISPM at MIT-AI
+
+System 83 belongs to MIT, like previous versions of the Lisp
+machine system.  People should not be misled by ZVONA's reference
+to it as an "LMI/MIT" system; it is an MIT system.
+(I wouldn't have worked, and so hard, on something that would
+belong to LMI!)
+
+Date: 12 April 1982 11:40-EST
+From: David Chapman <zvona at MIT-AI>
+Sender: DANNY at MIT-AI
+To: INFO-LISPM at MIT-AI
+
+It should be noted that files compiled in LMI/MIT system 83
+will not necessarily load into system 79.
+
+In order to postpone the necessity of chosing between 83 and
+204, I and others intend to keep 79 alive as long as possible
+by introducing patches from the new systems.
+
+Date: 12 April 1982 07:08-EST
+From: Richard M. Stallman <RMS at MIT-AI>
+To: INFO-LISPM at MIT-AI
+
+MIT System 83 is ready for people to try out.
+It has no known new bugs, but has not received heavy use.
+You can copy the band 83.5 Try me from CADR-7,
+together with microcode 104.
+
+See LMDOC;SYSTEM MSG for information on new features.
+
+Date: 26 March 1982 23:30-EST
+From: Richard M. Stallman <RMS at MIT-AI>
+Sender: RMS0 at MIT-AI
+To: INFO-LISPM at MIT-AI
+
+The recent announcement from "the staff of Symbolics" takes the tone
+of a generous and magnanimous offer to MIT.  People ought to know the
+background facts so that they can judge the appropriateness of that
+tone.
+
+Just about everything which Symbolics says it will do for MIT is
+required by the contract (I read it yesterday).  Specifically,
+Symbolics is required to make available anything which, had it existed
+at MIT when the contract was signed, would have been considered a part
+of the Lisp machine system.  This, in my interpretation, would include
+such things as font editors, file systems, new compilers, faster
+flavors, etc., though not applications programs.
+
+Symbolics is not required to pay attention to bug reports from MIT.
+But they will do this only when it suits them anyway, and we can be
+sure they would do so, out of self-interest, in any case.  They are
+not doing it for MIT's sake.  They are not required to put their files
+onto an MIT machine; they are only required to let someone from MIT
+copy them there.  This doesn't make much difference either way.
+
+So Symbolics is not really offering MIT anything.
+
+Instead they are breaking an oral agreement made (I am told) between
+Symbolics, LMI and the MIT lawyers, according to which changes to the
+basic system would belong to MIT for the sake of compatibility; an
+agreement which, until the beginning of this year, they followed.
+
+Their new policy is therefore properly understood as ceasing to do
+anything out of their way for MIT's sake, as they used to do, and
+instead doing only what is good for them or required in writing.
+
+Date: 24 March 1982 08:03-EST
+From: Patrick G. Sobalvarro <PGS at MIT-AI>
+To: INFO-LISPM at MIT-AI
+
+Now that the AI machine's problems with them seem to be in remission, the chaos
+door and elevator servers are once again installed.
+
+Date: 24 Mar 1982 0554-EST
+From: David L. Andre <DLA at SCRC-TENEX>
+Subject: Where to get 204.
+To: INFO-LISPM at SCRC-TENEX
+cc: DLA at SCRC-TENEX
+
+It seems that a large number of 204 bands have gotten munged somehow.
+There are (hopefully) unmunged bands on LM10, LM11, and LM13.
+-------
+
+Date: 21 Mar 1982 1613-EST
+From: Eric M. Ostrom <ERIC at MIT-EECS>
+Subject: access to Symbolics system.
+To: marty at MIT-AI, info-lispm at MIT-AI
+
+No permission is required from anyone at MIT to access the Sources stored
+on the EE/CS LIB: disk. Login anonymous with no password will allow anyone
+to ftp any of the Symbolics sources.
+	Eric
+-------
+
+Date: 20 March 1982 18:45-EST
+From: Martin David Connor <MARTY at MIT-AI>
+Subject:  A suggestion for the Lisp Machine community to discuss
+To: INFO-LISPM at MIT-AI, BUG-OZ at MIT-AI, KRD at MIT-AI,
+    GJS at MIT-AI, BRADY at MIT-AI, PHW at MIT-AI
+cc: MINSKY at MIT-AI, TK at MIT-AI
+
+I was not really sure who I should send this message to; It relates
+to an issue that would seem important to most everyone, and especially
+to those who consider Lisp Machines important to their research.  I
+wish to beg the pardon of anyone who is inconvenienced by this
+message.  I am leary of mailing lists for this very reason.
+
+I thought now was a good time to raise certain questions that we will
+very probably have to be deal with in the near future.  What follows
+is my analysis of the current Symbolics Inc. agreement with the EE/CS
+department, and how I feel we could benefit froma similar agreement.
+     
+     Date: Thursday, 18 March 1982, 14:29-EST
+     From: The Software Staff of Symbolics at SCRC-TENEX
+     Subject: Release of Symbolics software at MIT
+     To: INFO-LISPM at MIT-AI
+     
+     Through an agreement between Symbolics, Inc. and MIT's EE/CS department,
+     Symbolics' Lisp Machine software is now available for use by MIT users.
+     
+     Symbolics is making available all software that we maintain to MIT
+     users.  This includes the Symbolics File System, Tape System, Canon
+     Laser Printer Software, and Font Editor, as well as any other software
+     that is being developed for distribution to Symbolics customers.  New
+     releases will be made available to MIT at least as often as to Symbolics
+     customers.  In practice, MIT will probably be given releases more
+     often than this, to provide faster response to trouble reports.
+
+I assume that this means that they are giving us the software at no
+charge. What are giving them is possibly the best test market and
+debugging user community in the world.  The tradeoff may be worthwhile.
+     
+     Symbolics systems can be distinguished because their system version
+     numbers are greater than 200; the current system being released is
+     System 204.  The master copies of the sources from which Symbolics
+     systems are created are kept at Symbolics; copies of these sources are
+     being kept on MIT-EECS (the TOPS-20 system of the EE/CS department,
+     which is providing the disk space to hold these sources).  Please note
+     that MIT-EECS is a very heavily loaded system, and its routine use
+     should be avoided.  We expect lisp machine users to be considerate
+     in this regard.
+
+This begins to foreshadow my suggestion.  As an AI Lab researcher I
+would not want to have to depend on a system outside the Lab for
+accessing system sources.
+     
+     The sources are on the LIB: structure of the MIT-EECS machine.  The
+     Symbolics systems are configured to know that all system sources live on
+     this machine; if you access a system source file with the Meta-.
+     command or otherwise, the system will connect to MIT-EECS to read in the
+     file.  This way, Meta-. will find the correct version of the source,
+     corresponding to the software in the Lisp environment.  Furthermore,
+     if you do LOAD-PATCHES, the patch files will be searched for on MIT-EECS.
+     
+     When Symbolics bands for MIT are booted, they say "EE" instead of "MIT"
+     in the last line of the herald message.  This is because these bands use
+     a different set of site-configuration files, in order to make the SYS
+     host be EE instead of AI.  This convention may change in the future.
+     
+     The MIT-EECS machine requires you to log in before you can access files.
+     Anyone may log in by using the user name "Anonymous", without giving the
+     file job a password; this will give you read-access to all of the
+     sources.  Of course, if you have your own account on MIT-EECS, you may
+     use that; all users have read-access to all the sources.
+
+This situation is also far from ideal.  As an AI Lab person I feel a
+bit restricted to have to ask for permission to access sources.
+     
+     We want to provide the same fast response to bugs that MIT Lisp Machine
+     users are accustomed to.  Therefore, bug reports sent to Symbolics from
+     MIT will be answered as soon as possible, and patch files will get moved
+     to MIT-EECS promptly.
+     
+     In order to make it easy for MIT users to introduce bug fixes and
+     changes into the Symbolics software, system maintainers at MIT may
+     modify the copies of the sources that are stored on MIT-EECS.  Symbolics
+     will normally merge such changes into the master source files at
+     Symbolics; however, we reserve the right to reject any changes we feel
+
+The right of Symbolics to refuse changes would be bothersome, but the
+fact that there is a "site" file which I am told can contain patches
+which are very specific to a particular site would seem to help
+matters.  
+
+     are incorrect or inappropriate.  When new releases are provided to
+     MIT-EECS, sources will be copied from Symbolics to MIT-EECS, and any
+     changes that were rejected will disappear from the sources.  (The source
+     files on MIT-AI are merged with Symbolics sources only infrequently.)
+     
+     The administrators of the MIT-EECS machine have decided to control
+     write-access to these sources, on a per-user basis.  If you feel you'd
+
+op. cit. (already cited)
+
+     like to have access to modify Symbolics sources stored on MIT-EECS, send
+     mail to the list LISPM-ACCOUNTS@EE.  Please note that this control is
+     being maintained by MIT-EECS personnel, and not Symbolics personnel.
+     
+     This software is provided to MIT under the terms of the Lisp System
+     License Agreement between Symbolics and MIT.  MIT's license to use this
+     software is non-transferable.  This means that the world loads,
+     microloads, sources, etc. provided by Symbolics may not be distributed
+     outside of MIT without the written permission of Symbolics.
+
+This is a somewhat problematic point for some people.  I do not have
+very big problems with it.  I assume that we can give application
+programs freely to others, and as for the system, I think it a
+distraction from most people's research to maintain a LISP machine
+world.  The time it would take, and the hacker hours would not justify
+it, not to mention that those best at it are not here.  If I am only going
+to support a Lisp Machine world, I might as well get paid well for it.
+As a hacker, I can say that I am here to do things that I could not do
+at most companies.  I would suspect that many people have similar
+motivations in their research.
+     
+     System 204 already exists in many forms on MIT machines; some of these
+     bands have different systems loaded.  People who wish to receive advice
+     on which software packages would best suit their needs, or who wish
+     assistance in installing system 204 should send mail to
+     BUG-LISPM-SCRC@SCRC.
+
+     System 204, and all associated software, is now released to users.  It
+     comes with Symbolics microcode 865, and ZMail 42.  There are a number of
+     INCOMPATIBLE CHANGES in this software.  The system release announcement
+     can be found in EE:LIB:<LISPM.DOCUMENTATION>SYSTEM-204.RELEASE and
+     in AI: LMDOC; SYS204 MSG.
+
+--------------
+
+Now to my suggestion.
+
+The new AI machine OZ, will have 1.4 gigabytes of disk space. 
+I suggest that we store the Symbolics sources there.  
+I think this idea has the following attractive features for the Lab:
+
+- Each of the major groups of Lisp Machine users at the Lab may
+  choose what software they wish to run.  The sources can be on OZ,
+  and can be accessable to those who want them.  
+
+- This does not negate the possibility that we could have other Lisp
+  Machine system software on the same machine.
+
+- We would not have to depend on the heavily loaded EE machine for
+  storage of software.
+
+- We would not have to ask permission of EE people to access the
+  sources. I would not expect too much of a problem in this regard, but
+  I see no reason for this indirection if we can just as well have
+  our own sources.
+
+- The AI Lab will quite likely be the major Lisp Machine user on
+  Campus, and will have a very strong need to have the sources
+  available.
+
+What I would propose is that we seek an agreement with Symbolics
+whereby they will store their sources at MIT-OZ, and for our
+consideration of testing software and reporting bugs and allowing them
+access to the software we write as well as using our computational
+resources, they will incorporate our patches and at no charge will
+supply any software that they would supply to their normal customers.
+I would also like to see some words to the effect that we may give
+away certain specific kinds of software that we develop to whoever
+wants it.
+
+That is my basic suggestion.  
+
+I see the Lisp Machine as a tool, and thus I think we should use them
+rather than build them. Use them to create new ideas.  
+
+This represents my current thinking, and I wish it to be clear that
+this is a suggestion.  I hope it will serve as a basis for clearer
+more rational discussion between all the people who are affected by this
+issue.
+
+Hacking Tomorrow;
+
+Marty
+
+
+Date: Thursday, 18 March 1982, 14:29-EST
+From: The Software Staff of Symbolics at SCRC-TENEX
+Sender: DLA at SCRC-TENEX
+Reply-to: DLA at SCRC-TENEX
+Subject: Release of Symbolics software at MIT
+To: INFO-LISPM at MIT-AI
+
+Through an agreement between Symbolics, Inc. and MIT's EE/CS department,
+Symbolics' Lisp Machine software is now available for use by MIT users.
+
+Symbolics is making available all software that we maintain to MIT
+users.  This includes the Symbolics File System, Tape System, Canon
+Laser Printer Software, and Font Editor, as well as any other software
+that is being developed for distribution to Symbolics customers.  New
+releases will be made available to MIT at least as often as to Symbolics
+customers.  In practice, MIT will probably be given releases more
+often than this, to provide faster response to trouble reports.
+
+Symbolics systems can be distinguished because their system version
+numbers are greater than 200; the current system being released is
+System 204.  The master copies of the sources from which Symbolics
+systems are created are kept at Symbolics; copies of these sources are
+being kept on MIT-EECS (the TOPS-20 system of the EE/CS department,
+which is providing the disk space to hold these sources).  Please note
+that MIT-EECS is a very heavily loaded system, and its routine use
+should be avoided.  We expect lisp machine users to be considerate
+in this regard.
+
+The sources are on the LIB: structure of the MIT-EECS machine.  The
+Symbolics systems are configured to know that all system sources live on
+this machine; if you access a system source file with the Meta-.
+command or otherwise, the system will connect to MIT-EECS to read in the
+file.  This way, Meta-. will find the correct version of the source,
+corresponding to the software in the Lisp environment.  Furthermore,
+if you do LOAD-PATCHES, the patch files will be searched for on MIT-EECS.
+
+When Symbolics bands for MIT are booted, they say "EE" instead of "MIT"
+in the last line of the herald message.  This is because these bands use
+a different set of site-configuration files, in order to make the SYS
+host be EE instead of AI.  This convention may change in the future.
+
+The MIT-EECS machine requires you to log in before you can access files.
+Anyone may log in by using the user name "Anonymous", without giving the
+file job a password; this will give you read-access to all of the
+sources.  Of course, if you have your own account on MIT-EECS, you may
+use that; all users have read-access to all the sources.
+
+We want to provide the same fast response to bugs that MIT Lisp Machine
+users are accustomed to.  Therefore, bug reports sent to Symbolics from
+MIT will be answered as soon as possible, and patch files will get moved
+to MIT-EECS promptly.
+
+In order to make it easy for MIT users to introduce bug fixes and
+changes into the Symbolics software, system maintainers at MIT may
+modify the copies of the sources that are stored on MIT-EECS.  Symbolics
+will normally merge such changes into the master source files at
+Symbolics; however, we reserve the right to reject any changes we feel
+are incorrect or inappropriate.  When new releases are provided to
+MIT-EECS, sources will be copied from Symbolics to MIT-EECS, and any
+changes that were rejected will disappear from the sources.  (The source
+files on MIT-AI are merged with Symbolics sources only infrequently.)
+
+The administrators of the MIT-EECS machine have decided to control
+write-access to these sources, on a per-user basis.  If you feel you'd
+like to have access to modify Symbolics sources stored on MIT-EECS, send
+mail to the list LISPM-ACCOUNTS@EE.  Please note that this control is
+being maintained by MIT-EECS personnel, and not Symbolics personnel.
+
+This software is provided to MIT under the terms of the Lisp System
+License Agreement between Symbolics and MIT.  MIT's license to use this
+software is non-transferable.  This means that the world loads,
+microloads, sources, etc. provided by Symbolics may not be distributed
+outside of MIT without the written permission of Symbolics.
+
+System 204 already exists in many forms on MIT machines; some of these
+bands have different systems loaded.  People who wish to receive advice
+on which software packages would best suit their needs, or who wish
+assistance in installing system 204 should send mail to
+BUG-LISPM-SCRC@SCRC.
+
+System 204, and all associated software, is now released to users.  It
+comes with Symbolics microcode 865, and ZMail 42.  There are a number of
+INCOMPATIBLE CHANGES in this software.  The system release announcement
+can be found in EE:LIB:<LISPM.DOCUMENTATION>SYSTEM-204.RELEASE and
+in AI: LMDOC; SYS204 MSG.
+
+Date: 15 Mar 1982 1252-PST
+From: Chris Ryland <Ryland at SRI-KL>
+Subject: MEDFNT replacement
+To: Info-LISPM at MIT-AI
+
+I've put a MEDFNT font replacement in AI:LMLIB;MEDFNT QFASL .  It' a
+typewriter-style font which I happen to like (since I created it pixel
+by pixel and tuned it over a long period of time).  Further, I use it as
+as the standard font.  (It's a MEDFNT replacement to maximize its
+availability in standard system-type fonts (many of which use MEDFNT).)
+I do a (TV:SET-DEFAULT-FONT 'FONTS:MEDFNT) after loading it, and then
+a (CLEAR-RESOURCE 'TV:SYSTEM-MENU) to make the system menu get recreated
+in its new image.
+
+You may hate it.  I happen to like it and think it's a real eye-saver
+as a default font.
+-------
+
+Date: 8 March 1982 12:17-EST
+From: Gerald R. Barber <JerryB at MIT-AI>
+Subject: Picture insertion facility
+To: INFO-LISPM at MIT-AI
+
+The file AI:LMLIB;INSDIG contains a picture insertion facility for the
+lisp machine.  It will insert press diagrams such as those created by
+the Alto's draw program or ECC's XDIAG package for the Lisp Machine (see
+LMLIB;XDIAG) into press files. 
+
+Comments, problems to Jerryb@ai.
+
+Date: 8 March 1982 12:06-EST
+From: Gerald R. Barber <JerryB at MIT-AI>
+Subject: Picture insertion facility
+To: INFO-LISPM at MIT-AI
+
+The file AI:LMLIB;INSDIG contains a picture insertion facility for the
+lisp machine.  It will insert press diagrams into press files.
+Comments, problems to Jerryb@ai.
+
+Date: 26 February 1982 09:19-EST
+From: Charles Rich <RICH at MIT-AI>
+Subject: LMLIB on Lispm File Computer
+To: INFO-LISPM at MIT-AI
+
+To all contributors and users of LMLIB -
+
+   Please note that there are copies of LMLIB
+on FS:LMLIB; and FC:LMLIB; (which is very useful when
+AI is not available).  It would be especially appreciated 
+if contributors would keep up-to-date copies on these
+directories as well as AI.  
+
+		Thanks, Chuck.
+
+P.S. For those not familiar with FS: or FC: devices,
+you simply type for example  FS:LMLIB;KMOUSE.LISP and
+FS:LMLIB;KMOUSE.QFASL instead of AI:LMLIB;KMOUSE and
+AI:LMLIB;KMOUSE QFASL in your load or copy command.
+(Similarly for FC: instead of FS:).
+
+ECC@MIT-ML 02/23/82 14:45:12 Re: LMLIB;ZVAL
+To: info-lispm at MIT-AI
+The library LMLIB;ZVAL has functions, primarily ZMACS commands,
+to aid in evaluating from within ZMACS and for incrementally
+testing code as you write it.  See the INFO file AI:LMLIB;ZVAL INFO.
+
+
+Date: 19 February 1982 18:27-EST
+From: Eugene C. Ciccarelli <ECC at MIT-AI>
+Subject: new library
+To: INFO-LISPM at MIT-AI
+
+AI:LMLIB;FILCOM is a short file with a new ZMACS minor mode
+called Auto Fill Lisp Comments Mode.  This is like the normal
+auto fill mode except that only comments get broken across lines
+-- not code.  Some documentation is at the beginning of FILCOM >.
+
+Date: 19 February 1982 18:27-EST
+From: Eugene C. Ciccarelli <ECC at MIT-AI>
+Subject: new library
+To: INFO-LISPM at MIT-AI
+
+AI:LMLIB;FILCOM is a short file with a new ZMACS minor mode
+called Auto Fill Lisp Comments Mode.  This is like the normal
+auto fill mode except that only comments get broken across lines
+-- not code.  Some documentation is at the beginning of FILCOM >.
+
+Date: 17 February 1982 17:33-EST
+From: Daniel L. Weinreb <DLW at MIT-AI>
+To: INFO-LISPM at MIT-AI
+
+The file LMWIND; WINDOC PRESS is back in shape.  I hope to get
+this published by the AI lab so that you won't have to run off
+your own copies, someday.
+
+Date: 16 February 1982 05:02-EST
+From: Dexter Pratt <DEXTER at MIT-AI>
+Subject: hardware lossage reporting	
+To: INFO-LISPM at MIT-AI
+
+
+In order to keep the lisp machines better maintained, I'd like to ask everybody to
+use the bug-hardware list - I generally hear of broken machines by word of mouth, or
+by noticing that one has a note on it. Furthermore, once a bug is reported, there
+should be a response to bug-hardware by the person who fixes it, as is done on bug-lispm.
+
+
+several new people are learning how to debug cadrs, so the maintainance will  
+improve in the next months.
+
+-dexter
+
+Date: Friday, 12 February 1982, 15:55-EST
+From: Daniel L. Weinreb <dlw at SCRC-TENEX>
+Subject: New arguments to old functions.
+To: info-lispm at MIT-AI
+
+The following two changes were made some time ago, but never generally
+announced:
+
+The LOAD function now takes a fifth argument named NO-MSG-P.  If the
+value of this argument is T (it defaults to NIL), then LOAD will not
+print out the message that it usually prints (that is, the message that
+tells you that a certain file is being loaded into a certain package).
+
+The functions SUBSET and SUBSET-NOT (also known as REM-IF-NOT and
+REM-IF) now take a &rest argument, named EXTRA-LISTS, in addition to the
+first two arguments.  If EXTRA-LISTS is present, each element of
+EXTRA-LISTS (that is, each further argument to SUBSET) is a list of
+objects to be passed to PREDICATE as PREDICATE's second argument, third
+argument, and so on.  The reason for this is that PREDICATE might be a
+function of many arguments; EXTRA-LISTS lets you control what values are
+passed as additional arguments to PREDICATE.  However, the list returned
+by SUBSET is still a "subset" of those values that were passed as the
+first argument in the various calls to PREDICATE.
+
+
+Date: Friday, 12 February 1982, 14:30-EST
+From: David L. Andre <DLA at SCRC-TENEX>
+Subject: System 79 release.
+To: INFO-LISPM at MIT-AI
+Cc: DLA at SCRC-TENEX
+
+System 79.8 is now released to users.  It comes with ZMail 40,
+LMFILE-Remote 5, Remote-File 2, and microcode 849.  Copies of system 79
+bands are kept on the FileComputer (LM27), and you may get a band from
+there at any time, regardless of who is logged in there.
+
+A number of patches before 79.8 take a long time to load.  It will
+probably be easier for you to get a band from the FileComputer than to
+load those patches, if you already have a system 79 band.
+
+  Table of contents:
+
+  Things you should take note of:
+ [1] New Converse subsystem for interactive messages.
+ [2] Name changes to some editor commands.
+ [3] PROCESS-RUN-FUNCTION and related functions have been changed slightly.
+ [4] New function SI:LOAD-AND-SAVE-PATCHES.
+ [5] File computers.
+
+  Things you may safely ignore:
+ [A] New user option FS:*ALWAYS-MERGE-TYPE-AND-VERSION*
+ [B] A bug in %P-STORE-CONTENTS has been fixed.
+ [C] Only one process at a time may run in the compiler.
+ [D] New subst FILL-POINTER.
+ [E] New function ERRORP.
+ [F] Error handler now uses ERROR-OUTPUT for its IO.
+ [G] PROCESS-RUN-FUNCTION changes.
+ [H] New features in resources.
+ [I] New :SELECT-METHOD function spec.
+ [J] Some functions have moved to new files.
+ [K] New hosts are supported as file computers.
+ [L] Terminal B buries the selected window.
+ [M] New PEEK S mode for information on servers.
+ [N] MONITOR-VARIABLE and UNMONITOR-VARIABLE now actually work.
+ [O] New functions for use in the interactive error handler (debugger).
+ [P] Lambda macros are now supported.
+
+  Things that you should take note of:
+
+[1] This system includes the new Converse subsystem, for interactive
+messages between users.  (qsend) or System-C will select the Converse
+window, which should be self-documenting (type the Help key at that
+window for documentation on the window, the Lisp functions, and the
+user-option variables).  The qsend function with arguments works the
+same as before, except that if you don't specify a host it will search
+all Lisp machines on the local Chaosnet for the person to send to; in
+other words, all Lisp machines whose names the qsend function would
+accept.
+
+[2] The editor command List Multiple Callers has been renamed to
+Multiple List Callers for consistency (there is a whole family of these;
+everything with Multiple in its name now has Multiple as the first
+word.)
+
+The editor command List Functions has been renamed to List Definitions.
+
+[3] PROCESS-RUN-FUNCTION now does what PROCESS-RUN-TEMPORARY-FUNCTION used to
+do.  This means that the writeup in the manual is now obsolete.
+PROCESS-RUN-TEMPORARY-FUNCTION is still around, but is obsolete and will go
+away eventually.   More about this in the second section.
+
+[4] There is a new function SI:LOAD-AND-SAVE-PATCHES, which is the right
+thing to use if you want to load patches and save out the band.  It
+loads any patches, and if some were made, it prints the disk label and
+queries you to find out which partition should be used for the dump.
+This function may (and should, usually) be called without logging in, so
+as to avoid putting the contents of your login file into the world load.
+It is smart about many of the common errors people make when saving
+bands, and therefore should avoid many of those problems.
+
+A related change is that LOAD-PATCHES now returns T if any patches were
+made, and NIL otherwise.
+
+[5] Access to the file computer is now loaded by default.  This is the
+reason for the LMFILE-Remote and Remote-File systems in the herald.
+Interested parties are referred to LMFS;FSDOC for information on the LM
+file system, and to LMFILE;DOC for information on the LMFILE file
+system.
+
+  Things that you may safely ignore:
+
+[A] A new user option FS:*ALWAYS-MERGE-TYPE-AND-VERSION* is available
+for those who prefer TENEX style pathname defaulting.  The default
+algorithm for merging does NOT take the type and version from the
+default pathname if a name is specified.  For example, on TWENEX, typing
+"FOO" with the default "BAR.LISP" will give "FOO", NOT "FOO.LISP".
+There have been some complaints from people who dislike this convention,
+so with FS:*ALWAYS-MERGE-TYPE-AND-VERSION* set to T, they will get the
+desired behavior.  Most people will not want to use this.
+
+[B] A bug in %P-STORE-CONTENTS, causing it to follow invisible pointers,
+has been fixed.  This is mentioned here since it is a low-level change
+that might conceivably break something.  (In fact two functions in
+the system depended on the buggy behavior and have been fixed; other
+functions in the system did not work because of the buggy behavior.)
+
+[C] Only one process at a time may run the compiler.  If a second
+process tries to enter the compiler while it is busy, a notification
+will be printed and the second process will wait with who-line state
+"Compiler".  If the first process is not ever going to get out of the
+compiler (perhaps it is stopped with an error), you must abort it in
+order for the second process to proceed.  This was announced in system
+78, but now it really works.
+
+[D] The function FILL-POINTER, given an array, returns the fill pointer
+of the array.  This is actually a SUBST, and so you can use SETF with it. 
+
+[E] New function ERRORP.  For now equivalent to STRINGP, for the benefit
+of the :NOERROR keyword to OPEN and corresponding arguments to DELETEF
+and related functions.  In the new error system, these functions will
+return error objects rather than strings, and ERRORP will be changed to
+test whether something is an error object.  Start converting your code.
+
+[F] The error handler now does its i/o on the stream which is the value
+of ERROR-OUTPUT, or what it is indirected to if it is a syn stream.  It
+used to use TERMINAL-IO.  The default value of ERROR-OUTPUT is syn to
+TERMINAL-IO, hence this change only makes a difference if you change
+ERROR-OUTPUT.  The error handler bugs where QUERY-IO was bound to the
+wrong thing are also fixed.
+
+This may be changed again, by introducing a new stream ERROR-IO which
+the error handler uses, and making ERROR-OUTPUT be separately bindable.
+That has not been done yet, and may be a bad idea.
+
+[G] The first argument to PROCESS-RUN-FUNCTION (and the two similar
+functions) may now be a list of alternating keywords and values rather
+than a string.  The keywords are:
+
+	:name - a string, default "Anonymous"
+	:restart-after-reset - boolean, default nil => :reset kills process
+	:restart-after-boot - boolean, default nil => warm or cold boot kills
+	:warm-boot-action - same as for make-process, except :flush does
+			    what :warm-boot-action nil does, and nil (default)
+			    means obey the :restart-after-boot keyword
+	:priority - a number, default 0 which is standard priority
+	:quantum - a number of 60ths of a second, default 60.
+
+process-run-restartable-function defaults :restart-after-boot and
+:restart-after-reset to t rather than nil.
+
+Note that the names of processes, like the names of everything else, are
+strings.  It used to work, at least to some extent, to use any Lisp object
+as the name of a process, and some people have been using symbols.  This
+no longer works, as it happens.
+
+A related change is that P in PEEK now shows more information about
+processes.
+
+[H] DEFRESOURCE has been changed to provide some new features and to
+have better paging performance.  The :INITIALIZER is a form or function
+that sees OBJECT and its parameters as arguments, when OBJECT is about
+to be allocated (whether it is being reused or was just created); it may
+initialize the object.  The :FREE-LIST-SIZE option allows you to set the
+size of the array of objects.
+
+[I] There is a new function spec (:SELECT-METHOD fcn-spec message).  If
+fcn-spec contains a select-method, then this refers to the function to
+which the select method dispatches upon receiving <message>.  It is an
+error if fcn-spec doesn't contain a select method, or if the select
+method doesn't support message.  This is now used by DEFSELECT rather
+than making up new symbols for the functions.
+
+This also means that if a DEFSELECT is compiled in system 79, it will
+not load into an older system.
+
+[J] Numerous system functions are in different files now, for various
+reasons. This should not affect anyone.
+
+[K] VMS and Unix file systems are now supported as file servers.
+
+NOTE WELL: There are known problems with Unix pathnames with regard to
+alphabetic case and file-types.  These reflect a low-level pathname
+problem, which cannot be fixed until the next system release.  Be
+forewarned. 
+
+[L]  Terminal B buries the selected window.
+
+[M]  In PEEK, S now displays information on the active servers.
+
+[N] MONITOR-VARIABLE and UNMONITOR-VARIABLE actually work now (they have
+been in the manual for some time).
+
+[O] The error handler now provides functions EH-ARG, EH-LOC, EH-VAL and
+EH-FUN which you can use for looking at the args, locals, values being
+returned and function of the current frame.  Using SETF and LOCF, you
+can also modify these things or get their locations.
+
+EH-ARG and EH-LOC accept either the number of the arg or local (origin
+0) or its name (packages do not matter), and return the value of the
+arg or local.  EH-FUN takes no arg and returns the function this frame
+is calling.
+
+EH-VAL examines the values this frame is going to return, or, for a
+trap on exit, the values it has already returned.  It allows only
+a number to say which value, since values do not have names.
+EH-VAL with no argument returns a list of all the values this frame is
+returning.  EH-VAL with no argument cannot be SETF'd or LOCF'd,
+however.
+
+[P] Lambda macros are now supported.  Associated functions are
+DEFFUNCTION, DEFLAMBDA-MACRO, DEFLAMBDA-MACRO-DISPLACE, and
+LAMBDA-MACRO.  Interested parties are referred to LMDOC;LMACRO for more
+information.
+
+GJC@MIT-MC 02/09/82 00:32:38 Re: The CGOL parser.
+To: INFO-LISPM at MIT-MC
+There are files on "AI:LMLIB;" "CGOL QFASL" and "CGOL INFO"
+It defines a readmacro # I found useful in code with math
+formuli copied from papers and/or fortran programs, e.g.
+
+(DEFUN F (X Y Z) # 3*X**2+Y*X-Y**Z )
+
+-GJC
+
+p.s. The main feature of the CGOL parser is its ease of programability.
+
+
+
+Date: 26 January 1982 10:01-EST
+From: Eugene C. Ciccarelli <ECC at MIT-AI>
+Subject: Temporary CADR1 "fix"
+To: INFO-LISPM at MIT-AI
+
+If you are troubled by CADR1's Return key (it typically sends
+several Returns), try loading AI:ECC;*CRFIX.  It has the keyboard
+process ignore Return, and translate Control-M to Return.
+
+Date: Monday, 4 January 1981, 14:50:00
+From: The Software Staff of Symbolics, Inc.
+Subject: Software maintenance at M.I.T.
+To: INFO-LISPM at MIT-AI
+Sender: MMcM at SCRC-TENEX
+Reply-to: MMCM@MIT-AI
+
+Starting now, Symbolics, Inc. will independently maintain Lisp Machine
+system software on its own facilities.  In the past, Symbolics personnel
+have been making their changes to the copies of the system sources on
+the MIT-AI machine.  From now on, changes will be made on the Symbolics
+file computer, and new releases, source updates, and patches will be
+furnished to M.I.T. as they become available.  These new releases will
+be provided to all of the users of Lisp Machines throughout M.I.T., who
+may install them as they see fit.
+
+Due to unanticipated difficulties in establishing our high-speed
+microwave link to M.I.T., Symbolics currently has no high-bandwidth
+communication path; we plan to install a medium-speed phone line
+connection and to continue to attempt to install the microwave link, in
+order to allow closer cooperation with M.I.T.  Symbolics personnel will
+continue to monitor M.I.T. bug reports and fix problems reported by
+M.I.T. users; the medium-speed link will pass mail in both directions to
+allow us to provide this service.  Since this software work will occur
+at Symbolics rather than at M.I.T., it may take longer to fix bugs than
+it used to; we hope to minimize the inconvenience to all involved.
+
+Date: 24 December 1981 06:26-EST
+From: Henry Minsky <HQM at MIT-AI>
+To: INFO-LISPM at MIT-AI
+cc: HQM at MIT-AI
+
+Is there any program to print out a Lisp Machine's screen
+on the DOVER??
+
+Date: 24 December 1981 00:51-EST
+From: David A. Moon <MOON at MIT-AI>
+Subject: Help with CC
+To: INFO-LISPM at MIT-AI
+
+If your machine breaks or crashes, and you need to use CC on another
+machine to debug it, you might try doing (LOAD "AI:LMCONS;CCWHY")
+before going into CC.  [This will be installed as part of the system
+when the next major version is generated.]  This adds the :WHY command
+to CC, which automates the initial analysis of most common problems.
+It also adds the :? command, which lists all the colon commands.
+Feedback about bugs and suggestions for improvements will be entertained.
+
+DICK@MIT-ML 12/15/81 15:20:06
+To: info-lispm at MIT-AI
+Over the last 5 years I have been developing a LISP pretty printer
+called GPRINT.  A new version of this printer is now ready for release
+to the community as a whole.  Many people have been using earlier
+versions of GPRINT for years, and this new version is updated to
+include many suggested improvements.  It deals will all the standard
+LISP data types, and is completely compatable with both MACLISP and 
+the LISP machine.
+
+GPRINT is documented extensively in AIM-611.  This memo both describes
+its basic design, and serves as a manual for its use.
+
+The printer is available as LIBLSP;GPRINT FASL
+and AI:LMLIB;GPRINT QFASL
+
+The old version of the printer is still available as LIBLSP;GPRINT OFASL.
+The new version is incompatable though it is similar in basic design.
+The old version will no longer be supported in any way.  I recommend
+that all users convert to the new version.  Bugs in the new version
+should be sent to BUG-GPRINT on AI.
+
+Some people may still be using LIBLSP;#PRINT FASL or AI:DICK;LSPMP QFASL.
+These two programs are horrifyingly out of date.  If you still want to use
+them copy them to your own directory.  I will delete them in January.
+
+				Dick Waters
+
+Date: 13 December 1981 14:54-EST
+From: David L. Andre <DLA at MIT-AI>
+Subject: Correction to DLW's addendum on system 78.
+To: DLW at MIT-AI
+cc: DLA at MIT-AI, INFO-LISPM at MIT-AI
+
+    Date: 12 December 1981 12:44-EST
+    From: Daniel L. Weinreb <dlw at MIT-AI>
+
+    Only one process is permitted to be running the compiler at a time.  It
+    used to be that if you tried to run the compiler in two processes at
+    once, you got strange and mysterious errors; now the second process
+    waits for the first one to finish.  It waits in process state "Lock",
+    which you may see in the who-line if this happens to you.
+Actually the process state is "Compiler".  If you get "Lock", something
+else is locked.  This problem may be totally circumvented shortly.
+
+Date: 12 December 1981 12:44-EST
+From: Daniel L. Weinreb <dlw at MIT-AI>
+Subject: Two more System 78 differences that you should know about.
+To: INFO-LISPM at MIT-AI
+
+In the recently-released System 78:
+
+Only one process is permitted to be running the compiler at a time.  It
+used to be that if you tried to run the compiler in two processes at
+once, you got strange and mysterious errors; now the second process
+waits for the first one to finish.  It waits in process state "Lock",
+which you may see in the who-line if this happens to you.  This means
+that if a process goes into the error handler during compilation and
+you then try to run the compiler in a second process without aborting
+out of the error handler in the first process, the second process
+will wait.
+
+The initial value of READTABLE is now a copy of SI:INITIAL-READTABLE.
+You should never change the contents of SI:INITIAL-READTABLE; this
+should be left pristene so that other programs can make copies of it in
+order to get a fresh readtable.  Change READTABLE instead.  (Some people
+who have reader macros to cause font change sequences to be ignored may
+be affected by this change.)
+
+Date: 12 December 1981 12:40-EST
+From: Richard M. Stallman <RMS at MIT-AI>
+To: INFO-LISPM at MIT-AI
+
+Rejoice!  The irritating "c" blinker in the minibuffer is gone
+as of 78.13.  Instead, the word "COMPLETION" appears at the
+right side of the mode line when completion is available.
+
+Answers to the poll were unanimously against the "c" blinker.
+
+Date: 10 December 1981 04:33-EST
+From: Christopher C. Stacy <CStacy at MIT-AI>
+Subject: new Qsend features in System 78
+To: INFO-LISPM at MIT-AI
+
+Sometimes, users may wish not to be interrupted with Qsends.  A new
+function called CHAOS:QSENDS-OFF has been created for such occasions.
+If you give it a string argument, the string will be returned to anyone
+who tries to send to you.  Otherwise, they just get a note saying that
+you are not accepting Qsends.  CHAOS:QSENDS-ON ungags you.
+
+Also, CHAOS:SHOUT allows you to send a message to all Lisp Machines.
+
+Chris
+
+Date: 9 December 1981 20:20-EST
+From: Eugene C. Ciccarelli <ECC at MIT-AI>
+Subject: LMLIB; XDIAG -- diagram system
+To: INFO-LISPM at MIT-AI
+
+XDIAG, an experimental diagram editing system, has been added to the AI:LMLIB;
+directory.  AI:LMLIB;XDIAG INFO is an INFO file for it.  Note that it is
+not a supported product, but may prove useful if used with care.
+
+Date: 9 Dec 1981 11:33 PST
+From: BrianSmith at PARC-MAXC
+Subject: Re: "C" in cursor
+In-reply-to: RMS' message of 9 December 1981 04:16-EST
+To: Richard M. Stallman <RMS at MIT-AI>
+cc: INFO-LISPM at MIT-AI
+
+I noticed the "c" in the cursor right away, and found it distracting;
+my vote would be to have it go away.
+
+Brian
+
+
+Date: 9 December 1981 13:58-EST
+From: Mike McMahon <MMcM at MIT-AI>
+Subject: New system release (version 78) (270 line message)
+To: INFO-LISPM at MIT-AI
+
+System 78 is now released to users.  It has been a long time since an
+official release, so this message is rather long.
+From now on, system release messages will be divided into two parts, to
+make things more pleasant for those of you who don't like reading long
+messages.  First, we will list changes that might potentially cause
+problems or confuse you when you start using the new system.  Second, we
+will list new features or important bug fixes that might help you out.  If
+you're a Lisp Machine user, you should read the first section, but you can
+safely ignore the second section if you'd rather not be bothered.
+
+  Table of contents:
+  Things you should take note of:
+ [1] System 78 requires new microcode.
+ [2] If the QFASL and source of a file are in different directories, you
+     must recompile the file.
+ [3] Function specs have changed; FDEFINE, COMPILE, TRACE, et. al. are affected.
+ [4] The :CLOSE message to a chaos stream has changed - probably you are not affected.
+ [5] The system menu has changed - it is a more powerful superset.
+ [6] You may get spurious warnings about redefining functions - recompile.
+  Things you may safely ignore:
+ [A] Streams have been changed; there is a system of flavors that you can use if you
+     want to, though you don't have to.
+ [B] OPEN has a new argument syntax (the old one still works).
+ [C] WITH-OPEN-STREAM exists.
+ [D] There are new high-level functions for using the Chaosnet.
+ [E] New :HANDLER function spec.
+ [F] SI:PRINT-READABLY controls unreadable forms.
+ [G] TV sync prom is used when machine is booted.
+ [H] Source files are remembered for all definitions.
+ [I] Files with compile-flavor-methods ought to be recompiled if you care a lot
+     about efficiency.
+ [J] New features in MAKE-SYSTEM.
+ [K] Some changes in low-level disk control.
+ [L] The scavenger working set size can be controlled.
+ [M] The editor tries to give you more information in its display.
+ [N] Preparing now for coming new error system.
+ [O] The Greek letter convention for the Control/Meta keys is obsolete.
+
+  Things that you should take note of:
+
+[1] System 78 requires microcode 836.  It will fail to cold-boot with the
+previous microcode (793).  The system 74 will fail to work with
+the new microcode also.  (Ucode versions < 810, 825, 827 and 828 go with system 74,
+811, 826, 832 and up are compatible with systems 76, 77, and 78).
+
+[2] In order to interact properly with M-. in the editor, all files whose
+QFASL's live in a different directory than the source will need to be
+recompiled in system 78 (or in system 75.14 or later).  The present scheme of
+guessing the source file pathname based on the truename of the source has
+proved too bug-prone, and the correct information is now recorded by the
+compiler.
+
+[3] Function specs have been completely reimplemented.  As a side-effect of
+this the function spec (FOO BAR) as an abbreviation for (:PROPERTY FOO BAR)
+is now accepted only by defining forms such as DEFUN, DEFMACRO, and
+DEFSELECT; the full form must be used with the function-manipulating
+functions such as FDEFINE, COMPILE, TRACE, etc.  Formerly the short form
+worked partially with these functions.  If you get an error message that
+something is not a valid function spec, this is probably the reason.
+
+[4] The :CLOSE message to a chaos stream now behaves like the :EOF message
+if not given an abort-p argument.  The connection is also freed, so this
+need not be done manually.  Note that the CHAOS:STREAM function still
+gives bidirectional streams, but in many cases you may only want the
+unidirectional flavor (see below for more details).
+
+[5] The system menu has been made more useful; the "Other" command have been
+integrated into the menu, as have some useful screen editor commands and
+some commands that are like what you can do with the System key.  If you
+just pop one up and look at the mouse documentation for each item, it
+should be clear what all of the commands mean.  Lacking any better place
+to document it, I'll mention here that the function
+TV:ADD-TO-SYSTEM-MENU-PROGRAMS-COLUMN should be called by user programs
+that want to add themselves to the system menu.
+
+[6] In some obscure cases, you may get undeserved warnings about
+redefining system functions when you load old QFASL files into System
+77.  For example, if you had a defstruct with the same name as a
+system function, and you last compiled the file in certain system
+releases, this may happen.  Just recompile the file in System 77 and
+the new QFASL file won't produce the warning.
+
+  Things that you may safely ignore:
+
+[A] A major change in this system is a thorough reimplementation of streams.
+All old streams will continue to work; however, a system of flavors has
+been set up to make it easier for you to write new streams.  All buffered
+streams in the system (e.g. files, network, mag tape) are now built out of
+these flavors, eliminating much duplicated code and the consequent
+inconsistencies and inefficiencies.  This new basis for streams is not yet
+documented, but the source code may be found in the file SYS:IO;STREAM
+LISP.  The :FINISH message has been changed incompatibly; it now implies a
+:FORCE-OUTPUT (which is what it ought to have done all along).  There is a
+new message to streams, :STRING-IN, which reads efficiently into an array;
+it and :STRING-OUT are the right primitives from which to build most forms
+of binary record I/O.  As mentioned above, the :CLOSE message to a Chaosnet
+stream is now consistent with all other streams.  A new message to
+buffered streams, :READ-INPUT-BUFFER, behaves exactly like
+:GET-INPUT-BUFFER but returns the values ARRAY, INDEX, and LIMIT.  This
+should be used in all new code instead of :GET-INPUT-BUFFER, which will
+be faded out in 1990.
+    There has been some inconsistancy in the meaning of the optional
+argument to the :ADVANCE-INPUT-BUFFER message to a stream.  In system
+78, everything has been changed to assume it is a buffer index.  This
+agrees with the documentation.
+
+[B] The OPEN function now accepts keyword arguments in the standard fashion,
+after a required first argument which is the pathname of the file to be
+opened.  The keywords will be documented shortly.  For backwards
+compatibility, if OPEN is given only two arguments the second argument
+is an option or list of options from the old set of Maclisp-compatible
+OPEN options.  Naturally WITH-OPEN-FILE takes keywords the new way, just
+as OPEN does.
+
+[C] There is a new special form, WITH-OPEN-STREAM, which is completely
+analogous to WITH-OPEN-FILE except that you specify a form whose value
+is the stream, rather than arguments to OPEN.  This is used with
+non-file streams.
+
+[D] The preferred way of interacting with the chaosnet at the highest level
+is now via two new functions, CHAOS:OPEN-STREAM and CHAOS:MAKE-STREAM.
+CHAOS:OPEN-STREAM takes a host, contact name, and set of keyword options
+and returns an open stream to that host.  CHAOS:MAKE-STREAM takes an
+open connection and options and returns a stream.  This is useful when
+the connection has been gotten via a CHAOS:LISTEN, for example.
+Both functions accept the following keywords:
+:DIRECTION - :INPUT, :OUTPUT, or :BIDIRECTIONAL.  Default is :BIDIRECTIONAL.
+:CHARACTERS - boolean.  Default is T.
+  If non-NIL, ascii rather than binary data is to be sent.
+
+CHAOS:OPEN-STREAM also accepts these keywords relating to the connection itself:
+:ERROR - boolean.  Default is T.  A string is returned on an error for :ERROR NIL.
+:TIMEOUT - number of 60ths of a second.  Default is 10 seconds.
+:WINDOW-SIZE - number.  Default is like CHAOS:CONNECT formerly.
+
+[E] A new function spec (:HANDLER <flavor> <message>) refers to the function
+which is evoked when an object of flavor <flavor> is sent the message
+<message> (i.e., the element of the FLAVOR-SELECT-METHOD).  This is
+distinct from the :METHOD function spec, which refers to the function
+defined in flavor <flavor>, and possibly inherited by many other
+flavors.
+
+[F] A new variable SI:PRINT-READABLY enables you to specify that what you
+are printing is intended to be read with READ again, and should not
+contain any unreadable forms.  When SI:PRINT-READABLY is bound to
+non-NIL and an attempt is made to print an unreadable object, an error
+will be signalled on SI:PRINT-NOT-READABLE.  Anyone who defines their
+own :PRINT-SELF messages should be aware of a new macro
+SI:PRINTING-RANDOM-OBJECT, which must be used to preserve the
+functionality of SI:PRINT-READABLY.  It is documented in the source.
+
+[G] When booted, the system will now always use the TV sync prom if there
+is one, unless set-tv-speed was done before the disk-save.  If you do
+a set-tv-speed and save out the band, please put something in the label
+comment so someone transfering the band to another machine will be aware
+of what has been done ("60Hz" is the usual thing to reduce hum on VMI monitors).
+This should decrease the incidence of seasickness.
+
+[H] The system now remembers source files for all functions, not just those
+named by symbols, and does not get confused by multiple definitions of
+different types with the same name (for instance, a function, a variable, a
+flavor, a defstruct, and a resource with the same name).  Thus the editor
+M-. command is more likely to work now.  The whole function spec and source
+file system has been reimplemented, and numerous bugs have been fixed.
+flavor-method-symbols (e.g. tv:basic-momentary-menu-after-deexpose-method)
+no longer exist; the function spec (e.g. (:method tv:basic-momentary-menu
+:after :deexpose) is now used for all purposes formerly served by the
+symbol).
+
+[I] Any files containing COMPILE-FLAVOR-METHODS should be recompiled in system
+77 (or in system 75.22 or later).  Old qfasl files will still work; however,
+the system will regard all combined-methods in them as obsolete and will
+generate new ones at load time; thus the COMPILE-FLAVOR-METHODS will be
+inutile.
+
+[J] MAKE-SYSTEM will now offer to compile and load a new version of the file
+containing the DEFSYSTEM for the system if it has changed.  In fact, a new
+function SI:SET-SYSTEM-SOURCE-FILE allows you to specify what file a system
+is defined in before that system is loaded at all.  It will then be loaded
+the first time MAKE-SYSTEM is done on it.  This might be useful in your
+init file, for example.  The argument to this function is the name of the
+system, i.e. the symbol that you would give to MAKE-SYSTEM.  Note: since
+the system system has strong opinions about file types, this only happens
+when the file with the DEFSYSTEM form has a file type of LISP, i.e. an FN2
+of > on ITS.  Thus, if you have a file FOO PKG, and want to benefit from
+this feature, you should rename it to FOOPKG >.
+    The :RECOMPILE keyword to MAKE-SYSTEM is the same now as the :COMPILE and
+:RELOAD keywords together.  This should be easier to remember.
+
+[K] The A-MEMORY variable SYS:%DISK-READ-COMPARE-ENABLES has been renamed to
+SYS:%DISK-SWITCHES.  Bit 2 in this variable now controls the multiple
+page swapout feature.  When a page is swapped out and this bit is on,
+the system will look to see if the next higher page in virtual memory is
+present in physical memory and also needs to be written on disk.  If so,
+it will be appended to the transfer.  Currently the maximum size of
+transfer which can be built in this way is set to 20 pages.  The pages in
+question are not actually removed from core, but just changed to
+READ-WRITE-FIRST status.  If they are later selected for swapout
+before they are modified again, a disk write will be saved.  A new
+meter, %COUNT-DISK-PAGE-WRITE-APPENDS, records the number of pages
+added to transfers in this way. 
+
+Bit 3 in SYS:%DISK-SWITCHES now controls the multiple page swapin
+feature which exists in microcode version 826 and later.  When a swapin
+is called for, the system decides how many pages it would like
+to transfer with one disk op.  In system 78, this computation depends the area
+of the page being brought in.  SYS:AREA-SWAP-RECOMMENDATIONS is a new
+area number indexed area which holds the recommended swap size minus one
+per area.  (Ie 0 says just swap the needed page, 1 try to append one page
+to that, etc).  The user should not store in SYS:AREA-SWAP-RECOMMENDATIONS
+directly, but should use (SI:SET-SWAP-RECOMMENDATIONS-OF-AREA <AREA-NUMBER> <N>)
+Currently, 17 is the maximum value of N which should be used.
+There is not much experience yet as to what are good values to put in here.  
+(set-all-swap-recommendations 2) is a good way to turn on the feature
+and start seeing what happens.  Exactly what the best initial setting
+is will be determined thru experience.   Generally speaking, the more main
+memory the machine has, the higher the swap sizes should be.
+  There frequently seems to be a rather dramatic improvement in context
+switch times (such as entering the editor for the first time, etc.)
+Another new meter, %COUNT-DISK-PAGE-READ-APPENDS records
+the number of pages added to transfers in this way.
+
+[L] The size of the scavenger working set, formerly fixed at the low value
+of 12 pages, may now be set at any time by (SI:SET-SCAVENGER-WS
+<value>).  The way that this works is that main memory is divided into
+two pools; one pool is only used by the user program, while both the
+user and the scavenger contend for the other pool.  The <value> is the
+number of pages of main memory (256 words each) in the shared pool.
+Setting this value higher than 12 seems to improve the performance of
+the GC significantly.  Values of 400 seem to work well for 256K
+machines, larger values should probably be used for machines with more
+memory.  Please report your experiences setting this parameter, since it
+is unclear at this time what the default value should be.
+  As part of this change, the meaning of the SI:%SCAVENGER-WS-ENABLE
+variable has been changed.  It is now the dividing point in physical
+memory between the two pools.  (As a semi-compatibility feature,
+however, SI:%SCAVENGER-WS-ENABLE of NIL will still turn off the
+scavenger working set feature.)
+  The former low value of the scavenger working set parameter may have
+accounted for unacceptable garbage collector paging performance in some
+applications.
+
+[M] When the editor is reading a command argument from the mini-buffer
+and some sort of command or filename completion is present, the blinker
+will have a small "c" character inside its box.  Likewise, when a search
+string is being read that may contain special search characters (such as
+<and> and <or>), a small "s" character appears.  This feature is
+experimental.  Your comments on it and especially suggestions for
+improving it are welcome.
+    The version of the file last read or written is now displayed in
+parentheses in the mode line.
+
+[N] A new object oriented error handling and condition system will be
+installed in one of the next few major system releases.  The major
+change for simple programs is that functions like CHAOS:CONNECT and OPEN
+which take a no-error argument and now return a string of the error will
+instead return an error instance.  Since we imagine that there are a lot
+of these simple programs, and to help ease you into this change, there
+is a new global function ERRORP in system 78.  It is the same as
+STRINGP.  When the new system is installed, it will be different, but
+will still correctly recognize the error return case of the above
+mentioned functions.
+
+[O] The old convention of using alpha to mean Control, beta to mean
+Meta, and so on, has been declared obsolete.  The use of this convention
+in some system help messages has been replaced with the new convention,
+namely C-, M-, and so on.  The FORMAT ~C directive has been changed to
+use the new convention.  The Greek letters will continue to be accepted
+by #/ for compatibility only.  If you see the system trying to type Greek
+at you using this convention, tell us and we wil put a stop to it.
+
+Date: 9 December 1981 04:16-EST
+From: Richard M. Stallman <RMS at MIT-AI>
+To: INFO-LISPM at MIT-AI
+
+If you have any opinion on the "c" xor'd with the cursor
+in completing minibuffers in system 78, please send me a message.
+
+
+Date: 7 December 1981 23:07-EST
+From: Daniel L. Weinreb <dlw at MIT-AI>
+Subject: Where to find old INFO-LISPM mail.
+To: INFO-LISPM at MIT-AI
+
+Mail sent to INFO-LISPM is also sent to the file AI: LMDOC; INFO LISPM.
+If you want to read something that was once sent to INFO-LISPM, like
+announcements of new installed systems, that's where to look.
+
+By the way, System 74 is still the installed system.  There should be a
+new one soon.
+
+Date: 4 December 1981 13:34-EST
+From: Giuseppe Attardi <BEPPE at MIT-AI>
+Subject:  Call for Papers
+To: ARPA-BBOARDS at MIT-AI, INFO-LISPM at MIT-AI, ICE at MIT-AI,
+    WORKS at MIT-AI
+
+-------------------------------------------------------------------------------
+	    European Conference on Interactive Computing Systems
+			     - ECICS 82 -
+-------------------------------------------------------------------------------
+
+When:		    September 1-3, 1982
+Where:		    Stresa, Italy
+Sponsors:	    ACM Italian Chapter, AICA, AFCET, INRIA, SSI, AISB, BCS, GI
+Program Chairman:   Erik Sandewall, Sweden
+
+Papers are invited on all aspects of the design, methods, techniques and
+applications of interactive computing systems.
+
+Deadline for submission:	April 1st, 1982
+Notification of acceptance:	July 15th, 1982
+
+For the full Call for Papers, see the file "BEPPE; ECICS CALL" on MIT-AI or
+send mail to BEPPE@MIT-AI.
+
+MOON@MIT-MC 12/02/81 14:41:16 Re:  Bug reports from non-humans
+To: INFO-LISPM at MIT-MC
+There have been a lot of these lately.  If you want your bug reports
+answered, and want them not to be ignored if a request for additional
+information is needed, please remember to sign them if you are logged
+in as a program rather than yourself.  FILES and KBE are examples.
+You can just put From: ME in the header area of the mail-sending window.
+
+Date: 30 November 1981 23:42-EST
+From: Daniel L. Weinreb <dlw at MIT-AI>
+Subject: Please stop this discussion.
+To: INFO-LISPM at MIT-AI
+
+Please do not use INFO-LISPM as a forum for discussing changes to the
+Lisp Machine system.  INFO-LISPM should only be used for announcing
+things that are important to ALL Lisp Machine users.  I have encouraged
+every Lisp Machine user to be on this list, and almost all of them are.
+If the list gets used for longwinded discussions, people will be forced
+to take themselves off, and then they will miss important announcements.
+If you want to propose and discuss changes, please use BUG-LISPM.  Thank
+you.
+
+Date: 30 November 1981 21:00-EST
+From: Gregor J. Kiczales <GREGOR at MIT-AI>
+Subject: Flavor suggestion
+To: INFO-LISPM at MIT-AI
+
+
+I also like Henry's idea of being able to provide an
+:UNCLAIMED-MESSAGE method for flavors.
+
+Maybe the cleanest way to do this is to have an :UNCLAIMED-MESSAGE
+method defined on SI:VANILLA-FLAVOR which implements a functionality
+like the current SI:UNCLAIMED-MESSAGE. Whenever an instance gets sent
+a message it does not handle it would automatically be sent a message
+like (:UNCLAIMED-MESSAGE message &rest args)
+
+Then someone who would like to have a flavor which handles unclaimed
+messages differently only needs to define their own
+:UNCLAIMED-MESSAGE method on that flavor. Their message can implement
+whatever unclaimed message functionality they would like.
+
+Date: 30 November 1981 15:52-EST
+From: David L. Andre <DLA at MIT-AI>
+Subject: Flavor suggestion
+To: HENRY at MIT-AI
+cc: DLA at MIT-AI, INFO-LISPM at MIT-AI
+
+I vote for it.  It's cleaner than the current way of doing things, ie,
+:DEFAULT-HANDLER.
+
+Date: 30 Nov 1981 09:44 PST
+From: Deutsch at PARC-MAXC
+Subject: Re: Flavor suggestion
+In-reply-to: HENRY's message of 30 November 1981 11:26-EST
+To: Henry Lieberman <HENRY at MIT-AI>
+cc: INFO-LISPM at MIT-AI
+
+I second your suggestion about handling unclaimed messages.  It has proved
+useful for a variety of purposes in Smalltalk, and it provides a kind of semantic
+closure in that once you have it, no non-message-passing control structure is
+needed if you don't want one (and if the root of the inheritance structure
+handles :UNCLAIMED-MESSAGE).
+
+
+Date: 30 November 1981 11:26-EST
+From: Henry Lieberman <HENRY at MIT-AI>
+Subject:  Flavor suggestion
+To: INFO-LISPM at MIT-AI
+
+
+What do you think about the following addition to flavors? 
+
+Right now, when an instance doesn't understand a message it
+signals an error. I propose that the instance be given a chance
+to say what it wants done with unrecognized messages, by
+having the UNCLAIMED-MESSAGE function check to see if the
+instance handles the message :UNCLAIMED-MESSAGE, and if so, 
+send it :UNCLAIMED-MESSAGE, along with the original unrecognized
+message. 
+
+This would allow instances to "delegate" messages they didn't 
+understand to other objects, have object-specific "error handlers", 
+etc.
+
+
+Date: 9 November 1981 04:45-EST
+From: Richard Greenblatt <rg at MIT-AI>
+To: INFO-LISPM at MIT-AI
+
+Improvement to the scavenger working set feature in the garbage collector.
+
+  A serious crock in the garbage collector has been fixed.  While this
+doesnt guarantee you will win now, at least you may have a chance..
+
+ The scavenger working set feature tries to prevent the effect that
+idle-time scavenging can page out all the user's pages, thus causing
+poor response to the keyboard, for example.  (Recall that the scavenger
+is the module in the garbage collector which does the copying from old
+to new space.  It can run either interleaved with cons, or during
+otherwise idle time, or both.) The idea is to divide physical memory into two
+pools.  Scavenger caused page faults can only page into the scavenger
+pool, thus, the other pool will hold user's pages even if he has been
+idle for a long time.  This feature is enabled by the
+SI:%SCAVENGER-WS-ENABLE switch, and is on by default.
+
+  This is a fine idea, but there was a serious glitch in the
+implementation, namely that the size of the scavenger memory pool was
+set at 12 pages, and changing it required a reassembly of the microcode.
+It is no wonder that scavenger thrashed under these conditions.  The implementation
+has been fixed now.   The function (SI:SET-SCAVENGER-WS <n>) will set
+the scavenger working set size to any desired value.  (SI:COUNT-SCAVENGER-WS)
+will scan thru the system page tables and count the number of pages flagged
+as being in the scavenger working set.
+
+  The improved code will become the default in system 76. However, you can
+try it out by using microcode 800 in any system 74 (or later) and reloading
+the file LISPM2;GC.  In a few tries, (SI:SET-SCAVENGER-WS 400) seemed to give
+reasonable results.
+
+Date: 30 October 1981 17:27-EST
+From: Henry Lieberman <HENRY at MIT-AI>
+Subject:  LMLIB contributions
+To: INFO-LISPM at MIT-AI, CSTACY at MIT-AI
+
+
+I contributed my Lisp machine turtle graphics programs
+and my Lisp-editor top level ZTOP to the LMLIB library.
+
+
+Date: 29 October 1981 12:24-EST
+From: Eugene C. Ciccarelli <ECC at MIT-AI>
+Subject: Keyboard "mouse"
+To: INFO-LISPM at MIT-AI
+
+I have been urged to advertise a file I wrote recently, AI: ECC; KMOUSE.
+This implements a keyboard mechanism to replace (or maybe augment) the
+mouse -- e.g. for those lisp machines that are missing a mouse.  The
+hand keys move the mouse (Control- etc. vary the amount), and the
+Roman numeral keys act like buttons.
+
+If you are interested in this, read the brief documentation at the top
+of KMOUSE > and maybe send me a message so I can keep you informed of
+changes or suggestions.  Note that this is pretty experimental.
+
+Date: 28 October 1981 23:41-EST
+From: Christopher C. Stacy <CStacy at MIT-AI>
+Subject: You asked for it...
+To: INFO-LISPM at MIT-AI
+
+A new directory is now available:  AI:LMLIB;.
+
+This is a community directory for LispMachine users to store generally
+useful programs.  If you have some useful program which you think
+others might like to use, it should be installed here.
+
+For information about how to contribute programs to the library,
+please read the file  LMLIB; -READ- -THIS-.
+
+
+Chris
+
+MOON5@MIT-MC 10/25/81 03:27:11 Re: Lisp machines (not) taking directories of archives
+To: PGA at MIT-MC
+CC: (BUG LISPM) at MIT-MC, info-lispm at MIT-AI
+Several people have complained from time to time that Dired on a Lisp
+machine, or other directory operations, do not work on archives on
+ITS file servers.  This is true.  The reason is an incompatibility
+between the normal file system directory format and the archive
+directory format.  There is also the small issue that archives don't
+have authors and don't have a meaningful concept of * in the directory
+field.
+
+Anyway, the answer to past and future questions about this is that it
+doesn't work and won't work unless someone modifies the file server
+and/or the archive device to make it work.
+
+Directory operations on TTY:, COR:, CLU:, and PTR: don't work either,
+even though these devices all return some sort of meaningful information
+in the DDT :LISTF command.  This won't change, for reasons which
+should be obvious.
+
+Date: 24 October 1981 19:33-EDT
+From: Daniel L. Weinreb <dlw at MIT-AI>
+Subject: General interest; answers to common questions.
+To: INFO-LISPM at MIT-AI
+
+The following two answers to common questions may be of general interest.
+
+Many people have pointed out many typoes in the Third Edition of the
+Lisp Machine Manual (the red one).  The one that has bothered the most
+people is on page 102, near the bottom, where :named-structure should be
+changed to :named-structure-symbol.  In general, if you suspect a typo
+in the manual, you might want to look at the on-line source text and see
+if it is one that has already been found and fixed.  The file name that
+you should look at is printed at the bottom of every page of the manual.
+
+If you load a file that tries to SETQ the variables BASE and IBASE, and
+that file has a "Base" property in its -*- line, you will find that it
+doesn't work.  This is because if the file has such a property, then the
+values of BASE and IBASE are saved before the file is loaded and
+restored after it, so that they can be set to the value of the property
+during the loading.
+
+Date: 14 October 1981 15:31-EDT
+From: Mike McMahon <MMcM at MIT-AI>
+Subject: New system release
+To: INFO-LISPM at MIT-AI
+
+System 74 is now released to users.  This system comes with microcode 793.
+Except for new features it should work with the previous microcode (786)
+for the most part.
+
+Systems earlier than 74.21 will not work with lisp machines as file
+computers.
+
+Non-special variables now obey lexical scoping in compiled code, if
+you use LEXICAL-CLOSURE instead of FUNCTION around your internal
+LAMBDA-expressions.  For example,
+	(defun foo (a) (lexical-closure (lambda () a)))
+returns a function which returns a.
+Lexical closures do no consing if used in a downward direction.
+They are automatically consed as soon as you try to pass them upward.
+At some time in the future, FUNCTION may be changed to do the same
+thing.  Note that this would be upward compatible with the previous
+behavior of non-special variables.  Also, the interpreter may be
+changed to be compatible with the compiler.  This would be an
+incompatible change to the interpreter, but would not affect any code
+which currently runs properly compiled.
+
+With &KEY, you can now specify the keyword and variable name for a
+keyword argument independently.  To do this, use two levels of list
+structure for the variable: starting with the list which contains the
+name and possibly the initial value, and then replace the name with
+another list, containing the keyword followed by the name.
+For example: (defun foo (&key ((:x x-variable))
+			 &optional ((si:y y-variable) default)) ...)
+It is a good idea to change functions to use &KEY, because then
+ARGLIST will give complete information on the keywords they accept.
+
+The first argument to BREAK is now optional;  (BREAK)  <=>  (BREAK NIL).
+This means that there are two easy ways to write a breakpoint into your
+program: (BREAK) gets a read-eval-print loop, and (ERR) gets the error
+handler.  (These are the programmatic equivalents of the Break and Meta-Break
+keys on the keyboard.)
+
+The C-M-N and C-M-P commands in the error handler will now show you
+the incomplete frames for functions whose arguments are still being
+accumulated.  What you will see will include some number of
+already-computed arguments, plus some number of temporaries on the
+stack for microcoded primitives.  The error handler doesn't know how
+to sort which are which, yet, but at least you can see them.
+
+A new function ZWEI:AUTO-FILL-IF-APPROPRIATE, analogous to
+ZWEI:ELECTRIC-SHIFT-LOCK-IF-APPROPRIATE.  LOGIN-SETQ ZWEI:TEXT-MODE-HOOK
+to this in your init file and text without -*-Nofill:T-*- will be in
+auto fill mode.
+
+Support has been added for rational numbers.  It will change relatively
+soon, so programs should not be made to depend on it yet.
+
+Hosts now have standard representations as instances.  In particular,
+the HOST instance variable of a pathname is one.  This change should not
+affect any user code.  The variable CHAOS:HOST-ALIST is now gone, since
+the host table can handle multiple networks.  SI:PARSE-HOST is the way
+to convert a string into a host object, from which you can get the
+standard name or nicknames.  (SI:GET-HOST-FROM-ADDRESS num ':CHAOS) is
+the way to get a host object from a number.
+
+Files that have not been recompiled in a very long time will need to be
+recompiled for this system.  The symptom is that loading them tries to
+send a message to an array.
+
+There is a new process-warm-boot-action, si:process-warm-boot-delayed-restart,
+and it is now the default instead of si:process-warm-boot-restart.  The
+effect is that random processes do not get restarted any more before the
+system has finished initializing itself.  Processes needed to initialize the
+system, such as the Keyboard and Chaosnet processes, do not use this
+warm-boot action.
+
+Some small bugs associated with floating-point numbers have been fixed;
+some numerical programs may get different results.  The principal source
+of roundoff error in the reader (inaccurate powers of ten) has been corrected;
+many more numbers will be read as the best flonum approximation, although
+large and small numbers will still have an error of 1 least significant bit
+in some cases.  (There are no longer any cases with an error of more than 1
+LSB).  A fencepost error in floating-point subtraction has been corrected;
+formerly if the subtrahend was exactly equal to 1.0 times the weight of the
+last significant bit in the minuend, the answer would be the minuend, which
+is incorrect.  (The fact that pdp-10's have the identical bug does not make
+it less of a bug.)  The bug in integer division reported a few weeks ago
+is also fixed.
+
+Date: 20 September 1981 15:13-EDT
+From: Daniel L. Weinreb <dlw at MIT-AI>
+To: INFO-LISPM at MIT-AI
+
+I recently warned you about the problem with open-parens at the
+beginnings of lines, and how they can confuse the parsing in the editor.
+MMcM points out a helpful technique for getting around this problem when
+it strikes.  Often when you have an accidental open-paren at the
+beginning of a line, it is inside of a string.  If so, you can preceed
+it harmlessly with a slash, so that the slash will be the first
+character of the line instead of the open-paren.  The slash is a quoting
+character and so is ignored by the Lisp reader, and it prevents the
+editor from mis-parsing the open-paren as the beginning of a top-level
+definition.
+
+Date: 20 September 1981 14:12-EDT
+From: Daniel L. Weinreb <dlw at MIT-AI>
+Subject: Common Lisp
+To: INFO-LISPM at MIT-AI
+
+I would appreciate if people would be more careful about what they use
+the INFO-LISPM mailing list for.  Fateman's and Gumby's recent pieces of
+mail were in the nature of an interactive conversation, rather than
+announcements to the LispM user community.  If anyone wants to reply to
+them, please do not send your reply to INFO-LISPM; I'd like this mailing
+list to only be used for community announcements, so that people won't
+be forced to remove themselves from the list in order to free their
+mailboxes from clutter.  Thank you for your cooperation.
+
+Regarding the current draft Common Lisp specification: you are all
+welcome to read it, but consider this: it is the very first draft, and
+has not yet been modified to take into account the considerations of the
+LispM community, *currently* represented mainly by Dave Moon and myself.
+I would frankly prefer that you guys *don't* all go reading this draft,
+because if you do, you will probably find yourself saying "boy, this
+feature is really a loss....and I don't like that either..." and you
+will all get an unfairly bad impression of what Common Lisp is going to
+be about.  You don't like it when people read rough drafts of your
+papers before you are ready for comments, do you?  Well, that's what's
+going on here.  Guy Steele is doing a terrific job getting this stuff
+together, and after we get the first round of comments back to Guy,
+and we have a meeting about them, and he gets them edited in, then there
+will be a drastically different language specification that will be much
+closer to what Common Lisp will really be.
+
+At that time, we hope that anyone who is interested will read it
+carefully with a critical eye.  Please don't waste your energy on the
+existing draft; if you do, you'll probably be too bored to bother with
+the next draft, which is what will really be deserving of your efforts.
+
+If you have any questions, please direct them to me, Moon, and/or Steele
+as appropriate (and *not* to INFO-LISPM).  Thanks.
+
+Gumby@MIT-AI 09/19/81 13:45:04 Re: transportability
+To: CSVAX.fateman at BERKELEY
+CC: INFO-LISPM at MIT-AI
+    Date: 18 Sep 1981 21:01:55-PDT
+    From: CSVAX.fateman at Berkeley
+    To: info-lispm@mit-ai
+    Subject: not having read the common-lisp manual, 
+    Cc: CSVAX.jkf@Berkeley, CSVAX.sklower@Berkeley
+
+    What this means is no one is restricted from defining and using Gumbies
+    some X-lisp, but if Gumbies have no counterpart in common-lisp, it
+    MAY happen that the programs using Gumbies are not transportable.
+    This is totally reasonable. In fact I thought that Griss had done
+    this type of thing.
+
+
+I don't think it's reasonable; I LIKE being transportable. At least, nobody has complained
+to me yet...
+ Seriously, I think having three different syntaxes for (for instance) the "LOOP"
+macro sucks. From the compiler's point of view, it may be alright (with some sort 
+of style declaration as is used in Franz Lisp) but at top-level it really loses. Must 
+the programmer remember which flavour of Lisp is he currently using?
+
+Date: 18 Sep 1981 21:01:55-PDT
+From: CSVAX.fateman at Berkeley
+To: info-lispm@mit-ai
+Subject: not having read the common-lisp manual, 
+Cc: CSVAX.jkf@Berkeley, CSVAX.sklower@Berkeley
+
+I would have thought the way to provide a common lisp basis (presumably for 
+transmittal of code) would be comparable to the way we run (in the same
+Franz Lisp system) pieces of code in UCI Lisp, Maclisp, and even
+Interlisp. (a subset of it, anyway).
+  Given a computer running X-lisp, you have a common-lisp-to X-lisp
+translator (in the case of Franz, an adjunct to the compiler does this).
+X-lisp-to common-lisp translators may be more difficult to write, but
+then perhaps what should be encouraged is the development of strict
+subsets of X-lisp for which common-lisp translators can be manufactured.
+
+In the case of Franz, appropriate macro definitions are used at compile
+time so that "loop" means any of 3 different things
+depending upon source file language.  At run-time, the user has
+(a perhaps different) choice of "loop" macro.
+
+There are difficulties in the case of debugging, if the programmer
+was expecting, for example, the Interlisp run-time-environment.
+The run-time environment COULD be patched up to look like the
+"common lisp run-time environment", but this sounds to me like
+a bad idea. Either we all have Ledit and Bitblt or none of us have it?
+
+What this means is no one is restricted from defining and using Gumbies
+some X-lisp, but if Gumbies have no counterpart in common-lisp, it
+MAY happen that the programs using Gumbies are not transportable.
+This is totally reasonable. In fact I thought that Griss had done
+this type of thing.
+
+
+
+Date: 18 September 1981 2235-EDT (Friday)
+From: Guy.Steele at CMU-10A
+To: Richard M. Stallman <RMS at MIT-AI> 
+Subject:  Re: The Lispm MAY or MAY NOT adopt various aspects of Common Lisp.
+CC: info-lispm at MIT-AI
+In-Reply-To:  Richard M. Stallman's message of 18 Sep 81 18:54-EST
+Message-Id: <18Sep81 223517 GS70@CMU-10A>
+
+Your points are well taken, RMS.  My understanding (Moon or DLW or someone
+can clarify) was that LISPM (more specifically, Symbolics) was considering
+to promise merely to *support* Common LISP, not necessarily to convert to
+it wholesale.  On the other hand, if Common LISP is satisfactory, I would
+think there would be little reason to continue to support two closely
+parallel dialects.
+
+I don't want to interfere with the politics of the suppliers and users
+of Lisp Machine LISP at this point, but I would like to explain why
+comments on Common LISP are not being solicited from a wider community
+*at this point*.  The design is in such an early state that there are
+many rough edges, inconsistencies, and just plain bad design choices
+(mostly on my part), plus "flags put up to see who salutes" as Moon
+said.  I fully expect that any competent LISP hacker will find plenty of
+things to object to.  It would be a waste of my time, however, *at this
+stage*, to have to wade through fifty sets of comments objecting
+largely to the same things.  Fifty sets of "there's a typo on page 57"
+also are no more useful than a single such comment.
+
+Therefore on this iteration I have communicated mostly with just one or
+two representatives of each of a few groups (VAX/NIL, S-1/NIL, Spice
+LISP, and LISPM) which have shown interest in fostering and supporting
+Common LISP.  It has always been my assumption that these
+representatives would consult others in their respective communities if
+necessary and as they saw fit.  On the next iteration I hope to solicit
+comments from a wider community.
+
+--Guy
+
+Date: 18 September 1981 19:54-EDT
+From: Richard M. Stallman <RMS at MIT-AI>
+Subject: The Lispm MAY or MAY NOT adopt various aspects of Common Lisp.
+To: INFO-LISPM at MIT-AI
+
+Common Lisp is being designed by a small group of people,
+without much discussion with the Lisp machine community
+except for Moon and DLW (I hear).
+
+It may be good to adopt some of their changes, but that sort of
+decision should involve the Lispm user community, be based on
+considering the specific changes themselves, and shouldn't be
+all-or-nothing.  They shouldn't be decided privately by Moon and a few
+others.
+
+The design of Common Lisp is still going on, and it ought to be
+possible for Lispm users to look at the tentative design now and start
+thinking about whether they WANT the changes; or try to influence the
+Common Lisp design.  But the previous message did not encourage this.
+"When the Lisp machine adopts Common Lisp..." is what it said.  The
+Common Lisp people are not keeping their plans a secret, but the info
+is obscure, and the previous message didn't tell us where to find it.
+It adds up to, "Don't attempt to influence your future.  Resign
+yourself.  WE will decide what happens to you".
+
+I don't know about you, but I don't like receiving that attitude.  My
+response was to hunt down the Common Lisp manual, so I can see what's
+really being considered.  It is RMS;SLM PRESS, a huge press file.  Let
+me know if you want a copy, and I will print several at once.  Or
+maybe people can read them sequentially.
+
+Not surprisingly, most of the changes are improvements; but some of
+the improvements would involve TREMENDOUS incompatibilities (such as
+changing the quote character to "\").  Some other changes would be of
+no benefit, while making the system far more complicated if we were to
+advise users to write in a Common-Lisp-compatible style.  I think a
+few of the changes are bad.
+
+It's fine for a few people to get together privately and design a new
+Lisp.  But this, together with another small private group deciding
+that the Lisp machine will adopt whatever the first group designs,
+adds up to excluding the Lisp machine users, and the rest of the
+system implementers, from the decision.  This is not acceptable.  We
+have to be in the process SOMEWHERE.
+

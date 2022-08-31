@@ -1,0 +1,63 @@
+.section Lambda macros
+
+Lambda macros may appear in functions where LAMBDA would have previously
+appeared.  When the compiler or interpreter detects a function whose CAR
+is a lambda macro, they "expand" the macro in much the same way that
+ordinary Lisp macros are expanded -- the lambda macro is called with the
+function as its argument, and is expected to return another function as
+its value.  Lambda macros may be accessed with the (3:lambda-macro*
+2name*) function specifier.
+
+.defspec lambda-macro name lambda-list &body body
+Analagously with 3macro*, defines a lambda macro to be called
+2name*. 2lambda-list* should consist of one variable, which
+will be the function that caused the lambda macro to be called.  The
+lambda macro must return a function.  For example:
+
+.lisp
+(lambda-macro ilisp (x)
+  `(lambda (&optional ,@(second x) &rest ignore) . ,(cddr x)))
+.end_lisp
+
+would define a lambda macro called 3ilisp* which would cause the
+function to accept arguments like a standard Interlisp function -- all
+arguments are optional, and extra arguments are ignored.  A typical call
+would be:
+
+.lisp
+(fun-with-functional-arg #'(ilisp (x y z) (list x y z)))
+.end_lisp
+
+Then, any calls to the functional argument that
+3fun-with-functional-arg* executes will pass arguments as if the
+number of arguments did not matter.
+.end_defspec
+
+.defspec deflambda-macro
+3deflambda-macro* is like 3defmacro*, but defines a lambda macro
+instead of a normal macro.
+.end_defspec
+
+.defspec deflambda-macro-displace
+3deflambda-macro-displace* is like 3defmacro-displace*, but defines
+a lambda macro instead of a normal macro.
+.end_defspec
+
+.defspec deffunction function-spec lambda-macro-name lambda-list &body body 
+3deffunction* defines a function with an arbitrary lambda macro
+instead of 3lambda*.  It takes arguments like 3defun*, expect that
+the argument immediatly following the function specifier is the name of
+the lambda macro to be used.  3deffunction* expands the lambda macro
+immediatly, so the lambda macro must have been previously defined.
+
+For example:
+
+.lisp
+(deffunction some-interlisp-like-function ilisp (x y z)
+  (list x y z))
+.end_lisp
+
+would define a function called 3some-interlisp-like-function*, that
+would use the lambda macro called 3ilisp*.  Thus, the function would
+do no number of arguments checking.
+.end_defspec
