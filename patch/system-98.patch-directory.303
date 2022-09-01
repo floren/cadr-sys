@@ -1,0 +1,565 @@
+;;; -*- Mode: Lisp; Package: User; Base: 10.; Common-Lisp: NIL; Patch-File: T -*-
+;;; Patch directory for System version 98
+;;; Written 11/28/84 03:42:08 by MLY,
+;;; while running on Lisp Machine Twelve from band 4
+;;; with System 98.80, CADR 3.10, ZMail 53.19, MIT-Specific 22.5, microcode 309, gc@36.
+
+(:RELEASED
+ ((0 "System Loaded" "RMS" NIL)
+  (1 "Initial fixes." "rms" NIL)
+  (2 "Connection errors in OPEN.  Package not found errors in READ.
+Error message for redefinition queries.
+Compilation of Common Lisp package functions at top level.
+HISTORY-ELEMENT-SET-YANK-POINTER.  C-M-Y in minibuffer.
+Don't record interval-stream output for undo.  Query-replace on region bug.
+M-Status and C-M-Status in RH.
+Printing arrays doesn't cons.  Reading//printing 0-rank arrays.
+Multiple notifications don't overwrite when in RH.
+Pay attention to buffers not really visiting files.  Eliminate BUFFER-MUNGED-P.
+Common Lisp LOOP compatibility.
+Clear-Screen redisplays properly when there had been typeout.
+Compiler blowouts with comma not in backquote.
+UNDEFFLAVOR.  Combination type accepted as method type." "rms" NIL)
+  (3 "Reason: fed doesn't make unnecessary kern tables
+defstruct documentation; macros permanently loaded; :eval-when flushed;
+   subtype determined at defstruct time
+structures print with #s(...) syntax by default.
+#s(...), #a(...) reader error lossage
+*PRINT-ARRAY* bound to NIL in inspector
+*EVALHOOK* lossage
+New font TR12BI. Color fonts." "Mly" NIL)
+  (4 "Flavors: :INSTANTIATION-FLAVOR-FUNCTION.  :RUN-TIME-ALTERNATIVES.
+ UNDEFFLAVOR bug.  Pass back any number of values from primary method.
+ Bug in :LIST, :PASS-ON, etc. method handling.
+Editor: :MOUSE-BUTTON blips.  C-X 2 etc. bugs.
+  Don't update attribute lists that are syntactically invalid.
+Every QFASL file gets a :PACKAGE attribute.  Bind FASD-PACKAGE where needed.
+Linearizing various things can just touch things rather than copy.
+&SPECIAL in &AUX variables, and in Common Lisp interpreted functions.
+Rubout handler discards excess characters not read.
+WINDOW-WITH-INSIDE-SCROLL-BAR.  :STRING-OUT-EXPLICIT bug with kerning." "RMS" NIL)
+  (5 "SUBST expansion bug (reversing order of evaluation).
+Put initial buffer in ZMACS window's history.
+Protect debugger against errors in printing.
+LOAD returns file's truename again.
+Mouse click on SUPDUP window bug.
+(VIEWF /"just-a-directory-name/") bug.
+PROBEF bug (in OPEN-CHAOS).
+:BREAK flavor operation bug.
+DEFSTRUCT :INCLUDE bug." "RMS" NIL)
+  (6 "Fix sectionization: only one form per section.
+Compiling just part of a function doesn't mark it /"compiled/".
+&ENVIRONMENT in DEFMACRO.  Accompanying changes in evaluator, macroexpand, setf, step.
+Make DEFMACRO-DISPLACE same as DEFMACRO, etc.
+:NO-ERROR clauses in CONDITION-CALL.
+M-X Macro Expand All bug.
+ZWEI:READ-SYSTEM-NAME completion accepts nicknames.
+Crock demo bug.  CHAOS:RESET-SAVED-HOST-LISTS bug.
+Make FC:'s nonstandard open keywords work over chaosnet.
+Accept pathnames starting with colon meaning always default the host.
+Fix :TEXT and :MIDAS canonical types.
+MOUSE-SENSITIVE-ITEMS informs mouse process of changed mouse sensitivity.
+COLOR-DRAW-LINE bug." "RMS" NIL)
+  (7 "Converse doesn't kill text if recipient not found on any machine
+   c-end exits as advertised
+random-states print readably
+zwei variable documentation
+lozenged string pixel tweaking
+*print-array* and prinlength in inspector. c-\ is same as menu /"set \/"
+new inspectors use horizontal lisp listener//history. Does this win?" "Mly" NIL)
+  (8 "Common Lisp EVAL-WHEN changes; Y-OR-N-P and YES-OR-NO-P changes.
+*READ-SUPPRESS*.  Potential numbers.  | syntax change.  :: vs #:.
+DEFSTRUCT bugs in QC-FILE.  FILE-WRITE-DATE.
+Add Patch confirmation bug.  Compile and Load File bug." "RMS" NIL)
+  (9 "New PROMPT-AND-READ options; also :EVAL-FORM-OR-END now returns :END rather than #\END.
+READLINE, READLINE-TRIM, READLINE-OR-NIL second value.  NULL-STREAM end of file.
+Dwimify of method function specs.
+Error handler:  PRINT-CAREFULLY and callers.  Use %P-CONTENTS-SAFE-P and %P-POINTERP.
+ SETF of EH-ARG, etc.  SYS:PACKAGE-NOT-FOUND errors.
+ Disk full recovery.  Pathname parse error recovery. Non-chaos host recovery.
+ Allow :PROCEED methods to return NIL.  Bug in BREAK condition.
+:HOMEDIR op on editor pathnames.  Interpreted MULTIPLE-VALUE-LIST bug.
+ZWEI:RELEVANT-FUNCTION-NAME.  COMPILER:LOCKING-RESOURCES-NO-QFASL.
+TV:MOUSE-WAIT.  CONDITION-CALL.  PRINT-NOTIFICATIONS.  PARSE-UNIVERSAL-TIME.
+Answer S to MAKE-SYSTEM queries.  DESCRIBE-SYSTEM improved.
+Bug in circular structure printing." "RMS" NIL)
+  (10 "READ-DELIMITED-STRING.  NTH-VALUE.  PATCH-LOADED-P.  *DEBUG-IO-OVERRIDE*.
+MAKE-PROCESS-QUEUE, etc.  Calling non-CL NAMED-LAMBDAs from CL code.
+UNADVISE improvement.  Better pretty names for (INTEGER 0), (FLOAT 0).
+MARGIN-SPACE-MIXIN.  :PAST-DATE in CVV windows.
+Look in SYS: SITE; foo SYSTEM file without querying.
+Interpreted MULTIPLE-VALUE bug.  SHIFTF bug.
+Record system major version in sys com area.
+Record microcode version so brand S bands can see it.
+OPEN: :PROBE-DIRECTORY, :PROBE-LINK.  WITH-OPEN-FILE-SEARCH.
+FS:CREATE-LINK.  LINEARIZE-PATHNAME-PLISTS bug.  FULL-GC bug.
+Pathname mapping bug.  COPY-FILE takes keyword args.
+Flavor redefinition bug.
+Add Patch printout bug.  DEFINITION-NAME-AS-STRING bug.
+M-X Delete//Undelete//Rename//Copy File improvements." "RMS" NIL)
+  (11 "Fix GLOBAL:GET-UNIVERSAL-TIME.  Arrest-the-process restart bug.
+Verify sectionization faster. Automatic methods bug.
+Fix scope of SPECIAL declarations in compiler and evaluator.
+Changes in Common Lisp spec:
+ Values returned by DEFTYPE, DEFVAR, DEFCONST...
+ Sequential binding of SETF tempvars.
+ DIGIT-CHAR, CHAR-NAME, PUSHNEW, (N)SUBST-IF(-NOT), SUBLIS,
+ MAKE-BROADCAST-STREAM, MAKE-STRING-OUTPUT-STREAM, #(...), #*,
+ WRITE-CHAR, WRITE-BYTE, ~E, ASSERT,
+ PARSE-NAMESTRING//PARSE-PATHNAME, MAKE-PATHNAME, FILE-POSITION." "RMS" NIL)
+  (12 "Rubout handler interface improvements:
+ :ACTIVATION, :COMMAND, :PREEMPTABLE, :DO-NOT-ECHO, :PASS-THROUGH.
+WITH-INPUT-EDITING.
+Editor top level and Ztop mode have input histories; bugs fixed.
+COMPILE-INTERVAL and Add Patch printout bug.  C-Sh-E on atoms.
+READLINE, READ and PROMPT-AND-READ now use :ACTIVATION.
+RECORD-SOURCE-FILE-NAME flushes duplicate entries.
+UPDATE-INTERVAL-COMPILE-TICK bug.
+CHAOS:CONN-FINISHED-P, CHAOS:CLOSE-CONN, CHAOS:FINISH-CONN.
+Some streams now support :ANY-TYI.  Colons in logical pathnames bug." "rms" NIL)
+  (14 "Changes in Common Lisp DEFSTRUCT.
+M-X Split Screen bugs.  C-X 4 J.  Undefined major mode bug.
+Flash parens forward as well as back.  C-M-B within comment bug.
+Editor mouse blips//:MOUSE-OR-KBD-TYI bugs.  Hyper character bugs.
+System E gets all the editors now.  Inspector list-modifying bugs.
+Reading and printing font #s in character objects." "RMS" NIL)
+  (15 "Reading from editor host (ED-BUFFER, ED, ED-FILE) bug.
+TV:ADD-SYSTEM-KEY remembers all key bindings to a particular key,
+  but only displays most recent. TV:REMOVE-SYSTEM-KEY pops.
+WITH-OUTPUT-TO-STRING bug.
+{SUB-}APROPOS takes new keywords :BOUNDP and :FBOUNDP
+   -- same as :PREDICATE 'BOUNDP etc.
+Mouse blips in zwei.  View window says when it's at end.
+Printing histories and readtables.
+Document flavors -- use (DOCUMENTATION FOO-FLAVOR 'DEFFLAVOR) to access." "Mly" NIL)
+  (16 "*VALUES*.  *DEFAULT-COMMON-LISP*.  Bind *, +, etc. per process.
+Allow refs to all vars free at top level in listen loops.
+:READ//INCREMENT-CURSORPOS in characters rounds up." "RMS" NIL)
+  (17 "CHAOS:OPEN-STREAM with host NIL does a listen.
+Pathname defaulting in Dired and BDired buffers.
+RENAME-FILE, (UN)DELETE-FILE, COPY-FILE: wildcards, and values returned.
+ M-X Rename File, M-X Copy File corresponding changes.
+Attempt to prevent window output or switching while using cold load stream.
+Implement PARSE-ERROR, PARSE-FERROR.  Check for freeing an error handler sg twice.
+NAMED-STRUCTURE-INVOKE props work with or without colon.
+M-X Undelete File failed to look for deleted files!
+Bugs in FILE-RETRY-NEW-PATHNAME; :TRUENAME on pathnames.
+Describe inconsistently-updated systems more nicely.
+WARN-ON-ERRORS-CONDITION-HANDLER bug with ~'s.
+Bugs in SIMPLE-MAKE-ARRAY, PRINT-RECORD-OCCURRENCES, FUNCTION-START-SYMBOLS.
+Anonymous sections & files with structured name components.
+Local declarations in interpreter bug.  :MOUSE-CLICK bug affecting ZMail's Buttons." "RMS" NIL)
+  (18 "New FORMAT directive ~\lozenged-string\
+Completion success value. Logical pathname completion
+ZWEI:COPY-COMTAB
+Zwei mouse clicks can have bucky bits.
+EQUALP on multi-dimensional arrays" "Mly" NIL)
+  (19 "Zwei commands Make Local Variable and Kill Local Variable.
+Define :ELEMENT-TYPE stream operation on all streams.
+Define :ANY-TYI on some streams lacking it.
+Some new PROMPT-AND-READ options.
+Speed up SYMEVAL-GLOBALLY, SETQ-GLOBALLY, etc.
+Debugger Meta-L displaying ADI bug.  Add Patch printout bug.
+Fix compilation of (LET ((FOO FOO)) ...) when FOO is lexically available.
+FIND-PACKAGE (:MYPKG :GLOBAL 300) bug.  (LOCF (FUNCTION FOO)) bug." "RMS" NIL)
+  (20 "Define MACROEXPAND-ALL.
+Fix DEFSUBSTs containing conditionals.
+Bug in compilation of WITH-STACK-LIST as the test in a COND.
+Clean up handling of environment between compiler and codewalker." "RMS" NIL)
+  (21 "Bug in Meta-X Copy File." "Mly" NIL)
+  (22 "Define REST, same as CDR.
+End activates in debugger.
+Atoms at top level in compiled file warn gracefully.
+LOAD-PATHNAME-DEFAULTS now synonym for *DEFAULT-PATHNAME-DEFAULTS*.
+SETF of GET//GETHASH with three arguments.
+In-core compilation of macros temp area bug.
+ARGLIST declarations in DEFMACROs bug." "rms" NIL)
+  (23 "Zmacs buffer histories (as used by c-m-l, etc) include all buffers
+ c-x c-b lists per-buffer history
+tv:update-font-maps -- use this after loading a new copy of an old font
+Stuff left out of documenting flavors" "Mly" NIL)
+  (24 "Compilation of (SETQ X X) when value needed.
+WITH-LOCK when lock is the cdr of a cell.
+Compilation out of ZMail draft messages.
+DEFSYSTEM recording system pathnames bug.
+(MAKE-SYSTEM foo :NO-INCREMENT-PATCH :COMPILE) bug.
+Add Patch Buffer Changed Functions printout bug.
+Spurious compiler warnings from DEFMETHOD bug." "RMS" NIL)
+  (25 "Zwei Clear-Screen multi-window bug.  Various M-X Copy File bugs.
+Really fix buffer history bug.  Section name for ((LAMBDA ...)..), etc.
+Common Lisp ERROR and CERROR bugs.  SHOW-MV-SPECS.
+C-M-Break interaction with rubout handler fixed
+ when debugging using cold load stream." "RMS" NIL)
+  (26 "rh options. New option: :editing-command.
+  tv:stream-mixin operations :read-bp :force-rescan :rescanning-p
+setf on cons, list, list* -- by rms
+Dribble rubout bug" "Mly" NIL)
+  (27 "Lmfile pathname defaulting, file host lookup, pathname wildcard mapping bugs.
+Mouse clicks in inspector.
+READLINE eof arg bug.
+MEXP final expansion uses MACROEXPAND-ALL.
+{\it Really} fix Common Lisp ERROR" "Mly" NIL)
+  (28 "Make `E' in Dired work again." "RpK" NIL)
+  (29 "FORMAT ~c hacks mouse blips. FQUERY :tyi :help-function bug.
+EH c-m-a and c-m-l don't blow out on non-existent argslocals.
+New eh <help> command, including key documentation.
+Document all eh commands.
+Make c-m-a c-m-l c-m-v c-m-s set + to a locative as advertised.
+Repair mly brain-damage and really truly honestly fix READLINE eof.
+Make too-few-arguments errors on functions with optional args
+  proceed correctly when given additional args." "MLY" NIL)
+  (30 "Copying files in dired.
+m-x Find Unbalanced Parentheses does not munge undo info
+COMPILE-FILE arguments
+Parsing VMS pathnames with a null name. eg /".foo/"
+  /"foo.bar;/" gets version :newest
+m-x Print Region hacks fonts
+tv:graphics-mixin :DRAW-FILLED-IN-CIRCLE fencepost error
+Thicken and unthicken font bugs.
+SETF of CLI:AREF" "Mly" NIL)
+  (31 "OPEN-CHAOS keyword options
+DRIBBLE snarfage of rh buffer
+Codewalker binding lists
+EXPORT on strings
+LISP-TOP-LEVEL and BREAK handling of *DEFAULT-COMMON-LISP* change
+reader symbol substitutions print more dwimily.
+  FOO:AREF on read gets same as (INTERN /"AREF/" /"FOO/") always
+Fed COPY-FONT
+DEFRESOURCE function-parent declarations
+PRINT-NAMED-STRUCTURE hacks named arrays which don't have DEFSTRUCT definitions
+vms parsing braindamage" "Mly" NIL)
+  (32 "Multi-level lexical closure nesting bugs.
+PROCESS-MIXIN init option :PROCESS can be a function name,
+ or T (meaning the top level is to send a :PROCESS-TOP-LEVEL message).
+Help C M-X prints command and function name.
+M-X Find Unbalanced Paren pushes point.
+Debugger help alist typo.
+Selective MAKE-SYSTEM doesn't load depended-on files if you say No.
+READLINE bug affecting file error retry questions.
+Typeout window exposure and deexposure bugs." "RMS" NIL)
+  (33 "Menus:
+  :SET-DEFAULT-FONT does the right thing.
+  Geometry recomputed in a few additional places where this was necessary.
+  Mouse blinker uses correct height for the font of the item they are over.
+Sheet font-maps record the value supplied to :SET-CURRENT-FONT.
+FED:DISPLAY-FONT now accepts a font specifier, not just a font object.
+  Doesn't bash current-font of the window it uses.
+Fix a few functions which didn't know about CLI:LAMBDA, etc.
+PKG-BIND knows that (eq si:pkg-keyword-package si:pkg-user-package) => nil
+Fix PACKAGE-DECLARE on existing packages by defining SI:ALTER-PACKAGE
+  (was bashed by defstruct alter macro)
+PKG-GOTO takes optional third arg meaning to do a PKG-GOTO-GLOBALLY as well.
+CLI:DEFSTRUCT accidentally left out of SI:*COMMON-LISP-SYMBOL-SUBSTITUTIIONS*
+Forward CLI://// value cell to GLOBAL://// to make lisp listeners work right.
+Make COMMON-LISP-INCOMPATIBLE auto-exporting.
+  Clean up symbols in it.
+FORMAT
+  Make nested use of commands which use clauses work.
+  Some internal gc improvements.
+  Use (DEFPROP [ ] FORMAT:FORMAT-MATCHING-DELIMITER) to get format parsing to
+    work for format commands which come in pairs.
+Make Luke Codewalker understand &QUOTEd arglists.
+Printing, reading, describing 0-rank arrays.
+SI:PRINT-PATCHES takes optional third arg meaning to only describe patches
+  made after that minor version number.
+Reading package prefixes in commonlisp -- function left out of 98.31. Foo.
+Multidimensional string and bit arrays print as
+  #3a((/"foo/" /"bar/") (/"baz/" /"quux/")) and #2a(#*1010 #*1111)
+  when *print-array* is non-nil
+m-x View file hacks atomic font-lists (eg -*- Fonts:Foo -*-)
+ZWEI:READ-FUNCTION-NAME (as used by m-., etc) really changes the mouse blinker to 
+  ATOM-UNDER-MOUSE knows about the ZMACS-BUFFERS property.
+SELECT-MATCH understands T as the car of a clause to mean OTHERWISE.
+New CPTFONTB.
+Yow! Are we DONE yet?" "Mly" NIL)
+  (34 ":IF-DOES-NOT-EXIST in LOAD works as documented." "RpK" NIL)
+  (35 "Select All Buffers as Tag Table: omit special buffers.
+Zmacs pathname defaulting.  Zmacs offers to create nonexistent package.
+C-X C-F notices if previously nonexistent file now exists.
+C-X M flushes undo info; C-U C-X M preserves major mode.
+EQUALP on vectors of characters vs strings.
+:ITEM-LIST operation bug.
+BEEP on non-windows improved.
+UNINTERN default arg.
+SET-MEMORY-SIZE doc string.  Better swap recommendations.
+Fix order of binding of keyword args in compiled code.
+Replace uses of FORMAT ~G with ~@*." "RMS" NIL)
+  (36 "MATH:MULTIPLY-MATRICES bugs (barfed on vectors, played fast and loose with returned
+   matrix array type)" "RpK" NIL)
+  (37 "DEFMACRO expansion.
+Make DEFPACKAGE not over-quote its args.
+DESCRIBE on characters.
+Interpreted &KEY binding evaluation order bug.
+ZWEI:LOAD-FILE-INTO-ZMACS sets pathname defaults by default.
+FS:ENABLE-CAPABILITIES, FS:DISABLE-CAPABILITIES, /"*/" at the beginning of passwords.
+EVAL-ABORT-TRIVIAL-ERRORS and error-handler recovery if DEFAULT-CONS-AREA is garbage.
+ROTATEF (SWAPF) bug.
+Make matrix operations use rationals.
+Evaluation of DEFFLAVOR in Zmacs." "Mly" NIL)
+  (38 "KBD-ESC-NOTIFICATIONS.
+Globalize PKG-KEYWORD-PACKAGE, PKG-SYSTEM-PACKAGE, PACKAGE-EXTERNAL-SYMBOLS." "RMS" NIL)
+  (39 "SI:PRINTING-RANDOM-OBJECT includes package prefix if necessary
+DESCRIBE recursively indents better
+RENAME-PACKAGE accepts a single nickname as well as a list
+Define CLI:ATAN
+Make FS:*REMEMBER-PASSWORDS* a synonym for FS:RECORD-PASSWORDS-FLAG
+Interpreted DO* bug
+Declarations in USING-RESOURCE
+Metering fixes -- by rms
+Patch directories always written//read using /"traditional/" syntax
+Typeout Window bugs -- rms
+Can now abort in cold-load stream
+Forward *TERMINAL-IO* to TERMINAL-IO" "Mly" NIL)
+  (40 "Type optimization of fixnum
+Make random character functions into substs
+OPEN bug
+CLI:*DEFAULT-PATHNAME-DEFAULTS*
+COPY-READTABLE rationalized for common-lisp
+Define logical pathname methods for ZMail
+Printing timedate
+Define SETF methods for SEND and LEXPR-SEND
+Random mouse clicks in window-oriented-debugger! bug
+FUNCTION-PARENT declaration for DEFSTRUCT constructors
+Printing symbols when *PRINT-ESCAPE* is NIL still hacks *PRINT-CASE*
+Correct quoting for printing character objects, FORMAT:OCHAR, FORMAT /"~C/"
+Very important fix for Disassociated Press bug
+Compiler optimization for CLI://
+Define a few additional canonical file types
+LOAD-PATCHES is really silent as requested, uses WITH-SYS-HOST-ACCESSIBLE
+Fix a whole bunch of string functions which didn't know about character objects
+:NIL when parsing file attribute lists
+:NIL when reading values for Zmacs variables
+TV:TRACE-VIA-MENUS argument-reading bug
+(EVAL-WHEN (CLI:EVAL ...) ...) Sigh.
+FORMAT /"~D/" binds *PRINT-RADIX* to NIL
+Debugger prints out missing argument slots
+Make Common-Lisp stream input operations know that NIL => *STANDARD-INPUT*
+READ-LINE arguments.
+Light at the end of the rubout-handling tunnel!! Recursive rubout-handling now works.
+   New option: :NONRECURSIVE
+Bugs in complex arithmetic." "Mly" NIL)
+  (41 "GET-INTERNAL-RUN-TIME returns time since boot, maybe bignum.
+M-X Set Key, etc., will not clobber M-X or Abort.
+Unix pathname parsing of :string-for-editor namestrings.
+Canonical types used better in pathname defaulting.
+ZWEI:EXTENDED-COMMAND-P allows COMTAB arg.
+FSM search bugs.  DISK-RESTORE//SAVE arg parsing.
+Debugger handles *VALUES* right.  Fix up ERR.
+:AFTER-FLIP initialization list.
+Parsing complex numbers with signed exponents.
+AL font file bugs.  C-Shift-D in editor bug." "RMS" NIL)
+  (42 "DEFRESOURCE interprets a string as first option as documentation.
+MATH:MULTIPLY-MATRICES fixed improper handling of vector x matrix case." "kab" NIL)
+  (43 "Added new EMACS-compatible ZWEI variable:  Next Screen Context Lines" "TIM" NIL)
+  (44 "m-x Delete {Non}matching Lines say how many lines they deleted
+m-x Create Link
+m-x Upper//Lowercase Lisp Code In Region understands that /"#\/" quotes the next char
+Improvements to args to {c-u} c-x c-;
+c-g//abort don't beep when they make region go away
+:allow-other-keys in flavor init plists
+more type randomness
+phase returns correct angle
+setf method for %logldb
+give oddp and evenp function definitions
+c-clear-input is a global asynchronous character doing the same
+  as terminal clear-input, but perhaps a little faster
+terminal key documentation
+more multiply matrices featurism
+closing serial streams
+constraint-frame//selection-substitutes// zwei-mini-buffer bug -- rms
+vector//array-pop do not do any bogus destruction of elements beyond fill-pointer" "Mly" NIL)
+  (45 "Provide SELF when evalling default instance variable values.
+Define :SET methods for settable instance variables.
+Rename implicit args of methods to .OPERATION. and .SUBOPERATION.
+SUPDUP handles %TDCR, %TDLF, %TDBS.
+Lisp mode sectionization bug on stray parens." "RMS" NIL)
+  (46 "NVT window beeps send SUPDUP:TERMINAL-BEEP as type argument to TV:BEEP." "RpK" NIL)
+  (47 "SPECIAL-FORM-P uses real arglist
+Printing characters which have names bug
+MAKE-OBSOLETE GLOBAL:CATCH and GLOBAL:THROW
+:SET methods for :PUTHASH and :GET
+Make select-method definition update which-operations dynamically
+SI:PROPERTY-LIST-HANDLER does useful things for named-structure-invoke handlers
+EXPORTing inherited symbols bug
+Package name-conflict does checking only for external symbols of USEd packages 
+Trying to edit /"Buffer header/" and /"Things deleted/" sections in zmacs
+:COLD initializations will not run after warm boot even if never previously run
+Try to make DEFSELECT win.
+  :WHICH-OPERATIONS updated by FDEFINE and FUNDEFINE.
+  :SEND-IF-HANDLES, :OPERATION-HANDLED-P work on NAMED-STRUCTURE-INVOKE-ations
+  DEFSELECT-INCREMENTAL now substantially the same as DEFSELECT,
+    except (of course) that it defines no methods.
+More MAKE-ARRAY argument error checks.
+Try to use short system names if necessary on vms and its
+COMPILER:DEFOPTIMIZER, COMPILER:DEFCOMPILER-SYNONYM
+Make optimization happen only once per form
+Perform optimizations on args first if form is not special form or macro
+Many random optimization improvements
+Make BYTE open-code
+Compiler arg-checking looks for bogus keywords in calls to &key functions
+EQL and SYS:MEMBER-EQL optimize into EQ and MEMQ (nearly always for SELECTQ)
+MAKE-ARRAY optimizer understands unquoted keywords, :ELEMENT-TYPE
+Make sure that CLI exports all its symbols
+SELECTQ uses EQL as test. Also CASE, CCASE, ECASE
+MAKE-ARRAY, MAKE-STRING arglist.
+MACRO-FUNCTION understands /"(deff check-type 'check-arg-type)/" -- follows definition
+  indirection
+Globalize /"NUMBER/"
+Make IF a special form -- prevent macro-function  recursiveness
+(subst nil nil foo) and (append foo nil) compiler style-checking fascism
+  -- tell me if this is too obnoxious.
+type pretty-names improvements, caching, and other cuteness.
+RENAME-PACKAGE stringifies its args.
+Order of processing of optimions to MAKE-PACKAGE" "Mly" NIL)
+  (48 "Supdup: Update documentation: you can get to Internet hosts.
+Chaos: SHOW-ROUTING-TABLE of host, SHOW-ROUTING-PATH follows routing info, server
+ for DUMP-ROUTING-TABLE protocol" "RpK" NIL)
+  (49 "Define CLI:CATCH and CLI:THROW right for now.
+TRACE-PRINT bug.  ENCAPSULATE inherited SPECIAL decl bug.
+STEP bug.
+Control characters in ZWEI:COM-STRING-SEARCH
+Query Replace, etc., win with region now.
+Screen editor Attributes command bug, changing borders.
+Window error handler redisplay for Set Arg command.
+Source Compare no longer asks /"Text or Forms/".
+TYPE-PRETTY-NAME avoids temp area lossage." "RMS" NIL)
+  (50 "LOGIN-FORMS:
+  ZWEI:DEFCOM, PKG-GOTO(-GLOBALLY), ADD-INITIALIATION, PROGN
+Some #n= #n# reader fixes
+FS:EN//DISABLE-CAPABILITIES hacks protocol more accurately -- vms now understands us.
+(ARGLIST FOO 'COMPILE)
+#s reader improvements
+DEFSTRUCT constructors take doc strings.
+DEFSTRUCT :PRINT and :PRINT-FUNCTION use DEFSELECT
+:FASD-FIXUP and :SXHASH check :WHICH-OPERATIONS first
+  and only are invoked if handled
+Terminal 1 v views any file
+%POINTER-PLUS
+ADJUSTABLE-ARRAY-P defined. Amazingly useful on a lispmachine.
+READLINE returns right first value on eof (ie eof option)
+UT timezone
+common lisp alternate macro definitions.
+  Who would believe that COND could be a macro?
+Disassemble *PRINT-RADIX*
+type-checking macros do not copy type names so gratuitously
+m-X Add (Buffer) Changed Sections lets you <q>uit
+&KEY args don't barf on :ALLOW-OTHER-KEYS NIL
+(TYPEP FOO 'CLI:CHARACTER) Foo.
+SI:XR-XRTYI strips fonts
+DEFSIGNAL(-EXPLICIT) indentation
+Bug IN :SELECT-METHOD FUNCTION-SPEC-HANDLER
+MAKE-PACKAGE, DEFPACKAGE no longer take cretinous dotted pair :RELATIVE-NAMES args
+(IMPORT 'NIL FOO) works
+CAAR-SAFE, CDAR-SAFE
+Zmacs puts buffer-modified-p and more-above//below flags at start
+  prevent run-off-edgery
+Zmacs mouse clicks don't lose on mistimed shift-key merging
+Compiler check-number-of-args error
+(PROMPT-AND-READ '(:CHARACTER :OR-NIL T) /"Foo/") lets you read a #//clear-input
+  by quoting with #//c-q or #//quote
+CONDITION-TYPEP extensions: hacks AND, OR, NOT, and combinations thereof
+Typo affecting :DEFAULT-HANDLER option to DEFFLAVOR
+Locatives in TV:CHOOSE-VARIABLE-VALUES -- map" "Mly" NIL)
+  (51 "Define C canonical type; ZWEI uses PL1 on it.
+ZWEI:LOAD-FILE-INTO-ZMACS is quieter." "RpK" NIL)
+  (52 "ZWEI: Electric Font Lock mode is considered appropriate only if there's more than
+ one font in the attribute list.
+TV: Changing a window's label changes the string, not the font.
+Hardcopy: (In the SI: package)
+ (SET-PRINTER-DEFAULT-OPTION printer-type option value) allows the user to set a
+ default option for a printer type, which the hardcopy functions look at.
+ A common use at MIT may be (SI:SET-PRINTER-DEFAULT-OPTION :DOVER :SPOOL T)
+ Currently defaultable options are :FONT, :FONT-LIST, :HEADING-FONT, :PAGE-HEADINGS,
+ :VSP, :COPIES, and :SPOOL." "RpK" NIL)
+  (53 "Serial stream random unibus channel size is more reasonable..." "RpK" NIL)
+  (54 "define SI:COMBINED-METHOD-DOCUMENTATION
+  fancy formatting of documentation for combined methods
+  patch DOCUMENTATION to use it when appropriate" "kab" NIL)
+  (55 "QFILE: Add :SUBMIT open to OPEN.  Use in the output direction to submit a file for
+ a batch job.  Support the PROPERTIES command, add :PROPERTIES operation for streams.
+ Teach the directory property parser about a few new random properties.
+CHAOS: Routing table stuff was offset 8 relative from the rest of the world.
+ SHOW-ROUTING-PATH tell you what host the packet is going to at the very end." "RpK" NIL)
+  (56 "TIME:INITIALIZE-TIMEBASE doesn't try the net if we're :STANDALONE.
+CHAOS system has files in a new place." "RpK" NIL)
+  (57 "(typep foo 'complex) improvements
+REALP, (TYPEP FOO 'REAL)
+zmacs: c-x j doesn't barf if register points to different buffer
+peephole optimizer doesn't hang in infinite loops when hacking infinite loops
+lexically interpreted DO bug.
+lexically interpreted SETQ
+dired: @ on directory doesn't bash display of line
+MAKE-STRING optimizer
+unsetfable stuff
+DEFSTRUCT-DEFINE-TYPE FUNCTION-PARENT declaration bug
+random numeric optimizations
+(EVAL-WHEN (LOAD) (EXPORT ...)), etc bug
+PUSHNEW optimizer" "Mly" NIL)
+  (58 "Peek: Don't show useless subnets in Chaos mode.
+SI: PARSE-HOST now tries a HOSTAB server if needed." "RpK" NIL)
+  (59 "Source Compare Merge bug.
+SETF of SYMEVAL-IN-STACK-GROUP and EH:SG-CONTENTS." "RMS" NIL)
+  (60 "Miscompilation of declarations for lambda-lists which have both &KEY and &AUX
+Style checker to catch old-style MAKE-LIST calls
+LOAD-PATCHES barfs about inaccesible patch-directories more coherently
+Colour screen font parsing bugs.
+Reader infix bug." "Mly" NIL)
+  (61 "(PRINT-DISK-LABEL /"CC/") avoids clobbering label!
+Bug in commonlisp member functions" "RMS" NIL)
+  (62 "Metering warns if data is lost due to exceeding size of disk partition
+Reading complexnums bug
+c-m-x untabify bug with fonts of widely differing widths
+T(w)enex file parsing is :WILDer
+Miscompilation of some rational and complex functions.
+ARGLIST of macros which take zero args
+(TYPE-OF 1f0) => SINGLE-FLOAT (not FLONUM!)" "Mly" NIL)
+  (63 "TV:MULTIPLE-CHOOSE does not bash user args when is supplies default implications
+Lap bug preventing compiler rentrancy
+DEFLOCF
+(SETF (%POINTER ...) ...)
+STRING-APPEND uses /"maximal/" array type for result
+  -- not necessarily type of first arg
+Define accessors for fields of floats (SI:%SINGLE-FLOAT-EXPONENT, etc)
+Some fasdump operations clobbering FASD-PACKAGE
+SXHASH typo. Foo.
+Describing lexical closures made by compiled code
+Bug in compilation of (PROCLAIM '(SPECIAL ...))
+Bug in SETQ!!" "Mly" NIL)
+  (64 "For now, ignore when hosts change networks.  This patch must be loaded before the
+next host table is made for the MIT." "LMFile" NIL)
+  (65 "*Many* *hairy* evaluator changes.
+COMPILER-LET does The Right Thing wrt lexical environment." "Mly" NIL)
+  (66 "Not compiling variable initializations for value!
+(SETF (CHAR-BITS ...) ...)  and high-bit lossage.
+Disassembly of FLOOR//CEILING//TRUNCATE//ROUND instructions.
+New type NON-COMPLEX-NUMBER
+  (TYPEP x '(NON-COMPLEX-NUMBER a b)  (AND (NUMBERP x) (NOT (COMPLEXP x)) ( a x b))
+Better (and more correct!) optimization of COERCE
+SUBTYPEP lossage on some array types.
+Lap bug treating EQUAL frobs for quote vector as EQL
+Whitespace preserved on recursive calls READing package prefixes." "MLY" NIL)
+  (67 "SI:PATCH-LOADED-P simply returns NIL if SYSTEM is not loaded." "kab" NIL)
+  (68 "CHAOS: Receive BRD packets.  Controlled by *RECEIVE-BROADCAST-PACKETS-P*
+ Timeout after failure in SIMPLE waits twice as long, not one hour.
+Peek File System mode only shows file hosts that have been used.
+TV:DEFINE-USER-OPTION arranges for default to evaluated once at load time." "RpK" NIL)
+  (69 "Handle character objects when copying trees.
+CHAOS: PRINT-HOST-TIMES is faster, new function (EXPAND-MAILING-LISTS names host)" "RpK" NIL)
+  (70 "Make DEFPACKAGE accept what's in broken documentation in DayGloUal." "Mly" NIL)
+  (71 "load-and-save-patches lets you specify a band as a fixnum (99.5)" "Mly" NIL)
+  (72 "color:color-draw-line broken due to ancient swapf bug. foo." "Mly" NIL)
+  (73 "Bucky mouse click timing screw again (99.8)" "Mly" NIL)
+  (74 "Mly spazzed in 98.71 (99.9)" "Mly" NIL)
+  (75 "(REPLACE foo foo ...) bug (99.9) " "Mly" NIL)
+  (76 "(NEQ 'WHEN 'AND) idiot. (Really fix COLOR:COLOR-DRAW-LINE) (99.9)" "Mly" NIL)
+  (77 "Zmacs c-x j doesn't cause cerebral haemorrhage when jumping
+to another buffer (99.10)" "Mly" NIL)
+  (78 "Proceeding from file error by supplying new pathname
+doesn't blow out (99.10)
+Host tables always in base 8 (99.11)" "Mly" NIL)
+  (79 "New chaos NCP should fix retransmission lossage
+  Please tell me if there are any more problems with this
+Multiple host polling fix & improvements" "Mly" NIL)
+  (80 "CHAOS:ADDRESS-PARSE returns two values -- the address, and the host." "RPK" NIL)
+  (81 NIL "MLY" NIL)
+  ))

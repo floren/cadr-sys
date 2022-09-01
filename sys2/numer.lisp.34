@@ -1,0 +1,380 @@
+;;; -*- Mode:Lisp; Package:System-internals; Base 8 -*-
+;	** (c) Copyright 1980 Massachusetts Institute of Technology **
+;;; Edited 13 JUL 79 by rWG to fix expt-hard
+
+;;; Integer square-root
+(defun isqrt (n)
+  "Square root of an integer, as an integer."
+  (cond ((<= n 0) 0)  ;Otherwise, it would loop, which isn't nice
+	(t (do ((g (ash 1 (ash (1- (haulong n)) -1))
+		   (+ g e))
+		(e))
+	       ((zerop (setq e (truncate (- n (* g g))
+					 (ash g 1))))
+		;; We are now within 1, but might be too high
+		(cond ((> (* g g) n) (1- g))
+		      (t g)))))))
+
+(defun sqrt (number)
+  "Square root of a number, as a flonum.  Small flonum arg gets small flonum value."
+  (let* ((n (float number))
+	 (val
+	   (cond ((< n 0.0) (error 'sys:negative-sqrt "~S was negative - SQRT" n))
+		 ((= n 0.0) 0.0)
+		 (t (let ((f (+ n 0.0))
+			  (i2 (%float-double 0 1))
+			  (exp (- (%p-ldb 1013 n) 1776)))
+		      (%p-dpb 2000 1013 f)
+		      (%p-dpb (+ 2000 (cond ((oddp exp)
+					     (1+ (dpb (ldb 0127 exp) 0027 exp)))
+					    (t (dpb (ldb 0127 exp) 0027 exp))))
+			      1013 i2)
+		      (do ((i 0 (1+ i))
+			   (an (* i2 (+ .4826004 f (cond ((oddp exp) -.25)
+							 (t 0.0))))))
+			  ((= i 4) an)
+			(setq an (* .5 (+ an (// n an))))))))))
+    (if (small-floatp number) (small-float val) val)))
+
+(defun log (n)
+  "Log base e of a number, as a flonum.  Small flonum arg gets small flonum value."
+      (if (small-floatp n) (small-float (log-aux n)) (log-aux n)))
+
+(defun log-aux (n &aux (f (+ n 0.0)))
+      (cond (( n 0)
+	     (error 'sys:non-positive-log "~S was not positive - LOG." n))
+	    ((= n 1) 0.0)
+	    (t (let ((i (- (%p-ldb 1013 f) 2001)))	;i gets the base 2 exponent
+		 (%p-dpb 2001 1013 f)		;f gets the mantissa (1.0 to 2.0)
+		 (setq f (// (- f 1.414213562374)
+			     (+ f 1.414213562374)))
+		 (setq f (+ .5
+			    (* f (+ 2.885390073
+				    (* (setq f (* f f))
+				       (+ .9618007623
+					  (* f (+ .5765843421
+						  (* .4342597513 f)))))))))
+		 (* .69314718056 (+ i f))))))
+
+(defun exp (n)
+  "e to power of a number, as a flonum.  Small flonum arg gets small flonum value."
+  (if (small-floatp n)
+      (let ((m (* n 1.442695s0))		;lg e
+	    (f))
+	(setq n (fix m) f (- m n))
+	(ash (+ .5s0 (// f			;no doubt  a simpler approx for small-floats
+			 (+ 9.954596s0
+			    (* .034657359s0 f f)
+			    (- f)
+			    (// -617.97227s0
+				(+ (* f f) 87.4174972s0)))))
+	     (1+ n)))
+    (let ((m (* n 1.44269504))			;lg e
+	  (f))
+      (setq n (fix m) f (- m n))
+      (ash (+ .5 (// f				;replace this comment by a reference!
+		     (+ 9.95459578
+			(* .03465735903 f f)
+			(- f)
+			(// -617.97226953
+			    (+ (* f f) 87.417497202)))))
+	   (1+ n)))))
+
+(defun cosd (ang)
+  "Cosine of an angle measured in degrees.  Small flonum arg gets small flonum value."
+  (sin (+ (* ang .0174532926) 1.570796326) ang))
+
+(defun sind (ang)
+  "Sine of an angle measured in degrees.  Small flonum arg gets small flonum value."
+  (sin (* ang .0174532926) ang))
+
+(defun cos (x)
+  "Cosine of an angle measured in radians.  Small flonum arg gets small flonum value."
+  (sin (+ x 1.570796326) x))
+
+(defun sin (x &optional (type-specimen x))
+  "Sine of an angle measured in radians.  Small flonum arg gets small flonum value.
+If TYPE-SPECIMEN is specified, its type determines the type of the result."
+  (let ((value (cond ((< (abs x) 1.0s-3) x)
+		     (t (min (max (sin-aux x) -1.0) 1.0)))))
+    (if (small-floatp type-specimen)
+	(small-float value)
+      (float value))))
+
+(defun sin-aux (x &aux (pi%2 1.570796326))
+   (let ((frac (// (abs x) pi%2))
+         (d)
+         (sign (cond ((> x 0) 1)
+                     ((< x 0) -1))))
+      (setq d (fix frac))
+      (setq frac (- frac d))
+      (selectq (ldb 0002 d)
+          (1 (setq sign (minus sign) frac (- frac 1)))
+          (2 (setq sign (minus sign)))
+          (3 (setq frac (- frac 1))))
+      (let ((y (* frac sign))
+            (y2 (* frac frac)))
+           (* y (+ 1.5707963185
+                   (* y2 (+ -.6459637111
+                            (* y2 (+ .07968967928
+                                     (* y2 (+ -.00467376557
+                                              (* y2 .00015148419))))))))))))
+(defun atan2 (y x)
+  "Arctangent in radians of y//x, between 0 and 2.  Small flonum arg gets small flonum value."
+   (cond ((< y 0) (- (atan (- y) x)))
+	 (t (atan y x))))
+
+(defun atan (y x)
+  "Arctangent in radians of y//x, between - and .  Small flonum arg gets small flonum value."
+  (let ((absx (abs (float x)))
+	(absy (abs (float y)))
+	(temp)
+	(temp2)
+	(ans -0.004054058))
+    (setq temp (// (- absy absx) (+ absy absx))
+	  temp2 (* temp temp))
+    (do ((l '( 0.0218612288 -0.0559098861  0.0964200441
+	      -0.139085335   0.1994653499 -0.3332985605 0.9999993329)
+	    (cdr l)))
+	((null l))
+      (setq ans (+ (* ans temp2) (car l))))
+    (setq ans (* ans temp))
+    (setq temp (abs ans))
+    (cond ((or (>= temp .7855) (< temp .7853))
+	   (setq ans (+ ans 0.7853981634)))
+	  ((< ans 0) (setq ans (// absy absx)))
+	  (t (setq ans (+ (// absx absy) 1.5707963268))))
+    (setq temp ans
+	  ans (- 3.1415926536 ans))
+    (if (>= x 0) (psetq temp ans ans temp))
+    (setq temp (* temp 2))
+    (if (< y 0) (setq ans (+ ans temp)))
+    (if (and (small-floatp x) (small-floatp y))
+	(small-float ans)
+      ans)))
+
+
+;;; Hard cases of ^ -- non-fixnum base.
+;  Old code -- rewritten by rWG July 1979
+;  Binary-expt always uses ASH now since works for bignums.
+
+;  (defun expt-hard (*base *exp)		;numerous type conversion bugs
+;      (cond ((zerop *base)
+;  	   (and (zerop *exp) (ferror nil "(^ ~S ~S) not defined" *base *exp))
+;  	   *base)
+;  	  ((zerop *exp)
+;  	   (selectq (typep *base)
+;               (:fixnum 1)
+;  	     (:bignum 1)
+;  	     (:flonum 1.0)
+;  	     (:small-flonum 1.0s0)))
+;  	  ((< *exp 0) (// 1 (expt-hard *base (- *exp))))
+;  	  ((fixp *exp)
+;  	   (if (bigp *exp)
+;  	       (slow-binary-expt *base *exp)
+;  	       (fast-binary-expt *base *exp)))
+;  	  (t (exp (* *exp (log *base))))))
+;  
+;  (defun fast-binary-expt (*base *exp)	;obsolete
+;      (do ((*ans 1))
+;  	((zerop *exp) *ans)
+;        (if (bit-test *exp 1) (setq *ans (* *ans *base)))
+;        (setq *base (* *base *base)
+;  	    *exp (lsh *exp -1))))
+
+(defun expt-hard (*base *exp)
+      (setq *base (number-meets *base *exp))
+      (cond ((zerop *base)
+	     (or (plusp *exp) (ferror nil "(^ ~S ~S) not defined" *base *exp))	;eg 0^-1
+	     *base)
+	    ((< *exp 0) (// 1 (expt-hard *base (- *exp))))
+	    ((fixp *exp)
+	     (slow-binary-expt *base *exp))	;ash ucoded JUL 79 (?)
+	    (t (exp (* *exp (log *base))))))
+
+
+(defun slow-binary-expt (*base *exp)
+      (do ((ans (if (oddp *exp) *base (number-meets 1 *base))	;coerce to right flavor of 1!
+		(if (oddp *exp) (* ans *base) ans)))
+	  ((zerop (setq *exp (ash *exp -1))) ans)
+	(setq *base (* *base *base))))		;to avoid oflo, procrastinate squaring
+	
+(defun number-meets (ans influencer)		;ans in stronger type
+      (min ans (max ans influencer)))
+
+(DEFVAR RANDOM-ARRAY NIL "Default random number generator data")
+
+(DEFVAR *RANDOM-STATE* :UNBOUND "Default random number generator data")
+
+(FORWARD-VALUE-CELL '*RANDOM-STATE* 'RANDOM-ARRAY)
+
+(DEFSTRUCT (RANDOM-NUMBER-TABLE ARRAY-LEADER)
+    RANDOM-FILL-POINTER
+    RANDOM-SEED
+    RANDOM-POINTER-1
+    RANDOM-POINTER-2)
+
+(DEFUN MAKE-RANDOM-STATE (&OPTIONAL STATE)
+  "Create a new random-state object for RANDOM to use.
+If STATE is such a state object, it is copied.
+If STATE is NIL or omitted, the default random-state is copied.
+If STATE is T, a new state object is created and initialized based on the microsecond clock."
+  (COND ((EQ STATE NIL)
+	 (COPY-OBJECT RANDOM-ARRAY))
+	((EQ STATE T)
+	 (RANDOM-CREATE-ARRAY 71. 35. (TIME:FIXNUM-MICROSECOND-TIME)))
+	(T (COPY-OBJECT STATE))))
+
+(DEFUN RANDOM-CREATE-ARRAY (SIZE OFFSET SEED &OPTIONAL (AREA NIL))
+    (LET ((ARRAY (MAKE-RANDOM-NUMBER-TABLE
+		   MAKE-ARRAY (:AREA AREA
+			       :TYPE 'ART-Q-LIST
+			       :LENGTH SIZE)
+		   RANDOM-FILL-POINTER SIZE
+		   RANDOM-SEED SEED
+		   RANDOM-POINTER-1 0
+		   RANDOM-POINTER-2 OFFSET)))
+      (RANDOM-INITIALIZE ARRAY)
+      ARRAY))
+
+(DEFUN RANDOM-INITIALIZE (ARRAY &OPTIONAL NEW-SEED &AUX SIZE X BYTE-SPEC POINTER)
+   (IF (NOT (NULL NEW-SEED))
+       (SETF (RANDOM-SEED ARRAY) NEW-SEED))
+   (SETQ SIZE (RANDOM-FILL-POINTER ARRAY)
+	 POINTER (AP-1 ARRAY 0))
+   (SETF (RANDOM-POINTER-2 ARRAY) (\ (+ SIZE (- (RANDOM-POINTER-2 ARRAY)
+						(RANDOM-POINTER-1 ARRAY)))
+				     SIZE))
+   (SETF (RANDOM-POINTER-1 ARRAY) 0)
+   (DO I 0 (1+ I) (= I SIZE)
+     (ASET 0 ARRAY I))
+   (SETQ X (RANDOM-SEED ARRAY))
+   (DO L '(1414 0014) (CDR L) (NULL L)
+     (SETQ BYTE-SPEC (CAR L))
+     (DO I 0 (1+ I) (= I SIZE)
+       (SETQ X (%24-BIT-TIMES X 4093.))			;4093. is a prime number.
+       (%P-DPB-OFFSET (LDB 1314 X) BYTE-SPEC POINTER I))))
+
+(DEFUN RANDOM (&OPTIONAL HIGH ARRAY &AUX PTR1 PTR2 SIZE ANS)
+  "Returns a randomly chosen number.
+With no argument, value is chosen randomly from all fixnums.
+If HIGH is an integer, the value is a nonnegative integer and less than HIGH.
+If HIGH is a flonum or small flonum, the value is a nonnegative
+ number of the same type, and less than HIGH.
+ARRAY can be an array used for data by the random number generator (and updated);
+ you can create one with RANDOM-CREATE-ARRAY or MAKE-RANDOM-STATE."
+  (WHEN HIGH
+    (CHECK-ARG HIGH (AND (REALP HIGH) (PLUSP HIGH))
+	       "a positive real number"))
+  (COND ((NULL ARRAY)
+	 (OR (AND (VARIABLE-BOUNDP RANDOM-ARRAY) RANDOM-ARRAY)
+	     (SETQ RANDOM-ARRAY (RANDOM-CREATE-ARRAY 71. 35. 105)))
+	 (SETQ ARRAY RANDOM-ARRAY)))		;INITIALIZATION AS OPT ARG LOSES ON BOUNDP.
+  (WITHOUT-INTERRUPTS
+    (SETQ PTR1 (RANDOM-POINTER-1 ARRAY)
+	  PTR2 (RANDOM-POINTER-2 ARRAY)
+	  SIZE (RANDOM-FILL-POINTER ARRAY))
+    (OR (< (SETQ PTR1 (1+ PTR1)) SIZE)
+	(SETQ PTR1 0))
+    (OR (< (SETQ PTR2 (1+ PTR2)) SIZE)
+	(SETQ PTR2 0))
+    (SETF (RANDOM-POINTER-1 ARRAY) PTR1)
+    (SETF (RANDOM-POINTER-2 ARRAY) PTR2)
+    (SETQ ANS (%MAKE-POINTER-OFFSET DTP-FIX (AR-1 ARRAY PTR1) (AR-1 ARRAY PTR2)))
+    (ASET ANS ARRAY PTR2))
+  (COND ((SMALL-FLOATP HIGH)
+	 (* HIGH (// (SMALL-FLOAT (LOGAND ANS (LSH -1 -1)))
+		     (SMALL-FLOAT (ROT 1 -1)))))
+	((FLOATP HIGH)
+	 (* HIGH (// (FLOAT (LOGAND ANS (LSH -1 -1)))
+		     (SMALL-FLOAT (ROT 1 -1)))))
+	((NULL HIGH) ANS)
+	(T
+	 (DO ((BITS 14. (+ BITS %%Q-POINTER))
+	      (NUMBER (LOGAND ANS (LSH -1 -1))
+		      (+ (LOGAND (RANDOM) (LSH -1 -1))
+			 (ASH ANS (1- %%Q-POINTER)))))
+	     ((> BITS (HAULONG HIGH))
+	      (MOD NUMBER HIGH))))))
+
+;; Return a randomly chosen number at least LOW and less than HIGH.
+(DEFUN RANDOM-IN-RANGE (LOW HIGH)
+  "Randomly chosen flonum not less than LOW and less than HIGH."
+  (PROG* ((R (RANDOM))
+	  (RNORM (// (LOGAND R 777777) (FLOAT 1000000))))
+     (RETURN (+ LOW (* RNORM (- HIGH LOW))))))
+
+(defconst most-negative-fixnum (rot 1 -1)
+  "Any integer smaller than this must be a bignum.")
+
+(defconst most-positive-fixnum (lsh -1 -1)
+  "Any integer larger than this must be a bignum.")
+
+(defconst most-positive-short-float (%make-pointer dtp-small-flonum -1)
+  "No short float can be greater than this number.")
+
+(defconst least-positive-short-float (%make-pointer dtp-small-flonum 600000)
+  "No positive short float can be closer to zero than this number.")
+
+(defconst least-negative-short-float (%make-pointer dtp-small-flonum 577777)
+  "No negative short float can be closer to zero than this (unnormalized) number.")
+
+(defconst most-negative-short-float (%make-pointer dtp-small-flonum
+						   (lognot 377777))
+  "No short float can be less than this number.")
+
+(defconst most-positive-single-float (%float-double (lsh -1 -1) (lsh -1 -1))
+  "No float can be greater than this number.")
+
+(%p-dpb 77777 (byte 8 11.) most-positive-single-float)
+(%p-store-contents-offset -1 most-positive-single-float 1)
+
+(defconst most-negative-single-float (- 1.0 1.0)
+  "No float can be less than this number.")
+
+(%p-dpb 77777 (byte 7 12.) most-negative-single-float)
+
+(defconst least-positive-single-float (- 1.0 1.0)
+  "No positive float can be less than this number.")
+
+(%p-dpb 1 (byte 8 11.) least-positive-single-float)
+(%p-dpb 1 (byte 6 1) least-positive-single-float)
+
+
+(defconst least-negative-single-float (- 1.0 1.0)
+  "No negative float can be greater than this number.")
+
+(%p-dpb 1 (byte 8 11.) least-negative-single-float)
+(%p-dpb 1 (byte 7 1) least-negative-single-float)
+(%p-dpb 777 (byte 0 5) least-negative-single-float)
+(%p-store-contents-offset -1 least-negative-single-float 1)
+
+(defconst most-positive-long-float most-positive-single-float)
+(defconst most-negative-long-float most-negative-single-float)
+(defconst least-positive-long-float least-positive-single-float)
+(defconst least-negative-long-float least-negative-single-float)
+
+(defconst most-positive-double-float most-positive-single-float)
+(defconst most-negative-double-float most-negative-single-float)
+(defconst least-positive-double-float least-positive-single-float)
+(defconst least-negative-double-float least-negative-single-float)
+
+(defconst short-float-epsilon
+	  (small-float (scale-float 1.0s0 -20))
+  "Smallest positive short float which can be added to 1.0s0 and make a difference.")
+
+(defconst single-float-epsilon (scale-float 1.0 -36)
+  "Smallest positive float which can be added to 1.0 and make a difference.")
+
+(defconst long-float-epsilon single-float-epsilon)
+(defconst double-float-epsilon single-float-epsilon)
+
+(defconst short-float-negative-epsilon
+	  (small-float (scale-float 1.0s0 -20))
+  "Smallest positive short float which can be subtracted from 1.0s0 and make a difference.")
+
+(defconst single-float-negative-epsilon (scale-float 1.0 -36)
+  "Smallest positive float which can be subtracted from 1.0 and make a difference.")
+
+(defconst long-float-negative-epsilon single-float-negative-epsilon)
+(defconst double-float-negative-epsilon single-float-negative-epsilon)

@@ -1,0 +1,200 @@
+;-*-Mode:Lisp; Package:file-system; base:8-*-
+
+;Links are a kind of node.
+
+(defflavor name-link-node (link-to) (node))
+
+;Turn user-specified pointer info for a link into the real pointer info to use.
+;Throw away everything except link-to.
+(defmethod (name-link-node default-pointer-info) (old-entry &rest user-pointer-info
+							    &key &optional -link-to-
+							    &allow-other-keys)
+  old-entry
+  (setq -link-to- (get (locf user-pointer-info) ':link-to))
+  (or (stringp -link-to-)
+      (setq -link-to- (cerror ':new-value nil
+			      'bad-link-target
+			      "Target of link not specified or not string.")))
+  (list ':link-to -link-to-))
+
+(defmethod (name-link-node :after init-node) (pointer-info &rest ignore)
+  (setq link-to (or (get (locf pointer-info) ':link-to) "")))
+
+;By default, recursively finding this many links gets an error.
+(defconst default-link-depth 14)
+
+(defwrapper (name-link-node :make-stream) ((ignore creating &rest open-options)
+					   body)
+  `(cond ((or creating (extract-keywords open-options ':inhibit-links))
+	  ,body)
+	 (t
+	  (let ((link-depth (1- (or (extract-keywords open-options ':link-depth)
+				    default-link-depth))))
+	    (cond ((minusp link-depth)
+		   (cerror ':new-value nil 'circular-link
+			   "Link depth exceeded.")
+		   (setq link-depth default-link-depth)))
+	    (setq open-options (copylist open-options))
+	    (remprop (locf open-options) ':link-depth)
+	    (setq open-options (list* ':link-depth link-depth open-options))
+	    (open-name-link-target link-to
+				   open-options
+				   node-caller-area)))))
+
+;Discard any word of letters and numbers followed by a colon
+;from the front of the string supplied.
+(defun discard-host (string)
+  (let ((length (string-length string)))
+    (dotimes (i length)
+      (cond ((= (aref string i) #/:)
+	     (setq string (substring string (1+ i)))
+	     (return))
+	    ((<= #/A (char-upcase (aref string i)) #/Z))
+	    ((<= #/0 (char-upcase (aref string i)) #/9))
+	    (t (return))))
+    string))
+
+(defun open-name-link-target (link-to open-options default-cons-area)
+  (let ((default-cons-area background-cons-area))
+    (setq link-to (parse-pathname (discard-host link-to) lfs-host)))
+  (let (tem)
+    (do ((name link-to
+	       (cerror nil nil
+		       'link-target-not-found
+		       "Link to nonexistent file ~S."
+		       (funcall link-to ':string-for-printing))))
+	((not (errorp (setq tem (lexpr-funcall 'open link-to
+						(append open-options '(:error nil)))))))
+      (and (string-equal "link depth exceeded" tem
+			 0 (- (string-length tem) 19.))
+	   (ferror 'circular-link
+		   "Link depth exceeded.")))
+    tem))
+
+;Pass on various random operations to our target.
+
+(defun name-link-op-via-target (op &rest args)
+  (declare-flavor-instance-variables (name-link-node)
+    (let* ((stream (open-name-link-target link-to nil default-cons-area))
+	   (node (funcall stream ':node))
+	   (default-cons-area node-caller-area))
+      (unwind-protect (lexpr-funcall node op args)
+		      (close stream)))))
+
+(defmethod (name-link-node :open-subnode) name-link-op-via-target)
+
+(defmethod (name-link-node :create-subnode) name-link-op-via-target)
+
+(defmethod (name-link-node :operate-on-subnode-by-name) name-link-op-via-target)
+
+(defmethod (name-link-node :complete-subnode-name) name-link-op-via-target)
+
+(defmethod (name-link-node :complete-pathlist) name-link-op-via-target)
+
+(defmethod (name-link-node :any-subnode-matches-p) name-link-op-via-target)
+
+(defmethod (name-link-node :tape-dump) ignore)
+
+(defflavor hard-link-node (ptr-info) (node))
+
+;Turn user-specified pointer info for a link into the real pointer info to use.
+(defmethod (hard-link-node default-pointer-info) (old-entry &key &optional file-linked-to
+							    &allow-other-keys)
+  old-entry
+  (cond (file-linked-to
+	 (or (and (funcall file-linked-to 'file-node-p)
+		  (string-equal (pack-volume-name (funcall supernode ':pack))
+				(pack-volume-name
+				  (funcall (funcall file-linked-to':supernode) ':pack))))
+	     (ferror nil "~S not good target node for link" file-linked-to))
+	 (let ((pi (copylist (funcall file-linked-to ':pointer-info))))
+	   (remprop (locf pi) ':in-link-dirs)
+	   (copy-into-area node-caller-area pi)))))
+
+;This function is called whenever a hard-link-node's
+;directory entry is put into or taken out of a directory.
+;Its purpose is to update the back pointers of the file pointed at.
+(defun (hard-link-node entry-inserted-or-deleted) (entry inserted-p)
+  (let* ((pack (file-pack node-file))
+	 (volume (pack-volume-name pack))
+	 (pack-number (pack-number-within-volume pack))
+	 (fbn (block-number-of-record 0))
+	 (descriptor (list volume pack-number fbn))
+	 (temp-reason (gen-temp-reason))
+	 node)
+    (unwind-protect
+     (progn
+      (setq node
+	    (open-hard-link-target-node temp-reason (dir-entry-pointer-info entry)))
+      (cond (node
+	     (funcall node (if inserted-p ':add-in-link ':delete-in-link)
+		      descriptor))))
+     (and node (funcall node ':remove-reason temp-reason)))))
+
+(defmethod (hard-link-node :after init-node) (pointer-info &rest ignore)
+  (setq ptr-info pointer-info))
+
+(defwrapper (hard-link-node :make-stream) ((pathname creating &rest open-options)
+					   body)
+  `(cond ((or creating (extract-keywords open-options ':inhibit-links))
+	  ,body)
+	 (t
+	  (open-hard-link-target pathname ptr-info open-options node-caller-area))))
+
+(defun extract-keywords (keyargs &rest keynames)
+  (let ((vals (make-list (length keynames))))
+    (do ((k keyargs (cddr k)))
+	((null k))
+      (let ((i (find-position-in-list (car k) keynames)))
+	(and i (setf (nth i vals) (cadr k)))))
+    (values-list vals)))
+
+(defun open-hard-link-target-node (temp-reason pointer-info)
+  (let (volume-name pack-number pack first-block-number)
+    (setq volume-name (get (locf pointer-info) ':volume-name))
+    (setq pack-number (get (locf pointer-info) ':pack-number))
+    (setq first-block-number (get (locf pointer-info) ':first-block-number))
+    (setq pack (find-mounted-pack volume-name pack-number))
+    (open-node-given-first-block temp-reason pack first-block-number)))
+
+(defun open-hard-link-target (pathname pointer-info open-options default-cons-area)
+  (let* ((temp-reason (gen-temp-reason))
+	 (node (open-hard-link-target-node temp-reason pointer-info)))
+    (unwind-protect
+      (lexpr-funcall node 'make-stream pathname nil open-options)
+      (funcall node ':remove-reason temp-reason))))
+
+(defmethod (hard-link-node :before rename-internal) (other-dir &rest ignore)
+  (or (string-equal
+       (pack-volume-name (funcall other-dir 'dont-lock ':pack))
+       (pack-volume-name (file-pack)))
+      (cerror nil nil
+	      'bad-cross-volume-ref
+	      "Renaming across volumes.")))
+
+;Pass on various random operations to our target.
+
+(defun hard-link-op-via-target (op &rest args)
+  (declare-flavor-instance-variables (hard-link-node)
+    (let* ((temp-reason (gen-temp-reason))
+	   (default-cons-area node-caller-area)
+	   (node (open-hard-link-target-node temp-reason ptr-info)))
+      (unwind-protect
+	(lexpr-funcall node op args)
+	(funcall node ':remove-reason temp-reason)))))
+
+(defmethod (hard-link-node :open-subnode) hard-link-op-via-target)
+
+(defmethod (hard-link-node :create-subnode) hard-link-op-via-target)
+
+(defmethod (hard-link-node :operate-on-subnode-by-name) hard-link-op-via-target)
+
+(defmethod (hard-link-node :complete-subnode-name) hard-link-op-via-target)
+
+(defmethod (hard-link-node :complete-pathlist) hard-link-op-via-target)
+
+(defmethod (hard-link-node :any-subnode-matches-p) hard-link-op-via-target)
+
+(defmethod (hard-link-node :tape-dump) ignore)
+
+(compile-flavor-methods name-link-node hard-link-node)

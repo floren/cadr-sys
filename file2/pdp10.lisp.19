@@ -1,0 +1,496 @@
+
+;;; -*-Mode: Lisp; Package: FILE-SYSTEM; Base: 8; Lowercase: T -*-
+
+;PDP10 file nodes hold files which were copied from PDP10s.
+;We do not know whether such a file contains chars or binary info,
+;and we must make Lisp machine input (byte sizes 8 and 16)
+;do the same thing they would have done using the PDP10 file server.
+
+;(defflavor pdp10-file-node () (text-node))
+
+;A pdp-10 format file can be read in pdp-10 format or in Lispm format.
+;If read in pdp-10 format, the reader simply gets bytes extracted
+;from the pdp-10 words stored in the file.
+;If read in Lispm format, and the caller does not ask for characters,
+;then bytes are extracted in the same fashion.
+;With byte-size 16, only the top 32 bits of each word are read.
+
+;If read in Lispm format, and the caller asks for characters,
+;then the pdp-10 characters are converted to Lispm characters
+;and given to the caller.  A similar conversion happens on Lispm-format
+;output to pdp10-file-nodes.
+
+;The data in a PDP10 file node is stored with each 36-bit word
+;divided into four 7-bit bytes and one 8-bit byte.  The 8-bit byte
+;contains the last 8 bits of the word, but it is rotated so that
+;the low bit of the word is stored in the high bit of the 8-bit byte.
+;Each byte is stored in one Lisp machine 8-bit byte.
+;As a result, a caller interested only in the ascii characters can simply
+;read the bytes of the node and mask each one with 177.
+;The BYTE-SIZE of a pdp10-file-node is always 8.  No attempt is made
+;to record the byte size that the pdp10 data "really" has, since
+;pdp10's don't really know this.
+
+;The node operations :fetch-byte and :store-byte operate on the raw
+;data stored in the node; they do not effectively convert the data
+;into the pdp-10 words and extract bytes from them.  The caller must do that.
+
+(defmethod (pdp10-file-node :before init-node) (&rest ignore)
+  (or (= byte-size 8)
+      (progn (funcall supernode 'set-subnode-byte-size supernode-info
+		      8 (convert-length length-in-bytes byte-size 8))
+	     (setq byte-size 8))))
+
+(defmethod (pdp10-file-node :set-byte-size) (&rest ignore)
+  ())
+
+(defmethod (pdp10-file-node :length-in-bytes) (&optional (caller-byte-size 7))
+  (let ((bpw (truncate 36. caller-byte-size)))
+    (* (truncate length-in-bytes 5) bpw)))
+
+(defmethod (pdp10-file-node :qfaslp) ()
+  (and (eq (funcall-self ':fetch-byte 0) 143)
+       (eq (funcall-self ':fetch-byte 1) 32)
+       (eq (funcall-self ':fetch-byte 2) 16)
+       (eq (funcall-self ':fetch-byte 3) 73)
+       (eq (funcall-self ':fetch-byte 4) 0)))
+
+(defmethod (pdp10-file-node :characters) ()
+  (not (funcall-self ':qfaslp)))
+
+;Given some parameters, create a stream for accessing this node's data.
+
+;This is almost the same as the standard MAKE-STREAM.
+;The differences are:
+; 1) to decide whether the data are characters
+;    we consider whether the caller wants characters,
+;    whereas the standard one considers whether the node contains characters.
+; 2) if the data are not characters, we give a pdp10-byte-stream
+;    with default byte-size 7,
+;    whereas the standard one gives a lispm-stream with default byte-size 16.
+(defmethod (pdp10-file-node :make-stream)
+	   (pathname creating
+	    &key &optional (characters t) pdp10-format
+	    ((:byte-size spc-byte-size))
+	    (direction ':input)
+	    old-file
+	    &allow-other-keys)
+  (and (eq characters ':default)
+       (setq characters (funcall-self ':characters)))
+  (and (eq pdp10-format ':default)
+       (setq pdp10-format t))
+  (and (eq spc-byte-size ':default)
+       (setq spc-byte-size (if pdp10-format 7 byte-size)))
+  (and spc-byte-size (setq spc-byte-size (validate-byte-size spc-byte-size)))
+  (setq spc-byte-size
+	(or spc-byte-size
+	    (cond ((not pdp10-format)
+		   (if characters 8 16.))
+		  (t 7))))
+  (do () ((memq direction '(:input :output nil)))
+    (setq direction (cerror ':new-value nil 'inconsistent-options
+			    "The direction ~2G~S is not defined."
+			    (pathlist-into-pathname (send self ':standard-pathlist))
+			    ':open direction)))
+
+  (let ((default-cons-area node-caller-area)
+	(stream
+	  (make-instance
+	    (selectq direction
+	      (:INPUT (if pdp10-format
+			  'fc-pdp10-input-stream
+			(if characters
+			    'fc-lispm-character-input-stream
+			  'fc-pdp10-byte-input-stream)))
+	      (:OUTPUT (if pdp10-format
+			   'fc-pdp10-output-stream
+			 (if characters
+			     'fc-lispm-character-output-stream
+			   'fc-pdp10-byte-output-stream)))
+	      (t 'fc-probe-stream))
+	    ':byte-size spc-byte-size
+	    ':must-explicitly-close creating
+	    ':node node-closure ':characters characters
+	    ':pathname pathname)))
+    (and direction (funcall-self ':add-reason stream))
+    (and (eq old-file ':append)
+	 (funcall stream ':set-pointer
+		  (if pdp10-format length-in-bytes
+		      (funcall-self ':length-in-bytes spc-byte-size))))
+    stream))
+
+;Fill the supplied array completely with data from the node, in pdp-10 format.
+;Start from a location specified by pointer and status.
+;Pointer is in fact the number of the 8-bit byte within the file; status is ignored.
+;The value of pointer returned is the pointer to after the data that was gobbled.
+;The array must have a fill pointer, and we use array-push to store in it.
+(defmethod (pdp10-file-node :fill-array-pdp10-format) (array pointer status
+							     &optional return-internal-array)
+  status return-internal-array ;unused
+  (let ((size (array-length array))
+	buf (n-following 0) tem)
+    (do (8-bit-index) ((= (array-active-length array) size))
+      (cond ((zerop n-following)
+	     (setf (values buf 8-bit-index n-following)
+		   (funcall-self ':locate-byte-in-array pointer))
+	     (setq n-following (min (or n-following 0) (- length-in-bytes pointer)))
+	     (and (or (null buf) (not (plusp n-following)))
+		  (return))))	  
+      (setq tem (min n-following (- size (array-active-length array))))
+      (copy-array-portion buf 8-bit-index (+ 8-bit-index tem)
+			  array (array-active-length array)
+			  (setf (array-leader array 0) (+ (array-active-length array) tem)))
+      (incf 8-bit-index tem)
+      (incf pointer tem)
+      (decf n-following tem))
+    (values pointer status)))
+
+;Output the contents of the specified array, which contains pdp-10 format data.
+;Pointer and status say where in the node to store the data.  (Status is ignored)
+;Two values are returned, which are the values to use for pointer and status
+;in the next output call.
+;The size of the node is increased to cover what we have output.
+(defmethod (pdp10-file-node :output-array-pdp10-format) (array pointer status &optional num-words)
+  status ;unused
+  (let ((size (if num-words (* 5 num-words) (array-length array)))
+	buf (n-following 0)
+	(starting-pointer pointer)
+	(old-length length-in-bytes) tem)
+    (do ((i 0) 8-bit-index)
+	((= i size))
+      (cond ((zerop n-following)
+	     (setf (values buf 8-bit-index n-following)
+		   (funcall-self ':locate-byte-in-array pointer t))
+	     (or buf (return))))
+      (setq tem (min n-following (- size i)))
+      (copy-array-portion array i (+ i tem)
+			  buf 8-bit-index (+ 8-bit-index tem))
+      (incf i tem)
+      (incf 8-bit-index tem)
+      (incf pointer tem)
+      (decf n-following tem))
+    (funcall-self ':bytes-modified starting-pointer pointer)
+    (funcall-self ':set-length-in-bytes
+		  (max old-length pointer))
+    (values pointer status)))
+
+;Fill the supplied array completely with data taken from the node
+;and converted to pdp-10 format.  Start from a location specified
+;by pointer and status.  The meanings of pointer and status are not
+;defined, except that two values returned by this function
+;are suitable values of pointer and status to use next time.
+;The array must have a fill pointer, and we use array-push to store in it.
+(defmethod (node :fill-array-pdp10-format) (array pointer status
+						  &optional return-internal-array)
+  return-internal-array
+  (let ((size (array-length array))
+	buf (n-following 0) tem)
+    (or (zerop status)
+	(array-push array status))
+    (setq status 0)
+    (do (8-bit-index) ((= (array-active-length array) size))
+      (cond ((zerop n-following)
+	     (setf (values buf 8-bit-index n-following)
+		   (funcall-self ':locate-byte-in-array pointer))
+	     (setq n-following (min (or n-following 0) (- length-in-bytes pointer)))
+	     (and (or (null buf) (zerop n-following))
+		  (return))))	  
+      (setq tem (aref buf 8-bit-index))
+      (decf n-following) (incf 8-bit-index)
+      (incf pointer)
+      (cond ((< tem 200)
+	     (array-push array tem))
+	    ((= tem #\return)
+	     (array-push array 15)
+	     (cond ((= (array-active-length array) size)
+		    (return (setq status 12))))
+	     (array-push array 12))
+	    ((= tem #\page)
+	     (array-push array 14))
+	    ((= tem #\tab)
+	     (array-push array 11))
+	    ((= tem #\rubout)
+	     (array-push array 177))
+	    ((= tem #\backspace)
+	     (array-push array 10))
+	    ((= tem #\line)
+	     (array-push array 12))))
+    (let ((npad (\ (- 5 (\ (array-active-length array) 5)) 5)))
+      (dotimes (i npad) (array-push array 0)))
+    (values pointer status)))
+
+;Output the contents of the specified array.  Pointer and status say
+;where in the node to store the data.
+;Two values are returned, which are the values to use for pointer and status
+;in the next output call.
+;The size of the node is increased to cover what we have output.
+(defmethod (node :output-array-pdp10-format) (array pointer status &optional num-words)
+  (let ((size (if num-words (* 5 num-words) (array-length array)))
+	(old-length length-in-bytes)
+	(starting-pointer pointer)
+	buf (n-following 0)
+	tem (pad-char-count 0))
+    ;; Count any padding characters at the end of the array.
+    ;; We must output these pad chars in any case,
+    ;; but don't include them in the file length.
+    (dotimes (i (min size 5))
+      (let ((ch (aref array (- size i 1))))
+	(or (zerop ch)
+	    (= ch 3)
+	    (return)))
+      (incf pad-char-count))
+    (do ((i 0 (1+ i)) 8-bit-index)
+	((= i size))
+      (cond ((zerop n-following)
+	     (setf (values buf 8-bit-index n-following)
+		   (funcall-self ':locate-byte-in-array pointer t))
+	     (or buf (return))))
+      (setq tem (aref array i))
+      (cond ((not (zerop status))
+	     (cond ((= tem 12)
+		    (setq tem #\return))
+		   (t (setf (aref buf 8-bit-index) tem)
+		      (incf 8-bit-index)
+		      (incf pointer)
+		      (decf n-following)
+		      (cond ((zerop n-following)
+			     (setf (values buf 8-bit-index n-following)
+				   (funcall-self ':locate-byte-in-array pointer t))))))
+	     (setq status 0)))
+      (cond ((= tem 15) (setq status 15))
+	    (t (setq tem (selectq tem
+			   (12 #\line)
+			   (14 #\page)
+			   (11 #\tab)
+			   (177 #\rubout)
+			   (10 #\backspace)
+			   (t tem)))
+	       (setf (aref buf 8-bit-index) tem)
+	       (incf 8-bit-index)
+	       (incf pointer)
+	       (decf n-following))))	  
+    (funcall-self ':bytes-modified starting-pointer pointer)
+    (funcall-self ':set-length-in-bytes
+		  (max old-length (- pointer pad-char-count)))
+    (values pointer status)))
+
+;Fill the supplied array of 8-bit bytes completely with data from the node
+;and converted from the PDP10 character set to the Lispm character set.
+;Start from a location specified by pointer and status.
+;Pointer is in fact the number of the 8-bit byte within the file; status is ignored.
+;The value of pointer returned is the pointer to after the data that was gobbled.
+;The array must have a fill pointer, and we use array-push to store in it.
+;We return three values: the new pointer, the new status,
+;and the number of stream-sized bytes we have provided.
+;ASSUMPTION: this operation is only used with stream-byte-size 8, for characters.
+(defmethod (pdp10-file-node :fill-array-lispm-format)
+           (array pointer status stream-byte-size &optional return-internal-buffer)
+  stream-byte-size return-internal-buffer
+  (let ((size (array-length array))
+	buf (n-following 0) tem)
+    (do (8-bit-index) ((= (array-active-length array) size))
+      (cond ((zerop n-following)
+	     (setf (values buf 8-bit-index n-following)
+		   (funcall-self ':locate-byte-in-array pointer))
+	     (setq n-following (min (or n-following 0) (- length-in-bytes pointer)))
+	     (and (null buf) (return))
+	     ;; If we reach into the last pdp-10 word,
+	     ;; see how much data in that word is padding,
+	     ;; and remove the padding from consideration below.
+	     (and (>= (+ n-following pointer) (- length-in-bytes 5))
+		  (dotimes (i 5)
+		    (let ((ch (funcall-self ':fetch-byte (- length-in-bytes i 1))))
+		      (or (zerop ch) (= ch 3)
+			  (return)))
+		    (setq n-following (min n-following (- length-in-bytes i 1 pointer)))))
+	     (and (zerop n-following)
+		  (return))))
+      (setq tem (logand 177 (aref buf 8-bit-index)))
+      (decf n-following) (incf 8-bit-index)
+      (incf pointer)
+      (if (not (zerop status))
+	  (cond ((= tem 12)
+		 (setq tem #\return)
+		 (setq status 0))
+		(t (array-push array status)
+		   (setq status 0)
+		   (cond ((= (array-active-length array) size)
+			  (return))))))
+      (if (= tem 15)
+	  (setq status 15)
+	  (array-push array
+		      (selectq tem
+			(10 #\backspace)
+			(11 #\tab)
+			(12 #\line)
+			(14 #\page)
+			(177 #\rubout)
+			(t tem)))))
+    (values pointer status
+	    (array-active-length array))))
+
+;Output the contents of the specified array, converting from Lispm to pdp10 chars.
+;Pointer says where to store the data; it is in terms of 8-bit bytes.
+;Two values are returned, which are the values to use for pointer and status
+;in the next output call.
+;The size of the node is increased to cover what we have output.
+(defmethod (pdp10-file-node :output-array-lispm-format)
+	   (array pointer status num-bytes stream-byte-size &optional num-chars)
+  num-bytes stream-byte-size
+  (let ((size (or num-chars (array-length array)))
+	(starting-pointer pointer)
+	(old-length length-in-bytes)
+	buf 8-bit-index (n-following 0)
+	tem)
+    (do ((i 0 (1+ i)))
+	((= i size))
+      (cond ((zerop n-following)
+	     (setf (values buf 8-bit-index n-following)
+		   (funcall-self ':locate-byte-in-array pointer t))
+	     (or buf (return))))
+      (setq tem (aref array i))
+      (setq tem
+	    (selectq tem
+	      (#\return
+	       (setf (aref buf 8-bit-index) 15)
+	       (incf 8-bit-index)
+	       (incf pointer)
+	       (decf n-following)
+	       (cond ((zerop n-following)
+		      (setf (values buf 8-bit-index n-following)
+			    (funcall-self ':locate-byte-in-array pointer t))))
+	       12)
+	      (#\line 12)
+	      (#\tab 11)
+	      (#\page 14)
+	      (#\backspace 10)
+	      (#\rubout 177)
+	      (t tem)))
+      (setf (aref buf 8-bit-index) tem)
+      (incf 8-bit-index)
+      (incf pointer)
+      (decf n-following))
+    ;; Pad the file data out to a word boundary,
+    ;; but don't update pointer past the padding.
+    (dotimes (i (- (* 5 (quotient-ceiling pointer 5)) pointer))
+      (cond ((zerop n-following)
+	     (setf (values buf 8-bit-index n-following)
+		   (funcall-self ':locate-byte-in-array (+ pointer i) t))
+	     (or buf (return))))
+      (setf (aref buf 8-bit-index) 0)
+      (incf 8-bit-index)
+      (decf n-following))
+    (funcall-self ':bytes-modified starting-pointer
+		  (* 5 (quotient-ceiling pointer 5)))
+    (funcall-self ':set-length-in-bytes
+		  (max old-length (* 5 (quotient-ceiling pointer 5))))
+    (values pointer status)))
+
+;Fill the supplied array completely with data from the node
+;and converted by extracting bytes from the "36 bit words" represented therein.
+;Start from a location specified by pointer and status.
+;Pointer is the byte-number in stream-sized bytes; status is ignored.
+;The value of pointer returned is for after the data gobbled.
+;The array must have a fill pointer, and we use array-push to store in it.
+;We return three values: the new pointer, the new status,
+;and the number of stream-sized bytes we have provided.
+(defmethod (pdp10-file-node :fill-array-byte-format)
+           (array pointer status stream-byte-size)
+  status
+  (let* ((bpw (truncate 36. stream-byte-size))
+	 (8-bit-pointer (* 5 (truncate pointer bpw)))
+	 (bits-left (- 36. (* stream-byte-size (\ pointer bpw))))
+	 (size (array-length array))
+	 buf (n-following 0) tem)
+    (prog mainloop ()
+      (do ((8-bit-index 0)
+	   (tbuf (make-array 5)))
+	  ((= (array-active-length array) size))
+	;; Now accumulate one pdp10 word from the file's 8-bit bytes.
+	;; Store the 5 bytes in TBUF until we get them all;
+	;; then construct a bignum and put it in TEM.
+	(do ((lbytes 0 (1+ lbytes)))
+	    ((= lbytes 5)
+	     (setq tem (+ (ash (aref tbuf 0) 29.)
+			  (dpb (aref tbuf 1) 2607 0)
+			  (dpb (aref tbuf 2) 1707 0)
+			  (dpb (aref tbuf 3) 1007 0)
+			  (dpb (aref tbuf 4) 0107 0)
+			  (lsh (aref tbuf 4) -7))))
+	  (cond ((zerop n-following)
+		 (setf (values buf 8-bit-index n-following)
+		       (funcall-self ':locate-byte-in-array (+ 8-bit-pointer lbytes)))
+		 (setq n-following (min (or n-following 0)
+					(max 0 (- length-in-bytes (+ 8-bit-pointer lbytes)))))
+		 (and (null buf) (return-from mainloop))
+		 (and (zerop n-following)
+		      (return-from mainloop))))
+	  (setf (aref tbuf lbytes) (aref buf 8-bit-index))
+	  (incf 8-bit-index)
+	  (decf n-following))
+	;; Now extract whatever bytes we want out of the PDP10 word in TEM.
+	(do () ((< bits-left stream-byte-size))
+	  (decf bits-left stream-byte-size)
+	  (array-push array (load-byte tem bits-left stream-byte-size)))
+	(setq 8-bit-pointer (+ 8-bit-pointer 5) bits-left 36.)))
+    (values (+ pointer (array-active-length array)) 0
+	    (array-active-length array))))
+
+;Output the contents of the specified array, converting from Lispm to pdp10 chars.
+;Pointer says where to store the data; it is in terms of 8-bit bytes.
+;Two values are returned, which are the values to use for pointer and status
+;in the next output call.
+;The size of the node is increased to cover what we have output.
+(defmethod (pdp10-file-node :output-array-byte-format)
+	   (array pointer status num-bytes stream-byte-size)
+  status
+  (let* ((bpw (truncate 36. stream-byte-size))
+	 (8-bit-pointer (* 5 (truncate pointer bpw)))
+	 (bits-left (- 36. (* stream-byte-size (\ pointer bpw))))
+	 (size (or num-bytes (array-length array)))
+	 (starting-pointer pointer)
+	 (old-length length-in-bytes)
+	 buf 8-bit-index (n-following 0)
+	 (idx 0))
+    (do () ((= idx size))
+      ;; Accumulate bytes from the array into STATUS,
+      ;; stopping if we fill a PDP10 word.
+      (do () ((or (< bits-left stream-byte-size) (= idx size)))
+	(decf bits-left stream-byte-size)
+	(incf status (ash (load-byte (aref array idx) 0 stream-byte-size) bits-left))
+	(incf pointer)
+	(incf idx))
+      ;; Now take 7/8-bit bytes out of that word
+      ;; and put them into the file.
+      ;; If the word was not completed, we output it to the file anyway.
+      ;; This takes care of :FINISH and also of padding.
+      (do ((lbytes 0 (1+ lbytes)))
+	  ((= lbytes 5))
+	(cond ((zerop n-following)
+	       (setf (values buf 8-bit-index n-following)
+		     (funcall-self ':locate-byte-in-array (+ lbytes 8-bit-pointer) t))
+	       (or buf (error "cannot locate next byte in file"))))
+	(setf (aref buf 8-bit-index)
+	      (if (= lbytes 4)
+		  (dpb (load-byte status 0 1) 0701 (load-byte status 1 7))
+		  (load-byte status (- 29. (* 7 lbytes)) 7)))
+	(incf 8-bit-index 1)
+	(decf n-following))
+      ;; Maybe now we are finished with that PDP10 word.
+      (if (< bits-left stream-byte-size)
+	  (progn (setq status 0)
+		 (setq bits-left 36.)
+		 (incf 8-bit-pointer 5))))
+    (funcall-self ':bytes-modified starting-pointer pointer)
+    (funcall-self ':set-length-in-bytes
+		  (max old-length
+		       (if (= bits-left 36.)
+			   8-bit-pointer
+			 (+ 8-bit-pointer 5))))
+    (values pointer status)))
+
+;Convert a pointer in the user's terms
+;into values for ptr and status
+(defmethod (pdp10-file-node :pdp10-byte-format-pointer) (pointer -byte-size-)
+  (let ((word-pointer (truncate pointer (truncate 36. -byte-size-))))
+    (values (* 5 word-pointer) 0 (* word-pointer (truncate 36. -byte-size-)))))

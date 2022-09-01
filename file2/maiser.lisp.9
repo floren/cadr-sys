@@ -1,0 +1,182 @@
+;-*-Mode:Lisp; Package:FILE-SYSTEM; Base: 8 -*-
+
+;;there are some temporary kludges in this file, but it seems to work
+;;I am also about to add some more features, so please see me
+;;before making any changes --Hdt
+
+(DEFVAR MAIL-SERVER-DEBUG-SWITCH ())
+(DEFVAR MAIL-SERVER-ENABLED ())
+
+(DEFUN INSTALL-MAIL-SERVER ()
+  (ADD-INITIALIZATION "MAIL"
+		      `(PROCESS-RUN-FUNCTION  "MAIL server" 'MAIL-SERVE)
+		      ()
+		      'CHAOS:SERVER-ALIST))
+
+(INSTALL-MAIL-SERVER) ; But the caller must enable it when booting.
+
+;; Enable mail reception
+(DEFUN ENABLE-MAIL-SERVER ()
+  "Turn on the chaosnet MAIL server."
+  (SETQ MAIL-SERVER-ENABLED T))
+
+(DEFUN DISABLE-MAIL-SERVER ()
+  "Turn off the chaosnet MAIL server."
+  (SETQ MAIL-SERVER-ENABLED ()))
+
+(DEFUN DEINSTALL-MAIL-SERVER ()
+  "Remeove the current MAIL server from the server list."
+  (SETQ CHAOS:SERVER-ALIST
+	(DELQ (ASSOC "MAIL" CHAOS:SERVER-ALIST) CHAOS:SERVER-ALIST)))
+
+(DEFVAR MAIL-SERVER-TIMEOUT 10000000.
+  "Amount if time in 60ths of a second before we give up on trying to get incoming mail.")
+
+;;useful debugging variables 
+
+(DEFVAR MAIL-CONNS NIL
+  "This variable contains a list of currently open mail server connections.")
+
+(DEFVAR MAIL-STREAMS NIL
+  "This variable contains a list of currently open mail server streams.")
+
+(DEFUN MAIL-NOTIFY (FORMAT-CTL &REST FORMAT-ARGS)
+  "A temporary(?) kludge to notify someone of important events."
+  (LET ((STRING (LEXPR-FUNCALL #'FORMAT NIL FORMAT-CTL FORMAT-ARGS)))
+    (PROCESS-RUN-FUNCTION "Mail notify kludge" #'TV:NOTIFY NIL STRING)))
+
+;; This is the top level function of the mail server process.
+(DEFUN MAIL-SERVE (&AUX CONN STREAM CLOSING-REASON)
+  "This function is called when we get connected to on contact name MAIL."
+  (SETQ CONN (CHAOS:LISTEN "MAIL"))
+  (IF (NOT MAIL-SERVER-ENABLED)
+      (PROGN
+	(CHAOS:REJECT CONN "Not accepting MAIL at the moment.")
+	(CHAOS:REMOVE-CONN CONN))
+    (WITHOUT-INTERRUPTS (PUSH CONN MAIL-CONNS))
+    (SETQ STREAM (CHAOS:STREAM CONN))
+    (WITHOUT-INTERRUPTS (PUSH STREAM MAIL-STREAMS))
+    (COND ((CHAOS:WAIT CONN 'CHAOS:LISTENING-STATE MAIL-SERVER-TIMEOUT "Begin mail")
+	   (CHAOS:ACCEPT CONN)
+	   (SEND TV:WHO-LINE-FILE-STATE-SHEET ':ADD-SERVER CONN "MAIL")
+	   ;;if you want to debug, just move this function call up here
+	   ;;and punt the condition-case
+	   ;;	 (MAIL-SERVE-STREAM STREAM) (FERROR 'HDT-LOSER "twit")
+	   (CONDITION-CASE (PROBLEM)
+	       (MAIL-SERVE-STREAM STREAM)  ;;this function does all the work
+	     (SYS:BAD-CONNECTION-STATE  ;;random lossage
+	      
+	      (SETQ CLOSING-REASON (FORMAT NIL "Connection went into ~S after listening."
+					   (CHAOS:STATE CONN))))
+	     (NO-MORE-ROOM ;;disk full
+	      (SEND STREAM ':LINE-OUT "~%Disk full, please try again later.")
+	      (SETQ CLOSING-REASON "Disk full, can't receive mail."))
+	     (SYS:CONNECTION-NO-MORE-DATA
+	      (SETQ CLOSING-REASON "End of file encountered during receipt of mail."))
+	     (ERROR ;;this means some random internal problems which should
+	      ;;probably be debugged with mail sent to mail-maintainers
+	      ;;it would be nice if there was a variable that could be set to
+              ;;allow things to be debugged
+	      ;;its also not clear whether to send a - or a %
+	      (LET ((PROBLEMS (FORMAT NIL "-Internal problems: ~A" PROBLEM)))
+		(MAIL-NOTIFY
+		  "Mail server:  Problems with receipt of mail from host ~A (stream ~A)
+~A" (SEND STREAM ':FOREIGN-HOST) STREAM PROBLEMS)
+		(IGNORE-ERRORS
+		  (SEND STREAM ':LINE-OUT PROBLEMS)))
+	      (SETQ CLOSING-REASON "Internal lossage, please report to Hdt & rms"))
+	     (:NO-ERROR
+	      (SEND STREAM ':LINE-OUT "+") ;;success
+	      (SETQ CLOSING-REASON "Mail sent successfully."))))
+	  (T
+	   (SETQ CLOSING-REASON "Timeout while listening for start of mail.")))
+    ;;now try to close the conn, we either won or lost
+    ;;debugging
+    ;; (MAIL-NOTIFY "Closing connection because ~A " CLOSING-REASON)
+    (WITHOUT-INTERRUPTS
+      (SETQ MAIL-CONNS (DELQ CONN MAIL-CONNS))
+      (SETQ MAIL-STREAMS (DELQ STREAM MAIL-STREAMS)))
+    (IGNORE-ERRORS (SEND STREAM ':FINISH)
+		   (CHAOS:CLOSE CONN CLOSING-REASON))))
+
+(DEFUN MAIL-SERVE-STREAM (STREAM &AUX RCPTS TEXT END)
+  "Follow Chaosnet MAIL protocol for receiving mail from STREAM."
+  ;;operate on a bidirectional stream
+    ;;the CHAOS MAIL protocol says we get recipients on a line one at a time
+    ;;and the final one is followed by a ""
+    ;;we return after each recipient a line starting with a character with a special meaning
+    ;;followed by text intended for human use only
+    ;;a + means success, a - means failure, and a % means temporary failure
+  (LOOP FOR RCPT = (READLINE STREAM)
+	WITH TEM
+	UNTIL (STRING-EQUAL RCPT "")
+	DOING
+	(COND ((SETQ TEM (LOCAL-MAIL-RCPT-EXISTS-P RCPT))
+	       (SEND STREAM ':LINE-OUT "+")
+	       (PUSH TEM RCPTS))
+	      (T
+	       (SEND STREAM ':LINE-OUT (FORMAT NIL  "-User ~A not known" RCPT))))
+	;;acknowledge this transaction
+	(SEND STREAM ':FINISH))
+  ;;now that we have the recipients, we have to physically deliver the mail
+  ;;and then return a final success or failure message
+  (UNWIND-PROTECT
+      ;;anybody to send to?  If so, get mail.
+      (COND (RCPTS
+	     (DO (EOF) (())
+	       (SETQ TEXT (PUSH (GET-DISK-RQB 40) TEXT))
+	       (SETF (VALUES END EOF)
+		     (SEND STREAM ':STRING-IN
+			   NIL (SI:RQB-8-BIT-BUFFER (CAR TEXT))))
+	       (AND EOF (RETURN)))
+	     ;;we now have the text, lets deliver it
+	     (SETQ TEXT (REVERSE TEXT))  ;;grr
+	     (DOLIST (R RCPTS)
+	       (MAIL-TO-RCPT R TEXT END))))
+    (DOLIST (RQB TEXT)
+      (RETURN-DISK-RQB RQB)))
+  ;;  (PROCESS-SLEEP 1200.) ;;I don't think this is the right thing
+;We should not have generated any output so this should not be necessary.
+;  (CHAOS:FINISH (SEND STREAM ':CONNECTION) "Mail Finish")
+  )
+
+(DEFUN LOCAL-MAIL-RCPT-EXISTS-P (RCPT)
+  "Return T if a mailbox for RCPT exists at this host.
+Actually, the value is the parsed recipient name."
+     ;;for now, this is true iff RCPT has a directory at this host
+  (DO-FOREVER
+    (LET ((TEM (STRING-REVERSE-SEARCH-CHAR #/@ RCPT)))
+      (IF (AND TEM (SEND SI:LOCAL-HOST ':PATHNAME-HOST-NAMEP
+			 (STRING-TRIM " " (SUBSTRING RCPT (1+ TEM)))))
+	  (SETQ RCPT (STRING-TRIM " " (SUBSTRING RCPT 0 TEM)))
+	(RETURN
+	  (UNLESS TEM
+	    (UNLESS (ERRORP (SEND (SEND (SEND (DEFAULT-PATHNAME NIL LFS-HOST)
+					      ':NEW-DIRECTORY RCPT)
+					':DIRECTORY-PATHNAME-AS-FILE)
+				  ':PROPERTIES
+				  NIL))
+	      RCPT)))))))
+
+(DEFUN MAIL-TO-RCPT (RCPT RQB-LIST LAST-RQB-LENGTH)
+  "Physically deliver the textual mail to the local user RCPT."
+  ;;these should be a lot more clever...
+  ;  (MAIL-NOTIFY "Delivering mail for ~A" RCPT) ;;debugging
+  (WITH-OPEN-FILE (OUT-STREAM ;(SEND (DEFAULT-PATHNAME NIL LFS-HOST)
+			      ; ':NEW-PATHNAME ':DIRECTORY RCPT
+			      ; ':NAME RCPT ':TYPE "MAIL")
+		    
+  ;;this should really call a seperate function
+		    (MAKE-PATHNAME ':HOST LFS-HOST
+				   ':DIRECTORY RCPT
+				   ':NAME RCPT
+				   ':TYPE "MAIL")
+			      ':DIRECTION ':OUTPUT
+			      ':NEW-FILE T ':OLD-FILE ':APPEND)
+    (DO ((RQBS RQB-LIST (CDR RQBS)))
+	((NULL RQBS))
+      (SEND OUT-STREAM ':STRING-OUT
+	       (RQB-8-BIT-BUFFER (CAR RQBS)) 0 (IF (NULL (CDR RQBS)) LAST-RQB-LENGTH)))
+    (TERPRI OUT-STREAM)
+    (TYO 037 OUT-STREAM)  ;;this is ITS style, I think
+    (TERPRI OUT-STREAM)))

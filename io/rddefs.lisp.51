@@ -1,0 +1,290 @@
+;;; Definitions for the -*- Mode:LISP; Package:SYSTEM-INTERNALS; Base:8 -*- machine reader
+
+;;; WARNING! if you change anything in this file, not only might you
+;;; have to recompile READ and PRINT, but RTC as well, and then you
+;;; may have to load RTC and recompile the readtable from RDTBL
+;;; using RTC-FILE.
+
+(DEFSTRUCT (READTABLE :ARRAY-LEADER :NAMED
+		      (:CONSTRUCTOR MAKE-RDTBL)
+		      (:MAKE-ARRAY (:DIMENSIONS (RDTBL-ARRAY-DIMS) :TYPE 'ART-16B))
+		      (:DEFAULT-POINTER RDTBL)
+		      (:SIZE-MACRO RDTBL-SIZE))
+  ;; first slot is sacred
+  (RDTBL-FSM nil :documentation
+    "The readtable's finite-state machine")
+  (RDTBL-N-STATES 0 :documentation
+    "Number of states in RDTBL-FSM")
+  (RDTBL-N-BUCKETS 0 :documentation
+   "Number of buckets in RDTBL-FSM")
+  (RDTBL-STARTING-STATE 0 :documentation
+   "Starting state for the RDTBL-FSM")
+  (RDTBL-SLASH-CODE nil :documentation
+   "Code used for escape-quoted characters")
+  (RDTBL-EOF-CODE nil :documentation
+   "Code used to indicate EOF read")
+  (RDTBL-BREAK-CODE nil :documentation
+   "Code used to indicate breaks")
+  (RDTBL-MACRO-ALIST nil :documentation
+   "Alist of character and macro reader it invokes.")
+  (RDTBL-READ-FUNCTION-PROPERTY nil :documentation
+   "")
+  (RDTBL-PLIST nil :documentation
+   "Random useful information about this readtable.")
+  (RDTBL-DEFINITION nil :documentation
+   "The list structure from which RTC made this readtable.")
+  (RDTBL-MAKE-SYMBOL nil :documentation
+   "")
+  (RDTBL-MAKE-SYMBOL-BUT-LAST nil :documentation
+   "")
+; (RDTBL-SLASH nil :documentation "Not used")
+  ;; used in xr-xrtyi
+  (RDTBL-WHITESPACE nil :documentation
+   "Stuff which is to be counted a whitespace by the reader when using this readtable")
+; (RDTBL-CIRCLECROSS nil :documentation "Not used")
+  (RDTBL-ESCAPE-CODE		#// :documentation
+   "The character used to quote single characters")
+  (RDTBL-MULTIPLE-ESCAPE-CODE	#/| :documentation
+   "The character used to quote multiple characters")
+  (RDTBL-CHARACTER-CODE-ESCAPE-CODE #/ :documentation
+   "The character used to read arbitrary character codes as an octal number")
+  (rdtbl-names nil :documentation
+    "A list of strings which are names for this readtable")
+  (PTTBL-SPACE			#/space  :documentation
+   "The character for printing a space")
+  (PTTBL-NEWLINE		#/return :documentATion
+   "The character to use for printing a newline")
+  (PTTBL-CONS-DOT 		" . " :documentation
+   "The string to print meaning /"cons-dot/" in lists")
+  (PTTBL-MINUS-SIGN 		#/- :documentation
+   "The character to print for a minus sign")
+  (PTTBL-DECIMAL-POINT	 	#/. :documentation
+   "The character to print for a decimal point")
+  (PTTBL-SLASH 			#// :documentation
+   "The character to print to escape a single character")
+  (PTTBL-PRINLEVEL 		"**" :documentation
+   "The string to print to indicate the list printing is being abbreviated
+because the list structure was too deeply nested.")
+  (PTTBL-PRINLENGTH 		"..." :documentation
+   "The string to print to indicate that list printing is being truncated
+because the list was too long.")				
+  (PTTBL-RANDOM 		'("#<" . ">") :documentation
+   "Car is the string to print to indicate the start of a random (unreadable) object.
+Cdr is string to print to indicate end.")
+  (PTTBL-OPEN-PAREN 		#/( :documentation
+   "The character to print for an open parenthesis")
+  (PTTBL-CLOSE-PAREN 		#/) :documentation
+   "The character to print for a close parenthesis")
+  (PTTBL-OPEN-QUOTE-STRING 	#/" :documentation
+   "The character to print at the start of a quoted string")
+  (PTTBL-CLOSE-QUOTE-STRING	#/" :documentation
+   "The character to print at the end of a quoted string")
+  (PTTBL-OPEN-QUOTE-SYMBOL 	#/| :documentation
+   "The character to print at the start of a quoted symbol")
+  (PTTBL-CLOSE-QUOTE-SYMBOL 	#/| :documentation
+   "The character to print at the end of a quoted symbol")
+  (PTTBL-PACKAGE-PREFIX		":" :documentation
+   "The string to print between a package name and the symbol's pname
+for symbols which are /"directly accessible/" from the current")
+  (PTTBL-PACKAGE-INTERNAL-PREFIX":" :documentation
+   "The string to print between a package name and the symbol's pname
+for symbols which are not /"directly accessible/" from the current package")
+  (PTTBL-CHARACTER		'("#" "//") :documentation
+   "Cons of The string to print to start a character,
+and the string to print between the character font and the character name")
+  (PTTBL-RATIONAL-INFIX		#/\ :documentation
+   "The character to print between the numerator and denominator of a ratio")
+  (PTTBL-COMPLEX		'("" NIL "i") :documentation
+   "A three-element list describing how to print complex numbers.
+The CAR is a string to print before the number.
+The CADR is the string to print between the real imaginary parts,
+ or NIL, meaning to print either a /"+/" if the imaginary part is positive, else a /"-/"
+The CADDR is the string to print after the number")
+  (PTTBL-RATIONAL-RADIX		10. :documentation
+   "The radix in which to print ratios, or NIL, meaning to use the value of *PRINT-BASE*")
+  (PTTBL-VECTOR			'("#(" . ")") :documentation
+   "Cons of the string to start vectors and the string to terminate vectors")
+  (PTTBL-ARRAY			'("#" :RANK "A" :SEQUENCES) :documentation
+   "A list describing how to print arrays when *print-array* is non-NIL.
+Look in the code for SI:PRINT-ARRAY to find out how this is used.")
+  (PTTBL-BIT-VECTOR		'("#*" :SEQUENCES "") :documentation
+   "The string to print to start a bit-vector")
+  (PTTBL-UNINTERNED-SYMBOL-PREFIX "#:" :documentation
+   "The string to print to start unintered symbols, if *PRINT-GENSYM* is non-NIL")
+  (PTTBL-STRUCTURE		NIL :documentation
+   "Don't know what this should mean yet.")
+  )
+
+(DEFSUBST RDTBL-SYMBOL-SUBSTITUTIONS (&OPTIONAL (READTABLE RDTBL))
+  (GETF (RDTBL-PLIST READTABLE) 'SYMBOL-SUBSTITUTIONS))
+(DEFSUBST RDTBL-PRINT-MESSAGE-FUNCTION (&OPTIONAL (READTABLE RDTBL))
+  (GETF (RDTBL-PLIST READTABLE) 'PRINT-MESSAGE-FUNCTION) #'IGNORE)
+(DEFSUBST RDTBL-NAME (&OPTIONAL (READTABLE RDTBL))
+  (CAR (RDTBL-NAMES READTABLE)))
+
+(DEFSUBST RDTBL-SLASH (&OPTIONAL (READTABLE RDTBL))
+  (RDTBL-ESCAPE-CODE READTABLE))
+(DEFSUBST RDTBL-CIRCLECROSS (&OPTIONAL (READTABLE RDTBL))
+  (RDTBL-CHARACTER-CODE-ESCAPE-CODE READTABLE))
+
+(DEFVAR RDTBL-ARRAY-SIZE 240)
+
+(DEFMACRO RDTBL-ARRAY (&OPTIONAL (P 'RDTBL))
+  P)
+
+(DEFMACRO RDTBL-ARRAY-DIMS ()
+  `',(LIST 3 RDTBL-ARRAY-SIZE))
+
+(DEFMACRO RDTBL-BITS (RDTBL CHAR)
+  `(AREF ,RDTBL 0 ,CHAR))
+
+(DEFMACRO RDTBL-CODE (RDTBL CHAR)
+  `(AREF ,RDTBL 1 ,CHAR))
+
+(DEFMACRO RDTBL-TRANS (RDTBL CHAR)
+  `(AREF ,RDTBL 2 ,CHAR))
+
+;;; Names of special characters, as an a-list.  FORMAT searches this list to
+;;; get the inverse mapping (numbers to names), so the preferred name for a value
+;;; should be earliest in the list.  New-keyboard names are preferred.  Names (not
+;;; necessarily the prefered ones) should include those in the manual, in "The Lisp Machine
+;;; Character Set".  This variable is used by quite a few other programs as well, even though
+;;; it may look like it is internal to READ.  Here rather than in READ, because this
+;;; expression cannot be evaluated in the cold-load.
+
+(DEFCONST %%XR-SPECIAL-CHARACTER-NAMES-MOUSE-BIT 2401
+  "This should be used ONLY for defining XR-SPECIAL-CHARACTER-NAMES.")
+
+(DEFCONST XR-SPECIAL-CHARACTER-NAMES
+  (APPEND '((:NULL . 200) (:NULL-CHARACTER . 200)
+	    (:BREAK . 201) (:BRK . 201)
+	    (:CLEAR-INPUT . 202) (:CLEAR . 202) (:CLR . 202)
+	    (:CALL . 203)
+	    (:TERMINAL . 204) (:ESC . 204) (:ESCAPE . 204) (:TERMINAL-ESCAPE . 204)
+	    (:MACRO . 205) (:BACK-NEXT . 205) (:BACKNEXT . 205)
+	    (:HELP . 206)
+	    (:RUBOUT . 207)
+	    (:OVERSTRIKE . 210) (:BACKSPACE . 210) (:BS . 210)
+	    (:TAB . 211)
+	    (:LINE . 212) (:LF . 212) (:LINEFEED . 212) (:LINE-FEED . 212)
+	    (:DELETE . 213) (:VT . 213)
+	    ;; The keyboard says "CLEAR SCREEN", but it should type out as "PAGE".
+	    (:PAGE . 214) (:CLEAR-SCREEN . 214) (:FORM . 214) (:FF . 214)
+	    (:RETURN . 215) (:CR . 215) (:NEWLINE . 215)
+	    (:QUOTE . 216)
+	    (:HOLD-OUTPUT . 217)
+	    (:STOP-OUTPUT . 220)
+	    (:ABORT . 221)
+	    (:RESUME . 222)
+	    (:STATUS . 223)
+	    (:END . 224)
+	    (:ROMAN-I . 225) (:ROMAN-II . 226) (:ROMAN-III . 227) (:ROMAN-IV . 230)
+	    (:HAND-UP . 231) (:HAND-DOWN . 232)
+	    (:HAND-LEFT . 233) (:HAND-RIGHT . 234)
+	    (:SYSTEM . 235) (:NETWORK . 236)
+
+	    (:CENTER-DOT . 0) (:DOWN-ARROW . 1)
+	    (:ALPHA . 2) (:BETA . 3) (:AND-SIGN . 4) (:NOT-SIGN . 5)
+	    (:EPSILON . 6) (:PI . 7) (:LAMBDA . 10) (:GAMMA . 11) (:DELTA . 12)
+	    (:UP-ARROW . 13) (:UPARROW . 13)
+	    (:PLUS-MINUS . 14) (:CIRCLE-PLUS . 15)
+	    (:INFINITY . 16) (:PARTIAL-DELTA . 17)
+	    (:LEFT-HORSESHOE . 20) (:RIGHT-HORSESHOE . 21)
+	    (:UP-HORSESHOE . 22) (:DOWN-HORSESHOE . 23)
+	    (:UNIVERSAL-QUANTIFIER . 24) (:EXISTENTIAL-QUANTIFIER . 25)
+	    (:CIRCLE-X . 26) (:CIRCLE-CROSS . 26) (:TENSOR . 26)
+	    (:DOUBLE-ARROW . 27) (:LEFT-ARROW . 30) (:RIGHT-ARROW . 31)
+	    (:NOT-EQUAL . 32)(:NOT-EQUALS . 32)
+	    (:ALTMODE . 33) (:ALT . 33) (:DIAMOND . 33)
+	    (:LESS-OR-EQUAL . 34) (:GREATER-OR-EQUAL . 35) (:EQUIVALENCE . 36)
+	    (:OR-SIGN . 37) (:OR . 37)
+
+	    (:SPACE . 40) (:SP . 40)
+	    (:INTEGRAL . 177)
+	    )
+	  (MAPCAR #'(LAMBDA (X) (CONS (CAR X)
+				      (DPB 1 %%XR-SPECIAL-CHARACTER-NAMES-MOUSE-BIT
+					   (CDR X))))
+	      '((:MOUSE-L . 0) (:MOUSE-L-1 . 0) (:MOUSE-L-2 . 10) (:MOUSE-L-3 . 20)
+		(:MOUSE-M . 1) (:MOUSE-M-1 . 1) (:MOUSE-M-2 . 11) (:MOUSE-M-3 . 21)
+		(:MOUSE-R . 2) (:MOUSE-R-1 . 2) (:MOUSE-R-2 . 12) (:MOUSE-R-3 . 22)
+		(:MOUSE-1-1 . 0) (:MOUSE-1-2 . 10)
+		(:MOUSE-2-1 . 1) (:MOUSE-2-2 . 11)
+		(:MOUSE-3-1 . 2) (:MOUSE-3-2 . 12))))
+  "Alist of names of special characters, in the form of symbols in the keyword pkg,
+and the character values they correspond to.")
+
+; not patched in 98.
+(DEFMACRO PRINTING-RANDOM-OBJECT ((OBJECT STREAM . OPTIONS) &BODY BODY)
+  "A macro for aiding in the printing of random objects.
+This macro generates a form which:
+   1.  Uses the print-table to find the things in which to enclose your randomness.
+   2.  (by default) includes the virtual address in the printed representation.
+   3.  Obeys PRINT-READABLY
+ Options are	:NO-POINTER to suppress the pointer
+		:TYPE princs the TYPE-OF of the object first.
+ 		:FASTP <fastp> if the variable happens to be sitting around.
+
+ Example:
+ (DEFSELECT ((:PROPERTY HACKER :NAMED-STRUCTURE-INVOKE))
+   (:PRINT-SELF (HACKER STREAM IGNORE IGNORE)
+     (SI:PRINTING-RANDOM-OBJECT (HACKER STREAM :TYPE)
+       (PRIN1 (HACKER-NAME HACKER) STREAM))))
+ ==> #<HACKER /"MLY/" 6172536765>"
+  (LET ((%POINTER T)
+	(TYPEP NIL)
+	(FASTP NIL))
+    (IF (EQ STREAM T) (SETQ STREAM '*STANDARD-OUTPUT*))	;inconsistent with decode-print-arg...
+    (DO ((L OPTIONS (CDR L)))
+	((NULL L))
+      (SELECTQ (CAR L)
+	(:NO-POINTER (SETQ %POINTER NIL))
+	((:TYPEP :TYPE) (SETQ TYPEP T))
+	(:FASTP (SETQ L (CDR L) FASTP (CAR L)))
+	(OTHERWISE (FERROR NIL "~S is an unknown keyword in PRINTING-RANDOM-OBJECT"
+			   (CAR L)))))
+    `(PROGN
+       (AND PRINT-READABLY (PRINT-NOT-READABLE ,OBJECT))
+       (PRINT-RAW-STRING (CAR (PTTBL-RANDOM *READTABLE*)) ,STREAM ,FASTP)
+       ,@(AND TYPEP
+	      `((PRINT-PNAME-STRING (TYPE-OF ,OBJECT) ,STREAM ,FASTP)))
+       ,@(AND TYPEP BODY
+	      `((SEND ,STREAM ':TYO (PTTBL-SPACE *READTABLE*))))
+       ,@BODY
+       ,@(AND %POINTER
+	      `((SEND ,STREAM ':TYO (PTTBL-SPACE *READTABLE*))
+		(LET ((*PRINT-BASE* 8.)
+		      (*PRINT-RADIX* NIL))
+		  (PRINT-FIXNUM (%POINTER ,OBJECT) ,STREAM))))
+       (PRINT-RAW-STRING (CDR (PTTBL-RANDOM *READTABLE*)) ,STREAM ,FASTP)
+       ,OBJECT)))
+
+(DEFSUBST DECODE-PRINT-ARG (ARG)
+  (COND ((NULL ARG) *STANDARD-OUTPUT*)
+	((EQ ARG T) *TERMINAL-IO*)
+	(T ARG)))
+
+(DEFSUBST DECODE-READ-ARG (ARG)
+  (COND ((NULL ARG) *STANDARD-INPUT*)
+	((EQ ARG T) *TERMINAL-IO*)
+	(T ARG)))
+
+(DEFSELECT ((:PROPERTY READTABLE NAMED-STRUCTURE-INVOKE))
+  (:DESCRIBE (SELF) (DESCRIBE-DEFSTRUCT SELF) SELF)
+  (:PRINT-SELF (SELF STREAM IGNORE &OPTIONAL IGNORE)
+    (SI:PRINTING-RANDOM-OBJECT (SELF STREAM :TYPEP)
+      (IF (RDTBL-NAME SELF)
+	  (PRIN1 (RDTBL-NAME SELF) STREAM))))
+  ((:GET :GET-LOCATION-OR-NIL :GET-LOCATION :GETL :PUTPROP :REMPROP :PUSH-PROPERTY :PLIST
+    :PLIST-LOCATION :PROPERTY-LIST-LOCATION :SETPLIST :SET)
+   . READTABLE-PROPERTY-LIST-HANDLER)
+  (:FASD-FIXUP (SELF)
+    (UNLESS (MEMQ SELF *READTABLES*) (PUSH SELF *READTABLES*))))
+(DEFUN READTABLE-PROPERTY-LIST-HANDLER (OP SELF &REST ARGS)
+  (APPLY 'PROPERTY-LIST-HANDLER OP (LOCF (RDTBL-PLIST SELF)) ARGS))
+
+(DEFUN PRINT-RDTBL-MESSAGE (*READTABLE*)
+  (FORMAT T "~&;Now reading ~@[using ~:(~A~) syntax~] with readtable ~:(~S~).
+/; Reading in base ~D in package ~A"
+	  (SEND *READTABLE* ':GET ':SYNTAX) (OR (RDTBL-NAME *READTABLE*) *READTABLE*)
+	  *READ-BASE* *PACKAGE*))

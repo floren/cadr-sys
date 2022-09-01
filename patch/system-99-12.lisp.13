@@ -1,0 +1,1097 @@
+;;; -*- Mode:LISP; Package:USER; Patch-File:T; Base:10; Readtable:T -*-
+;;; Patch file for System version 99.12
+;;; Written 10/30/84 17:38:55 by Mly,
+;;; while running on Lisp Machine Nine from band 3
+;;; with Experimental System 99.9, CADR 4.0, Experimental ZMail 54.2, MIT-Specific 23.0, Experimental Macsyma 4.0, microcode 320, GC@2.
+
+
+
+; From file SHWARM.LISP OZ:<L.WINDOW> OZ:
+#8R TV#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "TV")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: WINDOW; SHWARM  "
+
+(DEFMETHOD (SHEET :BITBLT) (ALU WID HEI FROM-ARRAY FROM-X FROM-Y TO-X TO-Y
+				   &AUX (IL (SHEET-INSIDE-LEFT))
+				        (IT (SHEET-INSIDE-TOP))
+					(IW (SHEET-INSIDE-WIDTH))
+					(IH (SHEET-INSIDE-HEIGHT)))
+  (LET* ((ABS-WID (ABS WID))
+	 (ABS-HEI (ABS HEI))
+	 (LEFT-OVERRUN   (MAX 0 (- TO-X)))
+	 (RIGHT-OVERRUN  (MAX 0 (- (+ TO-X ABS-WID) IW)))
+	 (TOP-OVERRUN    (MAX 0 (- TO-Y)))
+	 (BOTTOM-OVERRUN (MAX 0 (- (+ TO-Y ABS-HEI) IH)))
+	 (CLIPPED-WID (* (IF (MINUSP WID) -1 1)
+			 (MAX 0 (- ABS-WID LEFT-OVERRUN RIGHT-OVERRUN))))
+	 (CLIPPED-HEI (* (IF (MINUSP HEI) -1 1)
+			 (MAX 0 (- ABS-HEI TOP-OVERRUN BOTTOM-OVERRUN)))))
+    (AND (NOT (ZEROP CLIPPED-WID))				;bitblt errs when w=h=0
+	 (NOT (ZEROP CLIPPED-HEI))				;and dims are out of bounds
+	 (PREPARE-SHEET (SELF)
+	   (BITBLT ALU
+		   CLIPPED-WID CLIPPED-HEI
+		   FROM-ARRAY
+		   (\ (+ FROM-X LEFT-OVERRUN) (PIXEL-ARRAY-WIDTH FROM-ARRAY))  ;***
+		   (\ (+ FROM-Y TOP-OVERRUN) (PIXEL-ARRAY-HEIGHT FROM-ARRAY))  ;***
+		   SCREEN-ARRAY
+		   (+ IL (MIN (MAX 0 TO-X) IW)) (+ IT (MIN (MAX 0 TO-Y) IH)))))))
+
+))
+
+(setf (cdr (assq :coke-bottle si::xr-special-character-names)) (+ 128. 69.)
+      (cdr (assq :cokebottle si::xr-special-character-names)) (+ 128. 69.))
+
+(remprop 'fix 'si::alias-type)
+(defprop fix integer si::type-alias-for)
+
+; From file TYPES.LISP OZ:<MLY.L> OZ:
+#10R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: SYS; TYPES  "
+
+(defconst *standard-system-type-specifiers*
+	  '(and or not cli:member member satisfies
+	    array atom bignum bit bit-vector cli:character character common compiled-function
+	    complex cons double-float entity si::fat-char fix fixnum float flonum function
+	    hash-table instance integer keyword list locative long-float microcode-function
+	    mod named-structure nil non-complex-number null number package pathname
+	    random-state ratio rational readtable real select si::select-method sequence
+	    short-float signed-byte simple-array simple-bit-vector simple-string simple-vector
+	    single-float small-float small-flonum standard-char stream string string-char
+	    structure symbol t unsigned-byte values vector
+	    :array :atom :bignum :character :closure :compiled-function :complex :cons
+	    :entity :fat-char :fix :fixnum :float :flonum :integer :list :locative
+	    :microcode-function :named-structure :null :number :ratio :rational :select
+	    :select-method :small-flonum :string :structure :symbol))
+
+))
+
+; From file TYPES.LISP OZ:<MLY.L> OZ:
+#10R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: SYS; TYPES  "
+
+(defmacro deftype (name arglist &body body)
+  "Defines NAME as a data type name for use in TYPEP, etc.
+A list starting with NAME, used as a type specifier,
+expands by binding the args in ARGLIST and then evaluating the BODY.
+The value of BODY should be another type specifier.
+Any optional arguments in ARGLIST which do not have default values specified
+will be bound to * by default, rather than NIL."
+  (cond ((memq name *standard-system-type-specifiers*)
+	 (ferror nil "~~S is the name of a standard type specifier used by the system.
+Redefining it would probably break the world.~" name))
+	((getl name '(flavor defstruct-description))
+	 (cerror "Yes, please. I want to lose. ~S ~S anyway"
+		 "~*~S is already the name of a ~:[flavor~;structure~]
+  /(~S ~S ...) will cause (~S foo '~S) not to recognize existing
+  ~:[instances of that flavor~;structures of that type~] in new code, and not affect (TYPEP foo '~S)
+  in old compiled code. You may lose!"
+		 'deftype name (get name 'defstruct-description) 'deftype name 'typep name
+		 (get name 'defstruct-description) name)))
+  (let ((argcopy (copy-list arglist))
+	optionalf doc)
+    (if (stringp (car body)) (setq doc (car body)))
+    (do ((tail argcopy (cdr tail))) ((null tail))
+      (cond ((eq (car tail) '&optional)
+	     (setq optionalf t))
+	    ((memq (car tail) '(&key &rest &aux))
+	     (return))
+	    ((and optionalf
+		  (atom (car tail))
+		  (not (memq (car tail) lambda-list-keywords)))
+	     (setf (car tail)
+		   `(,(car tail) '*)))))
+    `(progn
+       (eval-when (load eval)
+	 (clear-cached-subtype-info ',name)
+	 (defun (:property ,name type-expander) ,argcopy
+	   . ,body)
+	 (remprop ',name 'type-alias-for)
+	 (setf (documentation ',name 'type) ',doc))
+       (eval-when (compile)
+	 (putdecl ',name #'(lambda ,argcopy . ,body) 'type-expander))
+       ',name)))
+
+))
+
+; From file TYPES.LISP OZ:<MLY.L> OZ:
+#10R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: SYS; TYPES  "
+
+(defun type-canonicalize (typespec record-dependencies dependencies
+			  &aux tem (deps dependencies))
+  "Returns a typespec equivalent in meaning to TYPESPEC, but possibly simpler."
+  (declare (values canonicalized-type dependencies))
+  (macrolet ((record-dependency (x)
+	       `(if record-dependencies
+		    (if (cli:listp ,x)
+			(dolist (foo ,x) (pushnew foo dependencies :test #'eq))
+		      (pushnew ,x dependencies :test #'eq))))
+	     (type-canonicalize-1 (x)
+	       `(multiple-value-setq (nil dependencies)
+		    (type-canonicalize ,x record-dependencies dependencies)))
+	     (lossage () `(return-from lossage)))
+    (flet ((find-tail-of-same-type (y list &aux x)
+	     (setq x (if (consp y) (car y) y))
+	     (unless (memq x '(and or not cli:member global:member satisfies))
+	       (do ((z list (cdr z)))
+		   ((null z))
+		 (when (or (eq (car z) x) (eq (caar-safe z) x))
+		   (return z))))))
+      (block lossage
+	(condition-case ()
+	  (return-from type-canonicalize
+	    (values
+	      (block canon
+		(cond ((symbolp typespec)
+		       (cond ((memq typespec *standard-system-type-specifiers*)
+			      (or (get typespec 'type-alias-for) typespec))
+			     ((setq tem (get typespec 'type-alias-for))
+			      (record-dependency typespec)
+			      (type-canonicalize-1 tem))
+			     ((setq tem (getdecl typespec 'type-expander))
+			      (record-dependency typespec)
+			      (type-canonicalize-1 (funcall tem)))
+			     ;;>> trace aliases?
+			     ((getdecl typespec 'flavor) typespec)
+			     ((getdecl typespec 'defstruct-description) typespec)
+			     (t (lossage))))
+		      ((and (consp typespec) (symbolp (car typespec)))
+		       (when (setq tem (get (car typespec) 'type-alias-for))
+			 (record-dependency tem)
+			 (setq typespec `(,tem . ,(cdr typespec))))
+		       (case (car typespec)
+			 (or (do ((tail (cdr typespec) (cdr tail))
+				  elt (frobs nil))
+				 ((null tail)
+				  (cond ((cdr frobs)
+					 `(or . ,(nreverse frobs)))
+					;; (or foo) => foo
+					(frobs (car frobs))
+					;; (or) => t
+					(t t)))
+			       (setq elt (type-canonicalize-1 (car tail)))
+			       (case (if (consp elt) (car elt) elt)
+				 (or (setq tail (append elt (cdr tail))))
+				 ((t) (setq dependencies nil)
+				      (return-from canon t))
+				 ((nil))		;splice out NIL's
+				 (t
+				  (if (setq tem (find-tail-of-same-type elt frobs))
+				      (cond ((atom (car tem)))
+					    ;; (or (foo bar baz) foo) => foo
+					    ((atom elt) (setf (car tem) elt))
+					    (t (push elt frobs)))
+				    (push elt frobs))))))
+			 (and (do ((tail (cdr typespec) (cdr tail))
+				   elt (frobs nil))
+				  ((null tail)
+				   (cond ((cdr frobs)
+					  `(and . ,(nreverse frobs)))
+					 (t (car frobs))))
+				(setq elt (type-canonicalize-1 (car tail)))
+				(case (if (consp elt) (car elt) elt)
+				  (and (setq tail (append elt (cdr tail))))
+				  ((nil) (setq dependencies nil)
+					 (return-from canon nil))
+				  ((t))
+				  (t
+				   (if (setq tem (find-tail-of-same-type elt frobs))
+				       (cond ((atom (car tem)) (setf (car tem) elt))
+					     ((atom elt))
+					     (t (push elt frobs)))
+				     (push elt frobs))))))
+			 (not (let ((z (type-canonicalize-1 (cadr typespec))))
+				(if (eq (car-safe z) 'not)
+				    (cadr z)
+				  `(not ,z))))
+			 (t
+			  (cond ((dolist (elt (cdr typespec) t)
+				   (unless (eq elt '*)
+				     (return nil)))
+				 ;; (foo * * *) => foo
+				 (type-canonicalize-1 (car typespec)))
+				((setq tem (get (car typespec) 'type-expander))
+				 (record-dependency (car typespec))
+				 (apply tem (cdr typespec)))
+				(t (if (memq (car typespec) '(array simple-array complex))
+				       (let ((subtype (cadr typespec)))
+					 (if (memq subtype '(nil t *))
+					     typespec
+					   (multiple-value-setq (tem dependencies)
+					     (type-canonicalize subtype
+								record-dependencies
+								dependencies))
+					   (if (equal tem subtype)
+					       typespec
+					     `(,(car typespec) ,tem . ,(cddr typespec)))))
+				     (type-canonicalize-1 typespec)))))))
+		      (t (lossage))))
+	      dependencies))			;second value to return from type-canonicalize
+	    (error)))
+      (type-canonicalize
+	(cerror :argument-value nil 'wrong-type-argument "~*~S invalid typespec."
+		'type-specification typespec 'typespec)
+	record-dependencies deps))))
+
+))
+
+; From file TYPES.LISP OZ:<MLY.L> OZ:
+#10R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: SYS; TYPES  "
+
+(defun subtypep (x y)
+  "T if any object of type X must be of type Y.
+The second value is T if the first value is accurate:
+if the second value is T and the first is NIL,
+then there are objects of type X that are not of type Y.
+If the second value is NIL, it is not known whether X is really a subtype of Y."
+  (declare (values known-to-be-subtype known-whether-is-subtype))
+  (unless (variable-boundp *subtypep-hash-table*)
+    (let ((default-cons-area background-cons-area))
+      (setq *subtypep-hash-table* (make-hash-table :test #'equal :size 400.))))
+  (multiple-value-bind (known-to-be-subtype known-whether-is-subtype)
+      (let-if (not (variable-boundp use-cache-p)) ((use-cache-p t))
+	(declare (special use-cache-p))
+	(subtypep-1 x y nil))
+    (values known-to-be-subtype known-whether-is-subtype)))
+
+))
+
+; From file TYPES.LISP OZ:<MLY.L> OZ:
+#10R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: SYS; TYPES  "
+
+(defun compilation-subtypep (x y)
+  (declare (values known-to-be-subtype known-whether-is-subtype))
+  (multiple-value-bind (known-to-be-subtype known-whether-is-subtype)
+      (let ((use-cache-p nil))
+	(declare (special use-cache-p))
+	(subtypep-1 x y nil))
+    (values known-to-be-subtype known-whether-is-subtype)))
+
+))
+
+; From file TYPES.LISP OZ:<MLY.L> OZ:
+#10R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: SYS; TYPES  "
+
+(defun subtypep-1 (x y dependencies
+		   &aux (known-to-be-subtype nil) (known-whether-is-subtype nil) tem elt
+		        (foop use-cache-p))
+  (declare (values known-to-be-subtype known-whether-is-subtype dependencies)
+	   (special use-cache-p))
+  (cond ((and (symbolp y) (setq tem (get y 'subtypes)))
+	 (if (memq (if (atom x) x (car x)) tem)
+	     (return-from subtypep-1 (values t t dependencies))))
+	((memq y '(t nil)) (return-from subtypep-1 (values y t dependencies)))
+	((and foop
+	      (setq tem (gethash (cons x y) *subtypep-hash-table*))
+	      (return-from subtypep-1
+		(values (subtypep-hash-table-element-subtypep tem)
+			(subtypep-hash-table-element-knownp tem)
+			(subtypep-hash-table-element-dependencies tem))))))
+  (macrolet ((record-dependency (x)
+	       `(and foop
+		     (not (memq ,x *standard-system-type-specifiers*))
+		     (if (cli:listp ,x)
+			 (dolist (x ,x) (pushnew x dependencies :test #'eq))
+		       (pushnew ,x dependencies :test #'eq)))))
+   (labels ((record-atomic-dependency (x)
+ 	      (and foop
+		   (if (atom x)
+		       (unless (memq x *standard-system-type-specifiers*)
+			 (pushnew x dependencies :test #'eq))
+		     (case (car x)
+		       ((and or not)
+			(dolist (y (cdr x)) (record-atomic-dependency y)))
+		       ((satisfies cli:member global:member))
+		       ((not (memq x *standard-system-type-specifiers*))
+			(pushnew (car x) dependencies :test #'eq)))))))
+    (let ((x x) (y y))
+      (multiple-value-setq (x dependencies) (type-canonicalize x foop dependencies))
+      (multiple-value-setq (y dependencies) (type-canonicalize y foop dependencies))
+      (cond ((or (null x) (eq y t) (equal x y))
+	     (setq known-to-be-subtype t
+		   known-whether-is-subtype t))
+	    ((eq (car-safe y) 'or)		;(subtypep foo '(or ...))
+	     (let ((knownp t))
+	       (dolist (y (cdr y))
+		 (subtypep-3 (t1 t2) x y
+		   (when t1
+		     (setq known-to-be-subtype t
+			   known-whether-is-subtype t)
+		     (return nil))
+		   (setq knownp (and knownp t2))))
+	       (setq known-whether-is-subtype knownp)))
+	    ((eq (car-safe y) 'and)		;(subtypep foo '(and ...))
+	     (let ((val t))
+	       (dolist (y (cdr y))
+		 (subtypep-3 (t1 t2) x y
+		   (unless t2
+		     (return nil))
+		   (setq val (and val t1))))
+	       (setq known-to-be-subtype val
+		     known-whether-is-subtype t)))
+	    ((eq (car-safe y) 'not)		;(subtypep foo '(not ...))
+	     (multiple-value-bind (t1 t2 tem) (disjoint-typep x (cadr y) dependencies)
+	       (setq dependencies tem)
+	       (setq known-to-be-subtype t1
+		     known-whether-is-subtype (or t2
+						  (subtypep-2 x (cadr y))
+						  (subtypep-2 (cadr y) x)))))
+	    ((eq (car-safe x) 'cli:member)	;(subtypep '(member ...) bar)
+	     (setq known-to-be-subtype (loop for z in (cdr x) always (typep z y))
+		   known-whether-is-subtype t))
+	    ((eq (car-safe x) 'and)		;(subtypep '(and ...) bar)
+	     (let ((knownp t))
+	       (dolist (x (cdr x))
+		 (subtypep-3 (t1 t2) x y
+		   (when t1
+		     (setq known-to-be-subtype t
+			   known-whether-is-subtype t)
+		     (return nil))
+		   (setq knownp (and knownp t2))))
+	       (setq known-whether-is-subtype knownp)))
+	    ((eq (car-safe x) 'or)		;(subtypep '(or ...) bar)
+	     (let ((val t))
+	       (dolist (x (cdr x))
+		 (subtypep-3 (t1 t2) x y
+		   (unless t2
+		     (return nil))
+		   (setq val (and val t1))))
+	       (setq known-to-be-subtype val
+		     known-whether-is-subtype t)))
+	    ((eq (car-safe x) 'not)		;(subtypep '(not ...) bar)
+	     (multiple-value-bind (nil t2 tem) (disjoint-typep (cadr x) y dependencies)
+	       (setq dependencies tem)
+	       (setq known-whether-is-subtype (or t2
+						  (subtypep-2 (cadr x) y)
+						  (subtypep-2 y (cadr x))))))
+	    ((eq (car-safe y) 'cli:member))	;(subtypep foo '(member ...))
+	    ((eq (car-safe y) 'satisfies))	;(subtypep foo '(satisfies ...))
+	    ((eq (car-safe x) 'satisfies))	;(subtypep '(satisfies ...) bar)
+	    ((atom y)
+	     (setq known-to-be-subtype (atom-subtypep (if (atom x) x (car x)) y)
+		   known-whether-is-subtype t))
+	    ((atom x)
+	     (setq known-whether-is-subtype t))	 
+	    (t
+	      (unless (setq tem (atom-subtypep (car x) (car y)))
+		(setq known-whether-is-subtype t))
+	      (if (and tem (setq tem (get (car y) 'subtypep-predicate)))
+		  (multiple-value-setq (known-to-be-subtype known-whether-is-subtype dependencies)
+		    (funcall tem x y dependencies)))))
+      (setq known-whether-is-subtype (not (not known-whether-is-subtype)))
+      (setq known-to-be-subtype (not (not known-to-be-subtype)))
+      (when foop
+	(setq elt (let ((default-cons-area background-cons-area))
+		    (make-subtypep-hash-table-element :subtypep known-to-be-subtype
+						      :knownp known-whether-is-subtype
+						      :dependencies (copylist dependencies))))
+	(setf (gethash (cons x y) *subtypep-hash-table*) elt))))
+    (when foop (setf (gethash (cons x y) *subtypep-hash-table*) elt)))
+  (values known-to-be-subtype known-whether-is-subtype dependencies))
+
+))
+
+; From file TYPES.LISP OZ:<MLY.L> OZ:
+#10R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: SYS; TYPES  "
+
+(defun atom-subtypep (x y &aux t1 t2
+		      (f1 (get-flavor-tracing-aliases x))
+		      (f2 (get-flavor-tracing-aliases y)))
+  (cond ((eq x y) t)
+	(f1
+	 (or (eq y 'atom)
+	     (and (eq y 'common)
+		  (subtypep-1 x '(or pathname hash-table) nil))
+	     (and f2
+		  (memq (dont-optimize (flavor-name f2))
+			(dont-optimize (flavor-depends-on-all f1)))
+		  t)))
+	(f2 nil)
+	((class-symbolp x)
+	 (or (memq y '(atom entity))
+	     (and (class-symbolp y)
+		  (subclass-of-class-symbol-p x y))))
+	((class-symbolp y) nil)
+	((or (and (setq t1 (getdecl x 'defstruct-description))
+		  (defstruct-description-named-p t1))
+	     (get x 'defstruct-named-p))
+	 (if (memq x '(structure atom array common))
+	     t
+	   (and (or (and (setq t2 (getdecl y 'defstruct-description))
+			 (defstruct-description-named-p t2))
+		    (get y 'defstruct-named-p))
+		(do ((symbol x
+			     (and (setq t1 (getdecl symbol 'defstruct-description))
+				  (car (defstruct-description-include t1)))))
+		    ((null symbol) nil)
+		  (and (eq y symbol) (return t))))))
+	(t (not (not (memq x (get y 'subtypes)))))))
+
+))
+
+; From file TYPES.LISP OZ:<MLY.L> OZ:
+#10R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: SYS; TYPES  "
+
+(defun disjoint-typep (x y dependencies &aux t1 t2 (foop use-cache-p))
+  (declare (values known-to-be-subtype known-whether-is-subtype dependencies)
+	   (special use-cache-p))
+  (multiple-value-bind (x dependencies)
+      (type-canonicalize x foop dependencies)
+    (multiple-value-bind (y dependencies)
+	(type-canonicalize y foop dependencies)
+      (cond ((subtypep-2 y x)
+	     (return-from disjoint-typep (values nil t dependencies)))
+	    ((subtypep-2 x y)
+	     (return-from disjoint-typep (values nil t dependencies)))
+	    ((consp x)
+	     (case (car x)
+	       (or
+		(loop with val = t
+		      for x in (cdr x)
+		      do (multiple-value-setq (t1 t2 dependencies)
+			   (disjoint-typep x y dependencies))
+		      when (not t2) (return-from disjoint-typep (values nil nil dependencies))
+		      do (setq val (and val t1))
+		      finally (return-from disjoint-typep (values val t dependencies))))
+	       (and
+		(loop with val = t
+		      for x in (cdr x)
+		      do (multiple-value-setq (t1 t2 dependencies)
+			   (disjoint-typep x y dependencies))
+		      when t1 (return-from disjoint-typep (values t t dependencies))
+		      do (setq val (and val t2)) 
+		      finally (return-from disjoint-typep (values nil val dependencies))))
+	       (not
+		(subtypep-1 y (cadr x) dependencies))
+	       (cli:member
+		(loop for x in (cdr x)
+		      do (multiple-value-setq (t1 t2 dependencies)
+			   (subtypep-1 x y dependencies))
+		      when (null t2) return (values nil nil dependencies)
+		      when t1 return (values nil t dependencies)
+		      finally (return (values t t dependencies))))
+	       (satisfies nil)
+	       (t
+		(cond ((multiple-value-setq (nil nil dependencies)
+			 (disjoint-typep (car x) y dependencies))
+		       (values t t dependencies))
+		      ((atom y) (values nil t dependencies))
+		      ((setq t1 (get (car x) 'disjoint-typep-predicate))
+		       (funcall t1 x y dependencies))
+		      (t (values nil nil dependencies))))))
+	    ((not (atom y)) (disjoint-typep y x dependencies))
+	    (t (loop for (a . b) in *subtypep-pairwise-disjoint-sets*
+		     when (and (subtypep-2 x a) (subtypep-2 y a))
+		     do (let ((p (loop for tt in b
+				       when (subtypep-2 x tt) return tt))
+			      (q (loop for tt in b
+				       when (subtypep-2 y tt) return tt)))
+			  (when (and p q) (return (values (not (eq p q)) t dependencies))))
+		     finally (return (values nil nil dependencies))))))))
+
+))
+
+; From file TYPES.LISP OZ:<MLY.L> OZ:
+#10R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: SYS; TYPES  "
+
+(defun disjoint-array-typep (x y dependencies &aux (knownp t))
+  (declare (values known-to-be-subtype known-whether-is-subtype dependencies)
+	   (special use-cache-p))
+  (if (or (and (cddr x) (not (eq (caddr x) '*))
+	       (cddr y) (not (eq (caddr y) '*))
+	       (not (cond ((numberp (caddr x))
+			   (if (numberp (caddr y))
+			       (= x y)
+			     (and (= (length y) x)
+				  (loop for z in y always (eq z '*)))))
+			  ((numberp (caddr y))
+			   (and (= (length x) y)
+				(loop for z in x always (eq z '*))))
+			  (t (and (= (length x) (length y))
+				  (loop for z in x
+					for w in y
+					always (or (eq z '*) (eq w '*) (eq z w))))))))
+	  (and (not (eq (cadr x) '*))
+	       (not (eq (cadr y) '*))
+	       (multiple-value-setq (nil knownp dependencies)
+		 (disjoint-typep (multiple-value-setq (nil dependencies)
+				   (type-canonicalize (cadr x) use-cache-p dependencies))
+				 (multiple-value-setq (nil dependencies)
+				   (type-canonicalize (cadr x) use-cache-p dependencies))
+				 dependencies))))
+      (values t t dependencies)
+      (values nil knownp dependencies)))
+
+))
+
+; From file TYPES.LISP OZ:<MLY.L> OZ:
+#10R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: SYS; TYPES  "
+
+(defun (:property complex disjoint-typep-predicate) (x y dependencies &aux (knownp t))
+  (declare (values known-to-be-subtype known-whether-is-subtype dependencies)
+	   (special use-cache-p))
+  (if (and (neq (cadr x) '*)
+	   (neq (cadr y) '*)
+	   (multiple-value-setq (nil knownp dependencies)
+	     (disjoint-typep (multiple-value-setq (nil dependencies)
+			       (type-canonicalize (cadr x) use-cache-p dependencies))
+			     (multiple-value-setq (nil dependencies)
+			       (type-canonicalize (cadr x) use-cache-p dependencies))
+			     dependencies)))
+      (values t t dependencies)
+    (values nil knownp dependencies)))
+
+))
+
+; From file TYPES.LISP OZ:<MLY.L> OZ:
+#10R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: SYS; TYPES  "
+
+(defun array-type-from-element-type (element-type)
+  "Returns a symbol, such as ART-4B"
+  (unless (variable-boundp *array-element-type-hash-table*)
+    (let ((default-cons-area background-cons-area))
+      (setq *array-element-type-hash-table* (make-hash-table :test #'equal :size 100.))))
+  (array-type-from-element-type-1 element-type t))
+
+))
+
+; From file TYPES.LISP OZ:<MLY.L> OZ:
+#10R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: SYS; TYPES  "
+
+(defun compilation-array-type-from-element-type (element-type)
+  (array-type-from-element-type-1 element-type nil))
+
+))
+
+; From file TYPES.LISP OZ:<MLY.L> OZ:
+#10R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: SYS; TYPES  "
+
+(defun array-type-from-element-type-1 (element-type foop &aux (use-cache-p foop))
+  (declare (special use-cache-p))
+  (cond	((cdr (assoc-equal element-type array-element-type-alist)))
+	((and use-cache-p (car (gethash element-type *array-element-type-hash-table*))))
+	(t
+	 (multiple-value-bind (canon dependencies)
+	     (type-canonicalize element-type foop nil)
+	   (let ((value (or (cdr (assoc-equal canon array-element-type-alist))
+			    (cond ((subtypep canon 'fixnum)
+				   (cond ((subtypep canon 'bit)
+					  'art-1b)	;common case
+					 ((subtypep canon '(mod #o10))
+					  (if (subtypep canon '(mod 4)) 'art-2b 'art-4b))
+					 ((subtypep canon '(mod #o200000))
+					  (if (subtypep canon '(mod #o400)) 'art-8b 'art-16B))
+					 ((subtypep canon '(signed-byte #o20))
+					  'art-half-fix)
+					 (t 'art-q)))
+				  ((subtypep canon 'cli:character)
+				   (cond ((subtypep canon 'string-char)
+					  'art-string)
+					 ((subtypep canon 'fat-char)
+					  'art-fat-string)
+					 (t 'art-q)))
+				  ((subtypep canon 'float) 'art-float)
+				  ((subtypep canon 'complex)
+				   (if (subtypep canon '(complex float))
+				       'art-complex-float 'art-complex))
+				  (t 'art-q)))))
+	     (prog1 value
+		    (when foop
+		      (setq value (cons-in-area value dependencies background-cons-area))
+		      (setf (gethash canon *array-element-type-hash-table*) value)
+		      (setf (gethash element-type *array-element-type-hash-table*) value))))))))
+
+))
+
+; From file TYPES.LISP OZ:<MLY.L> OZ:
+#10R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: SYS; TYPES  "
+
+(defun typep-two-args (form &aux opt type pred dtp)
+  (cond ((and (= (length form) 3)
+	      (constantp (caddr form)))
+	 (condition-case (error)
+	     (progn
+	      (setq type (if (consp (caddr form))
+			     (cadr (caddr form))	;(typep foo ':bar)
+			   (caddr form)))		;(typep foo :bar)
+	      (flet ((frob (type)
+		       (if (and (symbolp type)
+				(setq opt (getdecl type 'type-optimizer)))
+			   (funcall opt form)
+			 (if (and (symbolp type)
+				  (setq opt (get type 'type-alias-for)))
+			     `(typep ,(cadr form) ',opt)
+			   (cond ((symbolp type)
+				  (cond ((setq opt (get type 'type-optimizer))
+					 (funcall opt form))
+					((and (setq pred (get type 'type-predicate))
+					      (symbolp pred))
+					 `(,pred ,(cadr form)))
+					((setq dtp (or (rassq type type-of-alist)
+						       (rassq type typep-one-arg-alist)))
+					 `(= (%data-type ,(cadr form)) ,(car dtp)))
+					;;>> kludge. defflavor is so nauseating.
+					((setq type (or (get (assq 'flavors
+								   file-local-declarations)
+							     type)
+							(get type 'si:flavor)))
+					 `(typep-structure-or-flavor
+					    ,(cadr form)
+					    ',(dont-optimize
+						(flavor-name
+						  (get-flavor-tracing-aliases type)))))
+					((getdecl type 'si:defstruct-description)
+					 `(typep-structure-or-flavor . ,(cdr form)))
+					((class-symbolp type)
+					 `(subinstance-of-class-symbol-p ,(cadr form) ',type))
+					(t form)))
+				 (t
+				  (let ((typecar (get (car type) 'type-alias-for (car type))))
+				    (cond ((setq opt (get typecar 'type-optimizer))
+					   (apply opt form (cdr type)))
+					  ((symbolp (setq pred (get typecar 'type-predicate)))
+					   `(,pred ,(cadr form)))
+					  (t form)))))))))
+		(let ((tem (frob type)))
+		  (if (not (equal tem form))
+		      tem
+		    (setq form (frob (type-canonicalize type nil nil)))
+		    tem))))
+	   (error (compiler::warn 'compiler::bad-type-specification :implausible
+				  "Error expanding type specification ~S for ~S:~%   ~A"
+				  (caddr form) 'typep error)
+		  form)))
+	((cdddr form)
+	 (compiler::warn 'compiler::bad-type-specification :implausuble
+			 "~S is a malformed type-specification" (cddr form))
+	 form)
+	(t form)))
+
+))
+
+; From file RESOUR.LISP OZ:<L.SYS2> OZ:
+#8R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: SYS2; RESOUR  "
+
+(DEFSTRUCT (RESOURCE (:TYPE :NAMED-ARRAY-LEADER) (:ALTERANT NIL)
+		     (:CONC-NAME RESOURCE-))
+  NAME				;Symbol which names it
+  (N-OBJECTS 0)			;Number of objects on the free list.
+  PARAMETIZER			;Function which defaults the parameters and returns list
+  CONSTRUCTOR			;Constructor function
+  FINDER			;Optional finder function
+  MATCHER			;Optional matcher function
+  CHECKER			;Optional checker function
+  INITIALIZER			;Optional initializer function
+  DEINITIALIZER			;Optional deinitializer function
+  )
+
+))
+
+; From file RESOUR.LISP OZ:<L.SYS2> OZ:
+#8R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: SYS2; RESOUR  "
+
+(defun resource-deinitializer (resource)
+  (and (> (array-leader-length resource) 9) (array-leader resource 9.)))
+
+))
+
+; From file RESOUR.LISP OZ:<L.SYS2> OZ:
+#8R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: SYS2; RESOUR  "
+
+(DEFSELECT ((:PROPERTY RESOURCE NAMED-STRUCTURE-INVOKE))
+  (:DESCRIBE (RESOURCE &AUX (N-OBJECTS (RESOURCE-N-OBJECTS RESOURCE)))
+    (DESCRIBE-DEFSTRUCT RESOURCE)
+    (COND ((ZEROP N-OBJECTS)
+	   (FORMAT T "~&There are currently no objects.~%"))
+	  (T (FORMAT T "~&There ~[~;is~:;are~] currently ~:*~D object~:P:~@
+			Object~40TParameters~60TIn Use"
+		     N-OBJECTS)
+	     (LOOP FOR I FROM 0 BELOW N-OBJECTS DOING
+		   (FORMAT T "~%~S~40T~S~60T~:[No~;Yes~]"
+			   (RESOURCE-OBJECT RESOURCE I)
+			   (RESOURCE-PARAMETERS RESOURCE I)
+			   (RESOURCE-IN-USE-P RESOURCE I)))
+	     (FORMAT T "~%"))))
+  (:PRINT-SELF (RESOURCE STREAM &REST IGNORE  &AUX (N-OBJECTS (RESOURCE-N-OBJECTS RESOURCE)))
+    (PRINTING-RANDOM-OBJECT (RESOURCE STREAM :TYPE)
+      (FORMAT STREAM "~S (~D object~:P, ~D in use)"
+	      (RESOURCE-NAME RESOURCE) N-OBJECTS
+	      (LOOP FOR I FROM 0 BELOW N-OBJECTS COUNT (RESOURCE-IN-USE-P RESOURCE I))))))
+
+))
+
+
+
+; From file RESOUR.LISP OZ:<L.SYS2> OZ:
+#8R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: SYS2; RESOUR  "
+
+(DEFMACRO DEFRESOURCE (NAME PARAMETERS &REST OPTIONS)
+  "Define a resource named NAME, with parameters PARAMETERS for constructing objects.
+OPTIONS can specify how to create objects and how to tell when old objects can be reused.
+Options are :CONSTRUCTOR (required) :FINDER :MATCHER :CHECKER :INITIALIZER :DEINITIALIZER
+ :INITIAL-COPIES :FREE-LIST-SIZE See the manual for details."
+  (LET ((CONSTRUCTOR-FORM NIL) (FINDER-FORM NIL) (MATCHER-FORM NIL) (CHECKER-FORM NIL)
+	(CONSTRUCTOR-FUNCTION NIL) (FINDER-FUNCTION NIL) (MATCHER-FUNCTION NIL)
+	(PARAMETIZER-FUNCTION NIL) (CHECKER-FUNCTION NIL) (INITIAL-COPIES 0)
+	(INITIALIZER-FORM NIL) (INITIALIZER-FUNCTION NIL)
+	(DEINITIALIZER-FORM NIL) (DEINITIALIZER-FUNCTION NIL)
+	(FREE-LIST-SIZE 20.) (PARAMS NIL)
+	(DOCUMENTATION NIL))
+    (UNLESS (CLI:LISTP PARAMETERS)
+      (FERROR NIL "~S invalid parameter list" PARAMETERS))
+    (SETQ PARAMS (LOOP FOR P IN PARAMETERS
+		       UNLESS (MEMQ P LAMBDA-LIST-KEYWORDS)
+		       COLLECT (IF (SYMBOLP P) P (CAR P))))
+    ;; if first option is a string, use it as documentation instead
+    (WHEN (STRINGP (CAR OPTIONS))
+      (SETQ DOCUMENTATION (POP OPTIONS)))
+    (LOOP FOR (KEYWORD VALUE) ON OPTIONS BY 'CDDR
+	  DO (CASE KEYWORD
+	       (:CONSTRUCTOR (SETQ CONSTRUCTOR-FORM VALUE))
+	       (:FINDER (SETQ FINDER-FORM VALUE))
+	       (:MATCHER (SETQ MATCHER-FORM VALUE))
+	       (:CHECKER (SETQ CHECKER-FORM VALUE))
+	       (:INITIALIZER (SETQ INITIALIZER-FORM VALUE))
+	       (:DEINITIALIZER (SETQ DEINITIALIZER-FORM VALUE))
+	       (:INITIAL-COPIES
+		(SETQ INITIAL-COPIES
+		      (COND ((NULL VALUE) 0)
+			    ((NUMBERP VALUE) VALUE)
+			    (T (FERROR NIL "~S ~S - number required"
+				       :INITIAL-COPIES VALUE)))))
+	       (:FREE-LIST-SIZE
+		(SETQ FREE-LIST-SIZE
+		      (COND ((NULL VALUE) 20.)
+			    ((NUMBERP VALUE) VALUE)
+			    (T (FERROR NIL "~S ~S - number required"
+				       :FREE-LIST-SIZE VALUE)))))
+	       (OTHERWISE (FERROR NIL "~S unknown option in ~S" 'DEFRESOURCE KEYWORD))))
+    (OR CONSTRUCTOR-FORM (FERROR NIL "~S requires the ~S option" 'DEFRESOURCE :CONSTRUCTOR))
+    ;; Pick function names.  Note that NIL is SYMBOLP.
+    (SETQ CONSTRUCTOR-FUNCTION (IF (SYMBOLP CONSTRUCTOR-FORM) CONSTRUCTOR-FORM
+				 `(:PROPERTY ,NAME RESOURCE-CONSTRUCTOR)))
+    (SETQ FINDER-FUNCTION (IF (SYMBOLP FINDER-FORM) FINDER-FORM
+			    `(:PROPERTY ,NAME RESOURCE-FINDER)))
+    (SETQ MATCHER-FUNCTION (IF (SYMBOLP MATCHER-FORM) MATCHER-FORM
+			     `(:PROPERTY ,NAME RESOURCE-MATCHER)))
+    (SETQ CHECKER-FUNCTION (IF (SYMBOLP CHECKER-FORM) CHECKER-FORM
+			     `(:PROPERTY ,NAME RESOURCE-CHECKER)))
+    (SETQ INITIALIZER-FUNCTION (IF (SYMBOLP INITIALIZER-FORM) INITIALIZER-FORM
+				 `(:PROPERTY ,NAME RESOURCE-INITIALIZER)))
+    (SETQ DEINITIALIZER-FUNCTION (IF (SYMBOLP DEINITIALIZER-FORM) DEINITIALIZER-FORM
+				 `(:PROPERTY ,NAME RESOURCE-DEINITIALIZER)))
+    (SETQ PARAMETIZER-FUNCTION (IF (AND PARAMETERS (NOT MATCHER-FORM) (NOT FINDER-FORM))
+				   `(:PROPERTY ,NAME RESOURCE-PARAMETIZER)))
+    `(LOCAL-DECLARE ((SYS:FUNCTION-PARENT ,NAME DEFRESOURCE))
+       ,(IF (NOT (SYMBOLP CONSTRUCTOR-FORM))
+	    `(DEFUN ,CONSTRUCTOR-FUNCTION (IGNORE ,@PARAMETERS)
+	       ,@PARAMS
+	       ,CONSTRUCTOR-FORM))
+       ,(IF (NOT (SYMBOLP FINDER-FORM))
+	    `(DEFUN ,FINDER-FUNCTION (IGNORE ,@PARAMETERS)
+	       ,@PARAMS
+	       ,FINDER-FORM))
+       ,(IF (NOT (SYMBOLP MATCHER-FORM))
+	    `(DEFUN ,MATCHER-FUNCTION (IGNORE ,(INTERN "OBJECT") ,@PARAMETERS)
+	       ,@PARAMS
+	       ,MATCHER-FORM))
+       ,(IF (NOT (SYMBOLP CHECKER-FORM))
+	    `(DEFUN ,CHECKER-FUNCTION (IGNORE ,(INTERN "OBJECT") ,(INTERN "IN-USE-P")
+				       ,@PARAMETERS)
+	       ,@PARAMS ,(INTERN "OBJECT") ,(INTERN "IN-USE-P")
+	       ,CHECKER-FORM))
+       ,(IF (NOT (SYMBOLP INITIALIZER-FORM))
+	    `(DEFUN ,INITIALIZER-FUNCTION (IGNORE ,(INTERN "OBJECT") ,@PARAMETERS)
+	       ,@PARAMS ,(INTERN "OBJECT")
+	       ,INITIALIZER-FORM))
+       ,(IF (NOT (SYMBOLP INITIALIZER-FORM))
+	    `(DEFUN ,DEINITIALIZER-FUNCTION (IGNORE ,(INTERN "OBJECT") ,@PARAMETERS)
+	       ,@PARAMS ,(INTERN "OBJECT")
+	       ,DEINITIALIZER-FORM))
+       ,(IF PARAMETIZER-FUNCTION
+	    `(DEFUN ,PARAMETIZER-FUNCTION ,PARAMETERS
+	       (LIST ,@PARAMS)))
+       (INITIALIZE-RESOURCE ',NAME ',CONSTRUCTOR-FUNCTION ',FINDER-FUNCTION
+			    ',MATCHER-FUNCTION ',CHECKER-FUNCTION
+			    ',PARAMETIZER-FUNCTION ',INITIAL-COPIES ',FREE-LIST-SIZE
+			    ',INITIALIZER-FUNCTION ',DEINITIALIER-FUNCTION)
+       ,(IF DOCUMENTATION
+	  `(SET-DOCUMENTATION ',NAME 'RESOURCE ,DOCUMENTATION)))))
+
+))
+
+; From file RESOUR.LISP OZ:<L.SYS2> OZ:
+#8R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: SYS2; RESOUR  "
+
+(DEFUN INITIALIZE-RESOURCE (NAME CONSTRUCTOR-FUNCTION FINDER-FUNCTION MATCHER-FUNCTION
+			    CHECKER-FUNCTION PARAMETIZER-FUNCTION INITIAL-COPIES
+			    (FREE-LIST-SIZE 20.) INITIALIZER-FUNCTION
+			    ;; Keep this &OPTIONAL for the time being so old QFASLs work.
+			    &OPTIONAL DEINITIALIZER-FUNCTION)
+  (OR (SYMBOLP CONSTRUCTOR-FUNCTION)
+      (SETQ CONSTRUCTOR-FUNCTION (GET (SECOND CONSTRUCTOR-FUNCTION)
+				      (THIRD CONSTRUCTOR-FUNCTION))))
+  (OR (SYMBOLP FINDER-FUNCTION)
+      (SETQ FINDER-FUNCTION (GET (SECOND FINDER-FUNCTION) (THIRD FINDER-FUNCTION))))
+  (OR (SYMBOLP MATCHER-FUNCTION)
+      (SETQ MATCHER-FUNCTION (GET (SECOND MATCHER-FUNCTION) (THIRD MATCHER-FUNCTION))))
+  (OR (SYMBOLP CHECKER-FUNCTION)
+      (SETQ CHECKER-FUNCTION (GET (SECOND CHECKER-FUNCTION) (THIRD CHECKER-FUNCTION))))
+  (OR (SYMBOLP INITIALIZER-FUNCTION)
+      (SETQ INITIALIZER-FUNCTION (GET (SECOND INITIALIZER-FUNCTION)
+					(THIRD INITIALIZER-FUNCTION))))
+  (OR (SYMBOLP DEINITIALIZER-FUNCTION)
+      (SETQ DEINITIALIZER-FUNCTION (GET (SECOND DEINITIALIZER-FUNCTION)
+					(THIRD DEINITIALIZER-FUNCTION))))
+  (OR (SYMBOLP PARAMETIZER-FUNCTION)
+      (SETQ PARAMETIZER-FUNCTION (GET (SECOND PARAMETIZER-FUNCTION)
+				      (THIRD PARAMETIZER-FUNCTION))))
+  (AND (RECORD-SOURCE-FILE-NAME NAME 'DEFRESOURCE)
+       (LET ((OLD-RESOURCE (GET NAME 'DEFRESOURCE)) RESOURCE)
+	 ;; Be careful that there's enough room for all objects in the old resource
+	 ;; when replacing it.
+	 (AND OLD-RESOURCE (NOT FINDER-FUNCTION)
+	      (SETQ FREE-LIST-SIZE (MAX (RESOURCE-N-OBJECTS OLD-RESOURCE)
+					FREE-LIST-SIZE)))
+	 (AND FINDER-FUNCTION (SETQ FREE-LIST-SIZE 0))
+	 (SETQ RESOURCE (MAKE-RESOURCE :NAME NAME
+				       :MAKE-ARRAY (:LENGTH (LIST FREE-LIST-SIZE 3)
+						    :AREA PERMANENT-STORAGE-AREA)
+				       :PARAMETIZER PARAMETIZER-FUNCTION
+				       :CONSTRUCTOR CONSTRUCTOR-FUNCTION
+				       :FINDER FINDER-FUNCTION
+				       :MATCHER MATCHER-FUNCTION
+				       :CHECKER CHECKER-FUNCTION
+				       :INITIALIZER INITIALIZER-FUNCTION
+				       :DEINITIALIZER DEINITIALIZER-FUNCTION))
+	 ;; Save any old objects when reloading a DEFRESOURCE
+	 (WHEN (AND OLD-RESOURCE (NOT FINDER-FUNCTION))
+	   (COPY-ARRAY-CONTENTS OLD-RESOURCE RESOURCE)
+	   (SETF (RESOURCE-N-OBJECTS RESOURCE)
+		 (RESOURCE-N-OBJECTS OLD-RESOURCE)))
+	 (PUTPROP NAME RESOURCE 'DEFRESOURCE)
+	 (LOOP FOR OBJECT IN (LOOP REPEAT INITIAL-COPIES COLLECT (ALLOCATE-RESOURCE NAME))
+	       DO (DEALLOCATE-RESOURCE NAME OBJECT))))
+  (PUSHNEW NAME *ALL-RESOURCES* :TEST #'EQ)
+  NAME)
+
+))
+
+; From file RESOUR.LISP OZ:<L.SYS2> OZ:
+#8R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: SYS2; RESOUR  "
+
+(DEFUN DEALLOCATE-RESOURCE (RESOURCE-NAME OBJECT &AUX RESOURCE DEINITIALIZER)
+  "Return OBJECT to the free pool of resource RESOURCE-NAME.
+OBJECT should have been returned by a previous call to ALLOCATE-RESOURCE."
+  (CHECK-ARG RESOURCE-NAME (SETQ RESOURCE (GET RESOURCE-NAME 'DEFRESOURCE))
+	     "the name of a resource")
+  (UNLESS (RESOURCE-FINDER RESOURCE)
+    (LOOP WITH N-OBJECTS = (RESOURCE-N-OBJECTS RESOURCE)
+	  FOR N FROM (1- N-OBJECTS) DOWNTO 0
+	  WHEN (EQ (RESOURCE-OBJECT RESOURCE N) OBJECT)
+	    ;; Note that this doesn't need any locking.
+	    DO (WHEN (SETQ DEINITIALIZER (dont-optimize (RESOURCE-DEINITIALIZER RESOURCE)))
+		 (APPLY DEINITIALIZER RESOURCE OBJECT))
+	       (RETURN (SETF (RESOURCE-IN-USE-P RESOURCE N) NIL))
+	  FINALLY (FERROR NIL "~S is not an object from the ~S resource"
+			  OBJECT RESOURCE-NAME))))
+
+))
+
+; From file RESOUR.LISP OZ:<L.SYS2> OZ:
+#8R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: SYS2; RESOUR  "
+
+(DEFUN DEALLOCATE-WHOLE-RESOURCE (RESOURCE-NAME &AUX RESOURCE)
+  "Return all objects allocated from resource RESOURCE-NAME to the free pool."
+  (CHECK-ARG RESOURCE-NAME (SETQ RESOURCE (GET RESOURCE-NAME 'DEFRESOURCE))
+	     "the name of a resource")
+  (UNLESS (RESOURCE-FINDER RESOURCE)
+    (LOOP WITH N-OBJECTS = (RESOURCE-N-OBJECTS RESOURCE)
+	  FOR N FROM 0 BELOW N-OBJECTS
+	  WITH DEINITIALIZER = (RESOURCE-DEINITIALIZER RESOURCE)
+	  WHEN (RESOURCE-IN-USE-P RESOURCE N)
+	    DO (IF DEINITIALIZER
+		   (FUNCALL DEINITIALIZER RESOURCE (RESOURCE-OBJECT RESOURCE N)))
+	       (SETF (RESOURCE-IN-USE-P RESOURCE N) NIL))))
+
+))
+
+; From file QCOPT.LISP OZ:<L.SYS> OZ: (136)
+#8R COMPILER#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "COMPILER")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: SYS; QCOPT  "
+
+(defrewrite let-if-expand let-if (cond let) (form)
+  (destructuring-bind (ignore cond vars-and-vals &body body) form
+    (cond ((null cond) `(let () . ,body))		;Macros generate this
+	  ((eq cond t) `(let ,vars-and-vals . ,body))	;and this
+	  (t (multiple-value-bind (body decls)
+;>> need to pass environment into extract-declarations here
+		 (extract-declarations body local-declarations nil)
+	       `(let ()
+		  (declare . ,decls)
+		  (cond (,cond ,(pbind vars-and-vals)))
+		  . ,body))))))
+
+))
+
+
+; From file TSCROL.LISP OZ:<L.WINDOW> OZ: (73)
+#8R TV#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "TV")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: WINDOW; TSCROL  "
+
+(DEFMETHOD (FUNCTION-TEXT-SCROLL-WINDOW :PRINT-ITEM) (ITEM IGNORE ITEM-NO)
+  (CONDITION-BIND (((SYS:CELL-CONTENTS-ERROR)
+		    #'(LAMBDA (COND)
+			(VALUES :NEW-VALUE
+				(FORMAT NIL "#<~S ~O>"
+					(Q-DATA-TYPES (SEND COND :DATA-TYPE))
+					(%POINTER (SEND COND :ADDRESS)))))))
+    (FUNCALL PRINT-FUNCTION ITEM PRINT-FUNCTION-ARG SELF ITEM-NO)))
+
+))
+
+; From file INSPCT.LISP OZ:<L.WINDOW> OZ: (158)
+#8R TV#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "TV")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: WINDOW; INSPCT  "
+
+
+(defmethod (basic-inspect :object-locative) (obj)
+  `(("%Pointer : " ,(format nil "~O ~*  (Area ~O, ~S)" (%pointer obj)
+			    (%p-pointerp obj) (%area-number obj)
+			    (area-name (%area-number obj))))
+    ("Cdr-code : " ,(symbol-name (nth (%p-cdr-code obj) sys:q-cdr-codes)))
+    ("Data type: " ,(symbol-name (q-data-types (%p-data-type obj))))
+    ((:item1 locative-cell "Contents : " princ)
+     ,(if (%p-contents-safe-p obj)
+	  `(:item1 locative-contents ,(car obj))
+	(format nil "#<~S ~O>"
+		(q-data-types (%p-data-type obj)) (%pointer obj))))
+    (" Offset " ,(format nil "~D" (%pointer-difference obj (%find-structure-header obj)))
+     " into "
+     (:item1 ,(data-type (%find-structure-header obj)) ,(%find-structure-header obj)))))
+(defun (:property locative-cell set-function) (ignore new-value object)
+  (setf (contents object) new-value))
+(defprop locative-cell t only-when-modify)
+
+
+))
+
+; From file PROCES.LISP OZ:<L.SYS2> OZ: (157)
+#8R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: SYS2; PROCES  "
+
+(compiler:make-obsolete process-preset "Use the :PRESET message")
+(compiler:make-obsolete process-reset "Use the :RESET message")
+
+))
+
+; From file PROCES.LISP OZ:<L.SYS2> OZ: (157)
+#8R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: SYS2; PROCES  "
+
+(DEFUN MAKE-PROCESS (NAME &REST INIT-ARGS)
+  "Create a process, with name NAME.
+:FLAVOR specifies the flavor of process to make.
+:SIMPLE-P if non-NIL specifies flavor SI:SIMPLE-PROCESS.
+If :FLAVOR and :SIMPLE-P are NIL, the flavor SI:PROCESS is used.
+:WARM-BOOT-ACTION is a function to call on warm booting,
+ or :FLUSH meaning flush the process.  The default is to restart it.
+ SI:PROCESS-WARM-BOOT-RESET kills the process.
+ SI:PROCESS-WARM-BOOT-RESTART restarts at an earlier stage of booting.
+:QUANTUM is in 60'ths and defaults to one second.
+:PRIORITY defaults to 0; larger numbers run more often.
+:STACK-GROUP specifies the stack group for this process to run in.
+If that is omitted, the keyword arguments :SG-AREA,
+:REGULAR-PDL-AREA, :SPECIAL-PDL-AREA, :REGULAR-PDL-SIZE,
+and :SPECIAL-PDL-SIZE are passed on to MAKE-STACK-GROUP."
+  (DECLARE (ARGLIST NAME &KEY SIMPLE-P FLAVOR STACK-GROUP WARM-BOOT-ACTION QUANTUM PRIORITY
+		    	      SG-AREA REGULAR-PDL-AREA SPECIAL-PDL-AREA
+			      REGULAR-PDL-SIZE SPECIAL-PDL-SIZE
+			      &ALLOW-OTHER-KEYS))
+  (OR (CAR INIT-ARGS) (SETQ INIT-ARGS (CDR INIT-ARGS)))	;For backward compatibility
+  (WITH-STACK-LIST* (INIT-ARGS :NAME NAME INIT-ARGS)
+    (LET ((DEFAULT-CONS-AREA BACKGROUND-CONS-AREA))	;don't cons processes in temp areas!
+      (INSTANTIATE-FLAVOR (OR (GETF INIT-ARGS :FLAVOR)
+			      (AND (GETF INIT-ARGS :SIMPLE-P) 'SIMPLE-PROCESS)
+			      'PROCESS)
+			  (LOCF INIT-ARGS)
+			  T))))
+
+))
+
+; From file QFILE.LISP OZ:<L.NETWORK.CHAOS> OZ: (354)
+#8R FILE-SYSTEM#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "FILE-SYSTEM")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: NETWORK; CHAOS; QFILE  "
+
+(DEFFLAVOR QFILE-BINARY-STREAM-MIXIN (CURRENT-BYTE-SIZE) (QFILE-DATA-STREAM-MIXIN))
+
+(DEFMETHOD (QFILE-BINARY-STREAM-MIXIN :AFTER :INIT) (IGNORE)
+  (SETQ CURRENT-BYTE-SIZE (GETF SI:PROPERTY-LIST :BYTE-SIZE :DEFAULT)))
+
+(DEFMETHOD (QFILE-BINARY-STREAM-MIXIN :SET-BYTE-SIZE) (NEW-BYTE-SIZE)
+  (CHECK-TYPE NEW-BYTE-SIZE (INTEGER 1 16.))
+  (SEND SELF :COMMAND T "Set Byte Size"
+		       "SET-BYTE-SIZE "
+		       (FORMAT NIL "~D ~D" NEW-BYTE-SIZE (SEND SELF :READ-POINTER)))
+  (SETQ CURRENT-BYTE-SIZE NEW-BYTE-SIZE)
+  NEW-BYTE-SIZE)
+
+(DEFMETHOD (QFILE-BINARY-STREAM-MIXIN :ELEMENT-TYPE) (&AUX SIZE)
+  (IF (EQ CURRENT-BYTE-SIZE :DEFAULT)
+      'UNSIGNED-BYTE
+    `(UNSIGNED-BYTE ,SIZE)))
+(DEFFLAVOR QFILE-INPUT-SIGNED-BINARY-STREAM-MIXIN ()
+	   (QFILE-INPUT-STREAM-MIXIN QFILE-BINARY-STREAM-MIXIN)
+  (:REQUIRED-FLAVORS SI:BASIC-BUFFERED-INPUT-STREAM)
+  :INITTABLE-INSTANCE-VARIABLES)
+
+(UNDEFMETHOD (QFILE-INPUT-SIGNED-BINARY-STREAM-MIXIN :AFTER :SET-BYTE-SIZE))
+
+))
+

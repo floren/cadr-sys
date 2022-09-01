@@ -1,0 +1,820 @@
+;-*- Mode:Text; Fonts:(TR12 CPTFONT TR12I HL12B TR12B TR12BI); Readtable:T; Base:10 -*-
+
+System 99 is nigh!! Beware the coming of system 99!
+Who knows what microcode version it will use, but
+it will be  320. (For the CADR)  (For the Lambda, it's XXX)
+
+Files compiled in System 98 will probably run in System 99.
+Files compiled in System 99 will probably not run in System 98. Stay tuned.
+
+CADR Users:
+
+Using some as-yet-unwritten magic, it will be possible to debug System 99 from
+System 98 and perhaps also System 97, but not any earlier systems.
+System 99 can debug all earlier systems. Yow!
+
+Contents of the rest of this file:
+
+4   Using Common Lisp in the MIT Lisp Machine System.0 
+4   Incompatible Changes0 
+4   Compatible Lisp Programming Changes0 
+4   Window System Changes0 
+4   User Interface Changes0 
+4   Editor Changes0 
+4   Network Changes0
+4   Site option Changes0
+
+
+4Using Common Lisp in the MIT Lisp Machine System.0 
+
+The variable 1*DEFAULT-COMMON-LISP*0 has now gone --- readtables now contain all
+the data which relied upon this variable. To use make a lisp listener use Common
+Lisp reader syntax and functions by default, do
+1 (SETQ *READTABLE* SI:COMMON-LISP-READTABLE)0 
+  or equivalently,  1(COMMON-LISP T)0 
+To use traditional Zetalisp syntax and functions, do
+1 (SETQ *READTABLE* SI:STANDARD-READTABLE)0 or 1(COMMON-LISP NIL)0 
+
+To make a file read in using common-lisp syntax, and use common-lisp functions,
+put "1Readtable: Common-Lisp0" or "1Readtable: CL0" in the attribute list
+(the "1-*-0" line) of the file.
+To make a file always read using traditional syntax and functions, use
+"1Readtable: Traditional0" or just "1Readtable: T0".
+
+The new editor command 1m-x Set Readtable0 will do this for you.
+(See the Editor Changes section.)
+
+Note that Zmacs now understands the different quoting characters ("1/0" and "1\0" respectively)
+used by the different readtables, and is parses lisp code based on which readtable is
+current.
+
+4Incompatible Changes0 
+
+1] 4Decimal radix is now the default.0 
+
+The default values for reading and printing integers is now base 10.
+The value of 1*nopoint0 is now 1T0 by default. All files (except init files) written
+out by Zmacs in the last few systems have automatically had a base attribute
+added to the "1-*-0" line, so this should not break many existing files.
+If you want your init file to be in base 8, add 1Base:80 to the 1-*-0 line.
+
+To get back the old behaviour, do 1(setq *print-base* 8. *read-base* 8.0 1*nopoint nil)0
+
+] 4Lexical Evaluator is now the default.0 
+
+hacks declarations, leaps tall buildings in a single bound.
+semantics are now exactly the same as those of compiler.
+say something about lexical closures??
+1(set 'a 3)0 
+1(defun foo ()0 
+   1(declare (special a))0 
+   1(print a))0 
+1(let ((a 1))0 
+   1(foo))0 
+will print "130" just as it would if compiled.
+
+Say much much more!!!
+
+(let ((foo 1)) #'(lambda () foo) =>
+
+]1 4Changes to 3FORMAT4 control argument.0 
+
+The control argument to 1FORMAT0 has changed for compatibility with Common Lisp.
+There are no longer separate functions 1FORMAT0 and 1CLI:FORMAT0, as there were in
+System 98.  This change will affects the following 1FORMAT0 directives:
+
+1~X0	1~2width,padchar,commachar1X0 
+	1      0Prints its argument in hexadecimal. (Analogous to 1~O0, 1~B0 and 1~D0)
+	This command used to be used to insert spaces into the output.
+
+	Use 1~2number-of-spaces1@T0 to achieve the same result as the old 1~2number-of-spaces1X0 directive.
+
+1~F0	1~2width,decimal-places,scale,overflowchar,padchar1F0 
+	1      0Prints a floating-point number in nonexponential notation.
+	        Multiplies by 10^2scale0 before printing if 2scale0 is specified.
+	        Prints in 2width0 positions, with 2decimal-places0 digits after the decimal point.
+	        Pads on left with 2padchar0 if necessary.  If then number doesn't fit in 2width0 positions,
+	        and 2overflowchar0 is specified, this command just fills the 2width0 positions with
+	        that character.
+	This directive used to just take one optional prefix control arg, which specified how many
+	        mantissa digits to print. This is the same as 2+2decimal-places0 for the new 1FORMAT0.
+
+	Use 1~,2n+21F0 to achieve the same result as the old 1~2n1F0 directive.
+
+1~E0	1~2width0,2decimal-places0,2exponent-places0,2scale0,2overflowchar,padchar,exptchar1E0 
+	1      0Prints a floating-point number in exponential notation.
+	        Prints in 2width0 positions, with 2exponent-places0 digits of exponent.
+	        If 2scale0 (default is 1) is positive, prints 2scale0 digits before point, 2decimal-places0-2scale0+1 after.
+	        If 2scale0 is zero, prints 2decimal-places0 digits after the point, and a zero before if there's room.
+	        If 2scale0 is negative, prints 2decimal-places0 digits after the point, of which the first -2scale0
+	        are zeros.
+	        If 2exptchar0 is specified, it is used to delimit the exponent2 0(instead of "e" or whatever.)
+	        If2 overflowchar0 is specified, then if the number doesn't fit in the specified2 width0,
+	        or if the exponent doesn't fit in 2exponent-places0 positions, the field is filled with 2overflowchar0
+	        instead.
+	This directive used to just take one optional prefix control arg, which specified how many
+	        mantissa digits to print. This is the same as 2+2decimal-places0 for the new 1FORMAT0.
+
+	Use 1~,2n+21E0 to achieve the same result as the old 1~2n1E0 directive.
+
+1~G0	1~2width0,2decimal-places0,2exponent-places0,2scale0,2overflowchar,padchar,exptchar1G0 
+	1      0Like 1~E0, but if the number fits without an exponent, it is printed without one.
+	This command used to be used to go to a particular argument.
+
+	Use 1~2argument-number1@*0 to achieve the same result as the old 1~2argument-number1G0 directive.
+
+1  0In System 99, 1CLI:FORMAT0 has the same function definition as 1GLOBAL:FORMAT0, so code written
+for1 0System 98 which use1d CLI:FORMAT0 will work correctly in System 99.
+1  0Only code which used 1GLOBAL:FORMAT0 with any of the above changed1 FORMAT0 directives will need
+to be altered to run in System 99.
+
+] 4The3 FONTS4 package no longer3 USE4s3 GLOBAL.0 
+
+This means that any fonts created in earlier systems will have to be redumped
+in order to work with system 99. This has been done for all the system's fonts
+appearing  in the 1SYS: FONTS;0 directory.
+There are two ways to do update the fonts to run in system 99. The first is to
+write out (using 1FED0) a 1KST0 format file of the font, load that into a system 99
+world and then write out a 1QFASL0 font file.
+The other technique is to do the following (in either system 98 or system 99)
+   1(use-package "GLOBAL" "FONTS")0 
+   1(load 2file-containing-font1)0 
+   1(unuse-package "GLOBAL" "FONTS")0 
+   1(compiler:fasd-symbol-value 2file-to-contain-font 1'fonts:2name-of-font1)0 
+Fonts from system 99 will load into system 98, but to load a system 98 font into
+a system 99 world, you will have to perform one of the above conversions.
+
+] 4Ratios read and print according to current value of 3*READ-BASE*4 and 3*PRINT-BASE*0 
+
+Ratios used to be always read and printed using decimal notation when using
+traditional (non-common-lisp) syntax.
+Thus, 1#5r-10\120 (or 1#5r -10/120 in common-lisp syntax) now represents
+``minus five sevenths.''
+
+] 3SELECTQ4 now uses 3EQL4 as its test function.0 
+
+1SELECTQ0 formerly performed all its comparisons using 1EQ0.
+Since everything that is 1EQ0 is also 1EQL0, and the only things which are 1EQL0 but not 1EQ0 
+are flonums, bignums and ratios (which should never have been used as tests for
+1SELECTQ0 in the past for this very reason) there should be no effect on any existing code.
+1SELECTQ0 and the Common Lisp macro 1CASE0 are thus now identical.
+
+
+] 3CATCH4 and 3THROW4 are now synonymous with 3*CATCH4 and 3*THROW4 respectively.0 
+
+1CATCH0 and 1THROW0 used to be defined in a way which was compatible with Maclisp.
+1(CATCH 0form1 TAG)0 used to be what 1(CATCH 'TAG 0form1)0 is now, and
+1(THROW 0form1 TAG)0 used to be what 1(THROW 'TAG 0form1)0 is now.
+Since Maclisp itself has been issuing warnings for years saying to use 1*CATCH0, this
+should cause no problems.
+The implementation restrictions and general weirdness associated with the values from
+1CATCH0 (aka 1*CATCH0) in older system versions have been fixed; 1CATCH0 now returns all the
+values from the last form executed (if no 1THROW0 occurs) or else the values supplied by
+the second argument to 1THROW0.
+
+4] Arguments to 3APROPOS4 and 3WHERE-IS4 extended0 
+
+The arguments to apropos are now
+1SUBSTRING &OPTIONAL (PACKAGE *ALL-PACKAGES*)0 
+1          &KEY (INHERITORS NIL) (INHERITED T)0 1DONT-PRINT0 
+1               PREDICATE BOUNDP FBOUNDP0
+The 1PACKAGE0 argument is now the always the second argument
+(it used to be a keyword argument)
+The value of this argument may be 1NIL0, meaning to search all packages,
+a single package or package name, or a list of packages and/or package names.
+
+1WHERE-IS0 now accepts a package or a package name or a list of packages
+and/or package names as it second argument
+
+] DEFSTRUCT Macro Constructors Frob 'foo???
+
+What does this mean ?
+I'll tell you when I fix it.
+
+] Change In Device Delimiting In Filenames
+
+Because of changes in the file access system internals, a device in a
+file specification with no explicit host must be preceded by a colon.
+(This is because the filename parser must check to see if the device name
+could also be a host name.)  For example, :SS:<SYS.UNSUPPORTED>YOW.MAC
+is needed to specify a file on the SS device of a TOPS-20 host (which
+is presumably a part of the defaults).  If the colon were not there, the
+system may try to contact to host table in order to find out if
+``SS'' were really a host.
+
+Note that that change is important only if you most often use
+Twenex, VMS, or ITS file servers.
+
+BOB!!!!!! This MUST get an error if there is no such host!
+It can't just randomly default to the current host! FIX THIS ASAP!
+
+4Compatible Lisp Programming Changes0
+
+] New frobs 1SI:FIND-READTABLE-NAMED SI:*ALL-READTABLES* SI:RDTBL-NAMES0 
+
+Talk a little about named readtablesat all ?
+
+] 4New way of initializing process of 3TV:PROCESS-MIXIN0 
+
+Normally, if the 1PROCESS0 argument to 1TV:PROCESS-MIXIN0 is  a symbol,
+it is used as the top level function and 1MAKE-PROCESS0 is called with
+no keyword arguments.
+But, as an exception, if1 PROCESS0 is1 T0, the top level function is
+to send the window a 1:PROCESS-TOP-LEVEL0 message with no arguments.
+So, for example, one could write:
+
+1(defflavor crock-window ()0 
+1                        (tv:process-mixin tv:window)0 
+1  (:default-init-plist :process t)0 
+1  (:documentation "A window which displays a crock."))0 
+
+1(defmethod (crock-window :process-top-level) ()0 
+1  (draw-crock self)0 
+1  (do-forever0 
+1    (update-hands)0 
+1    (process-sleep 60.)))0 
+
+] 4Compiler Optimization changed.0 
+
+Many compiler optimizers have been reimplemented, and should often produce
+better code. The most visible change is that any form is only optimized once,
+no matter where it appears. (In earlier systems, a form could sometimes be optimized
+twice, which could produce duplicate compiler warnings) In addition, the order in which
+optimizations are carried out has changed. All the arguments to a function are optimized
+before the call to the function on those arguments, unless the "function" is a macro
+or special form, in which case it is expected to take responsibility for doing its own
+optimizations.
+
+4] New 3:SUBMIT4 option for opening files0 
+
+A new 1:submit0 option available in 1OPEN0 and 1WITH-OPEN-FILE0 and friends, when 1T0
+(default 1NIL0) will submit the file for batch processing.  Thus, the 1:direction0
+must be 1:output0 as well.  The 1:submit0 option is currently effective on VMS and
+Twenex Chaosnet FILE servers.
+
+An example:
+
+1(DEFUN RETRIEVE-TWENEX-FILE (F) 0
+1  "Submit a batch job that will retrieve the file F" 0
+1  (SETQ F (FS:PARSE-PATHNAME F))0
+1  (WITH-OPEN-FILE (S (SEND (SEND (SEND (SEND F :HOST) :SAMPLE-PATHNAME) 0
+				1 :HOMEDIR)0
+			1   :NEW-PATHNAME :NAME "_RETRIEVE" 0
+			1   :TYPE "CTL" :VERSION :NEWEST)0
+		1     :DIRECTION :OUTPUT0
+		1     :TEMPORARY T0
+		1     :SUBMIT T)0
+1    (FORMAT S "@RETRIEVE ~A~%" (SEND F :STRING-FOR-HOST))))0
+
+4] New 3:PROPERTIES4 operation on0 4file streams0 
+
+Sending a 1:properties0 message to a file stream returns two values: a property
+list, like the kind which is a element of the list returns by 1FS:DIRECTORY-LIST0,
+and a list of settable properties.  There is the usual optional ``error-p'' argument,
+as well.  This operation uses a new 1PROPERTIES0 command in the Chaosnet file
+protocol, so it may not work with servers running old software.
+
+4User Interface Changes0 
+
+] 4New function0 3COMMON-LISP0  
+
+When this function is called in a lisp-listener, it changes whether Common Lisp
+or Tradtional Zetalisp syntax and incompatible functions are to be used for reading
+and printing lisp objects. It works by 1SETQ0ing 1*READTABLE*0.
+
+It takes one argument, which should be either 1T0 or 1NIL0.
+
+See the section 5Using Common Lisp in the MIT Lisp Machine System0.
+
+] 4Standard hardcopy options can be defaulted on a per-printer-type basis0 
+
+1(SET-PRINTER-DEFAULT-OPTION0 printer-type option value1)0 allows the user to set a
+default option for a printer type, which the hardcopy functions look at.
+A common use at MIT may be 1(SET-PRINTER-DEFAULT-OPTION :DOVER :SPOOL0 1T)0,
+which will cause Dover output to be spooled unless the 1:SPOOL0 option to a
+hardcopy function is supplied.  Currently defaultable options are 1:FONT0,
+1:FONT-LIST0, 1:HEADING-FONT0, 1:PAGE-HEADINGS0, 1:VSP0, 1:COPIES0, and 1:SPOOL0.
+
+] 4Usual mail file0 4directory option for ZMail0 
+
+You can set this option in the Profile editor in ZMail.  It simply informs ZMail to
+use a short name for a mail file in a menu, if that file is found in the
+directory.  (The full name of the file is displayed if it has not been read
+into a buffer yet.)
+
+]4 New beep types0 4for the type argument to0 3TV:BEEP0 
+
+	2Name0			      2Condition0 
+	1FQUERY0		      1FQUERY0 asks for something and needs to beep.
+	1SUPDUP:TERMINAL-BELL0   Bell character received
+
+4] 3DRIBBLE-START4, 3DRIBBLE-END0 4gone0
+Use 1(DRIBBLE 2filename1)0 or 1(DRIBBLE-ALL 2filename1)0 to start wallpapering output
+to a file, and 1(DRIBBLE)0 with no arguments to terminate output and close the
+file.
+
+4] New special form: 3MULTIPLE-CERROR0 
+
+string-append frobs array type
+:set method on flavors
+
+
+4] 3SELECT-MATCH4 and 3LIST-MATCH-P4 now accept logical combinations of patterns0 
+Hack and, or, not appearing at top-level. Not ambiguous, since not quoted.
+
+1(defun hack-add-sub (x)0 
+1  (select-match x0 
+1    ((or `(+ ,y 0) `(- ,y 0) `(+ y)) t0 
+1     y)0 
+1    ((not (or `(+ . ,ignore) `(- . ,ignore))) t0 
+1     (ferror nil "You lose"))0 
+1    (t x)))0 
+
+4] Complex and rational arithmetic is now common-lisp compatible.0 
+
+canonicalization
+rampant floating and complex contagion
+complex rational canonicalization
+real and imag parts of complexnum of same type
+
+There are still some many cases of transcendental functions of complex to be written
+Also atan of one arg.
+
+SYS:NEGATIVE-SQRT gone
+
+new condition SYS:ILLEGAL-EXPT
+
+log takes optional second arg
+sqrt returns complexnum if necesary
+
+4] Short-floats have one more bit of mantissa.0 
+
+Short-floats now have 17 bits of mantissa, 7 bits of exponent magnitude, and
+1 bit of exponent sign.  Short-floats in QFASL files dumped in 99 will load
+properly in System 98 if the mantissa is within the old range; if not, an
+error will be signalled.
+
+4] New types 3NON-COMPLEX-NUMBER4 and 3REAL0 
+
+1(TYPEP 2x 1(NON-COMPLEX-NUMBER 2low high1))0 returns 1T0 if 2x0 is a non-complex
+number (ie a floating-point number, a ratio or an integer) between 2low0 and2 high0,
+the limits as usual being inclusive normally, or exclusive if they constist of a
+list of one element.
+Note that complex-numbers with imaginary part = 0 are never of 1NON-COMPLEX-NUMBER0,
+since they are always of type 1COMPLEX0. To account for this additional case, there
+is another new type, 1REAL0, which is defined such that 
+1(TYPEP 2x 1(REAL 2low high1))0 returns 1T0 if 2x0 is a either a non-complex
+number between 2low0 and2 high0, or a complex number with a zero imaginary part
+and a real part lying between 2low0 and 2high0.
+
+4] Changes to forms specially treated at top-level in the compiler.0 
+
+Following is a partial list of symbols, which, when appearing as the car of a list in a top-level
+form, will cause that form to be treated specially by the compiler.
+Only those whose meanings have changed, or require clarificatrion, are listed here.
+
+1PROGN0		Treat all following forms as if they also were at top level.
+		Note that in Maclisp and in systems 97 and earlier, it was
+		necessary for the cadr of the list to be the symbol 1'COMPILE0 
+		for this to happen. This curious behaviour has been eliminated.
+1PROCLAIM0	The arguments are evaluated, and relevant proclaimations
+		(such as 1SPECIAL0, 1NOTINLINE0) are used in the remainder of the compilation.
+1EXPORT IMPORT IN-PACKAGE MAKE-PACKAGE SHADOW0 
+1SHADOWING-IMPORT UNEXPORT UNUSE-PACKAGE USE-PACKAGE0 
+		These perform their relevant actions when seen by the compiler.
+1REQUIRE0	Ditto.
+
+To cause a form not to be treated specially at top-level by the compiler, enclose it in
+an 1EVAL-WHEN0. Eg:
+1(EVAL-WHEN (LOAD)0		;don't want this package to be consed up when we're just compiling!
+1  (MAKE-PACKAGE "LOSSAGE" :USE NIL :SIZE 259))0 
+
+4] New macro: 3TV:WITH-WHO-LINE-RUN-STATE0 
+
+Using this macro, it is possible to bind the run-state field of wholine (the one which
+usually either "1Keyboard0" or "1Run0") to some user-informative value in a simple manner.
+Before, it was necessary to change an instance variable of the current process, which
+the scheduler would keep bashing to "1Run0".
+
+Example usage:
+1(DEFUN TOP-LEVEL-FROBNICATE (WIDGET)0 
+1  (TV:WITH-WHO-LINE-RUN-STATE ("Preprocessing")0 
+1    (SETQ WIDGET (PREFROBNICATE WIDGET)))0 
+1  (TV:WITH-WHO-LINE-RUN-STATE ("Pass 1")0 
+1    (FROB-1 WIDGET))0 
+1  (TV:WITH-WHO-LINE-RUN-STATE ("Pass 2")0 
+1    (FROB-2 WIDGET)))0 
+
+
+4] New variable 3TIME:*DEFAULT-DATE-PRINT-MODE*0 
+
+What kind of time printing does it effect ?
+ --- see the manual, ``Bob'' Section 34.2, `Printing dates and times,' or sys:io1;time
+ time:print-time, time:print-universal-time, time:print-brief-universal-time,
+ time:print-date, time:print-universal-date
+Description of possible values
+Only one "/" in zl
+ :DD//MM//YY						;27/10{/66}
+ :DD//MM//YYYY						;27/10{/1966}
+ :MM//DD//YY						;10/27{/66}
+ :MM//DD//YYYY						;10/27{/1966}
+ :DD-MM-YY							;27-10{-66}
+ :DD-MM-YYYY						;27-10{-1966}
+ :DD-MMM-YY						;27-Oct{-66}
+ :DD-MMM-YYYY						;27-Oct{-1966}
+Note that use "\" in cl
+ :DD/ MMM/ YY						;27 Oct{ 66}
+ :DD/ MMM/ YYYY						;27 Oct{ 1966}
+ :DDMMMYY							;27Oct{66}
+ :DDMMMYYYY						;27Oct{1966}
+ :YYMMDD							;661027
+ :YYYYMMDD						;19661027
+ :YYMMMDD							;{66}Oct27
+ :YYYYMMMDD						;{1966}Oct27
+ :YY-MMM-DD						;{66-}Oct-27
+ :YYYY-MMM-DD						;{1966-}Oct-27
+ :YY-MM-DD							;{66-}10-27
+ :YYYY-MM-DD						;{1966-}10-27
+these last four, and all the "yyyy" ones are new since the manual
+
+Default value
+ :mm//dd//yy YECH! BLECH! BARF!! I really think that this should be :dd-mmm-yy
+ I cannot see anything that this could break. ``Bob'' would you ask LMI people what
+ they think of that?
+
+] time parser accepts iso format dates (99.10)
+
+understands yyyy-mmm-dd, yyyy-mm-dd
+
+
+4] Changes to logical pathnames0 
+
+This needs much flaming!
+
+Logical pathnames now have structured directories.
+
+Pathname translations are now really translations, not just an alist.
+Example of use.
+
+FS:MAKE-LOGICAL-PATHNAME-HOST
+FS:SET-LOGICAL-PATHNAME-HOST
+
+SYS:SITE;FOO translations
+
+4] New function: 3FS:MERGE-PATHNAMES-10 
+
+This function extends the functionality of both the commonlisp function 1MERGE-PATHNAMES0 
+and the old Lisp Machine function 1FS:MERGE-PATHNAME-DEFAULTS0. It functions in a useful
+and consistent manner for suitable usage by programs.
+
+Its argument list is:
+1(PATHNAME &OPTIONAL DEFAULTS0 
+1          &KEY DEFAULT-TYPE ALWAYS-MERGE-TYPE0 
+1               DEFAULT-VERSION ALWAYS-MERGE-VERSION)0 
+
+1MERGE-PATHNAMES-10 defaults components that are of 1PATHNAME0 which are 1NIL0,
+and returns the defaulted pathname.
+1DEFAULTS0 is a pathname or a defaults-list to get defaults from.
+If non-1NIL0, 1DEFAULT-TYPE0 and 1DEFAULT-VERSION0 respectively are used as the defaults for
+the type and version components if those components are not supplied by 1PATHNAME0.
+Otherwise, these components are defaulted from 1DEFAULTS0 in the usual manner.
+1ALWAYS-MERGE-TYPE0 and 1ALWAYS-MERGE-VERSION0 respectively mean that the version and type
+components should always be merged in (from either 1DEFAULT-TYPE0 and 1DEFAULT-VERSION0
+or from 1DEFAULTS0) even if the relevant component is already specified by 1PATHNAME0.
+
+1(MERGE-PATHNAMES PATHNAME DEFAULTS DEFAULT-VERSION)0 is thus equivalent to:
+1(MERGE-PATHNAMES-1 PATHNAME DEFAULTS0
+1                   :DEFAULT-VERSION DEFAULT-VERSION0 1:ALWAYS-MERGE-VERSION T))0 
+since the 1DEFAULT-VERSION0 argument is merged into 1PATHNAME0 even if 1PATHNAME0 already has
+a version component.
+
+1FS:MERGE-PATHNAMES-10 differs from 1FS:MERGE-PATHNAME-DEFAULTS0 in that it performs 2only0 the
+merging operation of filling 1NIL0 components of one pathname with (possibly 1NIL0) components
+from the defaults, whereas 1FS:MERGE-PATHNAME-DEFAULTS0 will never return a pathname with
+a 1NIL0 name or type component.
+
+  1FS:MERGE-PATHNAME-DEFAULTS0 is thus a function useful for defaulting a pathname that the user
+has just entered for some purpose, such as to be read.
+  1FS:MERGE-PATHNAMES-10 will perform a single merging, and may return a pathname which is
+not accceptable for performing file operations upon. It is useful for programs which need to
+manipulate filenames in an exact manner (such as the file server) and do not want any
+user-oriented heuristics happening ``behind its back.'' It ignores such variables as
+1*ALWAYS-MERGE-TYPE-AND-VERSION*0 and1 *NAME-SPECIFIED-DEFAULT-TYPE*0, which
+1FS:MERGE-PATHNAME-DEFAULTS0 uses.
+  1MERGE-PATHNAMES0 is a lobotomized version of 1FS:MERGE-PATHNAMES-10 which Common-Lisp
+implementations understand.
+
+A typical use of 1FS:MERGE-PATHNAMES-10 is
+1(SETQ QFASL-FILE (FS:MERGE-PATHNAMES-1 QFASL-FILE LISP-FILE0 
+1                                       :ALWAYS-DEFAULT-VERSION T0 
+1                                       :DEFAULT-TYPE :QFASL0 
+1                                       :ALWAYS-DEFAULT-TYPE T))0 
+which will produce a file whose version is the same as that of 1LISP-FILE0 and whose type is
+always 1QFASL0, and whose other components are the (perhaps 1NIL0) results of merging
+the components of 1LISP-FILE0 with 1QFASL-FILE0.
+
+Some examples:
+1(setq pn1 (make-pathname :host twenex-host :name "FOO" :version 69))0 
+1  => #FS::TOPS20-PATHNAME "TWENEX:FOO..57"0 
+1(setq pn2 (make-pathname :host twenex-host :device "DP" :type :TEXT))0 
+1  => #FS::TOPS20-PATHNAME "TWENEX:DP:.TEXT."0 
+
+1(fs:merge-pathnames-1 pn1 pn2)0 
+1  => #FS::TOPS20-PATHNAME "TWENEX:DP:FOO.TEXT.57"0 
+1(fs:merge-pathnames-1 pn1 pn2 :default-version 5)0 
+1  => #FS::TOPS20-PATHNAME "TWENEX:DP:FOO.TEXT.57"0 
+1(fs:merge-pathnames-1 pn1 pn2 :default-version 5 :always-merge-version t)0 
+1  => #FS::TOPS20-PATHNAME "TWENEX:DP:FOO.TEXT.5"0 
+1(fs:merge-pathnames-1 pn1 pn2 :default-version 5 :default-type :lisp :always-merge-version t)0 
+1  => #FS::TOPS20-PATHNAME "TWENEX:DP:FOO.LISP.5"0 
+
+1(fs:merge-pathnames-1 pn2 pn1)0 
+1  => #FS::TOPS20-PATHNAME "TWENEX:DP:FOO.TEXT.57"0 
+1(fs:merge-pathnames-1 pn2 pn1 :always-merge-type t)0 
+1  => #FS::TOPS20-PATHNAME "TWENEX:DP:FOO..57"0		;merges in null type!
+1(fs:merge-pathnames-1 pn2 pn1 :default-type :lisp)0 
+1  => #FS::TOPS20-PATHNAME "TWENEX:DP:FOO.TEXT.57"0 
+1(fs:merge-pathnames-1 pn2 pn1 :default-type :lisp :always-merge-type t)0 
+1  => #FS::TOPS20-PATHNAME "TWENEX:DP:FOO.LISP.57"0 
+
+If anybody can think of a better name for 1FS:MERGE-PATHNAMES-10 I'd be pleased to hear it.
+
+
+4] 3TERMINAL C-CLEAR-INPUT4 is now 3TERMINAL C-M-CLEAR-INPUT0 
+
+This keyboard sequence is used to try to unhang some window-system
+problems. It has been changed so that 1c-clear-input0 is typeable (by having
+it quoted with "1terminal0," which causes it to lose its special meaning of "flush
+keyboard typeahead" and be simply passed on to the program which is reading
+from the keyboard.)
+
+4Editor Changes0 
+
+] Editor Aids for Common Lisp
+
+m-X Set Readtable
+How is the readtable name interpreted ?  What are the names for Zetalisp ?
+For Common Lisp ?  What happens if you just type <Return> ?
+
+m-X Set Common-Lisp [???]
+Does this set the base, too ?
+
+Besides binding the readtable for the editor buffer and the break loop,
+the readtable attribute also sets the quoting character (one of the two 
+slash characters) as appropriate.
+
+] Lisp Case Changing Commands Renamed
+
+The extended (m-X) commands for changing the alphabetic case of Lisp code
+have been renamed:
+
+  Old name                     New name
+  Lisp Lowercase Region        Lowercase Lisp Code In Region
+  Lisp Uppercase Region        Uppercase Lisp Code In Region
+
+As a result, typing ``m-X lisp'' now completes to ``Lisp Mode.''
+
+] Changes in Two History Yank Commands
+
+When editing in a minibuffer, c-m-Y yanks in the history,
+and  m-sh-Y inserts the previous command given in the minibuffer.
+
+] ZWEI:SEARCH renamed ZWEI:ZWEI-SEARCH to avoid name conflict with GLOBAL:SEARCH
+Note that this is only an internal frob used by people writing their own zmacs commands,
+and is not visible to m-x losers
+
+[Does the old name still work ?]
+Yes, but the compiler barfs. The name should be changed asap, but will continue to work
+for another system version or so, I guess
+
+4Network Changes0 
+
+]4 3SI:PARSE-HOST4 Uses the 3HOSTAB4 Servers By Default0 
+
+1SI:PARSE-HOST0's second argument, 1UNKNOWN-OK0, now defaults to 1T0.  That means that if it
+can't find the host on 1SI:HOST-ALIST0, it tries contacting a host table server to see if 2it0 
+knows about the host.  If the server contact does not, an error is signalled (or 1NIL0 is
+returned) as usual.  The change was made to minimise the penalty for not loading the
+latest site files.  (Up-to-date site information can be a problem at large installations.)
+
+The list of hosts that may be contacted on the Chaosnet for this service are listed in the
+site option 1:CHAOS-HOST-TABLE-SERVER-HOSTS0.
+
+]4 New Chaos Routing Inspector Functions.0 
+
+These two functions make use of the 3DUMP-ROUTING-TABLE0 protocol,
+documented in the new edition of the Lisp Machine Manual.  They are primarily
+for inspecting the operation of the network and the localisation of
+bridging and routing problems.
+
+(1CHAOS:SHOW-ROUTING-TABLE0 host &optional (stream 1*STANDARD-OUTPUT*0)) will
+print out the routing table of 2host0 onto2 stream0.
+
+(1CHAOS:SHOW-ROUTING-PATH0 &key (from 1SI:LOCAL-HOST0) to (stream 1*STANDARD-OUTPUT*0))
+will show how packets will flow from 2from0 to 2to0, using the routing information
+supplied by 2from0 and any intervening bridges to figure out the path.
+
+For example, 1(chaos:show-routing-path :from "charon" :to "nu-1")0 may produce
+the following output:
+
+1MIT-CHARON will bounce the packet off MIT-SIPB-11 at cost 81.0 
+1MIT-SIPB-11 will bounce the packet off MIT-INFINITE at cost 63.0 
+1MIT-INFINITE will bounce the packet off MIT-BYPASS at cost 51.0 
+1MIT-BYPASS will bounce the packet off MIT-OZ-11 at cost 37.0 
+1MIT-OZ-11 will bounce the packet off XI (XX-Network-11) at cost 23.0 
+1Direct path from XI (XX-Network-11) to host MIT-NU-1 on subnet 32 at interface 1.0 
+
+]4 Chaosnet source files have been reorganised0 
+
+The old files 1SYS: IO; CHSNCP 0and1 CHSAUX 0have been moved to
+the1 NETWORK;CHAOS;0 1 0directory.  (See the 2Site option Changes0 section for advice
+before restoring the1 0new sources.)  These files have been augmented by a new
+file, 1CHUSE0, which now contains the user connection-level functions previously
+found in 1CHSAUX0.  Also moved from the 1IO10 directory are 1CHATST0 (low-level
+testing functions) and 1EFTP0, an interface to the 3Mb (old) Ethernet Easy File
+Transfer Protocol that requires a protocol-translating gateway.
+
+4Site option Changes0 
+
+]4 New source directories need to be created0 
+
+A few new directoires will be used to hold Lisp Machine source files that relate
+to network software.  Please create these directories on the 1SYS0 host, and update
+the appropriate 2sys-host-translations0 variable(s) in 1SYS: SITE; SITE LISP :0 
+
+	2Logical directory0	2Suggested translation0
+	1NETWORK0		1L.NETWORK0 
+	1NETWORK; CHAOS0	1L.NETWORK.CHAOS0 
+	1NETWORK; IP0		1L.NETWORK.IP0 
+	1IO0;1 FILE0	1      L.IO.FILE0
+
+Say how to use sys:site; system translations to frob this for random hosts
+
+Of course, the names of the directories will be different if you don't store
+sources under a 1L0 hierarchy, but the names should follow this form.
+
+]4 New meaning for site option0 3:CHAOS0 
+
+Before, this site option was merely 1T0 or 1NIL0.  Now, a non-1NIL0 value of
+this option should be a string, the name of the Chaosnet.  This is to
+formalize the fact that there is more than one Chaosnet in the world,
+and to facilitate addressing a Chaosnet other than the local one, which
+which probably be implemented through a special gateway server.  A
+site's Chaosnet name is usually the site name.
+
+]4 New site option0 3:INTERNET0 
+
+This site option will be needed when IP is implemented for the Lisp Machine.
+The value is a list of Internet subnetwork specifications.  Each specification
+associates an Internet subnet with some kind of transport, usually
+another type of network capable of encapsulating packets.  The spec is
+of the form:
+
+ (2internet-address transport-type . transport-parameters0) 
+
+The Internet address actually describes a subnet of the Internet, and
+will have at least one trailing zero field.  Currently defined transport
+types are:
+
+	1:CHAOS0 2chaosnet-name0 2subnet0 A Chaosnet which forms
+	part of the Internet by encapsulating Internet packets
+	in Chaosnet UNC packets.  The subnet field is decribed below.
+
+	1:ETHERNET0 1T0 Ethernet II hardware which is an IP-active cable.
+	In this case, Internet packets are in Ethernet frames with the
+	standard Internet type code for Ethernet.  The T is a
+	placeholder until some way of differentating IP/Ethernet
+	networks is needed, if ever.
+
+The purpose of such an option is to allow the Lisp Machine to determine,
+assuming it has an NCP for Internet, how to use its interfaces and local
+networks to talk IP.  For example, a Lambda running at MIT could use
+either of the above transports.  It can use 1:CHAOS0 because of the Internet
+routing set up at MIT (even though the Chaos network at the Lambda
+itself is using Ethernet as a packet medium  !), and it can use the
+Ethernet interface to talk IP also, since Ethernet provides for this.
+If the Lambda was just given its Internet addresses, it would have no
+way of knowing for sure what interface or network it was supposed to
+use.  (The site option is most useful if a machine has more than one interface to
+the Internet.)
+
+For example, MIT's Chaosnet serves as TCP medium:
+
+	1("18.20.0.0" :CHAOS "MIT")0 
+
+The first two components of the Internet address must be non-zero.  The
+remaining fields yield the Chaosnet subnet number and host number.  If the
+third field is non-zero, then this is used; the subnet number is thrown away.
+This is an instance of the local Chaosnet functioning as a Class C network.
+Unless your site has a particularly large number (> 5) of existing Chaosnet
+subnets, it is better to ask (from the NIC) for a class C network number for
+each subnet.  This will include most sites; only the MIT Chaosnet really
+requires a Class B network.  Note that the Chaosnet internal (subnet)
+routing is transparent from an Internet point of view, even when several
+Class C networks (carrying Chaosnet packets) are in use.  At MIT, Internet
+118.20.26.640 (decimal numbers) maps to Chaosnet subnet 32, host 100
+(octal numbers).
+
+Things are more complicated in the Class C case.  It is desirable for the
+third component of the Internet address for the subnet to be the same
+as the Chaos subnet number, but this cannot always be the case.  In such
+a case (which will be fairly common), the subnet number must be obtained
+in a way other than looking at the third component.  The subnet parameter
+mentioned above provides the correct Chaos subnet.  Here are two
+translations:
+
+	1("192.13.4.0" :CHAOS "WIDGET")0 
+	1("192.13.5.0" :CHAOS "WIDGET" 6)0 
+
+The WIDGET Chaosnet has two subnets numbered 4 and 6, but they could not
+get an Internet Class C subnet number that matched 1*.*.6.00.
+So, 1192.13.4.50 maps to Chaos subnet 4, host 5, while Internet
+1"192.13.5.50 maps to subnet 6, host 5.
+
+A ``TCP on a LAN'' using Ethernet would probably look something like
+this:
+
+	1("128.31.6.0" :ETHERNET T)0 
+
+In the Ethernet scheme, address translation to Ethernet hardware address
+is accomplished by the address resolution protocol.  The option here is
+merely for informative purposes.
+
+]4 New site option0 3:STANDALONE0 
+
+If the Lisp Machine is just by itself, the option should be supplied with value T.
+This will cause the Lisp Machine to not to try to use the Chaosnet for getting
+the time, for one thing.  On the Lambda, the time will obtained from the SDU's
+clock.  On the CADR, the time will be obtained from the user.
+
+]4 New site option0 3:LOCAL-INTERNET-HOST-TABLE0 
+
+Defaults to 1SYS: SITE; IN-HOSTS TEXT0 (if not supplied or with the value
+T), but can be changed to share with other subsystems or machine types.
+
+#|
+
+]4 New site option0 3:NET-REGIONS0 
+
+Describes an ``area'' of the network.
+
+	1:CHAOS0 2subnets0   One argument of 1T0 includes all subnets.  Currently only
+	        refers to the local Chaosnet.
+	1:INTERNET0 2subnets0  Matching is done.
+	1:REGION0 2region-names0  (Obviously, circularity is discouraged !)
+
+A list of the form 1(:EXCEPT .0 2subnets1)0 is also allowed.
+
+The new predicate 1(NET:IN-NETWORK-REGION-P0 network network-address
+region-name1)0 uses this.
+
+|#
+
+]4 New site option0 3:VERIFY-LM-DUMPS0 
+
+If this site option is 1T0, Lisp Machine file system dump tapes will be verified.
+
+] New Way of specifying file computers
+
+Because of changes to the internals of the file access system, the method
+for specifying file computer at a site has changes.  The old list
+in the site option 1:CHAOS-FILE-SERVER-HOSTS,0 but the new option
+1:FILE-SERVER-HOSTS0 is preferred.  Note that:
+
+ * A pathname host does not have to be on the list :FILE-SERVER-HOSTS
+   to actually be recognized as a pathname host.  (This was not true in
+   earlier systems.)  As long as the host is known (either in the host table
+   or known about by a host table server), an error will not occur.
+   Thus, it is not necessary to edit 1SYS: SITE; SITE LISP0 when a new
+   file server is attached to the site; the site option merely names what
+   file servers are known initially.
+
+ * For now, the old and new names of the site option are equivalent, 
+   (with one exception -- see below) but
+   the new name is preferred in antcipation of when TCP/FTP file access is
+   implemented.
+
+For LMFS support, a file computer in the pathname host list was specified
+as a list of the host and the file system type.  This has been changed
+to be more convenient -- instead, there is new site option
+:SPECIAL-FILE-HOSTS which is a list of
+
+	1(2file-system-type1 . 2hosts1)0 
+
+where file-system-type is a keyword.  The only supported one at the
+moment is 1:LMFS0, as before.
+
+It is now possible is specify the default device of a host by using the
+site option 1:HOST-DEFAULT-DEVICE-ALIST0, an alist of host names and device
+names (with the colon).  This currently only works for Twenex hosts.
+An example of the use of the option:
+
+	  1(:HOST-DEFAULT-DEVICE-ALIST '(("OZ" . "OZ")))0 
+
+Here, we are overriding the default name 1PS0. 
+
+If, for example, a Twenex host is configured for a non-1PS0 primary structure
+name, this option should be used, to eliminate some strange interactions
+that can happen when the truenames of files are compared against supplied
+names.
+

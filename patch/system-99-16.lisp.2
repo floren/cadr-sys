@@ -1,0 +1,109 @@
+;;; -*- Mode:Lisp; Readtable:T; Package:SI; Base:8.; Patch-File:T -*-
+;;; Patch file for System version 99.16
+;;; Written 9-Dec-84 16:12:23 by PAO,
+;;; while running on Lisp Machine Thirty-two from band 6
+;;; with Don't-dump-a-band! Inconsistent (unreleased patches loaded) System 99.15, CADR 4.0, Experimental ZMail 54.3, MIT-Specific 23.0, microcode 320, GC@2.
+
+
+; From file QCOM.LISP KANSAS:<L.COLD> OZ: (581)
+#8R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: COLD; QCOM  "
+
+(DEFCONST UNIBUS-CSR-BITS '(
+  %%UNIBUS-CSR-OUTPUT
+  %%UNIBUS-CSR-TIMESTAMPED
+  %%UNIBUS-CSR-TWO-DATA-REGISTERS
+  %%UNIBUS-CSR-SB-ENABLE
+  %%UNIBUS-CSR-SET-BITS-P
+  %%UNIBUS-CSR-CLEAR-BITS-P
+  ))
+
+(DEFVAR %UNIBUS-CHANNEL-CSR-CLEAR-BITS 15)	;** Bits to clear at start of interrupt.
+(DEFVAR %UNIBUS-CHANNEL-CSR-SET-BITS 16)		;** Bits to set at start of interrupt.
+
+
+(DEFVAR %%UNIBUS-CSR-SET-BITS-P 2401)		;** %UNIBUS-CHANNEL-CSR-SET-BITS is
+						;  significant.
+(DEFVAR %%UNIBUS-CSR-CLEAR-BITS-P 2501)		;** %UNIBUS-CHANNEL-CSR-CLEAR-BITS is
+
+))
+
+
+; From file UNIBUS.LISP KANSAS:<L.IO> OZ: (26)
+#8R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER#:PATCH-SOURCE-FILE "SYS: IO; UNIBUS  "
+
+(DEFUN GET-UNIBUS-CHANNEL (INTERRUPT-VECTOR CSR-ADDRESS CSR-BITS DATA-ADDRESS N-DATA-REGS
+			   BUFFER-SIZE
+			   &OPTIONAL OUTPUT-TURNOFF-UNIBUS-ADDRESS OUTPUT-TURNOFF-DATA
+			   TIME-STAMPED CSR-CLEAR-BITS CSR-SET-BITS	;**
+			   &AUX CHAN)
+  "Allocate a unibus channel for interrupt-driven hardware i//o.
+INTERRUPT-VECTOR is the unibus interrupt vector of the device you want to use.
+ This is how interrupts get to the propert channel.
+CSR-ADDRESS is the unibus address of the device's status register.
+CSR-BITS are the bits in that register that say that input is
+ available or the device is ready for output.
+DATA-ADDRESS is the unibus address that data is read from or written to.
+N-DATA-REGS is the number of data registers in the device; normally 1,
+ but may be 2 meaning read 32 bits of data from two consecutive registers.
+BUFFER-SIZE is the size of array to use, in pages.
+ The buffer space is almost equal to the number of words.
+CSR-CLEAR-BITS and CSR-SET-BITS are bits to be cleared and set at the beginning 
+and end of the interrupt processing respectively.
+
+For output channels, OUTPUT-TURNOFF-DATA and OUTPUT-TURNOFF-UNIBUS-ADDRESS
+specify how to turn off output interrupts when the buffer is empty.
+The former is written into the unibus-word (16 bits) specified by the latter.
+TIME-STAMPED if non-NIL says that each input word should be preceded
+by another word containing the microsecond clock reading when the word arrived,
+and each output word for an output channel is preceded by a microsecond clock time
+saying when to output that word."
+  (CHECK-ARG N-DATA-REGS (OR (= N-DATA-REGS 1) (= N-DATA-REGS 2)) "1 or 2")
+  (LET ((SIZE (1- (* BUFFER-SIZE PAGE-SIZE))))
+    (IF (> SIZE %ARRAY-MAX-SHORT-INDEX-LENGTH)
+	(DECF SIZE))
+    (SETQ CHAN (ALLOCATE-RESOURCE 'UNIBUS-CHANNEL SIZE)))
+  (LOOP FOR I FROM 1 BELOW PAGE-SIZE		;Zero out the array, including tag bits
+	DO (%P-DPB-OFFSET 0 %%Q-LOW-HALF CHAN I)
+	   (%P-DPB-OFFSET 0 %%Q-HIGH-HALF CHAN I))
+  (%P-DPB-OFFSET INTERRUPT-VECTOR %%Q-POINTER CHAN %UNIBUS-CHANNEL-VECTOR-ADDRESS)
+  (%P-DPB-OFFSET (VIRTUAL-UNIBUS-ADDRESS CSR-ADDRESS) %%Q-POINTER
+		 CHAN %UNIBUS-CHANNEL-CSR-ADDRESS)
+  (%P-DPB-OFFSET CSR-BITS %%Q-POINTER CHAN %UNIBUS-CHANNEL-CSR-BITS)
+  (%P-DPB-OFFSET (VIRTUAL-UNIBUS-ADDRESS DATA-ADDRESS) %%Q-POINTER
+		 CHAN %UNIBUS-CHANNEL-DATA-ADDRESS)
+  (WHEN (= N-DATA-REGS 2)
+    (%P-DPB-OFFSET 1 %%UNIBUS-CSR-TWO-DATA-REGISTERS CHAN %UNIBUS-CHANNEL-CSR-BITS))
+  (COND (OUTPUT-TURNOFF-UNIBUS-ADDRESS
+	 (%P-DPB-OFFSET (VIRTUAL-UNIBUS-ADDRESS OUTPUT-TURNOFF-UNIBUS-ADDRESS) %%Q-POINTER
+			CHAN %UNIBUS-CHANNEL-OUTPUT-TURNOFF-ADDRESS)
+	 (%P-DPB-OFFSET OUTPUT-TURNOFF-DATA %%Q-POINTER
+			CHAN %UNIBUS-CHANNEL-OUTPUT-TURNOFF-BITS)
+	 (%P-DPB-OFFSET 1 %%UNIBUS-CSR-OUTPUT CHAN %UNIBUS-CHANNEL-CSR-BITS)))	;Output 
+  (IF TIME-STAMPED
+      (%P-DPB-OFFSET 1 %%UNIBUS-CSR-TIMESTAMPED CHAN %UNIBUS-CHANNEL-CSR-BITS))
+  (WHEN CSR-CLEAR-BITS				;**
+    (%P-DPB-OFFSET 1 %%UNIBUS-CSR-CLEAR-BITS-P CHAN %UNIBUS-CHANNEL-CSR-BITS)	;**
+    (%P-DPB-OFFSET CSR-CLEAR-BITS %%Q-POINTER CHAN %UNIBUS-CHANNEL-CSR-CLEAR-BITS))	;**
+  (WHEN CSR-SET-BITS				;**
+    (%P-DPB-OFFSET 1 %%UNIBUS-CSR-SET-BITS-P CHAN %UNIBUS-CHANNEL-CSR-BITS)	;**
+    (%P-DPB-OFFSET CSR-SET-BITS %%Q-POINTER CHAN %UNIBUS-CHANNEL-CSR-SET-BITS))	;**
+  (LET ((BUFFER-START (+ (%POINTER CHAN) 20)) ;leave room for expansion
+	(BUFFER-END (+ (%POINTER CHAN) (* BUFFER-SIZE PAGE-SIZE))))
+    (%P-DPB-OFFSET BUFFER-START %%Q-POINTER CHAN %UNIBUS-CHANNEL-BUFFER-START)
+    (%P-DPB-OFFSET BUFFER-END %%Q-POINTER CHAN %UNIBUS-CHANNEL-BUFFER-END)
+    (%P-DPB-OFFSET BUFFER-START %%Q-POINTER CHAN %UNIBUS-CHANNEL-BUFFER-IN-PTR)
+    (%P-DPB-OFFSET BUFFER-START %%Q-POINTER CHAN %UNIBUS-CHANNEL-BUFFER-OUT-PTR))
+  (WITHOUT-INTERRUPTS
+    (DOTIMES (I BUFFER-SIZE)
+      (WIRE-PAGE (%MAKE-POINTER-OFFSET DTP-FIX CHAN (* I PAGE-SIZE)))))
+  (WITHOUT-INTERRUPTS
+       (%P-DPB-OFFSET (SYSTEM-COMMUNICATION-AREA %SYS-COM-UNIBUS-INTERRUPT-LIST)
+		      %%Q-POINTER CHAN %UNIBUS-CHANNEL-LINK)
+       (STORE (SYSTEM-COMMUNICATION-AREA %SYS-COM-UNIBUS-INTERRUPT-LIST) CHAN))
+  CHAN)
+
+))

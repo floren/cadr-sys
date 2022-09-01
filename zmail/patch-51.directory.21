@@ -1,0 +1,21 @@
+;;; -*- Mode: Lisp; Package: User; Base: 10.; Patch-File: T -*-
+;;; Patch directory for ZMail version 51
+;;; Written 10/28/83 01:04:23 by RMS,
+;;; while running on Lisp Machine One from band 7
+;;; with System 97.20, CADR 1.0, ZMail 51.8, MIT-Specific 21.0, microcode 257, ZM MIT.
+
+(RELEASED
+ ((0 "ZMail Loaded" "rms" NIL)
+  (1 "Bug computing GMSGS pathname." "RMS" NIL)
+  (2 "Speed up sorting by position.
+Append to Referenced Msg bug." "RMS" NIL)
+  (3 "VMS mail files.
+Reformat headers if nec when moving message to different kind of file.
+Bugs in mail sending and checking when hosts are down." "RMS" NIL)
+  (4 "Mail file sort predicate bug." "EB.TFC" NIL)
+  (5 "COPY-MSG and Undo saving bug." "EB.TFC" NIL)
+  (6 "Fix Q command." "RMS" NIL)
+  (7 "new function ZWEI:LOAD-ZMAIL-INIT-FILE allows preloading of ZMAIL profile" "Mly" NIL)
+  (8 "Fix problems with edited messages -- by rms remote" "Mly" NIL)
+  (9 "Lock bug.  filter definition frame bug." "RMS" NIL)
+  ))

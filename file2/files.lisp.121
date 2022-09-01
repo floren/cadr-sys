@@ -1,0 +1,774 @@
+
+;;; -*-Mode: Lisp; Package: FILE-SYSTEM; Base: 8 -*-
+
+;The file IO contains the functions for moving data in and out of core.
+;This file FILES contains the next level up.
+;All functions operate on the file NODE-FILE.
+
+;;; Read or write an arbitrary single word of the file.
+
+;Regarding a file as a sequence of words, fetch a particular word.
+;Returns two values.  The first is the low 24 bits of the word.
+;The second is the high 8 bits of the word.
+;Refers to the file variables (core-map, etc.) but not to the file-pointer variables.
+(defun file-fetch-word (word-number)
+  (without-interrupts
+    (let ((core-pointer (core-address-of-word word-number)))
+      (values (%p-ldb 0030 core-pointer)
+	      (%p-ldb 3010 core-pointer)))))
+
+(defun file-maybe-fetch-word (n)
+  (and (> (file-map-offset) n)
+       (file-fetch-word n)))
+
+(defun file-maybe-store-word (n &optional bottom-24 top-8)
+  (and (> (file-map-offset) n)
+       (file-store-word n bottom-24 top-8)))
+
+;Regarding a file as a sequence of words, fetch a byte from a particular word.
+;Refers to the file variables (core-map, etc.) but not to the file-pointer variables.
+(defun file-ldb-word (ppss word-number)
+  (without-interrupts
+    (%p-ldb ppss (core-address-of-word word-number))))
+
+;Modify one word of the data in a file.
+;If either data component is NIL, we don't change that part of the word.
+(defun file-store-word (word-number &optional bottom-24 top-8)
+  (without-interrupts
+    (let ((core-pointer (core-address-of-word word-number)))
+       (or (and (or (null bottom-24) (= bottom-24 (%p-ldb 0030 core-pointer)))
+		(or (null top-8) (= top-8 (%p-ldb 3010 core-pointer))))
+	   (word-modified word-number))
+       (and bottom-24 (%p-dpb bottom-24 0030 core-pointer))
+       (and top-8 (%p-dpb top-8 3010 core-pointer)))))
+
+;Modify one word of the data in a file.
+;Does (lexpr-funcall function data word-core-address other-args)
+;to make the change.
+(defun file-modify-word (word-number function data &rest other-args)
+  (without-interrupts
+    (lexpr-funcall function data (core-address-of-word word-number) word-number other-args)))
+
+;This is in DEFS
+;(defsubst file-dpb-word (value ppss word-number)
+;  (file-modify-word word-number #'file-dpb-word-1 value ppss))
+
+(defun file-dpb-word-1 (value core-address word-number ppss)
+  (or (= value (%p-ldb ppss core-address))
+      (word-modified word-number))
+  (%p-dpb value ppss core-address))
+
+;Offset to subtract from universal time
+;so that we won't exhaust 32 bits for a hundred years.
+;Low 16 bits must be zero!
+(defconst file-date-offset 20000000000)
+
+;Largest bignum that can be stored in 32 bits after subtracting file-date-offset.
+(defconst file-date-max (* 3 file-date-offset))
+
+;Smallest number that can be stored in 32 bits.
+(defconst file-number-min (- file-date-offset))
+
+;Store a date at a specified word in the file.
+;Date format is universal time (seconds since 0:0:0 on 1/1 1900, gmt)
+(defun file-store-date (word-number ut)
+  (file-dpb-word (ldb 0020 ut) 0020 word-number)
+  (file-dpb-word (- (ldb 2020 ut) (ldb 2020 file-date-offset))
+		 2020 word-number))
+
+;Fetch the date from a given word and convert to universal time.
+(defun file-fetch-date (word-number)
+  (dpb (+ (file-ldb-word 2020 word-number) (ldb 2020 file-date-offset))
+       2020 (file-ldb-word 0020 word-number)))
+
+;Store a 32-bit bignum at a specified word in the file.
+(defun file-store-bignum (word-number bignum)
+  (file-dpb-word (ldb 0020 bignum) 0020 word-number)
+  (file-dpb-word (ldb 2020 bignum) 2020 word-number))
+
+;Fetch a specified file word as a 32-bit bignum.
+(defun file-fetch-bignum (word-number)
+  (+ (ash (file-ldb-word 2020 word-number) 20)
+     (file-ldb-word 0020 word-number)))
+
+;Read or write data in sequential words of the file.
+;Subroutines for efficient sequential storing into dir.
+;These subroutines DO NOT MARK AS MODIFIED.  The caller must do that.
+
+;This is the index in the file of the next word
+;for FILE-PTR-PREPARE-NEXT-WORD to prepare for.
+(defvar file-ptr-next-word)
+
+;After FILE-PTR-PREPARE-NEXT-WORD, this is the array in which this word is found.
+;It is ART-16B.
+(defvar file-ptr-access-array)
+
+;After FILE-PTR-PREPARE-NEXT-WORD, this is the number of array elements
+;in the array that can be used for following words (2 elts per word).
+(defvar file-ptr-elements-following)
+
+;After FILE-PTR-PREPARE-NEXT-WORD, this is the index of the first of the two
+;elements for the desired word.
+(defvar file-ptr-access-index)
+
+(defvar file-ptr-extend-file nil)
+
+(defun file-ptr-prepare-next-word (&aux new-rqb-flag)
+  (decf file-ptr-elements-following 2)
+  (cond ((<= file-ptr-elements-following 0)
+	 (setq new-rqb-flag t)
+	 (if (and file-ptr-extend-file
+		  (>= file-ptr-next-word (+ (file-contents-offset) (file-contents-length))))
+	     (file-set-contents-length (- (1+ file-ptr-next-word) (file-contents-offset)) t))
+	 (multiple-value (file-ptr-access-array file-ptr-access-index file-ptr-elements-following)
+	   (array-location-of-word file-ptr-next-word))
+	 (setq file-ptr-access-array (rqb-buffer file-ptr-access-array)))
+	(t (incf file-ptr-access-index 2)))
+  (incf file-ptr-next-word))
+
+(defun file-ptr-reprocess-word ()
+  (incf file-ptr-elements-following 2)
+  (decf file-ptr-access-index 2)
+  (decf file-ptr-next-word))
+
+;Fetch the next word of the array as four 8-bit bytes.
+(defun file-ptr-fetch-four-bytes ()
+  (file-ptr-prepare-next-word)
+  (let ((lowhalf (aref file-ptr-access-array file-ptr-access-index))
+	(highhalf (aref file-ptr-access-array (1+ file-ptr-access-index))))
+    (values (ldb 0010 lowhalf) (ldb 1010 lowhalf)
+	    (ldb 0010 highhalf) (ldb 1010 highhalf))))
+
+;Fetch one byte out of the currently prepared word.
+;Does not call file-ptr-prepare-next-word.  You must do that yourself.
+(defun file-ptr-fetch-a-byte (byte-number)
+  (ldb (if (bit-test 1 byte-number) 1010 0010)
+       (aref file-ptr-access-array (+ file-ptr-access-index (ldb 0101 byte-number)))))
+
+;Return the bottom 24 bits and top 8 bits of the next word,
+;as two values.
+(defun file-ptr-fetch-word ()
+  (declare (return-list bottom-24 top-8))
+  (file-ptr-prepare-next-word)
+  (let ((highhalf (aref file-ptr-access-array (1+ file-ptr-access-index))))
+    (values (%logdpb highhalf 2010 (aref file-ptr-access-array file-ptr-access-index))
+	    (ldb 1010 highhalf))))
+
+;Store the two halfwords that make up the next word.
+;This is good as a primitive for higher level storing functions.
+(defun file-ptr-fetch-two-halves ()
+  (file-ptr-prepare-next-word)
+  (values (aref file-ptr-access-array file-ptr-access-index)
+	  (aref file-ptr-access-array (1+ file-ptr-access-index))))
+
+;Fetch a 32-bit bignum from the next word of the file.
+(defun file-ptr-fetch-bignum ()
+  (file-ptr-prepare-next-word)
+  (dpb (aref file-ptr-access-array (1+ file-ptr-access-index))
+       2020
+       (aref file-ptr-access-array file-ptr-access-index)))
+
+;Fetch a date from the next word in the file.
+;Date format is universal time (seconds since 0:0:0 on 1/1 1900, gmt)
+(defun file-ptr-fetch-date ()
+  (file-ptr-prepare-next-word)
+  (dpb (+ (aref file-ptr-access-array (1+ file-ptr-access-index))
+	  (ldb 2020 file-date-offset))
+       2020
+       (aref file-ptr-access-array file-ptr-access-index)))
+
+;Store a 32-bit bignum in the next word of the directory.
+(defun file-ptr-store-bignum (bignum)
+  (file-ptr-prepare-next-word)
+  (setf (aref file-ptr-access-array file-ptr-access-index)
+	(ldb 0020 bignum))
+  (setf (aref file-ptr-access-array (1+ file-ptr-access-index))
+	(ldb 2020 bignum)))
+
+;Store a date at the next word in the directory.
+;Date format is universal time (seconds since 0:0:0 on 1/1 1900, gmt)
+(defun file-ptr-store-date (ut)
+  (file-ptr-prepare-next-word)
+  (setf (aref file-ptr-access-array file-ptr-access-index)
+	(ldb 0020 ut))
+  (setf (aref file-ptr-access-array (1+ file-ptr-access-index))
+	(- (ldb 2020 ut) (ldb 2020 file-date-offset))))
+
+;Store the two halfwords that make up the next word.
+;This is good as a primitive for higher level storing functions.
+(defun file-ptr-store-two-halves (bottom top)
+  (file-ptr-prepare-next-word)
+  (setf (aref file-ptr-access-array file-ptr-access-index) bottom)
+  (setf (aref file-ptr-access-array (1+ file-ptr-access-index)) top))
+
+;Store either the low 24 bits, the top 8 bits or both
+;in the next word of the directory.
+(defun file-ptr-store-word (bottom &optional top &aux middle)
+  (file-ptr-prepare-next-word)
+  (and bottom
+       (setf (aref file-ptr-access-array file-ptr-access-index)
+	     (ldb 0020 bottom)))
+  (or top (setq top (lsh (aref file-ptr-access-array (1+ file-ptr-access-index)) -10)))
+  (setq middle
+	(if bottom
+	    (%logldb 2010 bottom)
+	  (ldb 0010 (aref file-ptr-access-array (1+ file-ptr-access-index)))))
+  (setf (aref file-ptr-access-array (1+ file-ptr-access-index))
+	(dpb top 1010 middle)))
+
+;Store a string at our storing pointer, using as many words as it needs
+;(which is the length divided by four, rounded up).
+(defun file-ptr-store-string (string &aux (length (string-length string)))
+  (do ((i 0 (1+ i))
+       (bottomhalf 0)
+       (tophalf 0))
+      ((= i length)
+       (or (zerop length)
+	   (file-ptr-store-two-halves bottomhalf tophalf)))
+    (and (zerop (logand i 3))
+	 (not (zerop i))
+	 (progn (file-ptr-store-two-halves bottomhalf tophalf)
+		(setq bottomhalf 0 tophalf 0)))
+    (let ((ch (aref string i))
+	  (pos (if (bit-test i 1) 1010 0010)))
+      (if (bit-test i 2)
+	  (setq tophalf (dpb ch pos tophalf))
+	(setq bottomhalf (dpb ch pos bottomhalf))))))
+
+;Construct a string taking length-in-bytes bytes from the file
+;starting at word start-word-pointer.
+(defun file-extract-string (start-word-pointer length)
+  (cond ((> (+ start-word-pointer (ceiling length 4))
+	    (+ (file-contents-offset) (or (file-contents-length node-file) 0)))
+	 (ferror nil "String extends past end of file data")))
+  (let (file-ptr-access-array file-ptr-access-index
+	(file-ptr-extend-file nil)
+	(file-ptr-next-word start-word-pointer)
+	(file-ptr-elements-following 0))
+    (file-ptr-extract-string length)))
+
+(defun file-ptr-extract-string (length)
+  (let ((string (make-array length ':type 'art-string)))
+    (dotimes (i length)
+      (and (= 0 (logand i 3))
+	   (file-ptr-prepare-next-word))
+      (setf (aref string i)
+	    (file-ptr-fetch-a-byte i)))
+    string))
+
+;Store the string into the node using file pointers as already set up.
+;Advance them as we go, leaving them pointing at the last word we used.
+(defun file-store-string (starting-word-pointer string)
+  (or (let* ((alphabetic-case-affects-string-comparison t)
+	     (length (string-length string))
+	     (pad (- (* 4 (ceiling length 4)) length))
+	     (old-string (file-extract-string starting-word-pointer
+					      (+ length pad))))
+	(and (string-equal string old-string 0 0 length length)
+	     (string-equal "    " old-string 0 length pad)))
+      (let (file-ptr-access-array file-ptr-access-index
+	    (file-ptr-extend-file nil)
+	    (file-ptr-next-word starting-word-pointer)
+	    (file-ptr-elements-following 0))
+	(file-ptr-store-string string)
+	(records-modified (truncate starting-word-pointer (file-record-size))
+			  (ceiling file-ptr-next-word (file-record-size))))))
+
+;;; Subroutines used for opening a file.
+;;; These are called when the file's top level node gets opened.
+
+;Complain if there is anything inconsistent about the data in this file.
+;Returns T if the file is half-dead.
+(defun file-check-header (first-block-number name-for-error
+			  &optional superfile-first-block superfile-pack)
+  (or (file-half-dead-p)		;Nothing else to check in half-dead file.
+      (progn
+	(or (block-starts-file-p (file-pack node-file) first-block-number)
+	    (ferror nil "Block ~S on pack ~S does not start a file"
+		    first-block-number (file-pack node-file)))
+	(or (= (file-fetch-word 0) 6969.)
+	    (ferror nil "Invalid first word of file ~S" name-for-error))
+	(or (>= (file-map-offset) 5)
+	    (ferror nil "Invalid file-map-offset in file ~S" name-for-error))
+	(or (> (file-map-length) 0)
+	    (ferror nil "Invalid file-map-length in file ~S" name-for-error))
+	(or (>= (file-contents-offset)
+		(+ (file-map-offset) (file-map-length)
+		   (ceiling (or (file-redundant-name-length) 0) 4)))
+	    (ferror nil "Invalid file-contents-offset in file ~S" name-for-error))
+	(or (= first-block-number
+	       (file-fetch-word (file-map-offset)))
+	    (ferror nil "Invalid first map entry of file ~S" name-for-error))
+	(cond (superfile-first-block
+		(or (= (file-superfile-pointer) superfile-first-block)
+		    (progn (cerror ':no-action nil nil
+				   "Invalid superfile block pointer in file ~S."
+				   name-for-error)
+			   (and (y-or-n-p "Fix it? ")
+				(setf (file-superfile-pointer) superfile-first-block))))
+		(or (= (file-superfile-pack-spec)
+		       (cond (superfile-pack
+			      (dpb (if (string-equal (pack-volume-name (file-pack))
+						     (pack-volume-name superfile-pack))
+				       0 1)
+				   0701
+				   (pack-number-within-volume superfile-pack)))
+			     ;; This alternative happens only for the root node.
+			     (t 0)))
+		    (progn (cerror ':no-action nil nil
+				   "Invalid superfile pack spec in file ~S."
+				   name-for-error)
+			   (and (y-or-n-p "Fix it? ")
+				(setf (file-superfile-pack-spec)
+				      (cond (superfile-pack
+					     (dpb (if (string-equal (pack-volume-name (file-pack))
+								    (pack-volume-name superfile-pack))
+						      0 1)
+						  0701
+						  (pack-number-within-volume superfile-pack)))
+					    ;; This alternative happens only for the root node.
+					    (t 0))))))
+		;; If we fixed something, write it back.
+		(write-modified-records 0 1)))
+	nil)))
+
+;For the salvager, detect the same errors but report them differently.
+;Return T if the node is half-dead, :LOSE if it should be ignored,
+;NIL if it is good.
+(defun salvage-check-header (first-block-number
+			     &optional superfile-first-block superfile-pack
+			     name-for-error)
+  (cond ((file-half-dead-p) t)		;Nothing else to check in half-dead file.
+	((not (block-starts-file-p (file-pack node-file) first-block-number))
+	 (format t "~%Block ~d on pack ~S does not start a file.~%This is file ~A."
+		 first-block-number (file-pack node-file) name-for-error)
+	 ':lose)
+	((not (= (file-fetch-word 0) 6969.))
+	 (format t "~%Invalid first word of file at pack ~S, block ~d.~%This is file ~A."
+		 (file-pack node-file) first-block-number name-for-error)
+	 ':lose)
+	((not (>= (file-map-offset) 5))
+	 (format t "~%Invalid file-map-offset in file at pack ~S, block ~d.~%This is file ~A."
+		 (file-pack node-file) first-block-number name-for-error)
+	 ':lose)
+	((not (> (file-map-length) 0))
+	 (format t "~%Invalid file-map-length in file at pack ~S, block ~d.~%This is file ~A."
+		 (file-pack node-file) first-block-number name-for-error)
+	 ':lose)
+	((not (= first-block-number (file-fetch-word (file-map-offset))))
+	 (format t "~%Invalid first map entry of file at pack ~S, block ~d.~%This is file ~A."
+		 (file-pack node-file) first-block-number name-for-error)
+	 ':lose)
+	(t  ;This file is valid enough for us to extract and mark its map.
+	 (or (>= (file-contents-offset)
+		 (+ (file-map-offset) (file-map-length)
+		    (ceiling (or (file-redundant-name-length) 0) 4)))
+	     (format t "~%Invalid file-contents-offset in file at pack ~S, block ~d.~%This is file ~A."
+		     (file-pack node-file) first-block-number name-for-error))
+	 (cond (superfile-first-block
+		(or (= (file-superfile-pointer) superfile-first-block)
+		    (format t "~%Invalid superfile block pointer in file at pack ~S, block ~d.~%This is file ~A."
+			    (file-pack node-file) first-block-number name-for-error))
+		(or (= (file-superfile-pack-spec)
+		       (cond (superfile-pack
+			      (dpb (if (string-equal (pack-volume-name (file-pack))
+						     (pack-volume-name superfile-pack))
+				       0 1)
+				   0701
+				   (pack-number-within-volume superfile-pack)))
+			     ;; This alternative happens only for the root node.
+			     (t 0)))
+		    (format t "~%Invalid superfile pack spec in file at pack ~S, block ~d.~%This is file ~A."
+			    (file-pack node-file) first-block-number name-for-error))))
+	 nil)))
+
+;T if node-file is a half-dead file.
+(defun file-half-dead-p ()
+  (= (file-fetch-word 0) 5454.))
+
+;Create a file object and make it refer to an existing file.
+;If LEAVE-HALF-DEAD-FILES is T, then our second value is T
+;if the file is half dead.
+;If WARNINGS-ONLY is T, then our second value is :LOSE
+;if the file is invalid.
+(defun file-setup (pack first-block-number name-for-error
+			&optional leave-half-dead-files
+			superfile-first-block superfile-pack
+			warnings-only)
+  (prog (file-status)
+    (setq node-file (make-file-object))
+    (setf (file-pack node-file) pack)
+    (setf (file-blocks-to-be-freed node-file) nil)
+    (setf (file-record-size node-file)
+	  (* page-size (pack-pages-per-block pack)))
+    (setf (file-n-records node-file) 1)			;Prevents error traps.
+    (setf (file-modified-map) (make-array 1 ':type art-1b))
+    (setf (file-disk-map node-file) (list (list 0 1 first-block-number)))
+    (setf (file-core-map node-file) nil)
+    (setq file-status
+	  (if warnings-only
+	      (salvage-check-header first-block-number superfile-first-block superfile-pack
+				    name-for-error)
+	    (file-check-header first-block-number name-for-error
+			       superfile-first-block superfile-pack)))
+    (cond ((eq file-status ':lose))
+	  (file-status
+	   ;; File is half dead.  Do we fix it or report it?
+	   (cond ((not leave-half-dead-files)
+		  (adjust-array-size (file-modified-map) (file-n-records))
+		  (file-store-word 0 6969. 0)
+		  (setf (file-contents-offset) file-initial-contents-offset)
+		  (setf (file-map-offset) file-initial-map-offset)
+		  (setf (file-map-length) 0)
+		  (setf (file-redundant-name-length) 0)
+		  (setf (file-redundant-dir-info) 0)
+		  (setf (file-redundant-contents-length) 0)
+		  (setf (file-header-changed-p) t)
+		  (file-store-word file-initial-map-offset first-block-number 1)
+		  (file-store-word file-initial-contents-offset 0 0)
+		  (file-store-word (1+ file-initial-contents-offset) 0 0)
+		  (write-modified-records 0 1)
+		  (setq file-status nil))))
+	  (t
+	   ;; Ok, first block looks good, so extract the map and file length.
+	   (file-extract-map (file-map-offset) (file-map-length))
+	   (adjust-array-size (file-modified-map) (file-n-records))
+	   ;; Make sure top 8 bits of word 0 get set to 0.
+	   (file-store-word 0 6969. 0)))
+    (return node-file file-status)))
+
+;Given the first block number and pack object of a file,
+;return those of the file which points to it.
+;This operates on files which are NOT OPEN.
+;Returns NIL if there is no longer a file starting there.
+(defun file-get-superfile-pointer (pack first-block-number
+				   &aux superfile-first-block superfile-pack-spec)
+  (and (block-starts-file-p pack first-block-number)
+       (let ((node-file (make-file-object)))
+	 (setf (file-pack node-file) pack)
+	 (setf (file-blocks-to-be-freed node-file) nil)
+	 (setf (file-record-size node-file)
+	       (* page-size (pack-pages-per-block pack)))
+	 (setf (file-n-records node-file) 1)	;Prevents error traps.
+	 (setf (file-disk-map node-file) (list (list 0 1 first-block-number)))
+	 (setf (file-core-map node-file) nil)
+	 (cond ((file-half-dead-p) nil)
+	       (t
+		(file-check-header first-block-number nil)
+		(setf (values superfile-first-block superfile-pack-spec)
+		      (file-superfile-pointer))
+		(list (find-mounted-pack (cond ((ldb-test 701 superfile-pack-spec)
+						(pack-parent-volume-name pack))
+					       (t (pack-volume-name pack)))
+					 (ldb 0007 superfile-pack-spec))
+		      superfile-first-block))))))
+
+;Create a file object for a new file, and initialize the file.
+(defun file-create (pack supernode-first-block-number supernode-pack
+		    &optional (size-estimate-in-words 1))
+  (setq node-file (make-file-object))
+  (setf (file-pack node-file) pack)
+  (setf (file-blocks-to-be-freed node-file) nil)
+  (setf (file-disk-map node-file) nil)
+  (setf (file-core-map node-file) nil)
+  (setf (file-record-size node-file)
+	(* page-size (pack-pages-per-block pack)))
+  (setf (file-n-records node-file)
+	(ceiling size-estimate-in-words (file-record-size)))
+  (setf (file-modified-map node-file) (make-array (file-n-records)
+						  ':type 'art-1b))
+  (assign-disk-space 0 1)
+;First make it look like a half-dead file, and write it out as such.
+  (file-store-word 0 5454.)
+  (setf (file-superfile-pointer) supernode-first-block-number)
+  (setf (file-superfile-pack-spec)
+	(cond (supernode-pack
+	       (dpb (if (string-equal (pack-volume-name pack)
+				      (pack-volume-name supernode-pack))
+			0 1)
+		    0701
+		    (pack-number-within-volume supernode-pack)))
+	      ;; This alternative happens only for the root node.
+	      (t 0)))
+  (write-modified-records 0 1)
+;Now we can set the bit saying that a file starts at the block which was just allocated.
+  (set-block-starts-file-bit (file-pack node-file) (block-number-of-record 0) 1)
+;Now make it look like a live file,
+;but there's no need to write right away.
+  (file-store-word 0 6969. 0)
+  (setf (file-contents-offset) file-initial-contents-offset)
+  (setf (file-map-offset) file-initial-map-offset)
+  (setf (file-map-length) 0)
+  (setf (file-redundant-name-length) 0)
+  (setf (file-redundant-dir-info) 0)
+  (setf (file-redundant-contents-length) 0)
+  (setf (file-header-changed-p) t)
+  (file-store-word file-initial-contents-offset 0 0)
+  (file-store-word (1+ file-initial-contents-offset) 0 0))
+
+;Extract the file map from the start of the file,
+;expand it, and set up disk-map and the file length.
+;Note that the map can occupy more than one record.
+;However, in that case, before we start reading map from a record,
+;we have certainly expanded the part of the map that maps that record.
+;So we don't need to worry about that peculiar phenomenon.
+(defun file-extract-map (start length &aux (next-record 0) tem)
+  (file-fetch-word 0)
+  (setf (file-disk-map node-file) nil)
+  (let (file-ptr-access-array file-ptr-access-index
+	(file-ptr-extend-file nil)
+	(file-ptr-next-word start)
+	(file-ptr-elements-following 0))
+    (dotimes (l length)
+      (multiple-value-bind (bottom-24 top-8)
+	  (file-ptr-fetch-word)
+	(setq tem (+ next-record top-8))
+	(setf (file-disk-map node-file)
+	      (nconc (file-disk-map node-file)
+		     (ncons (list next-record tem bottom-24))))
+	(setf (file-n-records node-file) tem)
+	(setq next-record tem)))))
+
+;Make sure the file is completely up to date on disk.
+;Also make available any blocks which used to be in the file
+;which we were holding on to until the map was written out.
+(defun file-write-out (&aux n-valid-records)
+  (cond ((not (zerop (file-n-records)))
+	 (or (>= (file-contents-offset)
+		 (+ (file-map-offset) (file-map-length)
+		    (ceiling (or (file-redundant-name-length) 0) 4)))
+	     (ferror nil "Invalid file-contents-offset in ~S" node-file))
+	 (let ((length-in-bytes (funcall (file-top-level-node) ':length-in-bytes)))
+	   (or (eq (file-redundant-contents-length) length-in-bytes)
+	       (setf (file-redundant-contents-length) length-in-bytes)))
+
+	 ;; Assign disk space to all records, and store the map.
+
+	 ;; How many records of the file are actually in use?
+	 ;; Don't assign disk space to extra records
+	 ;; allocated in core in advance of being needed.
+	 (setq n-valid-records
+	       (if (file-contents-length)
+		   (ceiling (+ (file-contents-offset)
+			       (file-contents-length))
+			    (file-record-size))
+		 (file-n-records)))
+	 (and (> n-valid-records (file-n-records))
+	      (ferror nil "file-contents-length of ~S, which is ~S,
+doesn't fit in the ~S allocated records of the file."
+		      (file-top-level-node) (file-contents-length) (file-n-records)))
+	 (setq n-valid-records (min n-valid-records (file-n-records)))
+	 (assign-disk-space 0 n-valid-records)
+	 ;; Make sure all the existing map records
+	 ;; (except record 0) have newly assigned disk space.
+	 (and (file-header-changed-p)
+	      (let ((map-records
+		      (ceiling (+ (file-map-offset) (file-map-length))
+			       (file-record-size node-file))))
+		(cond ((> map-records 1)
+		       (atomic-update-records 0 map-records)))
+		;; Add new map records if the map has got bigger.
+		;; Repeat this process until the map is big enough.
+		(do () (())
+		  (let* ((missing-size (- (+ (length (file-disk-map node-file))
+					     (file-map-offset)
+					     (file-name-length-if-stored))
+					  (file-contents-offset))))
+		    (if (<= missing-size 0)
+			(return)
+		      ;; Make enough new records, AFTER the last record the map is in.
+		      (let ((n-records (ceiling (+ 5 missing-size)
+						(file-record-size)))
+			    (before-record (ceiling
+					     (+ (file-map-length) (file-map-offset))
+					     (file-record-size))))
+			(file-insert-records n-records before-record nil)
+			(assign-disk-space before-record (+ before-record n-records))
+			;; The end of the valid contents has moved up also.
+			(incf n-valid-records n-records)
+			;; Now copy the last record before the insertion
+			;; to the last of the inserted records
+			;; so the contents will be correct and contiguous.
+			(file-copy-record (+ before-record -1)
+					  (+ before-record n-records -1))))))
+		;; Now we have enough room for the map,
+		;; and have arranged for an atomic update.
+		;; Write the map.
+		(file-store-map)
+		(file-store-name)
+		(setf (file-header-changed-p) nil)))
+	 (and (> n-valid-records 1)
+	      (write-modified-records 1 n-valid-records nil t))
+	 (funcall (file-top-level-node) 'store-dir-info node-file)
+	 (write-modified-records 0 1)
+	 (records-not-modified n-valid-records (file-n-records))
+	 (setf (file-atomic-update-record node-file) nil)
+	 ;; Repeat the error check in case we just screwed
+	 ;; up the map pointers now.
+	 (or (>= (file-contents-offset)
+		 (+ (file-map-offset) (file-map-length)
+		    (ceiling (or (file-redundant-name-length) 0) 4)))
+	     (ferror nil "Invalid file-contents-offset in ~S" node-file))))
+  (mapc '(lambda (x)
+	   (set-block-starts-file-bit (car x) (cadr x) 0)
+	   (apply 'free-disk-blocks x))
+	(file-blocks-to-be-freed node-file))
+  (setf (file-blocks-to-be-freed node-file) nil))
+
+;UPDATE the map stored in the first records of the file.
+;Does not attempt to do an atomic update.
+;That is the responsibility of FILE-WRITE-OUT.
+(defun file-store-map (&aux (disk-map (file-disk-map node-file)))
+  (let ((map-offset (file-map-offset))
+	(map-length (length disk-map)))
+    ;; Now store the map.
+    (let (file-ptr-access-array file-ptr-access-index
+	  (file-ptr-extend-file nil)
+	  (file-ptr-next-word map-offset)
+	  (file-ptr-elements-following 0))
+      (dolist (mapelt disk-map)
+	(or (multiple-value-bind (bottom-24 top-8)
+		(file-ptr-fetch-word)
+	      (and (= (mapelt-data mapelt) bottom-24)
+		   (= (- (mapelt-end mapelt) (mapelt-start mapelt))
+		      top-8)))
+	    (progn
+	      (file-ptr-reprocess-word)
+	      (word-modified file-ptr-next-word)
+	      (file-ptr-store-word (mapelt-data mapelt)
+				   (- (mapelt-end mapelt) (mapelt-start mapelt)))))))
+    ;; If the map length has changed, clear out the
+    ;; gap following the map.
+    (if (= map-length (file-map-length))
+	nil
+      (setf (file-map-length) map-length)
+      (file-clear-words (+ map-offset map-length)
+			(- (file-contents-offset) (+ map-offset map-length))))
+    ))
+
+(defun file-store-name ()
+  (cond ((> (file-map-offset) 5)
+	 (let ((string (pathlist-to-string (funcall (file-top-level-node) ':standard-pathlist))))
+	   (file-store-string (+ (file-map-offset) (file-map-length))
+			      string)
+	   (setf (file-redundant-name-length)
+		 (string-length string))))))
+
+(defun file-name-length-if-stored ()
+  (if (> (file-map-offset) 5)
+      (let ((string (pathlist-to-string (funcall (file-top-level-node) ':standard-pathlist))))
+	(ceiling (string-length string) 4))
+    0))
+	   
+
+;Truncate or extend a file.  This is the entry point which nodes use.
+;NO-TRUNCATE means don't remove any records
+;even if they aren't needed for the new contents length.
+;HYSTERESIS means create more records than necessary if records are being created.
+(defun file-set-contents-length (length &optional no-truncate hysteresis)
+  (let ((new-size (+ length (file-contents-offset))))
+    (file-set-n-records (ceiling new-size (file-record-size node-file))
+			no-truncate hysteresis))
+  (setf (file-contents-length node-file) length))
+  
+;Turn a file into a half-dead file
+;in preparation for removing it from the directory.
+(defun file-begin-to-delete ()
+; Delete all but the first record, and make the file half-dead.
+  (file-set-n-records 1)
+  (file-store-word 0 5454.)
+; Make sure that gets out to the disk.
+  (write-modified-records 0 1)
+; Free the blocks that we have deleted so far.
+  (dolist (l (file-blocks-to-be-freed))
+    (apply 'free-disk-blocks l))
+  (setf (file-blocks-to-be-freed) nil))
+
+;Finish deleting a file by removing it from the block-starts-file map
+;and freeing its first record.  This is done AFTER removing it from the directory.
+(defun file-finish-delete (node-file)
+  (set-block-starts-file-bit (file-pack node-file) (block-number-of-record 0) 0)
+  (file-set-n-records 0)
+  (dolist (l (file-blocks-to-be-freed))
+    (apply 'free-disk-blocks l))
+  (setf (file-blocks-to-be-freed) nil))
+
+;Set number of records the node has.  Not an entry point.
+(defun file-set-n-records (desired-n-records &optional no-truncate hysteresis)
+  (prog ()
+	(let ((old-n-records (file-n-records node-file)))
+	  (cond ((< desired-n-records old-n-records)
+		 (and no-truncate (return nil))
+		 (deassign-disk-space desired-n-records old-n-records t))
+		((= desired-n-records old-n-records)
+		 (return nil))
+		(t (and hysteresis (incf desired-n-records file-record-increment))))
+	  (setf (file-n-records node-file) desired-n-records)
+	  (adjust-array-size (file-modified-map node-file) desired-n-records))))
+
+(defun print-file-words (start end)
+  (do ((i start (1+ i))) ((= i end))
+    (format t "~% ~3O ~8O ~3O"
+	    i (file-fetch-word i) (file-fetch-top-8-bits i))))
+
+;Make space for n more records in the file before before-record.
+;CONTENTS-FLAG says the new record is part of the file's contents
+;(rather than preceding the contents!)
+(defun file-insert-records (n-records before-record contents-flag)
+  (or (<= 0 before-record (file-n-records))
+      (ferror nil "Record position ~O out of range" before-record))
+  (split-core-map before-record n-records)
+  ;; Split any disk map element that crosses the insertion point.
+  ;; Relocate any that follow it.
+  (do ((maptail (file-disk-map) (cdr maptail)))
+      ((null maptail))
+    (let ((mapelt (car maptail)))
+      (cond ((>= (mapelt-start mapelt) before-record)
+	     (incf (mapelt-start mapelt) n-records)
+	     (incf (mapelt-end mapelt) n-records))
+	    ((> (mapelt-end mapelt) before-record)
+	     (push (list (+ before-record n-records)
+			 (+ (mapelt-end mapelt) n-records)
+			 (+ (mapelt-data mapelt)
+			    (- before-record (mapelt-start mapelt))))
+		   (cdr maptail))
+	     (setf (mapelt-end mapelt) before-record)))))
+  ;; Mark the file as bigger now.
+  (incf (file-n-records) n-records)
+  (if contents-flag
+      (incf (file-contents-length) (* (file-record-size) n-records))
+      (incf (file-contents-offset) (* (file-record-size) n-records)))
+  (adjust-array-size (file-modified-map) (file-n-records))
+  (do ((i (1- (file-n-records)) (1- i)))
+      ((< i (+ n-records before-record)))
+    (setf (aref (file-modified-map) i)
+	  (aref (file-modified-map) (- i n-records)))))
+
+;Copy one record of a file to another record of the same file.
+;Assumes that the records exist in the file.
+(defun file-copy-record (from to)
+  (multiple-value-bind (from-access-array from-access-index from-elements-following)
+      (array-location-of-word (* from (file-record-size)))
+    (setq from-access-array (rqb-buffer from-access-array))
+    (multiple-value-bind (to-access-array to-access-index to-elements-following)
+	(array-location-of-word (* to (file-record-size)))
+      (setq to-access-array (rqb-buffer to-access-array))
+      ;; We assume that these records exist.
+      ;; The RQBs contain entire records.
+      from-elements-following to-elements-following
+      (copy-array-portion from-access-array from-access-index
+			  (* (file-record-size) 2)
+			  to-access-array to-access-index
+			  (* (file-record-size) 2))
+      ;; Mark that record as changed.
+      (record-modified to))))
+
+(defun file-clear-words (start length)
+  (let (file-ptr-access-array file-ptr-access-index
+	(file-ptr-extend-file nil)
+	(file-ptr-next-word start)
+	(file-ptr-elements-following 0))
+    (dotimes (i length)
+      (file-ptr-store-word 0 0)))
+  (records-modified (truncate start (file-record-size))
+		    (ceiling (+ start length) (file-record-size))))
