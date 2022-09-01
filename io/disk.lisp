@@ -1244,17 +1244,12 @@ or /"CC/" which refers to the machine being debugged by this one."
     (UNLESS DONT-DISPOSE (DISPOSE-OF-UNIT UNIT))
     (RETURN-DISK-RQB RQB)))
 
-(DEFUN DISK-INIT (&AUX RQB SIZE)
-  (UNWIND-PROTECT
-      (PROGN (SETQ RQB (GET-DISK-LABEL-RQB))
-	     (READ-DISK-LABEL RQB 0)
-	     ;; Update things which depend on the location and size of the paging area
-	     (MULTIPLE-VALUE (PAGE-OFFSET SIZE)
-	       (FIND-DISK-PARTITION "PAGE" RQB 0 T))
-	     (SETQ VIRTUAL-MEMORY-SIZE (* (MIN (LDB #o1020 A-MEMORY-VIRTUAL-ADDRESS) SIZE)
-					  PAGE-SIZE))
-	     (SETQ DISK-PACK-NAME (GET-DISK-STRING RQB #o20 32.)))
-    (RETURN-DISK-RQB RQB)))
+(DEFUN DISK-INIT ()
+;;;---!!! Hack to get around a weird bug when doing QLD.  Make sure
+;;;---!!!    these match the disk!
+  (SETQ PAGE-OFFSET #o2414)
+  (SETQ VIRTUAL-MEMORY-SIZE #o76776000)
+  (SETQ DISK-PACK-NAME "QLD"))
 
 (DEFUN PRINT-LOADED-BAND (&OPTIONAL (STREAM T))	;Can be NIL to return a string
   "Prints on STREAM a description of the loaded band.
