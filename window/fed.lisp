@@ -155,7 +155,7 @@
   (:DEFAULT-INIT-PLIST :BLINKER-P NIL :MORE-P NIL)
   (:REQUIRED-METHODS :AREF :ASET :PLANE-EDGES :LISTEN)
 
-  (:DOCUMENTATION "Displays a set of points within a grid
+  (:DOCUMENTATION :MIXIN "Displays a set of points within a grid
     and allows for incremental redisplay of points and updating
     the data structure for changes in the display."))
 
@@ -175,20 +175,20 @@
 The correct size is enough to record enough boxes of size BOX-X-SIZE
 by BOX-Y-SIZE to fill up the window.
 Also sets WINDOW-X-SIZE and WINDOW-Y-SIZE to the size values."
-  (DECLARE :SELF-FLAVOR GRID-MIXIN)
-  (OR ARRAY-TYPE (SETQ ARRAY-TYPE (ARRAY-TYPE WINDOW-ARRAY)))
-  (LET ((LAST-ROW-OF-DOTS
-	 (IF (AND (> BOX-X-SIZE MIN-BOX-SIZE)
-		  (> BOX-Y-SIZE MIN-BOX-SIZE))
-	     2
-	     0)))
-    (SETQ WINDOW-X-SIZE (TRUNCATE (- (TV:SHEET-INSIDE-WIDTH) LAST-ROW-OF-DOTS) BOX-X-SIZE)
-	  WINDOW-Y-SIZE (TRUNCATE (- (TV:SHEET-INSIDE-HEIGHT) LAST-ROW-OF-DOTS) BOX-Y-SIZE))
-    (OR (AND (VARIABLE-BOUNDP WINDOW-ARRAY)
-	     ( WINDOW-X-SIZE (ARRAY-DIMENSION WINDOW-ARRAY 0))
-	     ( WINDOW-Y-SIZE (ARRAY-DIMENSION WINDOW-ARRAY 1)))
-	(SETQ WINDOW-ARRAY (MAKE-ARRAY (LIST WINDOW-X-SIZE WINDOW-Y-SIZE)
-				       :TYPE ARRAY-TYPE)))))
+  (DECLARE-FLAVOR-INSTANCE-VARIABLES (GRID-MIXIN)
+    (OR ARRAY-TYPE (SETQ ARRAY-TYPE (ARRAY-TYPE WINDOW-ARRAY)))
+    (LET ((LAST-ROW-OF-DOTS
+	    (IF (AND (> BOX-X-SIZE MIN-BOX-SIZE)
+		     (> BOX-Y-SIZE MIN-BOX-SIZE))
+		2
+		0)))
+      (SETQ WINDOW-X-SIZE (TRUNCATE (- (TV:SHEET-INSIDE-WIDTH) LAST-ROW-OF-DOTS) BOX-X-SIZE)
+	    WINDOW-Y-SIZE (TRUNCATE (- (TV:SHEET-INSIDE-HEIGHT) LAST-ROW-OF-DOTS) BOX-Y-SIZE))
+      (OR (AND (VARIABLE-BOUNDP WINDOW-ARRAY)
+	       ( WINDOW-X-SIZE (ARRAY-DIMENSION WINDOW-ARRAY 0))
+	       ( WINDOW-Y-SIZE (ARRAY-DIMENSION WINDOW-ARRAY 1)))
+	  (SETQ WINDOW-ARRAY (MAKE-ARRAY (LIST WINDOW-X-SIZE WINDOW-Y-SIZE)
+					 ':TYPE ARRAY-TYPE))))))
 
 ;;; If we didn't come back, remember that the screen is clobbered.
 
@@ -490,7 +490,7 @@ Also sets WINDOW-X-SIZE and WINDOW-Y-SIZE to the size values."
        (PLANE)
        (GRID-MIXIN)
   :GETTABLE-INSTANCE-VARIABLES
-  (:DOCUMENTATION
+  (:DOCUMENTATION :SPECIAL-PURPOSE
     "A grid window that displays a plane. The plane instance variable is displayed
      in the grid and updated when it is changed via the mouse."))
 
@@ -502,7 +502,7 @@ Also sets WINDOW-X-SIZE and WINDOW-Y-SIZE to the size values."
   "Return a list whose elements are the ends of the explicitly allocated index regions of PLANE.
 Each element corresponds to one dimension, and is one plus the highest
 value in that dimension for which storage in PLANE is allocated."
-  (MAPCAR #'+ (PLANE-ORIGIN PLANE) (ARRAY-DIMENSIONS PLANE)))
+  (MAPCAR '+ (PLANE-ORIGIN PLANE) (ARRAY-DIMENSIONS PLANE)))
 
 (DEFUN PLANE-EDGES (PLANE)
   "Return a list containing the origin of PLANE followed by the end.
@@ -631,7 +631,7 @@ The elements of the list completely describe what coordinate ranges have actual 
   :SETTABLE-INSTANCE-VARIABLES
   :INITABLE-INSTANCE-VARIABLES
   (:REQUIRED-FLAVORS GRID-MIXIN)
-  (:DOCUMENTATION
+  (:DOCUMENTATION :SPECIAL-PURPOSE 
     "Grid windows with a special outline. The outline is used to show
      the actual character area and baseline by the font-editor."))
 
@@ -773,7 +773,7 @@ The elements of the list completely describe what coordinate ranges have actual 
 		      (CURSOR-ON NIL))
 	   (GRAY-GRID-MIXIN PLANE-GRID-MIXIN CHAR-BOX-GRID-MIXIN
 	    TV:LIST-MOUSE-BUTTONS-MIXIN)
-  (:DOCUMENTATION
+  (:DOCUMENTATION :SPECIAL-PURPOSE 
     "The font editor itself uses its grid for displaying the character being edited."))
 
 (DEFMETHOD (BASIC-FED :SELECTED-FONT) () CURRENT-FONT)
@@ -914,7 +914,7 @@ The elements of the list completely describe what coordinate ranges have actual 
   (BASIC-FED TV:INTRINSIC-NO-MORE-MIXIN TV:WINDOW-WITH-TYPEOUT-MIXIN
    TV:PROCESS-MIXIN TV:WINDOW)
   (:SETTABLE-INSTANCE-VARIABLES PROMPT-WINDOW LABEL-WINDOW)
-  (:DOCUMENTATION "The actual FED window"))
+  (:DOCUMENTATION :COMBINATION "The actual FED window"))
 
 (DEFMETHOD (FED :WHO-LINE-DOCUMENTATION-STRING) ()
   (OR SPECIAL-COMMAND-MOUSE-DOCUMENTATION
