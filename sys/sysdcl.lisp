@@ -1,7 +1,6 @@
-;;;-*- Mode:LISP; Package:SYSTEM-INTERNALS; Readtable:ZL; Base:10 -*-
-
+;;;-*- Mode:LISP; Package:SYSTEM-INTERNALS; Base:8 -*-
 ;;; Declarations for SYSTEM's initally loaded
-;;; ** (c) Copyright 1980 Massachusetts Institute of Technology **
+;;; ** (c) Copyright 1984 Massachusetts Institute of Technology **
 
 (DEFSYSTEM SYSTEM
   (:NAME "System")
@@ -9,7 +8,6 @@
   (:PATCHABLE "SYS: PATCH;")
   (:MODULE ALLDEFS ("SYS: SYS2; DEFMAC"		;These are defs files for whole system
 		    "SYS: SYS2; LMMAC"
-		    "SYS: EH; ERRMAC"
 		    "SYS: SYS2; STRUCT"
 		    "SYS: SYS2; SETF"
 		    "SYS: SYS; TYPES")
@@ -52,21 +50,17 @@
 		 "SYS: SYS2; BAND"
 		 "SYS: SYS2; CHARACTER"
 		 "SYS: SYS; CLPACK"	;packages
-		 "SYS: COLD; GLOBAL"	;for package initialization
-		 "SYS: COLD; SYSTEM"
-		 "SYS: COLD; LISP"
 		 "SYS: WINDOW; COLD"
 		 "SYS: SYS2; DEFSEL"	;defselect
-		 "SYS: SYS2; DESCRIBE"
 		 "SYS: IO; DISK"
 		 "SYS: IO; DLEDIT"	;disk-label editor
 		 "SYS: IO; DRIBBL"	;dribble
 		 "SYS: SYS2; ENCAPS"	;encapsulations
 		 "SYS: SYS; EVAL"
 		 "SYS: SYS2; FLAVOR"
-		 "SYS: SYS; FSPEC"
 		 "SYS: SYS2; GC"
 		 "SYS: SYS; GENRIC"	;new commonlisp functions
+		 "SYS: COLD; GLOBAL"
 		 "SYS: IO; GRIND"
 		 "SYS: SYS2; HASH"
 		 "SYS: SYS2; HASHFL"	;flavorized hash table stuff
@@ -77,7 +71,6 @@
 		 "SYS: SYS2; LOGIN"
 		 "SYS: SYS2; LOOP"
 		 "SYS: SYS; LTOP"
-		 "SYS: SYS2; MACARR"	;mucklisp array functions. bletch
 		 "SYS: SYS2; MAKSYS"
 		 "SYS: IO; MINI"
 ;		 "SYS: IO; ETHER-MINI"	;New ethernet.  putting both flavors of mini in
@@ -107,6 +100,7 @@
 		 "SYS: IO; STREAM"
 		 "SYS: SYS2; STRING"
 		 "SYS: SYS; SYSDCL"
+		 "SYS: COLD; SYSTEM"
 		 "SYS: SYS2; UNFASL"
 		 "SYS: IO; UNIBUS"
 		 "SYS: SYS2; CLMAC"	;alternate macro definitions for some zl special forms
@@ -128,7 +122,7 @@
 	     "HL6" "HL7" "HL10" "HL10B" "HL12" "HL12I" "HL12B" "HL12BI"
 	     "TR8" "TR8I" "TR8B" "TR10" "TR10I" "TR10B" "TR10BI"
 	     "TR12" "TR12B" "TR12I" "TR12BI"
-	     "MOUSE" "SEARCH" "TOG" "ABACUS" "NARROW"))
+	     "MOUSE" "SEARCH" "TOG" "ABACUS"))
   (:READFILE ("EQUIVALENCE")))
 
 (DEFSYSTEM CHAOS
@@ -180,7 +174,7 @@
 (DEFSYSTEM FORMAT
   (:PACKAGE FORMAT)
   (:COMPILE-LOAD ("SYS: IO; FORMAT"
-;pos		  "SYS: IO; FORMAT-MACRO" 
+		  "SYS: IO; FORMAT-MACRO"
 		  "SYS: IO1; FQUERY"
 		  "SYS: IO1; OUTPUT")))
 
@@ -284,8 +278,8 @@
 ;;; error handler, debugger
 (DEFSYSTEM EH
   (:PACKAGE EH)
-  (:PATHNAME-DEFAULT "SYS: EH;")
-  (:COMPILE-LOAD ("EH" "EHF" "EHC" "EHW" "EHBPT")))
+  (:PATHNAME-DEFAULT "SYS: SYS2;")
+  (:COMPILE-LOAD ("EH" "EHF" "EHC" "EHW")))
 
 (DEFSYSTEM TV
   (:PACKAGE TV)
@@ -314,7 +308,7 @@
   (:NICKNAMES "FS")
   (:PATHNAME-DEFAULT "SYS: IO; FILE;")
   (:MODULE BASIC-PATHNAMES ("ACCESS" "PATHNM"))
-  (:MODULE HOST-PATHNAMES ("PATHST" "LOGICAL" "SYS:FILE2;PATHNM" "SYS:FILE;LMPARS"))
+  (:MODULE HOST-PATHNAMES ("PATHST" "SYS:FILE2;PATHNM" "SYS:FILE;LMPARS"))
   (:MODULE FILE-IO ("OPEN" "BALDIR"))
   (:MODULE CHAOS-FILE-IO ("SYS: NETWORK; CHAOS; QFILE"))
   (:COMPILE-LOAD BASIC-PATHNAMES)
@@ -354,7 +348,7 @@
   (:COMPILE-LOAD ("SYS: IO1; CONVER")))
 
 ;;; Systems not initially loaded, but done right afterwards
-;;; MIT-Specific definition moved to SYS: SITE; MIT-SPECIFIC SYSTEM
+;;; MIT-Specific definition moved to SYS:SITE;MIT-SPECIFIC.SYSTEM
 
 (DEFSYSTEM CADR
   (:NAME "CADR")
@@ -456,11 +450,10 @@
 
 (SET-SYSTEM-SOURCE-FILE 'COLD "SYS: COLD; COLDPK")
 
-;;;; These are the files in the cold load
+;;; These are the files in the cold load
 (DEFCONST COLD-LOAD-FILE-LIST
 	  '("SYS: FONTS; CPTFON QFASL >"
 	    "SYS: SYS; QRAND QFASL >"
-	    "SYS: SYS; FSPEC QFASL >"
 	    "SYS: IO; QIO QFASL >"
 ;	    "SYS: IO; RDTBL QFASL >"	;done specially
 ;	    "SYS: IO; CRDTBL QFASL >"	;done specially
@@ -478,16 +471,13 @@
 	    "SYS: SYS2; CHARACTER QFASL >"
 	    "SYS: SYS; CLPACK QFASL >"
 	    "SYS: COLD; GLOBAL QFASL >"
-	    "SYS: COLD; SYSTEM QFASL >"
-	    "SYS: COLD; LISP QFASL >"))
+	    "SYS: COLD; SYSTEM QFASL >"))
 
 (DEFCONST LAMBDA-COLD-LOAD-FILE-LIST
 	  '("SYS: FONTS; CPTFON QFASL"
 	    "SYS: SYS; QRAND QFASL >"
-	    "SYS: SYS; FSPEC QFASL >"
 	    "SYS: IO; QIO QFASL >"
 ;	    "SYS: IO; RDTBL QFASL >"	;done specially
-;	    "SYS: IO; CRDTBL QFASL >"	;done specially
 	    "SYS: IO; READ QFASL >"
 	    "SYS: IO; PRINT QFASL >"
 	    "SYS: WINDOW; COLD QFASL >"
@@ -496,13 +486,12 @@
 	    "SYS: SYS; TYPES QFASL >"
 	    "SYS: SYS; LTOP QFASL >"
 	    "SYS: SYS; QFASL QFASL >"
-	    "SYS: NETWORK; CHAOS; ETHER-MINI QFASL >"
+	    "SYS: CHNCP; ETHER-MINI QFASL >"
 	    "SYS: SYS; QFCTNS QFASL >"
 	    "SYS: SYS2; STRING QFASL >"
 	    "SYS: SYS; CLPACK QFASL >"
 	    "SYS: COLD; GLOBAL QFASL >"
-	    "SYS: COLD; SYSTEM QFASL >"
-	    "SYS: COLD; LISP QFASL >"))
+	    "SYS: COLD; SYSTEM QFASL >"))
 
 ;;; These variables are looked at by the cold load generator, which takes
 ;;; the translated pathnames and dumps out prototype values into the new
@@ -513,7 +502,7 @@
 	    ETHERNET-FILE-ALIST SITE-FILE-ALIST HOST-TABLE-FILE-ALIST))
 
 (DEFCONST INNER-SYSTEM-FILE-ALIST
-	  '(("SYS: SYS2; DEFSEL QFASL >" "SI")	;By (resource named-structure-invoke)
+	  '(("SYS: SYS2; DEFSEL QFASL >" "SI")	;By (resource si:named-structure-invoke)
 	    ("SYS: SYS2; RESOUR QFASL >" "SI")	;By FILLARRAY
 	    ("SYS: SYS; QMISC QFASL >" "SI")
 	    ("SYS: SYS; SORT QFASL >" "SI")	;Needed by FLAVOR
@@ -525,12 +514,10 @@
 	    ("SYS: SYS2; PRODEF QFASL >" "SI")	;Definitions for PROCES
 	    ("SYS: SYS2; PROCES QFASL >" "SI")
 	    ("SYS: SYS2; NUMER QFASL >" "SI")	;SI:EXPT-HARD needed by PROCES
-	    ("SYS: EH; EH QFASL >" "EH")
-	    ("SYS: EH; EHF QFASL >" "EH")
-	    ("SYS: EH; EHC QFASL >" "EH")
-	    ("SYS: EH; EHBPT QFASL >" "EH")
+	    ("SYS: SYS2; EH QFASL >" "EH")
+	    ("SYS: SYS2; EHF QFASL >" "EH")
+	    ("SYS: SYS2; EHC QFASL >" "EH")
 	    ("SYS: SYS2; DISASS QFASL >" "COMPILER")	;EH calls subroutines in DISASS
-	    ("SYS: SYS2; DESCRIBE QFASL >" "SI")	;For hack value
 	    ("SYS: IO; DISK QFASL >" "SI")
 	    ("SYS: SYS2; LOGIN QFASL >" "SI")	;ditto
 	    ("SYS: IO; RDDEFS QFASL >" "SI")	;Load this before trying to read any #\'s
@@ -544,7 +531,6 @@
 
 (DEFCONST REST-OF-PATHNAMES-FILE-ALIST
 	  '(("SYS: IO; FILE; PATHST QFASL >" "FS")
-	    ("SYS: IO; FILE; LOGICAL QFASL >" "FS")
 	    ("SYS: FILE2; PATHNM QFASL >" "FS")
 	    ("SYS: FILE; LMPARS QFASL >" "FS")
 	    ("SYS: IO; FILE; OPEN QFASL >" "FS")
