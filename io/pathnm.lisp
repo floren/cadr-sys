@@ -1,17 +1,6 @@
-;;; Pathnames -*- Mode:LISP; Package:FS; Base:8; Readtable:T -*- 
-;;; ** (c) Copyright 1980, 1984 Massachusetts Institute of Technology **
-;;;
-;;; This is SYS: IO; FILE; PATHNM.  See the file SYS: IO; FILE; ACCESS for
-;;; actual file access support.  See the file SYS: NETWORK; CHAOS; QFILE
-;;; for an example of using file access.
-;;;
-;;;  Note that flavors of pathnames that are ultimately used to refer to real files on
-;;;  hosts incorporate FS:HOST-PATHNAME and do not contain any information, in themselves,
-;;;  on what access is involved.  (This used to be the case, when CHAOS-PATHNAME was around.)
-;;;  What kind of access (local file system manipulation, using a file access protocol) is
-;;;  determined by the file access system the first time a host is accessed for files.
-;;;  Special purpose pathnames, such  as the ED-BUFFER: type pathnames, do not use the
-;;;  access system for their :OPEN, etc. methods.
+;;; Pathnames -*- Mode:LISP; Package:FS; Base:8; Readtable:T -*-
+
+;;;  ** (c) Copyright 1980 Massachusetts Institute of Technology **
 
 ;;; Advertised function interfaces:
 ;;; PARSE-PATHNAME THING &OPTIONAL WITH-RESPECT-TO (DEFAULTS *DEFAULT-PATHNAME-DEFAULTS*)
@@ -55,16 +44,21 @@
 ;;;  of pathnames.  Default is NIL.
 
 ;;; Other system types (pathname syntaxes) must implement at least the following messages:
+;;; They can then be mixed with CHAOS-PATHNAME for use with the QFILE chaosnet file
+;;; job protocol.
 ;;;  :STRING-FOR-HOST - returns a string that can be sent to the file computer that
 ;;;  specifying the file in question.
 ;;;  :PARSE-NAMESTRING - takes a string and returns multiple values for various components
 ;;;  present in the string.
 ;;; See ITS-PATHNAME-MIXIN and/or TOPS20-PATHNAME-MIXIN for additional details.
 
+;;; To add another protocol, implement the messages of CHAOS-PATHNAME for generic file
+;;; manipulation.  That flavor is defined in QFILE.
+
 ;;; Interaction with host objects:
 ;;; The HOST instance variable of a pathname is a host object, as
 ;;; outlined in SYS: SYS2; HOST
-;;; *LOGICAL-PATHNAME-HOST-LIST* is the set of all logical pathname hosts.
+;;; *PATHNAME-HOST-LIST* is the set of all logical pathname hosts.
 ;;; *PATHNAME-HOST-LIST* is the set of all physical pathname hosts.
 ;;; When parsing a string into a pathname, the specified host
 ;;; (the part of the string before the colon) is sent in the :PATHNAME-HOST-NAMEP
@@ -72,8 +66,8 @@
 ;;; The host is sent a :PATHNAME-FLAVOR message to determine the flavor of the
 ;;; pathname to instantiate.  (If the reply to :PATHNAME-FLAVOR returns multiple
 ;;; values, the second is an addition for the INIT-PLIST to use when instantiating.)
-;;; Normally, when printing the host portion of a pathname, the host is sent a
-;;; :NAME-AS-FILE-COMPUTER message.
+;;; Normally, when printing the host portion of a pathname, the host is
+;;; sent a :NAME-AS-FILE-COMPUTER message.
 
 ;;;TRUENAMEs  refer exactly to a single instance of a single file on a single filecomputer.
 
@@ -143,6 +137,36 @@
 ;;;   No conversion of NAME is ever done on generic pathnames.  If you are using logical
 ;;;  hosts (to attempt to improve portability) you should avoid complex file names
 ;;;  for the same reason.
+
+;;;  If a generic pathname is a logical pathname, then its device is always :UNSPECIFIC.
+
+;;; I (RMS) do not understand the following, which was written by RG, and
+;;; I suspect it isn't even hypothetically true any more:
+;;;  Devices in generic pathnames are a real pain.  If left :UNSPECIFIC they could cause
+;;;  identical appearing generic pathnames to not be EQ, resulting in loss of PLISTs.
+;;;  If specified, particularily in LOGICAL-PATHNAMES (see below), they can cause loss
+;;;  of portability since a different device spec might be necessary to cause the right
+;;;  thing to happen at another site.  The solution is first to make the GENERIC-PATHNAME
+;;;  as specific as possible by replacing any NIL or UNSPECIFIC device with the
+;;;  result of a :DEFAULT-DEVICE message to the host.  Then do the
+;;;  BACKTRANSLATE-HOST-DIRECTORY operation.  Then we if HOST is a LOGICAL-HOST,
+;;;  we wish this band-image to be portable with respect to file computers.
+;;;  Thus we want to treat the device as part
+;;;  of the host, not part of the generic pathname.  If DEVICE is NIL, UNSPECIFIC,
+;;;  or the default device for the logical host, we need do nothing special beyond
+;;;  standardizing by setting DEVICE to UNSPECIFIC.   Otherwise, we would really like to
+;;;  add an instance variable holding DEVICE to the particular sub-instance of HOST.
+;;;  Ie, it would SHARE the instance variables and behavior of HOST while having this one
+;;;  extra one off to the side.  Unfortunately, flavors dont allow us to do this
+;;;  for quite fundamental reasons.  We cant simply flush DEVICE, since then 
+;;;  the GENERIC-PATHNAME will not be adequate to access the base file.  The following
+;;;  kludge sort of gets around the problem.  We store on the GENERIC-PATHNAMEs property
+;;;  list a LOGICAL-DEVICE-TRANSLATION-KEY property, which is the position of the desired
+;;;  device in a NON-DEFAULT-DEVICE list associated with the LOGICAL-HOST.  Since we
+;;;  do not expect very many distinct devices associated with a host, this list should
+;;;  be quite short.
+;;;   -- however -- for the time being this hair is not implemented --
+;;;  it will just be an error condition if we would need one of these funny host objects.
 
 (DEFUN PATHNAME (OBJECT)
   "Convert OBJECT to a pathname.
@@ -162,7 +186,7 @@ If it's a string or symbol, it is parsed."
   "Convert OBJECT to a pathname, then return the truename of the file it refers to."
   (IF (STREAMP OBJECT)
       (SEND OBJECT :TRUENAME)
-      (SEND (PATHNAME OBJECT) :TRUENAME)))
+    (SEND (PATHNAME OBJECT) :TRUENAME)))
 
 (DEFUN NAMESTRING (OBJECT)
   "Convert OBJECT to a pathname and then that into a namestring."
@@ -181,8 +205,7 @@ If it's a string or symbol, it is parsed."
   (STRING-APPEND (SEND (PATHNAME OBJECT) :HOST) ":"))
 
 (DEFUN ENOUGH-NAMESTRING (OBJECT &OPTIONAL (DEFAULTS *DEFAULT-PATHNAME-DEFAULTS*))
-  "Return enough namestring to produce whatever OBJECT produced
-when merged with DEFAULTS using MERGE-PATHNAMES.
+  "Return enough namestring to produce whatever OBJECT produced when merged with DEFAULTS.
 OBJECT is converted to a pathname, and that is made into a string
 from which components may be omitted if their values are the same as
 what would result from defaulting whatever is left with the specified defaults."
@@ -192,25 +215,29 @@ what would result from defaulting whatever is left with the specified defaults."
 	 (NEED-NAME (NOT (EQUAL (PATHNAME-RAW-NAME PATHNAME) (PATHNAME-RAW-NAME DP))))
 	 (NEED-TYPE (NOT (EQUAL (PATHNAME-RAW-TYPE PATHNAME) (PATHNAME-RAW-TYPE DP))))
 	 (NEED-VERSION (NEQ (PATHNAME-RAW-VERSION PATHNAME) (PATHNAME-RAW-VERSION DP)))
-	 (STRING (SEND (SEND PATHNAME :NEW-PATHNAME
-				      (IF (EQUAL (PATHNAME-RAW-DIRECTORY PATHNAME)
-						 (PATHNAME-RAW-DIRECTORY DP))
-					  :DIRECTORY) NIL
-				      (IF (EQUAL (PATHNAME-RAW-DEVICE PATHNAME)
-						 (PATHNAME-RAW-DEVICE DP))
-					  :DEVICE) NIL
-				      (IF (EQUAL (PATHNAME-VERSION PATHNAME) :NEWEST)
-					  :VERSION) :NEWEST)
-		       (IF (OR NEED-NAME NEED-TYPE NEED-VERSION)
-			   :STRING-FOR-PRINTING :STRING-FOR-DIRECTORY))))
+	 (STRING
+	   (SEND 
+	     (SEND PATHNAME :NEW-PATHNAME
+		   (IF (EQUAL (PATHNAME-RAW-DIRECTORY PATHNAME) (PATHNAME-RAW-DIRECTORY DP))
+		       :DIRECTORY)
+		   NIL
+		   (IF (EQUAL (PATHNAME-RAW-DEVICE PATHNAME) (PATHNAME-RAW-DEVICE DP))
+		       :DEVICE)
+		   NIL
+		   (IF (EQ (PATHNAME-VERSION PATHNAME) :NEWEST)
+		       :VERSION)
+		   :NEWEST)
+	     (IF (OR NEED-NAME NEED-TYPE NEED-VERSION)
+		 :STRING-FOR-PRINTING
+	       :STRING-FOR-DIRECTORY))))
     (IF (OR NEED-NAME NEED-TYPE NEED-VERSION)
 	(IF (EQ (PATHNAME-HOST PATHNAME) DEFHOST)
 	    (STRING-LEFT-TRIM #/SP (SUBSTRING-AFTER-CHAR #/: STRING))
-	    STRING)
+	  STRING)
       (IF (EQ (PATHNAME-HOST PATHNAME) DEFHOST)
 	  STRING
-	  (STRING-APPEND (SEND (PATHNAME-HOST PATHNAME) :NAME-AS-FILE-COMPUTER)
-			 ": " STRING)))))
+	(STRING-APPEND (SEND (PATHNAME-HOST PATHNAME) :NAME-AS-FILE-COMPUTER)
+		       ": " STRING)))))
 
 (DEFFLAVOR PATHNAME-ERROR () (ERROR))
 
@@ -253,21 +280,21 @@ what would result from defaulting whatever is left with the specified defaults."
 ;;; PRINC of a pathname is just like PRINC of the :STRING-FOR-PRINTING
 ;;; PRIN1 prints inside a # ...  so it can be read back.
 (DEFMETHOD (PATHNAME :PRINT-SELF) (STREAM IGNORE SLASHIFY-P)
-  (COND (SLASHIFY-P
-	 (PRINC "#" STREAM)
-	 (PRIN1 (TYPE-OF SELF) STREAM)
-	 (TYO #/SP STREAM)
-	 (PRIN1 (SEND SELF :STRING-FOR-PRINTING) STREAM)
-	 (TYO #/ STREAM))
-	(T (SEND STREAM :STRING-OUT (SEND SELF :STRING-FOR-PRINTING)))))
+  (IF SLASHIFY-P
+      (LET ((PACKAGE SI:PKG-USER-PACKAGE))
+	(PRINC "#" STREAM)
+	(PRIN1 (TYPEP SELF) STREAM)
+	(TYO #/SP STREAM)
+	(PRIN1 (SEND SELF :STRING-FOR-PRINTING) STREAM)
+	(TYO #/ STREAM))
+      (SEND STREAM :STRING-OUT (SEND SELF :STRING-FOR-PRINTING))))
 
 ;And this is what is called to read back a PRIN1'd pathname.
 (DEFMETHOD (PATHNAME :READ-INSTANCE) (IGNORE STREAM)
-  (PARSE-PATHNAME (CLI:READ STREAM T NIL T)))
+  (PARSE-PATHNAME (READ STREAM)))
 
-; si:property-list-mixin already gives one this...
-;(DEFMETHOD (PATHNAME :PLIST) ()
-;  SI:PROPERTY-LIST)
+(DEFMETHOD (PATHNAME :PLIST) ()
+  SI:PROPERTY-LIST)
 
 ;For bootstrapping.
 (DEFMETHOD (PATHNAME :PARSE-TYPE-SPEC) PATHNAME-PASS-THROUGH-SPEC)
@@ -281,13 +308,15 @@ where NIL as a system type applies to any system type not specifically mentioned
 ;Here for bootstrapping.
 (DEFMETHOD (PATHNAME :CANONICAL-TYPE) ()
   (LET ((-TYPE- (SEND SELF :TYPE))
-	(SYSTEM-TYPE (SEND HOST :SYSTEM-TYPE)))
+	(SYSTEM-TYPE (SEND HOST :SYSTEM-TYPE))
+	(ALPHABETIC-CASE-AFFECTS-STRING-COMPARISON T))
     (LOOP FOR (CANONICAL-TYPE DEFN) ON CANONICAL-TYPES BY 'CDDR
 	  AS PER-SYSTEM = (OR (ASSQ SYSTEM-TYPE DEFN) (ASSQ NIL DEFN))
-       DO (IF (SYS:MEMBER-EQUAL -TYPE- (CDR PER-SYSTEM))
+	  DO
+	  (IF (SYS:MEMBER-EQUAL -TYPE- (CDR PER-SYSTEM))
 	      (RETURN CANONICAL-TYPE
 		      (UNLESS (EQUAL -TYPE- (CADR PER-SYSTEM)) -TYPE-)))
-       FINALLY (RETURN -TYPE-))))
+	  FINALLY (RETURN -TYPE-))))
 
 (DEFMETHOD (PATHNAME :RAW-DEVICE) () DEVICE)
 (DEFMETHOD (PATHNAME :RAW-DIRECTORY) () DIRECTORY)
@@ -340,30 +369,32 @@ where NIL as a system type applies to any system type not specifically mentioned
 	       *PATHNAME-HASH-TABLE*))))
 
 (DEFUN DESCRIBE-PATHNAME-1 (PATHNAME &AUX PLIST)
-  (WHEN (SETQ PLIST (PATHNAME-PROPERTY-LIST PATHNAME))
-    (LET ((LOADED-IDS (GETF PLIST :FILE-ID-PACKAGE-ALIST)))
-      (DO ((LOADED-IDS LOADED-IDS (CDR LOADED-IDS))
-	   (FIRST-P T NIL)
-	   (INFO) (TRUENAME) (CREATION-DATE))
-	  ((NULL LOADED-IDS))
-	(SETQ INFO (CADAR LOADED-IDS)
-	      TRUENAME (CAR INFO)
-	      CREATION-DATE (CDR INFO))
-	(FORMAT T "~&The version ~:[~*~;of ~A ~]in package ~A ~:[is ~A, and ~;~*~]~
+  (AND (SETQ PLIST (PATHNAME-PROPERTY-LIST PATHNAME))
+       (LET ((LOADED-IDS (GET (LOCF PLIST) :FILE-ID-PACKAGE-ALIST)))
+	 (AND LOADED-IDS
+	      (DO ((LOADED-IDS LOADED-IDS (CDR LOADED-IDS))
+		   (FIRST-P T NIL)
+		   (INFO) (TRUENAME) (CREATION-DATE))
+		  ((NULL LOADED-IDS))
+		(SETQ INFO (CADAR LOADED-IDS)
+		      TRUENAME (CAR INFO)
+		      CREATION-DATE (CDR INFO))
+		(FORMAT T "~&The version ~:[~*~;of ~A ~]in package ~A ~:[is ~A, and ~;~*~]~
 			     was created ~\TIME\~%"
-		FIRST-P PATHNAME (CAAR LOADED-IDS) (EQ PATHNAME TRUENAME) TRUENAME
-		CREATION-DATE))
-      (DO ((PLIST PLIST (CDDR PLIST))
-	   (FLAG NIL)
-	   (IND) (PROP))
-	  ((NULL PLIST))
-	(SETQ IND (CAR PLIST)
-	      PROP (CADR PLIST))
-	(WHEN (AND (NEQ IND :FILE-ID-PACKAGE-ALIST)
-		   (NULL FLAG))
-	  (FORMAT T "~&~A has the following ~:[additional ~]properties:~%"
-		  PATHNAME (NULL LOADED-IDS)) (SETQ FLAG T)))
-      (FORMAT T "~&~7@T~S:~27T~S~%" IND PROP))))
+			FIRST-P PATHNAME (CAAR LOADED-IDS) (EQ PATHNAME TRUENAME) TRUENAME
+			CREATION-DATE)))
+	 (DO ((PLIST PLIST (CDDR PLIST))
+	      (FLAG NIL)
+	      (IND) (PROP))
+	     ((NULL PLIST))
+	   (SETQ IND (CAR PLIST)
+		 PROP (CADR PLIST))
+	   (COND ((NEQ IND :FILE-ID-PACKAGE-ALIST)
+		  (COND ((NULL FLAG)
+			 (FORMAT T "~&~A has the following ~:[other ~]properties:~%"
+				 PATHNAME (NULL LOADED-IDS))
+			 (SETQ FLAG T)))
+		  (FORMAT T "~&~7@T~S:~27T~S~%" IND PROP)))))))
 
 (DEFMETHOD (PATHNAME :INIT) (IGNORE)
   (OR (VARIABLE-BOUNDP HOST)
@@ -450,12 +481,13 @@ where NIL as a system type applies to any system type not specifically mentioned
 ;of a file whose name includes no type.
 (DEFMETHOD (PATHNAME :UNSPECIFIC-TYPE-IS-DEFAULT) () NIL)
 
-;;; This is the flavor that interfaces to the access stuff
+;;; This is the flavor that interfaces to the acess stuff
 (DEFFLAVOR HOST-PATHNAME
 	((STRING-FOR-EDITOR NIL)
 	 (STRING-FOR-DIRED NIL)
 	 (STRING-FOR-HOST NIL)
-	 (STRING-FOR-DIRECTORY NIL))
+	 (STRING-FOR-DIRECTORY NIL)
+	 (ACCESS NIL))
 	(PATHNAME)
   (:REQUIRED-METHODS :STRING-FOR-HOST))
 
@@ -550,7 +582,8 @@ where NIL as a system type applies to any system type not specifically mentioned
   (SEND SELF :NEW-PATHNAME
 	     :RAW-DIRECTORY (IF (EQ DIRECTORY :ROOT)
 				 NAME
-			       (APPEND (IF (CONSP DIRECTORY) DIRECTORY (NCONS DIRECTORY))
+			       (APPEND (IF (CONSP DIRECTORY) DIRECTORY
+					 (NCONS DIRECTORY))
 				       (NCONS NAME)))
 	     :NAME :UNSPECIFIC
 	     :TYPE :UNSPECIFIC
@@ -563,11 +596,12 @@ where NIL as a system type applies to any system type not specifically mentioned
 	 DEV1)
     (AND (MEMQ DEV (SEND SELF :SUPPRESSED-DEVICE-NAMES))
 	 (SETQ DEV1 (SEND HOST :PRIMARY-DEVICE)))
-    (LET ((STAGE1 (SEND SELF :NEW-PATHNAME :DEVICE (OR DEV1 DEV)
-					   :DIRECTORY (SEND SELF :DIRECTORY)
-					   :NAME (SEND SELF :NAME)
-					   :TYPE NEW-TYPE
-					   :VERSION :UNSPECIFIC)))
+    (LET ((STAGE1
+	    (SEND SELF :NEW-PATHNAME :DEVICE (OR DEV1 DEV)
+		  		     :DIRECTORY (SEND SELF :DIRECTORY)
+				     :NAME (SEND SELF :NAME)
+				     :TYPE NEW-TYPE
+				     :VERSION :UNSPECIFIC)))
       ;; Now try backtranslating into a logical pathname.
       ;; If there is no suitable one, we return STAGE1.
       (DOLIST (H *LOGICAL-PATHNAME-HOST-LIST*
@@ -591,7 +625,7 @@ We use the actual source file name as recorded, if possible."
     (MULTIPLE-VALUE-BIND (CTYPE OTYPE)
 	(COND (QFASL-SOURCE
 	       (IF (CONSP QFASL-SOURCE)		;dont bomb if list frobs somehow 
-		   ;; left from cold load.
+		   ;left from cold load.
 		   (SETQ QFASL-SOURCE
 			 (PATHNAME-FROM-COLD-LOAD-PATHLIST QFASL-SOURCE)))
 	       (SEND QFASL-SOURCE :CANONICAL-TYPE))
@@ -601,27 +635,27 @@ We use the actual source file name as recorded, if possible."
 	      (T (SEND (SEND PATHNAME :HOST) :GENERIC-SOURCE-TYPE
 		       (SEND PATHNAME :CANONICAL-TYPE))))
       (SEND PATHNAME :NEW-PATHNAME :VERSION :NEWEST
-				   ;; The replacement of :UNSPECIFIC by :LISP
-				   ;; is for files that were last compiled on ITS or FC.
-				   :CANONICAL-TYPE (IF (EQ CTYPE :UNSPECIFIC) :LISP CTYPE)
-				   :ORIGINAL-TYPE OTYPE))))
+	    ;; The replacement of :UNSPECIFIC by :LISP
+	    ;; is for files that were last compiled on ITS or FC.
+	    :CANONICAL-TYPE (IF (EQ CTYPE :UNSPECIFIC) :LISP CTYPE)
+	    :ORIGINAL-TYPE OTYPE))))
 
 (DEFMETHOD (PATHNAME :TRANSLATED-PATHNAME) () SELF)
 
 (DEFMETHOD (PATHNAME :BACK-TRANSLATED-PATHNAME) (PATHNAME) PATHNAME)
 
+;;; This is used to parse a string which may not have the host in it
 (DEFMETHOD (PATHNAME :PARSE-TRUENAME) (STRING)
-  (PARSE-PATHNAME STRING HOST))
+  (PARSE-PATHNAME STRING NIL HOST))
 
 (DEFUN DECODE-CANONICAL-TYPE (CANONICAL-TYPE SYSTEM-TYPE)
-  (LET ((PROP (GETF CANONICAL-TYPES CANONICAL-TYPE)))
+  (LET ((PROP (GET (LOCF CANONICAL-TYPES) CANONICAL-TYPE)))
     (IF (NULL PROP)
 	CANONICAL-TYPE
       (LET ((PER-SYSTEM (OR (ASSQ SYSTEM-TYPE PROP) (ASSQ NIL PROP))))
 	(VALUES (CADR PER-SYSTEM) (CDR PER-SYSTEM))))))
 
-(DEFMACRO DEFINE-CANONICAL-TYPE (CANONICAL-TYPE DEFAULT-SURFACE-TYPE
-				 &BODY SYSTEM-SURFACE-TYPES)
+(DEFMACRO DEFINE-CANONICAL-TYPE (CANONICAL-TYPE DEFAULT-SURFACE-TYPE &BODY SYSTEM-SURFACE-TYPES)
   "Defines a keyword CANONICAL-TYPE as a canonical type.
 DEFAULT-SURFACE-TYPE is the string that it corresponds to.
 SYSTEM-SURFACE-TYPES overrides that default for specific kinds of file systems.
@@ -638,8 +672,8 @@ The first surface string in each list is the preferred one for that system."
 	  (PUSH ELT ALIST)
 	(DOLIST (SYSTEM (CAR ELT))
 	  (PUSH (CONS SYSTEM (CDR ELT)) ALIST))))
-    (IF (GETF CANONICAL-TYPES CTYPE)
-	(SETF (GETF CANONICAL-TYPES CTYPE) ALIST)
+    (IF (GET (LOCF CANONICAL-TYPES) CTYPE)
+	(PUTPROP (LOCF CANONICAL-TYPES) ALIST CTYPE)
       (SETF (CDR (OR (LAST CANONICAL-TYPES)
 		     (LOCF CANONICAL-TYPES)))
 	    (LIST* CTYPE ALIST NIL)))))
@@ -722,17 +756,6 @@ The first surface string in each list is the preferred one for that system."
 (DEFINE-CANONICAL-TYPE :CLU "CLU")
 (DEFINE-CANONICAL-TYPE :C "C")
 
-;; Yow!
-(define-canonical-type :lossage "LOSSAGE"
-  (:vms "LOS")
-  (:unix "LOSS"))
-
-(define-canonical-type :cadr-microcode "MCR")
-(define-canonical-type :cadr-microcode-symbols "SYM")
-(define-canonical-type :cadr-microcode-error-table "TBL")
-(define-canonical-type :cadr-microcode-locations "LOC")
-
-
 (DEFMETHOD (PATHNAME :SYSTEM-TYPE) ()
   (SEND HOST :SYSTEM-TYPE))
 
@@ -748,7 +771,9 @@ Any other error condition is not handled."
     (:NO-ERROR (PROG1 (SEND STREAM :TRUENAME) (CLOSE STREAM)))))
 
 (DEFMETHOD (PATHNAME :TYPES-FOR-CANONICAL-TYPE) (CANONICAL-TYPE)
-  (NTH-VALUE 1 (DECODE-CANONICAL-TYPE CANONICAL-TYPE (SEND HOST :SYSTEM-TYPE))))
+  (MULTIPLE-VALUE-BIND (NIL TEM)
+      (DECODE-CANONICAL-TYPE CANONICAL-TYPE (SEND HOST :SYSTEM-TYPE))
+    TEM))
 
 (DEFMETHOD (PATHNAME :OPEN-CANONICAL-DEFAULT-TYPE) (CANONICAL-TYPE &REST ARGS)
   (IF TYPE
@@ -768,11 +793,11 @@ Any other error condition is not handled."
 				 :OPEN)))
 	   (IF ERROR (SIGNAL-CONDITION CONDITION) CONDITION)))
       (CONDITION-CASE (RESULT)
-	  (LEXPR-SEND (SEND SELF :NEW-PATHNAME :TYPE (CAR TYPES))
-		      :OPEN (SEND (OR PRETRANSLATED-PATHNAME SELF)
-				  :NEW-PATHNAME :TYPE (IF (EQ TYPES SURFACE-TYPES)
-							  CANONICAL-TYPE
-							(CAR TYPES)))
+	  (LEXPR-SEND (SEND SELF :NEW-PATHNAME :TYPE (CAR TYPES)) :OPEN
+		      (SEND (OR PRETRANSLATED-PATHNAME SELF) :NEW-PATHNAME
+			    :TYPE (IF (EQ TYPES SURFACE-TYPES)
+				       CANONICAL-TYPE
+				     (CAR TYPES)))
 		      :ERROR T
 		      ARGS)
 	(FILE-NOT-FOUND NIL)
@@ -826,7 +851,7 @@ Any other error condition is not handled."
 
 (DEFMETHOD (PATHNAME :PATCH-FILE-PATHNAME) (NAM SAME-DIRECTORY-P PATOM TYP &REST ARGS)
   (LET ((PATOM (STRING-UPCASE (IF SAME-DIRECTORY-P PATOM NAM))))
-    (CASE TYP
+    (SELECTQ TYP
       (:SYSTEM-DIRECTORY
        (SEND SELF :NEW-PATHNAME :NAME PATOM
 		  :TYPE (IF SAME-DIRECTORY-P "DIRECTORY" :PATCH-DIRECTORY)
@@ -909,7 +934,8 @@ If DEFAULTS is T (the default), the host is defaulted from
 	      (NEQ HOST NEW-PATHNAME-HOST))
 	 (LEXPR-SEND (SAMPLE-PATHNAME NEW-PATHNAME-HOST)
 		     :NEW-PATHNAME
-		     :STARTING-PATHNAME (OR (GETF OPTIONS :STARTING-PATHNAME) SELF)
+		     :STARTING-PATHNAME (OR (GET (LOCF OPTIONS) :STARTING-PATHNAME)
+					     SELF)
 		     OPTIONS)
 	 . ,BODY)))
 
@@ -941,7 +967,7 @@ If DEFAULTS is T (the default), the host is defaulted from
 			DEVICE DIRECTORY NAME TYPE CANONICAL-TYPE)
   (LOOP FOR (KEYWORD VALUE) ON OPTIONS BY 'CDDR
 	DO
-	(CASE KEYWORD
+	(SELECTQ KEYWORD
 	  (:NAME (UNLESS NAME-P (SETQ NAME VALUE NAME-P T)))
 	  (:RAW-NAME (UNLESS NAME-P (SETQ NAME VALUE NAME-P :RAW)))
 	  (:DIRECTORY (UNLESS DIRECTORY-P (SETQ DIRECTORY VALUE DIRECTORY-P T)))
@@ -1121,7 +1147,9 @@ If DEFAULTS is T (the default), the host is defaulted from
 All components are raw."
   (DECLARE (ARGLIST HOST DEVICE DIRECTORY NAME TYPE VERSION)
 	   (VALUES PATHNAME FOUND-IN-HASH-TABLE-P))
-  (SETQ PATHNAME (GETHASH REST *PATHNAME-HASH-TABLE*))
+  (LET ((ALPHABETIC-CASE-AFFECTS-STRING-COMPARISON T))
+    (SETQ PATHNAME
+	  (GETHASH REST *PATHNAME-HASH-TABLE*)))
   (IF (GET (TYPEP PATHNAME) 'PATHNAME-FLAVOR-CHANGES)
       (MULTIPLE-VALUE (FLAVOR-NAME OPTIONS)
 	(SEND (CAR REST) :PATHNAME-FLAVOR)))
@@ -1130,9 +1158,9 @@ All components are raw."
     (LET ((OPATHNAME PATHNAME))
       (SETQ REST (COPY-INTO-PATHNAME-AREA REST))
       (OR FLAVOR-NAME
-	  (MULTIPLE-VALUE-SETQ (FLAVOR-NAME OPTIONS)
+	  (MULTIPLE-VALUE (FLAVOR-NAME OPTIONS)
 	    (SEND (CAR REST) :PATHNAME-FLAVOR)))
-      (SETQ PATHNAME (APPLY #'MAKE-PATHNAME-INSTANCE
+      (SETQ PATHNAME (APPLY 'MAKE-PATHNAME-INSTANCE
 			    FLAVOR-NAME
 			    :HOST (FIRST REST)
 			    :DEVICE (SECOND REST)
@@ -1141,7 +1169,7 @@ All components are raw."
 			    :TYPE (FIFTH REST)
 			    :VERSION (SIXTH REST)
 			    OPTIONS))
-      (IF OPATHNAME (SEND PATHNAME :SET-PROPERTY-PLIST (SEND OPATHNAME :PROPERTY-LIST)))
+      (IF OPATHNAME (SEND PATHNAME :SETPLIST (SEND OPATHNAME :PLIST)))
       (PUTHASH REST PATHNAME *PATHNAME-HASH-TABLE*)
       (VALUES PATHNAME NIL))))
 
@@ -1313,6 +1341,7 @@ In this normal case, we must swap in the first arg but not the second."
 (DEFMETHOD (PATHNAME :NEW-DEFAULT-PATHNAME) (&REST OPTIONS)
   (LEXPR-SEND SELF :NEW-PATHNAME OPTIONS))
 
+;(COMMENT
 ;;; Generate a default filename.  Most just merge in the name, etc.
 ;;; Used only from the preceding function.
 ;(DEFMETHOD (PATHNAME :NEW-DEFAULT-PATHNAME) (&REST OPTIONS)
@@ -1381,24 +1410,18 @@ In this normal case, we must swap in the first arg but not the second."
 ;(DEFMETHOD (PATHNAME :VALID-VERSION) (VRS)
 ;  (IF (SEND SELF :VALID-VERSION-P VRS) VRS :NEWEST))
 
+;) ;end comment
 
 (DEFSIGNAL PATHNAME-PARSE-ERROR (PATHNAME-ERROR PATHNAME-PARSE-ERROR)
-	   (PARSE-END-INDEX REPORT-STRING REPORT-ARGS)
+	   (PARSE-END-INDEX)
   "Any error that makes it impossible to parse a string into a pathname.")
 
 (DEFVAR PARSE-PATHNAME-FLAG NIL)
 
-(DEFPROP PATHNAME-ERROR T :ERROR-REPORTER)
-(DEFUN PATHNAME-ERROR (INDEX LOSING-STRING REPORT-STRING &REST ARGS)
+(DEFUN PATHNAME-ERROR (INDEX FORMAT-STRING &REST ARGS)
   (IF PARSE-PATHNAME-FLAG
-      (THROW 'PARSE-PATHNAME INDEX)
-    (FERROR 'PATHNAME-PARSE-ERROR
-	    "~?~%~VT~%   /"~A/"~%" 
-	    REPORT-STRING ARGS
-	    (- INDEX
-	       1
-	       (OR (STRING-REVERSE-SEARCH-CHAR #/NEWLINE LOSING-STRING INDEX) -4))
-	    LOSING-STRING)))
+      (*THROW 'PARSE-PATHNAME INDEX)
+    (APPLY 'FERROR 'PATHNAME-PARSE-ERROR FORMAT-STRING ARGS)))
 
 (DEFUN PARSE-NAMESTRING (THING &OPTIONAL WITH-RESPECT-TO
 			 		 (DEFAULTS *DEFAULT-PATHNAME-DEFAULTS*)
@@ -1413,7 +1436,8 @@ The same as FS:PARSE-PATHNAME except that that function's args are all positiona
 THING can be a pathname already (it is just passed back),
  a string or symbol, or a Maclisp-style namelist.
 WITH-RESPECT-TO can be NIL or a host or host-name;
- if it is not NIL, the pathname is parsed for that host.
+ if it is not NIL, the pathname is parsed for that host
+ and it is an error if the pathname specifies a different host.
 If WITH-RESPECT-TO is NIL, then DEFAULTS is used to get the host
  if none is specified.  DEFAULTS may be a host object in this case.
 START and END are indices specifying a substring of THING to be parsed.
@@ -1432,7 +1456,7 @@ The second value is the index in THING at which parsing stopped.
       (CATCH-CONTINUATION 'PARSE-PATHNAME
 	  #'(LAMBDA (INDEX-OR-PATHNAME) 
 	      (IF (NUMBERP INDEX-OR-PATHNAME)
-		  (VALUES NIL (MIN (OR END (STRING-LENGTH THING)) INDEX-OR-PATHNAME))
+		  (VALUES NIL (MIN (OR END (LENGTH THING)) INDEX-OR-PATHNAME))
 		(VALUES INDEX-OR-PATHNAME START)))
 	  NIL
 	(COND ((TYPEP THING 'PATHNAME)
@@ -1463,30 +1487,28 @@ The second value is the index in THING at which parsing stopped.
 					:TYPE TYPE :VERSION VERSION)
 			 START)))
 	      (T
-	       (SETQ THING (STRING THING) END (OR END (LENGTH THING)))
-	       (LET ((HOST-SPECIFIED NIL))
-		 (OR WITH-RESPECT-TO
-		     (MULTIPLE-VALUE-SETQ (HOST-SPECIFIED START END)
-		       (PARSE-PATHNAME-FIND-COLON THING START END)))
-;		 ;; If the thing before the colon is really a host,
-;		 ;; and WITH-RESPECT-TO was specified, then they had better match
-;		 (AND WITH-RESPECT-TO
-;		      HOST-SPECIFIED
-;		      (NEQ WITH-RESPECT-TO HOST-SPECIFIED)
-;		      ;; Otherwise treat it as a device name
-;		      (SETQ HOST-SPECIFIED NIL START 0 END NIL))
-		 (LET ((HOST (COND (WITH-RESPECT-TO)
-				   ((AND HOST-SPECIFIED (GET-PATHNAME-HOST HOST-SPECIFIED T)))
-				   ((TYPEP DEFAULTS 'SI:BASIC-HOST) DEFAULTS)
-				   (T (DEFAULT-HOST DEFAULTS)))))
+	       (SETQ THING (STRING THING))
+	       (MULTIPLE-VALUE-BIND (HOST-SPECIFIED START END)
+		   (PARSE-PATHNAME-FIND-COLON THING START END)
+		 ;; If the thing before the colon is really a host,
+		 ;; and WITH-RESPECT-TO was specified, then they had better match
+		 (AND WITH-RESPECT-TO
+		      HOST-SPECIFIED
+		      (NEQ WITH-RESPECT-TO HOST-SPECIFIED)
+		      ;; Otherwise treat it as a device name
+		      (SETQ HOST-SPECIFIED NIL START 0 END NIL))
+		 (LET* ((HOST
+			  (COND ((AND HOST-SPECIFIED (GET-PATHNAME-HOST HOST-SPECIFIED T)))
+				(WITH-RESPECT-TO)
+				((TYPEP DEFAULTS 'SI:BASIC-HOST) DEFAULTS)
+				(T (DEFAULT-HOST DEFAULTS)))))
 		   (MULTIPLE-VALUE-BIND (DEVICE DIRECTORY NAME TYPE VERSION PARSE-END)
 		       (SEND (SAMPLE-PATHNAME HOST) :PARSE-NAMESTRING
-						    (NOT (NULL HOST-SPECIFIED))
-						    THING START END)
+			     (NOT (NULL HOST-SPECIFIED)) THING START END)
 		     (VALUES
 		       ;; If device is :NO-INTERN then immeditely return 2nd value, DIRECTORY.
 		       ;; this provides a way to bypass as much of this lossage as possible
-		       ;; in cases where it doesn't make sense.
+		       ;; in cases where it doesnt make sense.
 		       (COND ((EQ DEVICE :NO-INTERN)
 			      DIRECTORY)
 			     (T
@@ -1496,7 +1518,7 @@ The second value is the index in THING at which parsing stopped.
 		       PARSE-END))))))))))
 
 (DEFUN PARSE-PATHNAME-THROW-NEW-PATHNAME (IGNORE PATHNAME)
-  (THROW 'PARSE-PATHNAME PATHNAME))
+  (*THROW 'PARSE-PATHNAME PATHNAME))
   
 (DEFUN CANONICALIZE-KLUDGEY-MACLISP-PATHNAME-STRING-LIST (X)
   (COND ((OR (NULL X) (NUMBERP X)) X)
@@ -1548,7 +1570,7 @@ The second value is the index in THING at which parsing stopped.
 
 (DEFSIGNAL UNKNOWN-PATHNAME-HOST (PATHNAME-ERROR UNKNOWN-PATHNAME-HOST)
 	   (NAME)
-  "Used when FS:GET-PATHNAME-HOST does not recognize the host name.")
+  "Used when GET-PATHNAME-HOST does not recognize the host name.")
 
 (defvar *pathname-host-list* nil
   "List of physical hosts that can serve in pathnames.")
@@ -1660,84 +1682,82 @@ even if the specified pathname does contain a name component.")
 if the specified pathname contains a name but no type.")
 
 ;;; Setting a working directory specifies what device and directory "DSK" should mean.
+(DEFVAR HOST-WORKING-DIRECTORY-ALIST NIL
+  "Alist of elements (host-object working-directory-pathname).")
 (DEFUN SET-HOST-WORKING-DIRECTORY (HOST PATHNAME)
   "Set the working device//directory for HOST to that in PATHNAME.
 When a pathname containing device component DSK is defaulted,
 its device is replaced by the working device, and its directory
 defaulted (if not explicitly specified) to the working directory."
   (LET* ((HOST1 (GET-PATHNAME-HOST HOST))
-	 (DIR (PARSE-PATHNAME PATHNAME HOST1)))
-    (SEND HOST :SET :GET 'WORKING-DIRECTORY (SEND DIR :PATHNAME-AS-DIRECTORY))))
+	 (DIR (PARSE-PATHNAME PATHNAME HOST1))
+	 (ELT (OR (ASSQ HOST1 HOST-WORKING-DIRECTORY-ALIST)
+		  (CAR (PUSH (LIST HOST1 NIL) HOST-WORKING-DIRECTORY-ALIST)))))
+    (SETF (SECOND ELT) DIR)))
 
 (defun merge-pathnames (pathname &optional defaults (default-version :newest))
   "Default components that are NIL in PATHNAME, and return the defaulted pathname.
 DEFAULTS is a pathname or a defaults-list to get defaults from.
 If non-NIL, DEFAULT-VERSION specifies the version of the resulting pathname,
 else the version is defaulted from the corresponging component DEFAULTS in the usual manner."
-  (merge-pathname-components pathname defaults :default-version default-version
-					       :always-merge-version t))
+  (merge-pathnames-1 pathname defaults :default-version default-version
+				       :always-merge-version t))
 
-(defun merge-pathname-components
-       (pathname &optional defaults
-		 &key (default-version nil default-version-specified-p)
-		      (default-type nil default-type-specified-p)
-		      (default-name nil default-name-specified-p)
-		      always-merge-name always-merge-type always-merge-version
-		 &aux default new-device new-directory new-name new-type new-version
-		      new-otype merge-name-p merge-type-p merge-version-p)
+(defun merge-pathnames-1 (pathname
+			  &optional defaults
+			  &key default-version
+			       default-type
+			       always-merge-type
+			       always-merge-version
+			  &aux default new-device new-directory new-name
+			       new-type new-version new-otype)
   "Default components that are NIL in PATHNAME, and return the defaulted pathname.
 DEFAULTS is a pathname or a defaults-list to get defaults from.
-If supplied, DEFAULT-NAME, DEFAULT-TYPE and DEFAULT-VERSION are used as the defaults for
-their components if those components are not supplied by PATHNAME.
+If non-NIL DEFAULT-TYPE and DEFAULT-VERSION respecively are used as the defaults for
+the type and version components if those components are not supplied by PATHNAME.
 Otherwise, these components are defaulted from DEFAULTS in the usual manner.
-ALWAYS-MERGE-xxx mean that the the xxx components should *always* be merged in
-/(from either DEFAULT-xxx or from DEFAULTS) even if the relevant component is already
-specified by PATHNAME."
+ALWAYS-MERGE-TYPE and ALWAYS-MERGE-VERSION respectively mean that the version
+and type components should always be merged in (from either DEFAULT-TYPE and DEFAULT-VERSION
+or from DEFAULTS) even if the relevant component is already specified by PATHNAME."
   (setq pathname (parse-pathname pathname nil defaults))
   (if (null defaults) (setq defaults *default-pathname-defaults*))
-  (setq default (if (atom defaults)
-		    (parse-pathname defaults nil pathname)
-		    (default-pathname defaults (pathname-host pathname) nil nil t)))
-  ;; Merge the and device and directory in vanilla fashion
-  (when (null (pathname-device pathname))
-    (setq new-device (pathname-device default)))
-  (let ((pdir (pathname-directory pathname))
-	(ddir (pathname-directory default)))
-  (cond ((null pdir)
-	   (setq new-directory ddir))
-	  ((eq (car-safe pdir) ':relative)
-	   (setq new-directory
-		 (merge-relative-directory pdir ddir)))))
-  ;; merge name type and version hirsutely
-  (when (or (null (pathname-name pathname))
-	    always-merge-name)
-    (setq new-version (if default-name-specified-p
-			  default-name
-			  (pathname-name default))
-	  merge-name-p t))
-  (when (or (null (pathname-type pathname))
-	    always-merge-type)
-    (setq merge-type-p t)
-    (if default-type-specified-p
-	(setq new-type default-type)
-	(multiple-value-setq (new-type new-otype) (send default :canonical-type))))
-  (when (or (null (pathname-version pathname))
-	    always-merge-version)
-    (setq new-version (if default-version-specified-p
-			  default-version
-			  (pathname-version default))
-	  merge-version-p t))
-  (send pathname :new-pathname
-		 (if new-device :device) new-device
-		 (if new-directory :directory) new-directory
-		 (if merge-name-p :name) new-name
-		 (if merge-type-p :type) new-type
-		 (if new-otype :original-type) new-otype
-		 (if merge-version-p :version) new-version))
+  (if (not (typep pathname 'pathname))
+      pathname					;Some funny thing.  No defaulting possible.
+    (setq default (if (atom defaults)
+		      (parse-pathname defaults nil pathname)
+		      (default-pathname defaults (pathname-host pathname) nil nil t)))
+    ;; Merge the device, directory, and name
+    (when (null (pathname-device pathname))
+      (setq new-device (pathname-device default)))
+    (let ((pdir (pathname-directory pathname))
+	  (ddir (pathname-directory default)))
+      (cond ((null pdir)
+	     (setq new-directory ddir))
+	    ((eq (car-safe pdir) :relative)
+	     (setq new-directory
+		   (merge-relative-directory pdir ddir)))))
+    (when (null (pathname-name pathname))
+      (setq new-name (pathname-name default)))
+    ;; hairyness for merging type and version
+    (when (or (null (pathname-type pathname))
+	      always-merge-type)
+      (setq new-type default-type)
+      (or new-type (setf (values new-type new-otype)
+			 (send default :canonical-type))))
+    (when (or (null (pathname-version pathname))
+	      always-merge-version)
+      (setq new-version (or default-version (pathname-version default))))
+    (send pathname :new-pathname
+		   (if new-device :device) new-device
+		   (if new-directory :directory) new-directory
+		   (if new-name :name) new-name
+		   (if new-type :type) new-type
+		   (if new-otype :original-type) new-otype
+		   (if new-version :version) new-version)))
 
 ;;; What a crock.
-;;; Fill in slots in PATHNAME from program defaults.  This is what most programs interface to.
-;;; They should often be interfacing to merge-pathname-components instead!!
+;;; Fill in slots in PATHNAME from program defaults.  This is what most
+;;; programs interface to.
 (DEFUN MERGE-PATHNAME-DEFAULTS (PATHNAME
 				&OPTIONAL DEFAULTS
 					  (DEFAULT-TYPE *NAME-SPECIFIED-DEFAULT-TYPE*)
@@ -1775,7 +1795,8 @@ to be merged like the name, directory, etc. but has no effect on the version."
 		   )
 	 ;; Device name DSK means the working directory and associated device if any.
 	 (COND ((EQUAL (PATHNAME-DEVICE PATHNAME) "DSK")
-		(LET ((WDIR (OR (GET HOST 'WORKING-DIRECTORY) (USER-HOMEDIR HOST))))
+		(LET ((WDIR (OR (CADR (ASSQ HOST HOST-WORKING-DIRECTORY-ALIST))
+				(USER-HOMEDIR HOST))))
 		  (SETQ NEW-DEVICE
 			(OR (SEND WDIR :DEVICE)
 			    (SEND HOST :PRIMARY-DEVICE)))
@@ -1917,12 +1938,14 @@ pathname sets the defaults."
 	      (= (LENGTH PATTERN) (LENGTH SAMPLE))
 	      (LOOP FOR P IN PATTERN
 		    FOR S IN SAMPLE
-		 DO (LET ((TEM (PATHNAME-COMPONENT-MATCH
-				 P S WILD-ANY WILD-ONE RETURN-SPECS-FLAG)))
+		    DO
+		    (LET ((TEM
+			    (PATHNAME-COMPONENT-MATCH P S WILD-ANY WILD-ONE
+						      RETURN-SPECS-FLAG)))
 		      (IF (NULL TEM) (RETURN NIL))
 		      (UNLESS (EQ TEM T)
 			(SETQ SPECS (APPEND SPECS TEM))))
-		 FINALLY (RETURN (OR SPECS T)))))
+		    FINALLY (RETURN (OR SPECS T)))))
 	((NOT (STRINGP SAMPLE)) NIL)
 	(T
 	 (DO ((P-PTR 0)
@@ -2099,13 +2122,13 @@ pathname sets the defaults."
 
 (DEFMETHOD (PATHNAME :MULTIPLE-FILE-PLISTS) (FILES OPTIONS &AUX (CHARACTERS T))
   (LOOP FOR (IND OPT) ON OPTIONS BY 'CDDR
-	DO (CASE IND
+	DO (SELECTQ IND
 	     (:CHARACTERS (SETQ CHARACTERS OPT))
 	     (OTHERWISE (FERROR NIL "~S is not a known MULTIPLE-FILE-PLISTS option" IND))))
   (LOOP FOR FILE IN FILES
 	AS STREAM = (OPEN FILE :DIRECTION NIL :ERROR NIL :CHARACTERS CHARACTERS)
 	COLLECT (CONS FILE (AND (NOT (ERRORP STREAM))
-				(LET* ((LIST (SEND STREAM :PROPERTY-LIST))
+				(LET* ((LIST (SEND STREAM :PLIST))
 				       (PLIST (LOCF LIST)))
 				  (OR (GET PLIST :TRUENAME)
 				      (PUTPROP PLIST (SEND STREAM :TRUENAME) :TRUENAME))
@@ -2141,6 +2164,7 @@ pathname sets the defaults."
 (DEFFLAVOR HIERARCHICAL-DIRECTORY-MIXIN () ()
   (:REQUIRED-FLAVORS PATHNAME))
 
+;(comment
 ;(DEFMETHOD (HIERARCHICAL-DIRECTORY-MIXIN :VALID-DIRECTORY) (DIRNAME)
 ;  (IF (ATOM DIRNAME)
 ;      (COND ((MEMQ DIRNAME '(NIL :WILD :UNSPECIFIC))
@@ -2174,6 +2198,7 @@ pathname sets the defaults."
 ;      (CONS (IF (SEND SELF :VALID-DIRECTORY-COMPONENT-P (CAR DIRNAMES) LEVEL)
 ;		(CAR DIRNAMES))
 ;	    (SEND SELF :CHECK-SUBDIRECTORIES (CDR DIRNAMES) (1+ LEVEL)))))
+;);end comment
 
 (DEFFLAVOR MEANINGFUL-ROOT-MIXIN () ()
   (:REQUIRED-FLAVORS PATHNAME)
@@ -2182,10 +2207,11 @@ pathname sets the defaults."
   (:DOCUMENTATION :MIXIN "For use with file systems where the root directory is treated
 as an ordinary directory."))
 
+;(comment
 ;(DEFMETHOD (MEANINGFUL-ROOT-MIXIN :OR :VALID-DIRECTORY-COMPONENT-P) (DIRNAME IGNORE)
 ;  (MEMQ DIRNAME '(:ROOT :RELATIVE :UP)))
-
-
+;);end comment
+
 ;;; brand S
 (DEFF DESCRIBE-PHYSICAL-HOST 'SI:DESCRIBE-HOST)
 
@@ -2209,11 +2235,11 @@ as an ordinary directory."))
       ;; If already been recopied, just reference all of them so they are
       ;; all copied into newspace together.
       (MAPHASH #'(LAMBDA (IGNORE FILE &REST IGNORE)
-		   (REFERENCE-ALL (SEND FILE :PROPERTY-LIST)))
+		   (REFERENCE-ALL (SEND FILE :PLIST)))
 	       FS:*PATHNAME-HASH-TABLE*)
     (SETQ PATHNAME-PLISTS-LINEARIZED-ONCE T)
     (MAPHASH #'(LAMBDA (IGNORE FILE &REST IGNORE)
-		 (SEND FILE :SET-PROPERTY-LIST (COPYTREE (SEND FILE :PROPERTY-LIST))))
+		 (SEND FILE :SET-PROPERTY-LIST (COPYTREE (SEND FILE :PLIST))))
 	     FS:*PATHNAME-HASH-TABLE*)))
 
 (DEFUN REFERENCE-ALL (OBJECT)
