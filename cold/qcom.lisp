@@ -269,7 +269,7 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
   PROPERTY-LIST-AREA				;Exists for paging Reasons
   P-N-STRING					;Print names and strings
   CONTROL-TABLES				;Obarray, readtable (semi-obsolete)
-  OBT-TAILS					;Obarray bucket conses (semi-obsolete)
+; OBT-TAILS					;Obarray bucket conses (semi-obsolete)
   NR-SYM					;Symbols not in resident-symbol-area
   MACRO-COMPILED-PROGRAM			;Macro code loaded here
   PDL-AREA					;Put stack-group regular-pdls here
@@ -280,7 +280,7 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
 ;;; Default area size is one page
 (DEFCONST COLD-LOAD-AREA-SIZES '(
   P-N-STRING			600
-  OBT-TAILS			100
+;  OBT-TAILS			100
   NR-SYM			500
   MACRO-COMPILED-PROGRAM	1000
   PAGE-TABLE-AREA		128.		;Enough for 2 megawords of main memory
