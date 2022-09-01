@@ -1,4 +1,4 @@
-;; -*- Mode:LISP; Package:SYSTEM-INTERNALS; Base:8; Readtable:ZL; Cold-load:T -*-
+;; -*- Mode:LISP; Package:SYSTEM-INTERNALS; Base: 8; Readtable:T; Cold-load: T -*-
 ;;; Initialization & top-level READ-EVAL-PRINT loop
 
 (DEFVAR SYN-TERMINAL-IO (MAKE-SYN-STREAM '*TERMINAL-IO*)
@@ -60,7 +60,7 @@ Will be NIL by the time YOU get to look at it")
 (DEFVAR UNIBUS-VIRTUAL-ADDRESS :UNBOUND
   "Virtual address mapped into Unibus location 0.")
 
-(DEFCONST TV::TV-QUAD-SLOT #xF8 "Slot number for LAMBDA tv board.")
+(DEFCONST TV:TV-QUAD-SLOT #xF8 "Slot number for LAMBDA tv board.")
 
 
 (ADD-INITIALIZATION "Next boot is a cold boot" '(SETQ COLD-BOOTING T)
@@ -69,17 +69,17 @@ Will be NIL by the time YOU get to look at it")
 ;;; Come here when machine starts.  Provides a base frame.
 (DEFUN LISP-TOP-LEVEL ()
   (LISP-REINITIALIZE NIL)			;(Re)Initialize critical variables and things
-  (TERPRI (OR TV::INITIAL-LISP-LISTENER *TERMINAL-IO*))
+  (TERPRI (OR TV:INITIAL-LISP-LISTENER *TERMINAL-IO*))
   ;; LISP-TOP-LEVEL1 supposedly never returns, but loop anyway in case
   ;; someone forces it to return with the error-handler.
   (DO-FOREVER
     (IF (FBOUNDP 'PROCESS-TOP-LEVEL)
 	(PROCESS-TOP-LEVEL)
-      (LISP-TOP-LEVEL1 (OR TV::INITIAL-LISP-LISTENER *TERMINAL-IO*)))))
+      (LISP-TOP-LEVEL1 (OR TV:INITIAL-LISP-LISTENER *TERMINAL-IO*)))))
 
 ;;; Called when the main process is reset.
 (DEFUN LISP-TOP-LEVEL2 ()
-  (LISP-TOP-LEVEL1 (OR TV::INITIAL-LISP-LISTENER *TERMINAL-IO*)))
+  (LISP-TOP-LEVEL1 (OR TV:INITIAL-LISP-LISTENER *TERMINAL-IO*)))
 
 ;;; Function to reset various things, do initialization that's inconvenient in cold load, etc.
 ;;; COLD-BOOT is T if this is for a cold boot.
@@ -92,54 +92,48 @@ COLD-BOOT is T if this is for a cold boot."
   ;; make sure we don't use these until set up below
   (select-processor
     (:cadr
-      (setq tv::tv-quad-slot nil)
+      (setq tv:tv-quad-slot nil)
       (setq rg-quad-slot nil)
       (setq sdu-quad-slot nil))
     (:lambda
-      (setq tv::tv-quad-slot (compiler::%lambda-tv-quad-slot)
-	    rg-quad-slot (compiler::%lambda-rg-quad-slot)
-	    sdu-quad-slot (compiler::%lambda-sdu-quad-slot))))
-
+      (setq tv:tv-quad-slot (compiler:%lambda-tv-quad-slot)
+	    rg-quad-slot (compiler:%lambda-rg-quad-slot)
+	    sdu-quad-slot (compiler:%lambda-sdu-quad-slot))))
   (SETQ ALPHABETIC-CASE-AFFECTS-STRING-COMPARISON NIL)
   ;; If these are set wrong, all sorts of things don't work.
-
   (SETQ LOCAL-DECLARATIONS NIL FILE-LOCAL-DECLARATIONS NIL
-	UNDO-DECLARATIONS-FLAG NIL COMPILER::QC-FILE-IN-PROGRESS NIL)
-
+	UNDO-DECLARATIONS-FLAG NIL COMPILER:QC-FILE-IN-PROGRESS NIL)
   (SETQ *INTERPRETER-VARIABLE-ENVIRONMENT* NIL
 	*INTERPRETER-FUNCTION-ENVIRONMENT* NIL
 	*INTERPRETER-FRAME-ENVIRONMENT* NIL)
-
   ;; Provide ucode with space to keep EVCPs stuck into a-memory locations
   ;; by closure-binding the variables that forward there.
   (OR (AND (BOUNDP 'AMEM-EVCP-VECTOR) AMEM-EVCP-VECTOR)
       (SETQ AMEM-EVCP-VECTOR
 	    (MAKE-ARRAY (+ (LENGTH SYS:A-MEMORY-LOCATION-NAMES) #o40 #o20)
 			;;					     in case ucode grows.
-			:AREA PERMANENT-STORAGE-AREA)))
-
-  (UNLESS (NOT CALLED-BY-USER)
-     (IF (FBOUNDP 'COMPILER::MA-RESET)	;Unload microcompiled defs, because they are gone!
-	 (COMPILER::MA-RESET))		; Hopefully manage to do this before any gets called.
-     ;; Set up the TV sync program as soon as possible; until it is set up
-     ;; read references to the TV buffer can get NXM errors which cause a
-     ;; main-memory parity error halt.  Who-line updating can do this.
-     (WHEN (BOUNDP 'TV:DEFAULT-SCREEN)
-       (IF (BOUNDP 'TV::SYNC-RAM-CONTENTS)
-	   ;; if TV:SET-TV-SPEED has been done in this image,
-	   ;; use the results from that.
-	   (SETUP-CPT TV::SYNC-RAM-CONTENTS NIL T)
-	   (SETUP-CPT))
-       (IF (VARIABLE-BOUNDP TV:MAIN-SCREEN)
-	   (SETQ %DISK-RUN-LIGHT
-		 (+ (- (* TV:MAIN-SCREEN-HEIGHT
-			  (TV:SHEET-LOCATIONS-PER-LINE TV:MAIN-SCREEN))
-		       #o15)
-		    (TV:SCREEN-BUFFER TV:MAIN-SCREEN))))
-       (SETQ TV::WHO-LINE-RUN-LIGHT-LOC (+ 2 (LOGAND %DISK-RUN-LIGHT #o777777))))
-     ;; Clear all the bits of the main screen after a cold boot.
-     (AND COLD-BOOT (CLEAR-SCREEN-BUFFER IO-SPACE-VIRTUAL-ADDRESS)))
-
+			':AREA PERMANENT-STORAGE-AREA)))
+  (COND ((NOT CALLED-BY-USER)
+	 (AND (FBOUNDP 'COMPILER:MA-RESET) ;Unload microcompiled defs, because they are gone!
+	      (COMPILER:MA-RESET))	 ; Hopefully manage to do this before any gets called.
+	 ;; Set up the TV sync program as soon as possible; until it is set up
+	 ;; read references to the TV buffer can get NXM errors which cause a
+	 ;; main-memory parity error halt.  Who-line updating can do this.
+	 (COND ((BOUNDP 'TV:DEFAULT-SCREEN)
+		(COND ((BOUNDP 'TV:SYNC-RAM-CONTENTS)
+		       ;; if TV:SET-TV-SPEED has been done in this image,
+		       ;; use the results from that.
+		       (SETUP-CPT TV:SYNC-RAM-CONTENTS NIL T))
+		      (T (SETUP-CPT)))
+		(COND ((VARIABLE-BOUNDP TV:MAIN-SCREEN)
+		       (SETQ %DISK-RUN-LIGHT
+			     (+ (- (* TV:MAIN-SCREEN-HEIGHT
+				      TV:(SHEET-LOCATIONS-PER-LINE MAIN-SCREEN))
+				   #o15)
+				(TV:SCREEN-BUFFER TV:MAIN-SCREEN)))))
+		TV:(SETQ WHO-LINE-RUN-LIGHT-LOC (+ 2 (LOGAND %DISK-RUN-LIGHT #o777777)))))
+	 ;; Clear all the bits of the main screen after a cold boot.
+	 (AND COLD-BOOT (CLEAR-SCREEN-BUFFER IO-SPACE-VIRTUAL-ADDRESS))))
   ;; Do something at least if errors occur during loading
   (OR (FBOUNDP 'FERROR) (FSET 'FERROR #'FERROR-COLD-LOAD))
   (OR (FBOUNDP 'CERROR) (FSET 'CERROR #'CERROR-COLD-LOAD))
@@ -149,8 +143,8 @@ COLD-BOOT is T if this is for a cold boot."
   (OR (FBOUNDP 'FS:MAKE-FASLOAD-PATHNAME) (FSET 'FS:MAKE-FASLOAD-PATHNAME #'LIST))
 
   ;; Allow streams to work before WHOLIN loaded
-  (OR (BOUNDP 'TV::WHO-LINE-FILE-STATE-SHEET)
-      (SETQ TV::WHO-LINE-FILE-STATE-SHEET 'IGNORE))   ;NOT #'IGNORE since IGNORE not in coldld
+  (OR (BOUNDP 'TV:WHO-LINE-FILE-STATE-SHEET)
+      (SETQ TV:WHO-LINE-FILE-STATE-SHEET 'IGNORE))   ;NOT #'IGNORE since IGNORE not in coldld
   (UNCLOSUREBIND '(* ** *** + ++ +++ // //// ////// *VALUES*))
 
   (SETQ DEFAULT-CONS-AREA WORKING-STORAGE-AREA)	;Reset default areas.
@@ -159,6 +153,10 @@ COLD-BOOT is T if this is for a cold boot."
   (SETQ READ-AREA NIL)
 
   (NUMBER-GC-ON)				;This seems to work now, make it the default
+
+  (SETQ EH:CONDITION-HANDLERS NIL
+	EH:CONDITION-DEFAULT-HANDLERS NIL
+	EH:CONDITION-RESUME-HANDLERS NIL)
 
   (UNLESS (GET 'CDR-NIL 'SYSTEM-CONSTANT)
     (MAPC #'(LAMBDA (Y) 
@@ -182,57 +180,32 @@ COLD-BOOT is T if this is for a cold boot."
   (WHEN (NOT (BOUNDP 'CURRENT-PROCESS))		;Very first time around
     (SETQ SCHEDULER-EXISTS NIL
 	  CURRENT-PROCESS NIL
-	  TV::WHO-LINE-PROCESS NIL
-	  TV::LAST-WHO-LINE-PROCESS NIL)
-    (UNLESS (FBOUNDP 'TV::WHO-LINE-RUN-STATE-UPDATE)
-      (FSET 'TV::WHO-LINE-RUN-STATE-UPDATE #'(LAMBDA (&REST IGNORE) NIL)))
+	  TV:WHO-LINE-PROCESS NIL
+	  TV:LAST-WHO-LINE-PROCESS NIL)
+    (UNLESS (FBOUNDP 'TV:WHO-LINE-RUN-STATE-UPDATE)
+      (FSET 'TV:WHO-LINE-RUN-STATE-UPDATE #'(LAMBDA (&REST IGNORE) NIL)))
     (KBD-INITIALIZE))
-  (SETQ TV::KBD-LAST-ACTIVITY-TIME (TIME))	; Booting is keyboard activity.
-
+  (SETQ TV:KBD-LAST-ACTIVITY-TIME (TIME))	; Booting is keyboard activity.
   (INITIALIZE-WIRED-KBD-BUFFER)
-
-  (select-processor
-    (:lambda;; now that the "unibus" channel is set up, turn on 60Hz interrupts
-      ;; first the vector
-      (compiler::%nubus-write tv::tv-quad-slot 8
-			      (dpb rg-quad-slot (byte 8 24.) (* 4 (+ #o400 #o260))))
-      (compiler::%nubus-write tv::tv-quad-slot 4
-			      (logior #o40 (compiler::%nubus-read tv::tv-quad-slot 4)))))
+  (IF-IN-LAMBDA
+    ;; now that the "unibus" channel is set up, turn on 60Hz interrupts
+    ;; first the vector
+    (compiler:%nubus-write tv:tv-quad-slot 8
+			   (dpb rg-quad-slot (byte 8 24.) (* 4 (+ #o400 #o260))))
+    (compiler:%nubus-write tv:tv-quad-slot 4
+			   (logior #o40 (compiler:%nubus-read tv:tv-quad-slot 4))))
 
   ;; Flush any closure binding forwarding pointers
   ;; left around from a closure we were in when we warm booted.
-  (UNCLOSUREBIND '(PRIN1 *PRINT-BASE* *READ-BASE*
+  (UNCLOSUREBIND '(PRIN1 *PRINT-BASE* *NOPOINT
 		   FDEFINE-FILE-PATHNAME INHIBIT-FDEFINE-WARNINGS
 		   SELF SI:PRINT-READABLY *PACKAGE* *READTABLE*
-		   EH::ERROR-MESSAGE-HOOK EH::ERROR-DEPTH EH::ERRSET-STATUS))
+		   EH:ERROR-MESSAGE-HOOK EH:ERROR-DEPTH EH:ERRSET-STATUS))
   (when (variable-boundp zwei:*local-bound-variables*)
     (unclosurebind zwei:*local-bound-variables*))
   (when (variable-boundp *default-process-closure-variables*)
     (unclosurebind *default-process-closure-variables*))
   (unclosurebind '(zwei:*local-variables* zwei:*local-bound-variables*))
-
-  ;; Initialize the rubout handler.
-  (SETQ	RUBOUT-HANDLER NIL)			;We're not in it now
-
-  ;; Initialize the error handler.
-  (SETQ EH::CONDITION-HANDLERS NIL
-	EH::CONDITION-DEFAULT-HANDLERS NIL
-	EH::CONDITION-RESUME-HANDLERS NIL)
-  (OR (BOUNDP 'ERROR-STACK-GROUP)
-      (SETQ ERROR-STACK-GROUP (MAKE-STACK-GROUP 'ERROR-STACK-GROUP :SAFE 0)))
-  (SETQ %ERROR-HANDLER-STACK-GROUP ERROR-STACK-GROUP)
-  (STACK-GROUP-PRESET ERROR-STACK-GROUP 'LISP-ERROR-HANDLER)	;May not be defined yet 
-  (SETF (SG-FOOTHOLD-DATA %INITIAL-STACK-GROUP) NIL)	;EH depends on this
-  (WHEN (AND (FBOUNDP 'LISP-ERROR-HANDLER)
-	     (FBOUNDP 'EH::ENABLE-TRAPPING))
-    (SEND ERROR-STACK-GROUP '(INITIALIZE))
-    (IF (NOT (BOUNDP 'EH::ERROR-TABLE))
-	(SETQ MUST-ENABLE-TRAPPING T)
-      ;; Note: if error-table not loaded,
-      ;; we enable trapping after loading it.
-      (EH::ENABLE-TRAPPING)))
-  (SETQ EH::ERRSET-STATUS NIL EH::ERROR-MESSAGE-HOOK NIL);Turn off possible spurious errset
-  (SETQ EH::ERROR-DEPTH 0)
 
   ;; Get the right readtable.
   (unless (variable-boundp initial-readtable)
@@ -240,13 +213,33 @@ COLD-BOOT is T if this is for a cold boot."
 	  *readtable* (copy-readtable *readtable*)
 	  standard-readtable *readtable*)
     (setf (rdtbl-names *readtable*) (rdtbl-names initial-readtable))
-    (pushnew *readtable* *all-readtables* :test #'eq))	;since not frobbed by cold-load
+    (pushnew *readtable* *all-readtables* :test 'eq))	;since not frobbed by cold-load
   (when (variable-boundp common-lisp-readtable)
     (unless (variable-boundp initial-common-lisp-readtable)
       (setq initial-common-lisp-readtable common-lisp-readtable
 	    common-lisp-readtable (copy-readtable common-lisp-readtable))
       (setf (rdtbl-names common-lisp-readtable) (rdtbl-names initial-common-lisp-readtable)))
-    (pushnew common-lisp-readtable *all-readtables* :test #'eq))
+    (pushnew common-lisp-readtable *all-readtables* :test 'eq))
+
+  ;; Initialize the rubout handler.
+  (SETQ	RUBOUT-HANDLER NIL)			;We're not in it now
+
+  ;; Initialize the error handler.
+  (OR (BOUNDP 'ERROR-STACK-GROUP)
+      (SETQ ERROR-STACK-GROUP (MAKE-STACK-GROUP 'ERROR-STACK-GROUP ':SAFE 0)))
+  (SETQ %ERROR-HANDLER-STACK-GROUP ERROR-STACK-GROUP)
+  (STACK-GROUP-PRESET ERROR-STACK-GROUP 'LISP-ERROR-HANDLER)	;May not be defined yet 
+  (SETF (SG-FOOTHOLD-DATA %INITIAL-STACK-GROUP) NIL)	;EH depends on this
+  (WHEN (AND (FBOUNDP 'LISP-ERROR-HANDLER)
+	     (FBOUNDP 'EH:ENABLE-TRAPPING))
+    (SEND ERROR-STACK-GROUP '(INITIALIZE))
+    (IF (NOT (BOUNDP 'EH:ERROR-TABLE))
+	(SETQ MUST-ENABLE-TRAPPING T)
+      ;; Note: if error-table not loaded,
+      ;; we enable trapping after loading it.
+      (EH:ENABLE-TRAPPING)))
+  (SETQ EH:ERRSET-STATUS NIL EH:ERROR-MESSAGE-HOOK NIL)	;Turn off possible spurious errset
+  (SETQ EH:ERROR-DEPTH 0)
 
   ;; And all kinds of randomness...
   (SETQ TRACE-LEVEL 0)
@@ -259,18 +252,15 @@ COLD-BOOT is T if this is for a cold boot."
   (SETQ %INHIBIT-READ-ONLY NIL)
   (UNLESS (BOUNDP 'PRIN1) (SETQ PRIN1 NIL))
   (SETQ *EVALHOOK* NIL *APPLYHOOK* NIL)
-  (SETQ *READ-BASE* 10. *PRINT-BASE* 10.)
+  (SETQ *READ-BASE* 10. *PRINT-BASE* 10. *NOPOINT T)
   (SETQ XR-CORRESPONDENCE-FLAG NIL		;Prevent the reader from doing random things
 	XR-CORRESPONDENCE NIL)
-; (SETQ *RSET T)				;In case any MACLISP programs look at it
+  (SETQ *RSET T)				;In case any MACLISP programs look at it
   (SETQ FDEFINE-FILE-PATHNAME NIL)
   (SETQ INHIBIT-FDEFINE-WARNINGS NIL)		;Don't get screwed by warm boot
-
   (SETQ SELF-FLAVOR-DECLARATION NIL)
   (SETQ SELF NIL SELF-MAPPING-TABLE NIL)
-
   (SETQ SI:PRINT-READABLY NIL)
-
   (SETQ CHAOS:CHAOS-SERVERS-ENABLED NIL)	;Don't allow botherage from networks
   (IF COLD-BOOT (SETQ FS:USER-LOGIN-MACHINE NIL))
   (SETQ *PACKAGE* PKG-USER-PACKAGE)
@@ -278,29 +268,28 @@ COLD-BOOT is T if this is for a cold boot."
   ;; The first time, this does top-level SETQ's from the cold-load files
   (OR (BOUNDP 'ORIGINAL-LISP-CRASH-LIST)	;Save it for possible later inspection
       (SETQ ORIGINAL-LISP-CRASH-LIST LISP-CRASH-LIST))
-
-  (MAPC #'EVAL LISP-CRASH-LIST)
+  (MAPC 'EVAL LISP-CRASH-LIST)
   (SETQ LISP-CRASH-LIST NIL)
 
   ;; Reattach IO streams.  Note that *TERMINAL-IO* will be fixed later to go to a window.
-  (UNLESS CALLED-BY-USER
-    (UNCLOSUREBIND '(*TERMINAL-IO* *STANDARD-OUTPUT* *STANDARD-INPUT*
-				   *QUERY-IO* *TRACE-OUTPUT* *ERROR-OUTPUT* *DEBUG-IO*))
-    (SETQ *TERMINAL-IO*	COLD-LOAD-STREAM
-	  *STANDARD-OUTPUT* SYN-TERMINAL-IO
-	  *STANDARD-INPUT*	SYN-TERMINAL-IO
-	  *QUERY-IO*	SYN-TERMINAL-IO
-	  *DEBUG-IO*	SYN-TERMINAL-IO
-	  *TRACE-OUTPUT*	SYN-TERMINAL-IO
-	  *ERROR-OUTPUT*	SYN-TERMINAL-IO)
-    (SEND *TERMINAL-IO* :HOME-CURSOR))
+  (COND ((NOT CALLED-BY-USER)
+	 (UNCLOSUREBIND '(*TERMINAL-IO* *STANDARD-OUTPUT* *STANDARD-INPUT*
+			  *QUERY-IO* *TRACE-OUTPUT* *ERROR-OUTPUT* *DEBUG-IO*))
+	 (SETQ *TERMINAL-IO*	COLD-LOAD-STREAM
+	       *STANDARD-OUTPUT* SYN-TERMINAL-IO
+	       *STANDARD-INPUT*	SYN-TERMINAL-IO
+	       *QUERY-IO*	SYN-TERMINAL-IO
+	       *DEBUG-IO*	SYN-TERMINAL-IO
+	       *TRACE-OUTPUT*	SYN-TERMINAL-IO
+	       *ERROR-OUTPUT*	SYN-TERMINAL-IO)
+	 (SEND *TERMINAL-IO* ':HOME-CURSOR)))
 
-  (SETQ TV::MOUSE-WINDOW NIL)	;This gets looked at before the mouse process is turned on
+  (SETQ TV:MOUSE-WINDOW NIL)	;This gets looked at before the mouse process is turned on
   (KBD-CONVERT-NEW 1_15.)	;Reset state of shift keys
 
-  (SELECT-PROCESSOR
-    (:CADR (AND (FBOUNDP 'CADR:CLEAR-UNIBUS-MAP);clear valid bits on unibus map.
-		(CADR:CLEAR-UNIBUS-MAP))))	; and necessary if sharing Unibus with PDP11.
+  (IF (AND (FBOUNDP 'CADR:CLEAR-UNIBUS-MAP)	;clear valid bits on unibus map.
+	   (= PROCESSOR-TYPE-CODE 1))		; Prevents randomness
+      (CADR:CLEAR-UNIBUS-MAP))			; and necessary if sharing Unibus with PDP11.
 						; Do this before SYSTEM-INITIALIZATION-LIST to
 						; avoid screwwing ETHERNET code.
   ;; These are initializations that have to be done before other initializations
@@ -314,17 +303,17 @@ COLD-BOOT is T if this is for a cold boot."
   ;; we do not do any typeout nor erasing on the cold-load-stream, to avoid bashing
   ;; the bits of whatever window was exposed before a warm boot.
   (COND (CALLED-BY-USER)
-	((FBOUNDP 'TV::WINDOW-INITIALIZE)
-	 (MULTIPLE-VALUE-BIND (X Y) (SEND *TERMINAL-IO* :READ-CURSORPOS)
-	   (SEND TV::INITIAL-LISP-LISTENER :SET-CURSORPOS X Y))
-	 (SETQ *TERMINAL-IO* TV::INITIAL-LISP-LISTENER)
-	 (SEND *TERMINAL-IO* :SEND-IF-HANDLES :SET-PACKAGE *PACKAGE*)
-	 (SEND *TERMINAL-IO* :FRESH-LINE))
-	(T (SETQ TV::INITIAL-LISP-LISTENER NIL)	;Not created yet
-	   (SEND *TERMINAL-IO* :CLEAR-EOL)))
+	((FBOUNDP 'TV:WINDOW-INITIALIZE)
+	 (MULTIPLE-VALUE-BIND (X Y) (SEND *TERMINAL-IO* ':READ-CURSORPOS)
+	   (SEND TV:INITIAL-LISP-LISTENER ':SET-CURSORPOS X Y))
+	 (SETQ *TERMINAL-IO* TV:INITIAL-LISP-LISTENER)
+	 (SEND *TERMINAL-IO* ':SEND-IF-HANDLES ':SET-PACKAGE *PACKAGE*)
+	 (SEND *TERMINAL-IO* ':FRESH-LINE))
+	(T (SETQ TV:INITIAL-LISP-LISTENER NIL)	;Not created yet
+	   (SEND *TERMINAL-IO* ':CLEAR-EOL)))
 
   (WHEN CURRENT-PROCESS
-    (SEND CURRENT-PROCESS :RUN-REASON 'LISP-INITIALIZE))
+    (SEND CURRENT-PROCESS ':RUN-REASON 'LISP-INITIALIZE))
 
   ;; prevent screw from things being traced during initialization
   (if (fboundp 'untrace) (untrace))
@@ -336,15 +325,15 @@ COLD-BOOT is T if this is for a cold boot."
   (IF COLD-BOOTING (INITIALIZATIONS 'COLD-INITIALIZATION-LIST))
   (INITIALIZATIONS 'WARM-INITIALIZATION-LIST T)
 
-  (WHEN (AND MUST-ENABLE-TRAPPING
-	     (BOUNDP 'EH::ERROR-TABLE))
-    (EH::ENABLE-TRAPPING))
+  (COND ((AND MUST-ENABLE-TRAPPING
+	      (BOUNDP 'EH:ERROR-TABLE))
+	 (EH:ENABLE-TRAPPING)))
 
   (SETQ COLD-BOOTING NIL)
 
   (IF (FBOUNDP 'PRINT-HERALD)
       (PRINT-HERALD)
-    (SEND *STANDARD-OUTPUT* :FRESH-LINE)
+    (SEND *STANDARD-OUTPUT* ':FRESH-LINE)
     (PRINC "Lisp Machine cold load environment, beware!
 ; *READ//PRINT-BASE* = ")
     (LET ((*PRINT-BASE* 10.))
@@ -361,7 +350,7 @@ COLD-BOOT is T if this is for a cold boot."
   ;; This process no longer needs to be able to run except for the usual reasons.
   ;; The delayed-restart processes may now be allowed to run
   (WHEN CURRENT-PROCESS
-    (SEND CURRENT-PROCESS :REVOKE-RUN-REASON 'LISP-INITIALIZE)
+    (SEND CURRENT-PROCESS ':REVOKE-RUN-REASON 'LISP-INITIALIZE)
     (WHEN WARM-BOOTED-PROCESS
       (FORMAT T "Warm boot while running ~S.
 Its variable bindings remain in effect;
@@ -372,10 +361,9 @@ its unwind-protects have been lost.~%" WARM-BOOTED-PROCESS)
 		     (TYPEP WARM-BOOTED-PROCESS 'SI:SIMPLE-PROCESS)))
 	(IF (YES-OR-NO-P "Reset it?  Answer No if you want to debug it.  ")
 	    (RESET-WARM-BOOTED-PROCESS)
-	  (FORMAT T "~&Do ~S to examine it, or do
-~S to reset it and let it run again.~%
-If you examine it, you will see a state that is not quite the latest one."
-		  '(SI:DEBUG-WARM-BOOTED-PROCESS) '(SI:RESET-WARM-BOOTED-PROCESS)))))
+	  (FORMAT T "~&Do (SI:DEBUG-WARM-BOOTED-PROCESS) to examine it, or do
+/(SI:RESET-WARM-BOOTED-PROCESS) to reset it and let it run again.~%
+If you examine it, you will see a state that is not quite the latest one."))))
     (LOOP FOR (P . RR) IN DELAYED-RESTART-PROCESSES
 	  DO (WITHOUT-INTERRUPTS
 	       (SETF (PROCESS-RUN-REASONS P) RR)
@@ -386,9 +374,10 @@ If you examine it, you will see a state that is not quite the latest one."
   ;; window.  Some processes, such as Lisp listeners, rebind it to something else.
   ;; CALLED-BY-USER is T if called from inside one of those.
   (WHEN (AND (NOT CALLED-BY-USER)
-	     (FBOUNDP 'TV::DEFAULT-BACKGROUND-STREAM)
-	     (NEQ (SYMBOL-FUNCTION 'TV::DEFAULT-BACKGROUND-STREAM) COLD-LOAD-STREAM))
-    (SETQ *TERMINAL-IO* TV::DEFAULT-BACKGROUND-STREAM))
+	     (FBOUNDP TV:DEFAULT-BACKGROUND-STREAM)
+	     (NEQ (FSYMEVAL TV:DEFAULT-BACKGROUND-STREAM)
+		  TV:COLD-LOAD-STREAM))
+    (SETQ *TERMINAL-IO* TV:DEFAULT-BACKGROUND-STREAM))
 
   ;; Now that -all- initialization has been completed, allow network servers
   (SETQ CHAOS:CHAOS-SERVERS-ENABLED T))
@@ -421,12 +410,12 @@ is the stream to read and print with."
       (%BIND (LOCF *PACKAGE*) *PACKAGE*))
   (WHEN (FBOUNDP 'FORMAT)
     (FORMAT T "~&;Reading~@[ at top level~]" TOP-LEVEL-P)
-    (IF (SEND *TERMINAL-IO* :OPERATION-HANDLED-P :NAME)
-	(FORMAT T " in ~A." (SEND *TERMINAL-IO* :NAME))
+    (IF (SEND *TERMINAL-IO* ':OPERATION-HANDLED-P ':NAME)
+	(FORMAT T " in ~A." (SEND *TERMINAL-IO* ':NAME))
       (FORMAT T ".")))
   (PUSH NIL *VALUES*)
   (DO ((*READTABLE* *READTABLE*)
-       (*PRINT-BASE* *PRINT-BASE*) (*READ-BASE* *READ-BASE*)
+       (*PRINT-BASE* *PRINT-BASE*) (*READ-BASE* *READ-BASE*) (*NOPOINT *NOPOINT)
        (LAST-TIME-READTABLE NIL)
        THROW-FLAG)	;Gets non-NIL if throw to COMMAND-LEVEL (e.g. quitting from an error)
       (NIL)		;Do forever
@@ -438,11 +427,11 @@ is the stream to read and print with."
 	  ;; User set the package during previous iteration of DO
 	  ;; => tell the window about it.
 	  ((AND OLD-PACKAGE (NEQ PACKAGE OLD-PACKAGE))
-	   (SEND *TERMINAL-IO* :SEND-IF-HANDLES :SET-PACKAGE *PACKAGE*)
+	   (SEND *TERMINAL-IO* ':SEND-IF-HANDLES ':SET-PACKAGE *PACKAGE*)
 	   (SETQ OLD-PACKAGE *PACKAGE*))
 	  ;; Window's package has been changed, or first iteration through DO,
 	  ;; => set our package to the window's -- if the window has one.
-	  ((SETQ W-PKG (SEND *TERMINAL-IO* :SEND-IF-HANDLES :PACKAGE))
+	  ((SETQ W-PKG (SEND *TERMINAL-IO* ':SEND-IF-HANDLES ':PACKAGE))
 	   (AND (NEQ W-PKG *PACKAGE*)
 		(SETQ *PACKAGE* W-PKG))
 	   (SETQ OLD-PACKAGE *PACKAGE*))
@@ -450,12 +439,12 @@ is the stream to read and print with."
 	  ;; to the global value of *PACKAGE*.
 	  ((NULL OLD-PACKAGE)
 	   (SETQ OLD-PACKAGE *PACKAGE*)
-	   (SEND *TERMINAL-IO* :SEND-IF-HANDLES :SET-PACKAGE *PACKAGE*)))
+	   (SEND *TERMINAL-IO* ':SEND-IF-HANDLES ':SET-PACKAGE *PACKAGE*)))
     (CHECK-FOR-READTABLE-CHANGE LAST-TIME-READTABLE)
     (SETQ LAST-TIME-READTABLE *READTABLE*)
     (SETQ THROW-FLAG T)
     (CATCH-ERROR-RESTART ((SYS:ABORT ERROR) "Return to top level in ~A."
-			  (OR (SEND *TERMINAL-IO* :SEND-IF-HANDLES :NAME)
+			  (OR (SEND *TERMINAL-IO* ':SEND-IF-HANDLES ':NAME)
 			      "current process."))
       (TERPRI)
       (SETQ +++ ++ ++ + + -)			;Save last three input forms
@@ -479,8 +468,8 @@ is the stream to read and print with."
     (WHEN THROW-FLAG
       ;; Inform user of return to top level.
       (FORMAT T "~&;Back to top level")
-      (IF (SEND *TERMINAL-IO* :OPERATION-HANDLED-P :NAME)
-	  (FORMAT T " in ~A." (SEND *TERMINAL-IO* :NAME))
+      (IF (SEND *TERMINAL-IO* ':OPERATION-HANDLED-P ':NAME)
+	  (FORMAT T " in ~A." (SEND *TERMINAL-IO* ':NAME))
 	  (WRITE-CHAR #/.)))))
 
 (defun check-for-readtable-change (last-time-readtable)
@@ -498,7 +487,71 @@ or Traditional Zetalisp (if FLAG is NIL)"
   (if globally-p (setq-globally *readtable* *readtable*))
   (if (eq *readtable* old-rdtbl) flag (values)))
 
-
+(defun eval-abort-trivial-errors (top-level-form)
+  "Evaluate TOP-LEVEL-FORM, returning the value, but aborting on trivial errors.
+A trivial error is one involving a symbol present in the form itself.
+Aborting is done by signaling SYS:ABORT, like the Abort key.
+The user gets to choose whether to do that or to enter the debugger as usual."
+  (declare (special top-level-form))
+  (condition-bind (((sys:too-few-arguments sys:too-many-arguments
+		     sys:cell-contents-error sys:wrong-type-argument
+		     sys:invalid-function-spec sys:unclaimed-message)
+		    'eval-abort-trivial-errors-handler))
+    ;; Eval, making all free variable references special
+    (eval-special-ok top-level-form)))
+
+(defun eval-abort-trivial-errors-handler (condition)
+  (declare (special top-level-form))
+  (when (cond ((condition-typep condition 'sys:cell-contents-error)
+	       (and (symbolp (send condition ':containing-structure))
+		    (mem*q-fwd (send condition ':containing-structure) top-level-form)))
+	      ((condition-typep condition 'sys:invalid-function-spec)
+	       (mem*q (send condition ':function-spec) top-level-form))
+	      ((condition-typep condition 'sys:unclaimed-message)
+	       (mem*q (send condition ':message) top-level-form))
+	      (t (mem*q (function-name (send condition ':function)) top-level-form)))
+    (send *query-io* ':fresh-line)
+    (send condition ':print-error-message current-stack-group t *query-io*)
+    (send *query-io* ':clear-input)
+    (let ((*evalhook* nil)
+	  (*applyhook* nil))
+      (unless (fquery `(:choices
+			 ,(mapcar #'(lambda (choice)
+				      (if (eq (caar choice) nil)
+					  (append choice '(#/c-Z))
+					choice))
+				  format:y-or-n-p-choices))
+		      "Enter the debugger (No means abort instead)? ")
+	(signal-condition eh:abort-object))))
+  (values))
+
+(defun mem*q-fwd (elt tree)
+  "T if ELT is TREE or an element of TREE or an element of an element, etc.
+Does not compare the CDRs (the links of the lists of TREE), just the elements.
+Regards two symbols as equal if their value cells are forwarded together."
+  ;; Cannot use MEMQ since it gets an error if a list ends in a non-NIL atom.
+  (or (eq elt tree)
+      (and (symbolp tree)
+	   (symbolp elt)
+	   (eq (follow-cell-forwarding (value-cell-location elt) t)
+	       (follow-cell-forwarding (value-cell-location tree) t)))
+      (do ((tail tree (cdr tail)))
+	  ((atom tail) nil)
+	(if (or (eq (car tail) elt)
+		(mem*q-fwd elt (car tail)))
+	    (return t)))))
+
+(defun mem*q (elt tree)
+  "T if ELT is TREE or an element of TREE or an element of an element, etc.
+Does not compare the CDRs (the links of the lists of TREE), just the elements."
+  ;; Cannot use MEMQ since it gets an error if a list ends in a non-NIL atom.
+  (or (eq elt tree)
+      (do ((tail tree (cdr tail)))
+	  ((atom tail) nil)
+	(if (or (eq (car tail) elt)
+		(mem*q elt (car tail)))
+	    (return t)))))
+
 (DEFVAR *BREAK-BINDINGS*
 	'((RUBOUT-HANDLER NIL)			;Start new level of rubout catch
 	  (READ-PRESERVE-DELIMITERS NIL)	;For normal Lisp syntax
@@ -511,9 +564,9 @@ or Traditional Zetalisp (if FLAG is NIL)"
 	  (*STANDARD-INPUT* SYN-TERMINAL-IO)	;Rebind streams to terminal
 	  (*STANDARD-OUTPUT* SYN-TERMINAL-IO)
 	  (*QUERY-IO* SYN-TERMINAL-IO)
-	  (EH::ERRSET-STATUS NIL)		;"Condition Wall" for errsets
-	  (EH::CONDITION-HANDLERS NIL)		; and for conditions
-	  (EH::CONDITION-DEFAULT-HANDLERS NIL)
+	  (EH:ERRSET-STATUS NIL)		;"Condition Wall" for errsets
+	  (EH:CONDITION-HANDLERS NIL)		; and for conditions
+	  (EH:CONDITION-DEFAULT-HANDLERS NIL)
 	  (LOCAL-DECLARATIONS NIL)
 	  (SELF-FLAVOR-DECLARATION NIL)
 	  ;; must use FUNCALL in the line below as the cold-load cannot hack the macro "SEND"
@@ -531,20 +584,19 @@ Bindings are made sequentially.")
 
 ;;; Note that BREAK binds RUBOUT-HANDLER to NIL so that a new level of catch
 ;;; will be established.  Before returning it restores the old rubout handler's buffer.
-(DEFUN BREAK (&OPTIONAL FORMAT-STRING &REST FORMAT-ARGS
+(DEFUN BREAK (&OPTIONAL &QUOTE FORMAT-STRING &EVAL &REST ARGS
 	      &AUX SAVED-BUFFER SAVED-BUFFER-POSITION)
   "Read-eval-print loop for use as subroutine.  Args are passed to FORMAT.
 Many variables are rebound, as specified in SI::*BREAK-BINDINGS*."
-  (SETQ FORMAT-STRING (STRING FORMAT-STRING))
-;  (SETQ FORMAT-STRING
-;	;; temporary kludge for compatability with past, when break took &quoted first arg
-;	(IF (OR (SYMBOLP FORMAT-STRING) (AND (CONSP FORMAT-STRING)
-;					     (EQ (CAR FORMAT-STRING) 'QUOTE)
-;					     (SYMBOLP (CADR FORMAT-STRING))
-;					     (NULL (CDDR FORMAT-STRING))
-;					     (SETQ FORMAT-STRING (CADR FORMAT-STRING))))
-;	    (STRING FORMAT-STRING)
-;	  (EVAL FORMAT-STRING)))
+  (SETQ FORMAT-STRING
+	;; temporary kludge for compatability with past, when break took &quoted first arg
+	(IF (OR (SYMBOLP FORMAT-STRING) (AND (CONSP FORMAT-STRING)
+					     (EQ (CAR FORMAT-STRING) 'QUOTE)
+					     (SYMBOLP (CADR FORMAT-STRING))
+					     (NULL (CDDR FORMAT-STRING))
+					     (SETQ FORMAT-STRING (CADR FORMAT-STRING))))
+	    (STRING FORMAT-STRING)
+	  (EVAL1 FORMAT-STRING)))
   (UNLESS (OR (EQUAL FORMAT-STRING "")
 	      (MEMQ (CHAR FORMAT-STRING (1- (LENGTH FORMAT-STRING))) '(#/. #/? #/!)))
     (SETQ FORMAT-STRING (STRING-APPEND FORMAT-STRING #/.)))
@@ -557,13 +609,14 @@ Many variables are rebound, as specified in SI::*BREAK-BINDINGS*."
     (COND ((EQ %CURRENT-STACK-GROUP SCHEDULER-STACK-GROUP)
 	   (SETQ CURRENT-PROCESS NIL)))
     (AND (NOT (NULL CURRENT-PROCESS))
-	 (NULL (SEND CURRENT-PROCESS :RUN-REASONS))
-	 (SEND CURRENT-PROCESS :RUN-REASON 'BREAK))
+	 (NULL (SEND CURRENT-PROCESS ':RUN-REASONS))
+	 (SEND CURRENT-PROCESS ':RUN-REASON 'BREAK))
     (COND (INHIBIT-SCHEDULING-FLAG
 	   (FORMAT T "~%---> Turning off INHIBIT-SCHEDULING-FLAG, you may lose. <---~%")
 	   (SETQ INHIBIT-SCHEDULING-FLAG NIL)))
-    (MULTIPLE-VALUE-SETQ (SAVED-BUFFER SAVED-BUFFER-POSITION)
-      (SEND OLD-STANDARD-INPUT :SEND-IF-HANDLES :SAVE-RUBOUT-HANDLER-BUFFER))
+    (AND (MEMQ ':SAVE-RUBOUT-HANDLER-BUFFER (SEND OLD-STANDARD-INPUT ':WHICH-OPERATIONS))
+	 (SETF (VALUES SAVED-BUFFER SAVED-BUFFER-POSITION)
+	       (SEND OLD-STANDARD-INPUT ':SAVE-RUBOUT-HANDLER-BUFFER)))
     (FORMAT T "~&;Breakpoint ~?  ~:@C to continue, ~:@C to quit.~%"
 	    FORMAT-STRING ARGS #/RESUME #/ABORT)
     (LET* ((LAST-TIME-READTABLE NIL)
@@ -583,21 +636,21 @@ Many variables are rebound, as specified in SI::*BREAK-BINDINGS*."
 			(FUNCALL (CADR (ASSQ CHAR TV:KBD-STANDARD-INTERCEPTED-CHARACTERS))
 				 CHAR))
 		       ((= CHAR (CHAR-INT #/RESUME))
-			(SEND *STANDARD-OUTPUT* :STRING-OUT "[Resume]
+			(SEND *STANDARD-OUTPUT* ':STRING-OUT "[Resume]
 ")
 			(RETURN NIL))
-		       (T (SEND *STANDARD-INPUT* :UNTYI CHAR))))
-	       (LET ((EH::CONDITION-RESUME-HANDLERS (CONS T EH::CONDITION-RESUME-HANDLERS))
+		       (T (SEND *STANDARD-INPUT* ':UNTYI CHAR))))
+	       (LET ((EH:CONDITION-RESUME-HANDLERS (CONS T EH:CONDITION-RESUME-HANDLERS))
 		     (THROW-FLAG T))
 		 (CATCH-ERROR-RESTART ((SYS:ABORT ERROR)
 				       "Return to BREAK ~?"
 				       FORMAT-STRING ARGS)
 		   (MULTIPLE-VALUE-BIND (TEM1 TEM)
 		       (WITH-INPUT-EDITING (*STANDARD-INPUT* '((:FULL-RUBOUT :FULL-RUBOUT)
-							       (:ACTIVATION CHAR= #/END)))
+							       (:ACTIVATION = #/END)))
 			 (READ-FOR-TOP-LEVEL))
-		     (IF (EQ TEM ':FULL-RUBOUT)
-			 (GO LOOK-FOR-SPECIAL-KEYS))
+		     (COND ((EQ TEM ':FULL-RUBOUT)
+			    (GO LOOK-FOR-SPECIAL-KEYS)))
 		     (SHIFTF +++ ++ + - TEM1))
 		   (COND ((AND (CONSP -) (EQ (CAR -) 'RETURN))
 			  (RETURN (EVAL-ABORT-TRIVIAL-ERRORS (CADR -)))))	;(RETURN form) proceeds
@@ -625,7 +678,7 @@ Many variables are rebound, as specified in SI::*BREAK-BINDINGS*."
       ;; If we weren't inside there, the rubout handler buffer is now empty because
       ;; we read from it, so leave it alone.  (Used to :CLEAR-INPUT).
       (WHEN SAVED-BUFFER
-	(SEND OLD-STANDARD-INPUT :RESTORE-RUBOUT-HANDLER-BUFFER
+	(SEND OLD-STANDARD-INPUT ':RESTORE-RUBOUT-HANDLER-BUFFER
 	      SAVED-BUFFER SAVED-BUFFER-POSITION))
       VALUE)))
 
@@ -667,7 +720,7 @@ Many variables are rebound, as specified in SI::*BREAK-BINDINGS*."
 REDO-FLAG if non-NIL says rerun inits that are marked as already run.
 If FLAG is T, inits are marked as run; if NIL, they are marked as not already run."
   (INIT-LIST-CHECK LIST-NAME)
-  (DO ((INIT (SYMBOL-VALUE LIST-NAME) (CDR INIT)))
+  (DO ((INIT (SYMEVAL LIST-NAME) (CDR INIT)))
       ((NULL INIT))
     (WHEN (OR (NULL (INIT-FLAG (CAR INIT))) REDO-FLAG)
       (CATCH-ERROR-RESTART ((ERROR) "Abort the ~A initialization."
@@ -738,18 +791,18 @@ The default for it is SYS:WARM-INITIALIZATION-LIST."
 	       (SETQ HEAD-OF-LIST T))
 	      (T (FERROR NIL "Illegal keyword ~S" S))))))
   (SELECTOR (OR WHEN DEFAULT-WHEN) STRING=
-    ((NIL) (SETQ WHEN NIL))
-    ((NORMAL) (SETQ WHEN NIL))
-    ((NOW) (SETQ WHEN ':NOW))
-    ((REDO) (SETQ WHEN ':REDO))
-    ((FIRST) (SETQ WHEN ':FIRST)))
+    (("NIL") (SETQ WHEN NIL))
+    (("NORMAL") (SETQ WHEN NIL))
+    (("NOW") (SETQ WHEN ':NOW))
+    (("REDO") (SETQ WHEN ':REDO))
+    (("FIRST") (SETQ WHEN ':FIRST)))
   (INIT-LIST-CHECK LIST-NAME)
   (SETQ INIT
-        (DOLIST (L (SYMBOL-VALUE LIST-NAME)
-		   (IF (OR HEAD-OF-LIST (NULL (SYMBOL-VALUE LIST-NAME)))
+        (DOLIST (L (SYMEVAL LIST-NAME)
+		   (IF (OR HEAD-OF-LIST (NULL (SYMEVAL LIST-NAME)))
 		       (CAR (PUSH (MAKE-INIT-LIST-ENTRY NAME FORM NIL FDEFINE-FILE-PATHNAME)
-				  (SYMBOL-VALUE LIST-NAME)))
-		     (CADR (RPLACD (LAST (SYMBOL-VALUE LIST-NAME))
+				  (SYMEVAL LIST-NAME)))
+		     (CADR (RPLACD (LAST (SYMEVAL LIST-NAME))
 				   (NCONS (MAKE-INIT-LIST-ENTRY
 					    NAME FORM NIL FDEFINE-FILE-PATHNAME))))))
 	  (WHEN (STRING= (INIT-NAME L) NAME)
@@ -783,7 +836,7 @@ list name symbol as LIST-NAME."
        (FLAG NIL))
       ((NULL L) FLAG)
       (WHEN (STRING= (INIT-NAME (CAR L)) NAME)
-	(SET LIST-NAME (DELQ (CAR L) (SYMBOL-VALUE LIST-NAME)))
+	(SET LIST-NAME (DELQ (CAR L) (SYMEVAL LIST-NAME)))
 	(SETQ FLAG T))))
 
 (DEFUN RESET-INITIALIZATIONS (LIST-NAME)
@@ -851,7 +904,7 @@ Pass whatever data or pointers you need in the ARGUMENTS."
 	      CURRENT-PROCESS)
 	 ;; Called PROCESS-WAIT from a process's wait-function!
 	 ;; Rather than hang the system, just say the process is not runnable now.
-	 (THROW 'PROCESS-WAIT-IN-SCHEDULER NIL))
+	 (*THROW 'PROCESS-WAIT-IN-SCHEDULER NIL))
 	((OR (NOT SCHEDULER-EXISTS)
 	     (EQ SCHEDULER-STACK-GROUP %CURRENT-STACK-GROUP)
 	     (NULL CURRENT-PROCESS)
@@ -864,13 +917,13 @@ Pass whatever data or pointers you need in the ARGUMENTS."
 		(RETURN NIL))))
 	(T
 	 (WITHOUT-INTERRUPTS		;A sequence break would reset my state to "running"
-	   (SETF (PROCESS-WAIT-WHOSTATE CURRENT-PROCESS) WHOSTATE)
-	   (TV::WHO-LINE-PROCESS-CHANGE CURRENT-PROCESS)
+	   (SETF (PROCESS-WHOSTATE CURRENT-PROCESS) WHOSTATE)
+	   (TV:WHO-LINE-PROCESS-CHANGE CURRENT-PROCESS)
 	   (SET-PROCESS-WAIT CURRENT-PROCESS FUNCTION ARGUMENTS)
-	   ;; DON'T change this FUNCALL to a STACK-GROUP-RESUME!  The scheduler
+	   ;; DON'T change this SEND to a STACK-GROUP-RESUME!  The scheduler
 	   ;; needs to know what the process's current stack group is.
 	   (FUNCALL SCHEDULER-STACK-GROUP))
-	 (TV::WHO-LINE-PROCESS-CHANGE CURRENT-PROCESS))))
+	 (TV:WHO-LINE-PROCESS-CHANGE CURRENT-PROCESS))))
 
 ;;;; System initialization
 (DEFVAR QLD-MINI-DONE NIL)
@@ -892,16 +945,17 @@ Used only if you are not generating a new Lisp machine system version."
 	 (MINI-LOAD-FILE-ALIST INNER-SYSTEM-FILE-ALIST)
 	 ;; Even though PATHNM is now loaded, it doesn't work yet.  So must disable
 	 ;; FS:MAKE-FASLOAD-PATHNAME until it does.
-	 (LETF (((SYMBOL-FUNCTION 'FS:MAKE-FASLOAD-PATHNAME) #'LIST))
+	 (LET ()				;create frame for %BIND
+	   (%BIND (LOCF (SYMBOL-FUNCTION 'FS:MAKE-FASLOAD-PATHNAME)) #'LIST)
 	   (MINI-LOAD-FILE-ALIST REST-OF-PATHNAMES-FILE-ALIST)
-	   (SELECT-PROCESSOR
-	     (:LAMBDA (MINI-LOAD-FILE-ALIST ETHERNET-FILE-ALIST)))
+	   (IF-IN-LAMBDA
+	     (MINI-LOAD-FILE-ALIST ETHERNET-FILE-ALIST))
 	   ;; Read the site files.
 	   ;; Now that QFILE is loaded, this will work properly.
 	   (UPDATE-SITE-CONFIGURATION-INFO)	;Setup site dependent stuff
 	   )
 	 (LISP-REINITIALIZE)			;Turn on network, load error table, etc.
-	 (LOGIN "LISPM" (SEND (FS:GET-PATHNAME-HOST "SYS") :PHYSICAL-HOST) T)
+	 (LOGIN "LISPM" (SEND (FS:GET-PATHNAME-HOST "SYS") ':PHYSICAL-HOST) T)
 	 (FS:CANONICALIZE-COLD-LOAD-PATHNAMES)	;Update properties for real pathnames
 	 ;; Load MAKE-SYSTEM so we can use it for the rest.
 	 (DOLIST (F SYSTEM-SYSTEM-FILE-ALIST)
@@ -921,9 +975,7 @@ Used only if you are not generating a new Lisp machine system version."
 ; ;; Compactify property lists in the hopes of speeding up compilation
 ; (SETQ AREA-FOR-PROPERTY-LISTS PROPERTY-LIST-AREA)
   (MAPATOMS-ALL #'(LAMBDA (X) (SETF (PLIST X) (COPYLIST (PLIST X) PROPERTY-LIST-AREA))))
-
   (ANALYZE-ALL-FILES)
-
   (SETQ *IN-COLD-LOAD-P* NIL)
   (FORMAT T "~%Partition size ~D.~%" (ESTIMATE-DUMP-SIZE))
   (PRINT-DISK-LABEL)
