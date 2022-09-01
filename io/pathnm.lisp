@@ -680,16 +680,13 @@ The first surface string in each list is the preferred one for that system."
 
 (DEFINE-CANONICAL-TYPE :LISP "LISP"
   ((:TOPS-20 :TENEX) "LISP" "LSP")
-  (:UNIX "L" "LISP")
   (:VMS "LSP"))
 
 (DEFINE-CANONICAL-TYPE :QFASL "QFASL"
-  (:UNIX "QF")
   (:VMS "QFS"))
 
 (DEFINE-CANONICAL-TYPE :MIDAS "MIDAS"
   ((:TOPS-20 :TENEX) "MID" "MIDAS")
-  (:UNIX "MD")
   (:VMS "MID"))
 
 (DEFINE-CANONICAL-TYPE :MAC "MAC")
@@ -699,7 +696,6 @@ The first surface string in each list is the preferred one for that system."
 
 (DEFINE-CANONICAL-TYPE :TEXT "TEXT"
   ((:TOPS-20 :TENEX) "TEXT" "TXT")
-  (:UNIX "TX")
   (:VMS "TXT"))
 
 (DEFINE-CANONICAL-TYPE :DOC "DOC")
@@ -707,49 +703,38 @@ The first surface string in each list is the preferred one for that system."
 (DEFINE-CANONICAL-TYPE :TEX "TEX")
 
 (DEFINE-CANONICAL-TYPE :PRESS "PRESS"
-  (:UNIX "PR")
   (:VMS "PRS"))
 
 (DEFINE-CANONICAL-TYPE :PATCH-DIRECTORY "PATCH-DIRECTORY"
   (:ITS "(PDIR)")
-  (:UNIX "PD")
   (:VMS "PDR"))
 
 (DEFINE-CANONICAL-TYPE :LOGICAL-PATHNAME-TRANSLATIONS "TRANSLATIONS"
   (:ITS "LOGTRN")
-  (:UNIX "LT" "LOGTRAN")
   (:VMS "LTR"))
 
 (DEFINE-CANONICAL-TYPE :QWABL "QWABL"
-  (:UNIX "QW")
   (:VMS "QWB"))
 
 (DEFINE-CANONICAL-TYPE :BABYL "BABYL"
-  (:UNIX "BB")
   (:VMS "BAB"))
 
 (DEFINE-CANONICAL-TYPE :XMAIL "XMAIL"
-  (:UNIX "XM")
   (:VMS "XML"))
 
 (DEFINE-CANONICAL-TYPE :MAIL "MAIL"
-  (:UNIX "MA")
   (:VMS "MAI"))
 
 (DEFINE-CANONICAL-TYPE :INIT "INIT"
-  (:UNIX "IN")
   (:VMS "INI"))
 
 (DEFINE-CANONICAL-TYPE :UNFASL "UNFASL"
-  (:UNIX "UF")
   (:VMS "UNF"))
 
 (DEFINE-CANONICAL-TYPE :OUTPUT "OUTPUT"
-  (:UNIX "OT")
   (:VMS "OUT"))
 
 (DEFINE-CANONICAL-TYPE :WIDTHS "WIDTHS"
-  (:UNIX "WD")
   (:VMS "WID"))
 
 (DEFINE-CANONICAL-TYPE :PL1 "PL1")
