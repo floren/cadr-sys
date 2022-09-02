@@ -1,4 +1,4 @@
-;-*- Mode:LISP; Package:EH; Readtable:ZL; Base:8 -*-
+;-*- Mode:LISP; Package:EH; Readtable:T; Base:8 -*-
 
 (defmacro defsignal-explicit (signal-name flavor &optional args &body init-options)
   "Define a signal name, which can be used in ERROR, SIGNAL, FERROR, CERROR.
@@ -30,7 +30,7 @@ which are arguments to pass to MAKE-INSTANCE in addition to the flavor name."
 	      (declare (function-parent ,signal-name defsignal-explicit))
 	      ,(if condition-names
 		   `(make-instance ',flavor ,@init-options
-				   :condition-names ',condition-names)
+				   ':condition-names ',condition-names)
 		 `(make-instance ',flavor ,@init-options))))))
 
 (deff defsignal-format 'defsignal)
@@ -69,12 +69,12 @@ which are additional arguments to pass to MAKE-INSTANCE."
 	      (declare (function-parent ,signal-name defsignal))
 	      (make-instance ',flavor
 			     ,@init-options
-			     :property-list
+			     ':property-list
 			     (list . ,(mapcan 'list properties args))
-			     :format-string format-string
-			     :format-args
+			     ':format-string format-string
+			     ':format-args
 			     (list* ,@args (copy-list format-args))
-			     :condition-names ',condition-names)))))
+			     ':condition-names ',condition-names)))))
 
 (defun make-condition (signal-name &rest args)
   "Create a condition object using flavor or signal name SIGNAL-NAME.
@@ -94,9 +94,12 @@ we create an instance of FERROR with SIGNAL-NAME as an additional condition name
 
 (defun make-condition-default (signal-name format-string &rest args)
   (make-instance 'ferror
-		 :condition-names (list signal-name)
-		 :format-string format-string
-		 :format-args (copy-list args)))
+		 ':condition-names (list signal-name)
+		 ':format-string format-string
+		 ':format-args (copy-list args)))
+
+(defsignal nil (ferror) ()
+  "This is signaled for (FERROR NIL ...), etc.")
 
 (defvar error-identify-value (list nil)
   "This object is the first instance variable of every error object.
@@ -139,7 +142,7 @@ It is a fast way of identifying error objects.")
 	  (subset #'(lambda (symbol) (not (memq symbol not-condition-flavors)))
 		  (dont-optimize (si:flavor-depends-on-all (si:instance-flavor self))))))
     (setq condition-names
-	  (nunion tem (if (cl:listp condition-names)
+	  (nunion tem (if (cli:listp condition-names)
 			  condition-names (list condition-names))))))
 
 ;;; The following four operations must be redefined
@@ -150,7 +153,7 @@ It is a fast way of identifying error objects.")
       ((null l))
     (push (car l) accum))
   (nreconc accum (funcall #'(:method si:vanilla-flavor :which-operations)
-			  :which-operations)))
+			  ':which-operations)))
 
 (defmethod (condition :operation-handled-p) (operation)
   (or (si:memq-alternated operation si:property-list)
@@ -185,11 +188,11 @@ It is a fast way of identifying error objects.")
        . ,body)))
 
 (defun condition-report-abort-printing (condition)
-  (when (memq ':abort-printing (send condition :proceed-types))
+  (when (memq ':abort-printing (send condition ':proceed-types))
     ':abort-printing))
 
 (defmethod (condition :report) (stream)
-  (apply #'format stream format-string (send self :format-args)))
+  (apply #'format stream format-string (send self ':format-args)))
 
 (defprop condition-data-plist-lookup t :error-reporter)
 ;;; This is the default handler for format-string conditions.
@@ -206,7 +209,7 @@ It is a fast way of identifying error objects.")
 	 :dont-print-instance-variables)
 
 (defflavor error ((condition-identify error-identify-value)) (condition))
-(defflavor cl:error () (error) :alias-flavor)
+(defflavor cli:error () (error) :alias-flavor)
 
 (defun errorp (object)
   "T if OBJECT is a condition-object representing an error condition.
@@ -217,7 +220,7 @@ This is equivalent to (TYPEP OBJECT 'ERROR) but faster."
 
 (defun condition-typep (condition-instance condition-name)
   "T if CONDITION-NAME is one of the condition names possessed by CONDITION-INSTANCE."
-  (condition-typep-1 (send condition-instance :condition-names) condition-name))
+  (condition-typep-1 (send condition-instance ':condition-names) condition-name))
 
 (defun condition-typep-1 (names frob)
   (if (atom frob) (memq frob names)
@@ -232,7 +235,7 @@ This is equivalent to (TYPEP OBJECT 'ERROR) but faster."
   (if *print-escape*
       (condition-bind ((error 'condition-report-abort-printing))
         (lexpr-funcall-with-mapping-table continuation map args))
-    (send self :report stream)))
+    (send self ':report stream)))
   
 (defmethod (condition :reconstruction-init-plist) ()
   (let (accum)
@@ -251,8 +254,8 @@ This is equivalent to (TYPEP OBJECT 'ERROR) but faster."
 	accum
 	dont-mention)
     (dolist (component (dont-optimize (si:flavor-depends-on-all flavor)))
-      (setq dont-mention (si:union-eq (get component ':dont-print-instance-variables)
-				      dont-mention)))
+      (setq dont-mention (union (get component ':dont-print-instance-variables)
+				dont-mention)))
     (dolist (var (dont-optimize (si:flavor-all-instance-variables flavor)))
       (or (memq var dont-mention)
 	  (push (cons (intern (string var) si:pkg-keyword-package) var)
@@ -261,10 +264,10 @@ This is equivalent to (TYPEP OBJECT 'ERROR) but faster."
     accum))
 
 (defmethod (condition :string-for-printing) ()
-  (format:output nil (send self :report *standard-output*)))
+  (format:output nil (send self ':report *standard-output*)))
 
 (defmethod (condition :report-string) ()
-  (format:output nil (send self :report *standard-output*)))
+  (format:output nil (send self ':report *standard-output*)))
 
 (defmethod (condition :print-error-message-prefix) (sg brief stream)
   sg brief
@@ -290,11 +293,11 @@ This is equivalent to (TYPEP OBJECT 'ERROR) but faster."
 	   (terpri)))))
 
 (defmethod (condition :maybe-clear-input) (stream)
-  (send stream :clear-input))
+  (send stream ':clear-input))
 
 (defmethod (condition :print-error-message) (sg brief stream)
-  (send self :print-error-message-prefix sg brief stream)
-  (send self :report stream)
+  (send self ':print-error-message-prefix sg brief stream)
+  (send self ':report stream)
   (terpri stream))
 
 ;;; Four values, which are used to set ERROR-LOCUS-FRAME, CURRENT-FRAME,
@@ -320,13 +323,13 @@ This is equivalent to (TYPEP OBJECT 'ERROR) but faster."
   (command-loop sg self))
 
 (defmethod (condition :bug-report-recipient-system) ()
-  "CADR")					;We leave BUG-LISPM to the slimy world
+  "LISPM")
 
 (defconst default-bug-report-frames 5
   "Default number of frames to include in a bug report backtrace.")
 
 (defmethod (condition :bug-report-description) (stream &optional n-frames)
-  (send self :print-error-message error-sg nil stream)
+  (send self ':print-error-message error-sg nil stream)
   (format stream "Backtrace from the debugger:")
   (let ((*standard-output* stream)
 	total-frames)
@@ -379,15 +382,15 @@ An element can also be just T, which means don't look past here when
 looking for a resume handler for an unhandled SIGNAL on a non-error condition.")
 
 ;This is called by expansions of obsolete versions of CATCH-ERROR-RESTART, etc.
-;(defun si:catch-error-restart-1 (&rest ignore) t)
+(defun si:catch-error-restart-1 (&rest ignore) t)
 
 ;;; If the user has defined a case of :PROCEED instead of :PROCEED-ASKING-USER,
 ;;; call it.
 (defmethod (condition :proceed-asking-user) (proceed-type continuation read-object-function)
   read-object-function
-  (if (send self :proceed :operation-handled-p proceed-type)
+  (if (send self ':proceed ':operation-handled-p proceed-type)
       (let ((values (multiple-value-list
-		      (send self :proceed proceed-type))))
+		      (send self ':proceed proceed-type))))
 	(if (car values)
 	    ;; If :PROCEED handler returns NIL, don't really proceed.
 	    (apply continuation values)))
@@ -405,10 +408,9 @@ looking for a resume handler for an unhandled SIGNAL on a non-error condition.")
 (defmethod (condition :user-proceed-types) (proceed-types) proceed-types)
 
 (defmethod (condition :document-proceed-type) (proceed-type stream
-					       &optional (resume-handlers
-							   condition-resume-handlers))
-  (let ((string (or (send self :proceed-asking-user :case-documentation proceed-type)
-		    (send self :proceed :case-documentation proceed-type))))
+					       &optional (resume-handlers condition-resume-handlers))
+  (let ((string (or (send self ':proceed-asking-user ':case-documentation proceed-type)
+		    (send self ':proceed ':case-documentation proceed-type))))
     (if string (princ string stream)
       (do ((handler-list resume-handlers (cdr handler-list))
 	   (h))
@@ -438,8 +440,8 @@ looking for a resume handler for an unhandled SIGNAL on a non-error condition.")
 (defmethod (proceed-with-value-mixin :case :proceed-asking-user :new-value)
 	   (continuation read-object-function)
   "Return a value; the value of an expression you type."
-  (funcall continuation :new-value
-	   (funcall read-object-function :eval-read
+  (funcall continuation ':new-value
+	   (funcall read-object-function ':eval-read
 		    "Form to evaluate and return: ")))
 
 (defflavor no-action-mixin () () (:required-flavors condition))
@@ -470,7 +472,7 @@ you should call MAKE-CONDITION yourself and pass the result.
 If you do not specify the :PROCEED-TYPES argument, a list of all the
 proceed-types which the specific flavor of condition can handle is used."
   (let ((condition
-	  (if (typep signal-name-or-condition-object 'instance)
+	  (if (typep signal-name-or-condition-object ':instance)
 	      signal-name-or-condition-object
 	    (apply #'make-condition signal-name-or-condition-object args))))
     (signal-condition condition
@@ -565,18 +567,18 @@ The values of the last statement in the clause whih is used to proceed are retur
 			   :property-list (list . ,condition-properties))
        . ,clauses)))
 
-;(defflavor common-lisp-cerror () (ferror))
+;(DEFFLAVOR COMMON-LISP-CERROR () (FERROR))
 
-;(defmethod (common-lisp-cerror :report) (stream)
-;  (apply #'format stream format-string (send self :format-args)))
+;(DEFMETHOD (COMMON-LISP-CERROR :REPORT) (STREAM)
+;  (APPLY #'FORMAT STREAM FORMAT-STRING (SEND SELF ':FORMAT-ARGS)))
 
-;(defmethod (common-lisp-cerror :case :proceed-asking-user :continue)
-;	   (continuation ignore)
-;  (funcall continuation :continue))
+;(DEFMETHOD (COMMON-LISP-CERROR :CASE :PROCEED-ASKING-USER :CONTINUE)
+;	   (CONTINUATION IGNORE)
+;  (FUNCALL CONTINUATION ':CONTINUE))
 
-;(defmethod (common-lisp-cerror :case :document-proceed-type :continue)
-;	   (stream &optional ignore)
-;  (apply #'format stream (send self :continue-format-string) format-args))
+;(DEFMETHOD (COMMON-LISP-CERROR :CASE :DOCUMENT-PROCEED-TYPE :CONTINUE)
+;	   (STREAM &OPTIONAL IGNORE)
+;  (APPLY #'FORMAT STREAM (SEND SELF ':CONTINUE-FORMAT-STRING) FORMAT-ARGS))
   
 (defprop cerror t :error-reporter)
 (defun cerror (proceedable-flag unused &optional signal-name format-string &rest args)
@@ -616,8 +618,8 @@ In this case, NIL is always returned."
   (signal-condition (apply #'make-condition nil format-string args)
 		    '(:no-action)))
 
-(defprop cl:error t :error-reporter)
-(deff cl:error 'ferror)
+(defprop cli:error t :error-reporter)
+(deff cli:error 'ferror)
 
 (defprop ferror t :error-reporter)
 (defun ferror (signal-name &optional format-string &rest args)
@@ -632,11 +634,11 @@ or else a condition name to include in the signal, or NIL for none in particular
       (apply #'make-condition signal-name format-string args))
     nil t))
 
-(defun (:property maclisp-error make-condition-function) (ignore message object interrupt)
+(defun (maclisp-error make-condition-function) (ignore message object interrupt)
   (make-instance 'ferror
-		 :format-string (if object "~S ~A" "~*~A")
-		 :format-args (list object message)
-		 :condition-names (list (get interrupt 'condition-name))))
+		 ':format-string (if object "~S ~A" "~*~A")
+		 ':format-args (list object message)
+		 ':condition-names (list (get interrupt 'condition-name))))
 
 (defflavor ferror ()
 	   (proceed-with-value-mixin no-action-mixin error))
@@ -647,7 +649,7 @@ or else a condition name to include in the signal, or NIL for none in particular
 Normal error processing has no chance until this is set")
 
 (defconst *break-on-warnings* nil
-  "Non-NIL means CL:WARN calls BREAK rather than just printing a message.")
+  "Non-NIL means CLI:WARN calls BREAK rather than just printing a message.")
 
 (defun warn (format-string &rest args)
   "Use FORMAT to print a message on *ERROR-OUTPUT*.
@@ -707,13 +709,13 @@ this can often save a lot of time."
 		  ((symbolp (car h))
 		   (eq (car h) condition-name))
 		  (t (memq condition-name (car h))))
-	    (return (if (eq (cadr h) 'si::condition-case-throw) t 'maybe))))
+	    (return (if (eq (cadr h) 'si:condition-case-throw) t 'maybe))))
       (dolist (h condition-default-handlers)
 	(if (cond ((null (car h)) t)
 		  ((symbolp (car h))
 		   (eq (car h) condition-name))
 		  (t (memq condition-name (car h))))
-	    (return (if (eq (cadr h) 'si::condition-case-throw) t 'maybe))))
+	    (return (if (eq (cadr h) 'si:condition-case-throw) t 'maybe))))
       (dolist (h condition-resume-handlers)
 	(if (cond ((eq h t))
 		  ((null (car h)) t)
@@ -724,7 +726,7 @@ this can often save a lot of time."
 
 ;;; This saves each CONDITION-CASE from having to make a new function.
 (defun condition-throw (condition tag)
-  (throw tag condition))
+  (*throw tag condition))
 
 (defvar condition-proceed-types :unbound
   "List of proceed types specified in call to SIGNAL.
@@ -765,7 +767,7 @@ Any attempt to proceed simply returns to SIGNAL-CONDITION's caller.
 UCODE-ERROR-STATUS is non-NIL only when this function is called
  as a result of an error detected in the microcode; it is of interest
  only to routines of conditions that the microcode can signal."
-  (let ((condition-names (send condition :condition-names))
+  (let ((condition-names (send condition ':condition-names))
 	(debugger-called nil))
     (and trace-conditions
 	 (or (eq trace-conditions t)
@@ -783,13 +785,13 @@ UCODE-ERROR-STATUS is non-NIL only when this function is called
       (when (and errset-status
 		 (not errset)
 		 (errorp condition)
-		 (not (send condition :dangerous-condition-p))
-		 (not (send condition :debugging-condition-p)))
+		 (not (send condition ':dangerous-condition-p))
+		 (not (send condition ':debugging-condition-p)))
 	(if errset-print-msg
 	    ;; Note: MUST be "brief", since some methods will lose
 	    ;; if executed in this stack group and not brief.
-	    (send condition :print-error-message current-stack-group t *standard-output*))
-	(throw 'errset-catch nil))
+	    (send condition ':print-error-message current-stack-group t *standard-output*))
+	(*throw 'errset-catch nil))
       (if (or use-debugger ucode-error-status)
 	  (setq debugger-called t
 		tem1 (let ((error-depth (1+ error-depth)))
@@ -855,7 +857,7 @@ is used regardless of its proceed type; however, in this case,
 a T in the list CONDITION-RESUME-HANDLERS terminates the scan."
   (let ((h (find-resume-handler condition proceed-type)))
     (when h
-      (call (fifth h) nil condition :spread (nthcdr 5 h) :spread args)
+      (call (fifth h) nil condition ':spread (nthcdr 5 h) ':spread args)
       (ferror nil "A condition resume handler for proceed-type ~S returned to its caller." proceed-type)))
   (and proceed-type
        (ferror nil "Invalid proceed-type ~S returned by handler for ~S."
@@ -864,7 +866,7 @@ a T in the list CONDITION-RESUME-HANDLERS terminates the scan."
 (defun find-resume-handler (condition &optional proceed-type
 			    (resume-handlers condition-resume-handlers)
 			    &aux (condition-names
-				   (and condition (send condition :condition-names))))
+				   (and condition (send condition ':condition-names))))
   "Return the resume handler that would be run for PROCEED-TYPE on CONDITION.
 This is how INVOKE-RESUME-HANDLER finds the handler to run.
 RESUME-HANDLERS is the list of resume handlers to search
@@ -888,7 +890,54 @@ The value is an element of RESUME-HANDLERS, or NIL if no handler is found."
 		 (funcall (caddr h) condition))
 	     (return h))))))
 
-;(def describe-proceed-types "Moved to SYS2; EHC")
+(defun describe-proceed-types (sg error-object)
+  "Print documentation of the available proceed-types and characters to get them.
+ERROR-OBJECT is the object to document.  Output goes to *STANDARD-OUTPUT*."
+  (when error-handler-running
+    (let* ((proceed-types  (send error-object ':user-proceed-types
+				 (sg-condition-proceed-types sg error-object)))
+	   (resume-handlers (symeval-in-stack-group 'condition-resume-handlers sg))
+	   (abort-handler (find-resume-handler abort-object nil resume-handlers)))
+      (do ((keywords (append proceed-types special-commands)
+		     (cdr keywords))
+	   (proceed-types proceed-types
+			  (cdr proceed-types))
+	   tem
+	   this-one-for-abort
+	   (i 0 (1+ i)))
+	  ((null keywords))
+	(if (zerop i)
+	    (format t "~&~%Commands available for this particular error:~2%"))
+	(format t "~C" (+ (char-code #/S-A) i))
+	(when proceed-types
+	  (setq this-one-for-abort
+		(eq (find-resume-handler error-object (car keywords) resume-handlers)
+		    abort-handler))
+	  (if this-one-for-abort (setq abort-handler nil)))
+	(cond ((and (zerop i) (atom (car proceed-types)))
+	       ;; Resume only works for proceed-types that are atomic.
+	       (format t ", ~C" #/Resume))
+	      ((setq tem (assq (car keywords)
+			       (if proceed-types *proceed-type-special-keys*
+				 *special-command-special-keys*)))
+	       (format t ", ~C" (cdr tem)))
+	      ;; If Abort is synonymous with this one, mention that.
+	      (this-one-for-abort
+	       (format t ", ~C" #/Abort)))
+	(format t ":~13T")
+	(send error-object
+	      (if proceed-types
+		  ':document-proceed-type
+		':document-special-command)
+	      (car keywords) *standard-output* resume-handlers)
+	(send *standard-output* ':fresh-line))
+      (when abort-handler
+	;; Abort is not currently synonymous with any of the proceed types.
+	;; So document it specially.
+	(format t "~C:~13T" #/Abort)
+	(send abort-object ':document-proceed-type (second abort-handler)
+	      *standard-output* resume-handlers)
+	(send *standard-output* ':fresh-line)))))
 
 (defmethod (condition :proceed-type-p) (proceed-type)
   (or (memq proceed-type condition-proceed-types)
@@ -920,7 +969,7 @@ The value is an element of RESUME-HANDLERS, or NIL if no handler is found."
   "Return a list of all resume handler keywords available for CONDITION's handlers.
 These resume-types, together with the proceed-types specified in signaling,
 are the possible keywords that a condition handler may return as its first value."
-  (let ((condition-names (send condition :condition-names))
+  (let ((condition-names (send condition ':condition-names))
 	types)
     (do ((handler-list resume-handlers (cdr handler-list))
 	 (h))
@@ -1058,9 +1107,9 @@ always one at a time."
 
 (defsignal-explicit fquery condition (options format-string &rest format-args)
   "By default, calls to FQUERY signal this."
-  :property-list (list :options options)		    
-  :format-string format-string
-  :format-args (copy-list format-args))
+  ':property-list (list ':options options)		    
+  ':format-string format-string
+  ':format-args (copy-list format-args))
 
 (defsignal zwei:barf condition ()
   "All calls to ZWEI:BARF signal this condition, normally ignored.")
@@ -1092,8 +1141,8 @@ for cases in which the result is not defined"
 (defmethod (unclaimed-message-error :case :proceed-asking-user :new-operation)
 	   (proceed-function read-argument-function)
   "Use another operation instead.  You specify the operation."
-  (funcall proceed-function :new-operation
-	   (funcall read-argument-function :eval-read
+  (funcall proceed-function ':new-operation
+	   (funcall read-argument-function ':eval-read
 		    "Form to evaluate to get operation to perform instead:~%")))
 
 (defsignal sys:unclaimed-message unclaimed-message-error (object message arguments)
@@ -1120,10 +1169,10 @@ for cases in which the result is not defined"
 (defmethod (sys:undefined-keyword-argument :case :proceed-asking-user :new-keyword)
 	   (continuation read-object-function)
   "Use a different keyword, which you must type in."
-  (funcall continuation :new-keyword
-	   (funcall read-object-function :eval-read
+  (funcall continuation ':new-keyword
+	   (funcall read-object-function ':eval-read
 		    "Form to evaluate to get the keyword to use instead of ~S: "
-		    (send self :keyword))))
+		    (send self ':keyword))))
 
 (defsignal stream-closed (error stream-closed stream-invalid) (stream)
   "I//O to STREAM, which has been closed and no longer knows how to do I//O.")
@@ -1154,7 +1203,7 @@ for cases in which the result is not defined"
 
 (defmethod (parse-error :case :proceed-asking-user :no-action) (continuation ignore)
   "Continue reading, trying to ignore the problem."
-  (funcall continuation :no-action))
+  (funcall continuation ':no-action))
 
 (defflavor package-error () (error)
   (:documentation "All package errors are based on this"))
@@ -1291,7 +1340,7 @@ for cases in which the result is not defined"
 
 (defmethod (read-end-of-file :case :proceed-asking-user :no-action) (continuation ignore)
   "Close off all unfinished lists."
-  (funcall continuation :no-action))
+  (funcall continuation ':no-action))
 
 (defsignal read-end-of-file (read-end-of-file read-error) (stream)
   "End of file within READ on STREAM.
@@ -1335,17 +1384,17 @@ Occurs only within a vertical-bar construct.  STRING is the string read so far."
   "Try the disk operation again."
   (if (funcall read-object-function '(:fquery)
 	       "Retry the disk operation? ")
-      (funcall continuation :retry-disk-operation)))
+      (funcall continuation ':retry-disk-operation)))
 
 (defflavor redefinition () (warning))
 
 (defmethod (redefinition :case :proceed-asking-user :proceed) (continuation ignore)
   "Perform this and all further redefinitions of that file by this file."
-  (funcall continuation :proceed))
+  (funcall continuation ':proceed))
 
 (defmethod (redefinition :case :proceed-asking-user :inhibit-definition) (continuation ignore)
   "Continue execution but skip this redefinition."
-  (funcall continuation :inhibit-definition))
+  (funcall continuation ':inhibit-definition))
 
 (defsignal sys:redefinition redefinition
   (definition-type name new-pathname old-pathname)
@@ -1362,11 +1411,11 @@ Both of the last two are generic pathnames or NIL.")
   :inittable-instance-variables)
 
 (defmethod (remote-network-error :after :init) (ignore)
-  (setq connection (getf si:property-list :connection))
-  (setq foreign-host (or (getf si:property-list :foreign-host)
+  (setq connection (getf si:property-list ':connection))
+  (setq foreign-host (or (getf si:property-list ':foreign-host)
 			 (and connection
 			      (si:get-host-from-address
-				(chaos:foreign-address connection) :chaos)))))
+				(chaos:foreign-address connection) ':chaos)))))
 
 (defsignal sys:network-resources-exhausted local-network-error ()
   "The connection table was full, or something else has run out.")
@@ -1402,9 +1451,9 @@ CONNECTION is the connection object we used while trying.")
 (defsignal sys:no-server-up connection-error ()
   "No server was available for some protocol this machine wanted to use.")
 
-(defsignal sys:host-stopped-responding (bad-connection-state
-					sys:host-stopped-responding
-					host-not-responding)
+(defsignal sys:host-stopped-responding
+	   (bad-connection-state
+	     sys:host-stopped-responding host-not-responding)
   (connection)
   "The foreign host stopped responding while we were connected.
 CONNECTION is the connection object.")
@@ -1435,7 +1484,7 @@ if none was given.  CONNECTION is the connection object.")
 (defmethod (break :case :proceed-asking-user :no-action) (continuation ignore)
   "Proceed."
   (format t " Continue from break.~%")
-  (funcall continuation :no-action))
+  (funcall continuation ':no-action))
 
 (defmethod (break :print-error-message-prefix) (sg brief stream)
   sg brief
@@ -1464,7 +1513,7 @@ if none was given.  CONNECTION is the connection object.")
 	      (declare (function-parent ,error-name def-ucode-error))
 	      sg ete
 	      (make-instance ',error-flavor
-			     :condition-names ',condition-names
+			     ':condition-names ',condition-names
 			     ,@init-options)))))
 
 (defun make-ucode-error (error-name sg ete)
@@ -1474,8 +1523,8 @@ if none was given.  CONNECTION is the connection object.")
 (defmacro def-ucode-format-error (error-name error-flavor &body format-args)
   (declare (arglist error-name error-flavor format-string &body format-args))
   `(def-ucode-error ,error-name ,error-flavor
-     :format-string ,(car format-args)
-     :format-args (list . ,(cdr format-args))))
+     ':format-string ,(car format-args)
+     ':format-args (list . ,(cdr format-args))))
 
 (defun sg-proceed-micro-pc (sg tag)
   "Restart SG from an error in the microcode, at micro-pc determined by TAG.
@@ -1488,7 +1537,7 @@ control will be returned from the micro-routine that got the error."
   (let ((pc (if tag (cdr (assq tag restart-list)) (1+ (sg-trap-micro-pc sg)))))
     (when (null pc)
       (bad-hacker tag " no such restart!")
-      (throw 'quit nil))
+      (*throw 'quit nil))
     ;; Since the micro stack is saved backwards, the top of the stack is buried
     ;; where it is hard to get at.
     (let ((rp (sg-regular-pdl sg))
@@ -1636,8 +1685,8 @@ control will be returned from the micro-routine that got the error."
 (defmethod (arg-type-error :case :proceed-asking-user :argument-value)
 	   (continuation read-object-function)
   "Use a different argument.  You type an expression for the new value."
-  (funcall continuation :argument-value
-	   (funcall read-object-function :eval-read
+  (funcall continuation ':argument-value
+	   (funcall read-object-function ':eval-read
 		    "Form to evaluate and use as replacement argument: ")))
 
 (defmethod (arg-type-error :case :proceed-ucode-with-args :argument-value)
@@ -1677,10 +1726,10 @@ control will be returned from the micro-routine that got the error."
 (defmethod (wrong-type-argument-error :case :proceed-asking-user :argument-value)
 	   (continuation read-object-function)
   "Use a different argument.  You type an expression for the new value."
-  (funcall continuation :argument-value
-	   (funcall read-object-function :eval-read
+  (funcall continuation ':argument-value
+	   (funcall read-object-function ':eval-read
 	     (format nil "Form to be evaluated and used as replacement value for ~A:~%"
-		     (send self :arg-name)))))
+		     (send self ':arg-name)))))
 
 (defflavor failed-assertion (places) (error)
   :inittable-instance-variables
@@ -1696,7 +1745,7 @@ control will be returned from the micro-routine that got the error."
 	   (proceed-type continuation read-object-function)
   (when (memq proceed-type places)
     (funcall continuation proceed-type
-	     (funcall read-object-function :eval-read
+	     (funcall read-object-function ':eval-read
 		      "Form to be evaluated and used as replacement value for ~S:~%"
 		      proceed-type))
     t))
@@ -1713,10 +1762,10 @@ control will be returned from the micro-routine that got the error."
 ;;;   Force return from the microroutine executing at the time.
 
 (def-ucode-error fixnum-overflow fixnum-overflow-error
-  :function (sg-erring-function sg)
-  :number (sg-contents sg (second ete))
-  :location-in-sg (second ete)
-  :push-new-value-flag
+  ':function (sg-erring-function sg)
+  ':number (sg-contents sg (second ete))
+  ':location-in-sg (second ete)
+  ':push-new-value-flag
   (progn (or (memq (third ete) '(push nopush))
 	     (bad-hacker ete "Bad ETE, must be PUSH or NOPUSH."))
 	 (third ete)))
@@ -1735,10 +1784,10 @@ control will be returned from the micro-routine that got the error."
 (defmethod (fixnum-overflow-error :case :proceed-asking-user :new-value)
 	   (continuation read-object-function &aux num)
   "Return a value specified by you.  You type an expression for the new value."
-  (setq num (funcall read-object-function :eval-read
+  (setq num (funcall read-object-function ':eval-read
 		     "Form to evaluate to get fixnum to return instead: "))
   (check-type num fixnum)
-  (funcall continuation :new-value num))
+  (funcall continuation ':new-value num))
 
 (defmethod (fixnum-overflow-error :case :proceed-ucode-with-args :new-value)
 	   (sg value &rest ignore)
@@ -1774,7 +1823,7 @@ control will be returned from the micro-routine that got the error."
 		 '(:fquery :list-choices nil :fresh-line nil)
 		 "Proceeds using 0.0~:[s~;f~]0 as the value instead? "
 		 (not small-float-p))
-    (funcall continuation :use-zero)))
+    (funcall continuation ':use-zero)))
 
 (defmethod (floating-exponent-underflow-error :case :proceed-ucode-with-args
 					      :use-zero)
@@ -1807,7 +1856,7 @@ control will be returned from the micro-routine that got the error."
 	   (continuation read-object-function &aux num)
   "Use a float specified by you as the result."
   (do-forever
-    (setq num (funcall read-object-function :eval-read
+    (setq num (funcall read-object-function ':eval-read
 		       (if small-float-p "Form evaluating to short-float to return instead: "
 			 "Form evaluating to float to return instead: ")))
     (cond ((and small-float-p
@@ -1816,7 +1865,7 @@ control will be returned from the micro-routine that got the error."
 	  ((floatp num)
 	   (return nil)))
     (format t "Please use a ~:[~;short~] float.~%" small-float-p))
-  (funcall continuation :new-value num))
+  (funcall continuation ':new-value num))
 
 (defmethod (floating-exponent-overflow-error :case :proceed-ucode-with-args :new-value)
 	   (sg value &rest ignore)
@@ -1830,23 +1879,23 @@ control will be returned from the micro-routine that got the error."
 ;;; You cannot recover.
 ;;; The second element of the ETE can be the location of the dividend.
 
-(defun (:property divide-by-zero make-ucode-error-function) (ignore sg ete)
-  (declare (ignore ete))
+(defun (divide-by-zero make-ucode-error-function) (ignore sg ete)
+  ete
   (make-instance 'arithmetic-error
-		 :condition-names
+		 ':condition-names
 		 (if (eq (sg-erring-function sg) '^)
 		     '(sys:illegal-expt sys:zero-to-negative-power)
 		   '(sys:divide-by-zero))
-		 :property-list
+		 ':property-list
 		 (if (second ete)
 		     `(:function ,(sg-erring-function sg)
 				 :dividend ,(sg-contents sg (second ete)))
 		   `(:function ,(sg-erring-function sg)))
-		 :format-string
+		 ':format-string
 		 (if (eq (sg-erring-function sg) '^)
 		     "There was an attempt to raise zero to a negative power in ~S."
 		   "There was an attempt to divide a number by zero in ~S.")
-		 :format-args (list (sg-erring-function sg))))
+		 ':format-args (list (sg-erring-function sg))))
 
 (defflavor bad-array-mixin (array array-location-in-sg restart-tag)
 	   ()
@@ -1857,8 +1906,8 @@ control will be returned from the micro-routine that got the error."
 (defmethod (bad-array-mixin :case :proceed-asking-user :new-array)
 	   (continuation read-object-function)
   "Use a different array.  You type an expression for the array to use."
-  (funcall continuation :new-array
-	   (funcall read-object-function :eval-read
+  (funcall continuation ':new-array
+	   (funcall read-object-function ':eval-read
 		    "Form to eval to get array to use instead: ")))
 
 (defmethod (bad-array-mixin :ucode-proceed-types) ()
@@ -2056,18 +2105,18 @@ control will be returned from the micro-routine that got the error."
 	  ( (length subscripts-used) (array-rank object)))
       (let (num)
 	(do-forever
-	  (setq num (funcall read-object-function :eval-read
+	  (setq num (funcall read-object-function ':eval-read
 			     "Form evaluating to index to use instead: "))
 	  (if (and (integerp num)
 		   (< -1 num subscript-limit))
 	      (return))
 	  (format t "Please use a positive fixnum less than ~D.~%" subscript-limit))
-	(funcall continuation :new-subscript num))
+	(funcall continuation ':new-subscript num))
     (do ((i 0 (1+ i))
 	 subscripts)
 	((= i (length subscripts-used))
-	 (apply continuation :new-subscript (nreverse subscripts)))
-      (push (funcall read-object-function :eval-read
+	 (apply continuation ':new-subscript (nreverse subscripts)))
+      (push (funcall read-object-function ':eval-read
 		     " Subscript ~D: " i)
 	    subscripts))))
 
@@ -2157,18 +2206,16 @@ control will be returned from the micro-routine that got the error."
 
 (def-ucode-error number-called-as-function (invalid-function)
   :property-list `(:function ,(sg-contents sg (second ete)))
-;character lossage
-  :format-string "The ~:[number~;character~], ~S, was called as a function"
-  :format-args (list (characterp (sg-contents sg (second ete)))
-		     (sg-contents sg (second ete))))
+  :format-string "The number, ~S, was called as a function"
+  :format-args (list (sg-contents sg (second ete))))
 
 (defflavor invalid-function () (error))
 
 (defmethod (invalid-function :case :proceed-asking-user :new-function)
 	   (continuation read-object-function)
   "Use a different function.  You type an expression for one."
-  (funcall continuation :new-function
-	   (funcall read-object-function :eval-read "Form to evaluate to get function to use instead:~%")))
+  (funcall continuation ':new-function
+	   (funcall read-object-function ':eval-read "Form to evaluate to get function to use instead:~%")))
 
 (defmethod (invalid-function :ucode-proceed-types) ()
   '(:new-function))
@@ -2237,8 +2284,8 @@ control will be returned from the micro-routine that got the error."
 (defmethod (throw-tag-not-seen-error :case :proceed-asking-user :new-tag)
 	   (continuation read-object-function)
   "Throw to another tag.  You type an expression for it."
-  (funcall continuation :new-tag
-	   (funcall read-object-function :eval-read
+  (funcall continuation ':new-tag
+	   (funcall read-object-function ':eval-read
 		    "Form evaluating to tag to use instead: ")))
 
 (defmethod (throw-tag-not-seen-error :case :proceed-ucode-with-args :new-tag)
@@ -2303,8 +2350,8 @@ but SELF is ~S, not an instance."
   (sg-contents sg (third ete)))
 
 (def-ucode-error nonexistent-instance-variable (error instance-lacks-instance-variable)
-  :format-string "Compiled code referred to instance variable ~S, no longer present in flavor ~S."
-  :format-args (decode-nonexistent-instance-variable sg))
+  ':format-string "Compiled code referred to instance variable ~S, no longer present in flavor ~S."
+  ':format-args (decode-nonexistent-instance-variable sg))
 
 (defun decode-nonexistent-instance-variable (sg)
   (let ((flavor (si:fef-flavor-name (aref (sg-regular-pdl sg) (sg-ap sg)))))
@@ -2348,7 +2395,7 @@ The width, times the number of bits per pixel, must be a multiple of 32.")
 
 (defmethod (turd-alert-error :case :proceed-asking-user :no-action) (continuation ignore)
   "Proceed, perhaps writing garbage on the screen."
-  (funcall continuation :no-action))
+  (funcall continuation ':no-action))
 
 (defmethod (turd-alert-error :case :proceed-ucode-with-args :no-action) (sg &rest ignore)
   (sg-proceed-micro-pc sg nil))
@@ -2359,7 +2406,7 @@ The width, times the number of bits per pixel, must be a multiple of 32.")
 ;;; Arg is either SPECIAL or REGULAR
 
 (def-ucode-error pdl-overflow pdl-overflow-error
-  :pdl-name (cdr (assq (second ete) '((regular . :regular) (special . :special)))))
+  ':pdl-name (cdr (assq (second ete) '((regular . :regular) (special . :special)))))
 
 (defflavor pdl-overflow-error (pdl-name)
 	   (error)
@@ -2374,7 +2421,7 @@ The width, times the number of bits per pixel, must be a multiple of 32.")
 
 (defmethod (pdl-overflow-error :case :proceed-asking-user :grow-pdl) (continuation ignore)
   "Make the stack larger and proceed."
-  (funcall continuation :grow-pdl))
+  (funcall continuation ':grow-pdl))
 
 (defmethod (pdl-overflow-error :case :proceed-ucode-with-args :grow-pdl) (sg &rest ignore)
   (format t "Continuing with more pdl.~%")
@@ -2424,9 +2471,9 @@ The width, times the number of bits per pixel, must be a multiple of 32.")
 
 ;;; RCONS-FIXED
 (def-ucode-error rcons-fixed (error cons-in-fixed-area)
-  :property-list `(:area ,(area-name (sg-contents sg 'm-s)))
-  :format-string "There was an attempt to allocate storage in the fixed area ~S."
-  :format-args (list (area-name (sg-contents sg 'm-s))))
+  ':property-list `(:area ,(area-name (sg-contents sg 'm-s)))
+  ':format-string "There was an attempt to allocate storage in the fixed area ~S."
+  ':format-args (list (area-name (sg-contents sg 'm-s))))
 
 ;;; REGION-TABLE-OVERFLOW
 (def-ucode-format-error region-table-overflow dangerous-error
@@ -2475,11 +2522,11 @@ cannot be RPLACD'ed.  The list is ~S."
 
 (defmethod (mar-break :case :proceed-asking-user :no-action) (continuation ignore)
   "Proceed."
-  (funcall continuation :no-action))
+  (funcall continuation ':no-action))
 
 (defmethod (mar-break :case :proceed-asking-user :proceed-no-write) (continuation ignore)
   "Proceed, not changing the cell contents."
-  (funcall continuation :proceed-no-write))
+  (funcall continuation ':proceed-no-write))
 
 (defmethod (mar-break :case :proceed-ucode-with-args :no-action) (sg &rest ignore)
   ;; By simply returning without calling SG-PROCEED-MICRO-PC, the PGF-R will return
@@ -2521,8 +2568,8 @@ cannot be RPLACD'ed.  The list is ~S."
 	    (t (setq cell-type nil))))
     (values original-address current-address cell-type symbol)))
 
-(defun (:property trans-trap make-ucode-error-function) (ignore sg ete)
-  (declare (ignore ete))
+(defun (trans-trap make-ucode-error-function) (ignore sg ete)
+  ete
   (without-interrupts
     (multiple-value-bind (original-address current-address cell-type symbol)
 	(trans-trap-decode sg)
@@ -2539,16 +2586,18 @@ cannot be RPLACD'ed.  The list is ~S."
 		     :data-type (aref (sg-regular-pdl sg) (sg-regular-pdl-pointer sg))
 		     :pointer (aref (sg-regular-pdl sg) (1- (sg-regular-pdl-pointer sg)))
 		     :containing-structure (%find-structure-header original-address)
-		     :condition-names (case cell-type
-					(:value '(unbound-symbol))
-					(:closure
-					 (if (typep (%find-structure-header original-address)
-						    'instance)
-					     '(unbound-instance-variable)
-					     '(unbound-closure-variable)))
-					(:function `(undefined-function))
-					(t '(bad-data-type-in-memory)))))))
+		     :condition-names
+		     (case cell-type
+		       (:value '(unbound-symbol))
+		       (:closure
+			(if (typep (%find-structure-header original-address) ':instance)
+			    '(unbound-instance-variable)
+			  '(unbound-closure-variable)))
+		       (:function `(undefined-function))
+		       (t '(bad-data-type-in-memory)))))))
   
+;Not patched in system 98 - omits AUTOMATIC-ABORT-DEBUGGER-MIXIN
+;which has been eliminated from the source.
 (defflavor cell-contents-error
 	(address current-address
 	 cell-type symbol containing-structure
@@ -2562,7 +2611,7 @@ cannot be RPLACD'ed.  The list is ~S."
 (defmethod (unbound-variable :variable-name) () symbol)
 
 (defmethod (unbound-variable :instance) ()
-  (and (typep containing-structure 'instance) containing-structure))
+  (and (typep containing-structure ':instance) containing-structure))
 
 (defflavor undefined-function () (cell-contents-error))
 
@@ -2608,7 +2657,7 @@ cannot be RPLACD'ed.  The list is ~S."
 		       stream "It now has the definition"
 		       current-address))
 		 (and (symbolp symbol)
-		      (get symbol 'compiler::qintcmp)
+		      (get symbol 'compiler:qintcmp)
 		      (let ((fn (rp-function-word (sg-regular-pdl sg)
 						  (sg-out-to-interesting-active
 						    sg error-locus-frame))))
@@ -2647,10 +2696,10 @@ cannot be RPLACD'ed.  The list is ~S."
 (defmethod (cell-contents-error :debugger-command-loop)
 	   (error-sg &optional (error-object self))
   (declare (special error-object))
-  (catch 'quit
+  (*catch 'quit
     (catch-error-restart ((sys:abort error) "Return to debugger command loop.")
       (and enable-trans-trap-dwim
-	   (send error-object :proceed-asking-user :package-dwim
+	   (send error-object ':proceed-asking-user ':package-dwim
 		 'proceed-error-sg 'read-object))))
   nil)
 
@@ -2662,7 +2711,7 @@ cannot be RPLACD'ed.  The list is ~S."
 				    (:function fdefinedp fdefinition))))
        (car (setq new-val
 		  (sg-funcall error-sg 'cell-contents-error-dwimify symbol cell terminal-io)))
-       (funcall continuation :new-value (cadr new-val))))
+       (funcall continuation ':new-value (cadr new-val))))
 
 ;;; CELL is a list (symbolic-name dwimify-definition-type value-extractor)
 (defun cell-contents-error-dwimify (sym cell *query-io*)
@@ -2679,8 +2728,8 @@ cannot be RPLACD'ed.  The list is ~S."
   "Proceed, using current contents if legal, or reading replacement value."
   (if (not (%p-contents-safe-p current-address))
       ;; Location still contains garbage, get a replacement value.
-      (send self :proceed-asking-user :new-value continuation read-object-function)
-    (funcall continuation :no-action)))
+      (send self ':proceed-asking-user ':new-value continuation read-object-function)
+    (funcall continuation ':no-action)))
 
 (defmethod (cell-contents-error :case :proceed-asking-user :new-value)
 	   (continuation read-object-function)
@@ -2694,19 +2743,19 @@ cannot be RPLACD'ed.  The list is ~S."
        (setq prompt (format nil
 			    "Form to evaluate and use instead of ~S's function definition:~%"
 			    symbol))))
-    (funcall continuation :new-value (funcall read-object-function :eval-read prompt))))
+    (funcall continuation ':new-value (funcall read-object-function ':eval-read prompt))))
 
 (defmethod (cell-contents-error :case :proceed-asking-user :store-new-value)
 	   (continuation read-object-function)
   "Use the value of an expression you type, and store that value."
-  (let ((value (funcall read-object-function :eval-read
+  (let ((value (funcall read-object-function ':eval-read
 		 (or (case cell-type
 		       (:value
-			(format nil "Form to evaluate and ~S ~S to: " 'setq symbol))
+			(format nil "Form to evaluate and SETQ ~S to: " symbol))
 		       (:function
-			(format nil "Form to evaluate and FSET ~S to: " 'fset symbol)))
+			(format nil "Form to evaluate and FSET' ~S to: " symbol)))
 		     "Form to evaluate and store back: "))))
-    (funcall continuation :store-new-value value)))
+    (send continuation ':store-new-value value)))
 
 (defmethod (cell-contents-error :ucode-proceed-types) ()
   (if (memq cell-type '(:value :function))
@@ -2748,10 +2797,10 @@ cannot be RPLACD'ed.  The list is ~S."
   (loop with error-code = (aref (sg-regular-pdl sg) (sg-regular-pdl-pointer sg))
 	for symbol in '(%%m-esubs-too-few-args %%m-esubs-too-many-args %%m-esubs-bad-dt)
 	for flag in '(too-few-arguments too-many-arguments )
-	when (ldb-test (symbol-value symbol) error-code)
+	when (ldb-test (symeval symbol) error-code)
 	  return flag))
 
-(defun (:property function-entry make-ucode-error-function) (ignore sg ignore)
+(defun (function-entry make-ucode-error-function) (ignore sg ignore)
   (make-instance 'function-entry-error
 		 :function (aref (sg-regular-pdl sg) (sg-ap sg))
 		 :argument-list (cdr (get-frame-function-and-args sg (sg-ap sg)))
@@ -2766,7 +2815,7 @@ cannot be RPLACD'ed.  The list is ~S."
 (defsignal-explicit sys:too-many-arguments (function-entry-error sys:too-many-arguments)
   (ignore function nargs argument-list)
   "FUNCTION was called with only NARGS args, which were ARGUMENT-LIST."
-  :function function :nargs nargs :argument-list argument-list)
+  ':function function ':nargs nargs ':argument-list argument-list)
 
 ;Not patched in system 98 - omits AUTOMATIC-ABORT-DEBUGGER-MIXIN
 ;which has been eliminated from the source.
@@ -2811,18 +2860,18 @@ cannot be RPLACD'ed.  The list is ~S."
 (defmethod (function-entry-error :case :proceed-asking-user :additional-arguments)
 	   (continuation read-object-function)
   "Try again with additional arguments.  You type expressions for them."
-  (send self :proceed-asking-user :new-argument-list continuation read-object-function))
+  (send self ':proceed-asking-user ':new-argument-list continuation read-object-function))
 
 (defmethod (function-entry-error :case :proceed-asking-user :fewer-arguments)
 	   (continuation read-object-function)
   "Try again, dropping some of the arguments.  You must confirm."
-  (send self :proceed-asking-user :new-argument-list continuation read-object-function))
+  (send self ':proceed-asking-user ':new-argument-list continuation read-object-function))
 
 (defmethod (function-entry-error :case :proceed-asking-user :new-argument-list)
 	   (continuation read-object-function)
-  (let* ((-function- (send self :function))
-	 (-argument-list- (send self :argument-list))
-	 (-nargs- (send self :nargs))
+  (let* ((-function- (send self ':function))
+	 (-argument-list- (send self ':argument-list))
+	 (-nargs- (send self ':nargs))
 	 (form (cons -function- -argument-list-))
 	 (args-info (args-info -function-))
 	 (args-wanted (ldb %%arg-desc-min-args args-info))
@@ -2837,7 +2886,7 @@ cannot be RPLACD'ed.  The list is ~S."
 	     (multiple-value-bind (value flag)
 		 (funcall read-object-function
 			  (if ( i args-wanted)
-			      :eval-read-or-end :eval-read)
+			      ':eval-read-or-end ':eval-read)
 			  (if ( i args-wanted)
 			      "Arg ~D~A, or ~C: " "Arg ~D~A: ")
 			  i
@@ -2847,23 +2896,23 @@ cannot be RPLACD'ed.  The list is ~S."
 	       (setq new-args
 		     (nconc new-args
 			    (ncons value)))))
-	   (funcall continuation :new-argument-list
+	   (funcall continuation ':new-argument-list
 		    (append (cdr form) new-args)))
 	  ((or ( -nargs- max-args)
 	       (ldb-test %%arg-desc-any-rest args-info))
 	   (if (funcall read-object-function '(:fquery) "Try ~S again? " form)
-	       (funcall continuation :new-argument-list (cdr form))))
+	       (funcall continuation ':new-argument-list (cdr form))))
 	  ((funcall read-object-function '(:fquery)
 		    "Call again with the last ~[~1;~:;~:*~D ~]argument~:P dropped? "
 		    (- -nargs- max-args))
-	   (funcall continuation :new-argument-list
+	   (funcall continuation ':new-argument-list
 		    (firstn max-args (cdr form)))))))
 
 (defmethod (function-entry-error :case :proceed-asking-user :return-value)
 	   (continuation read-object-function)
   "Pretend the function ran; you type an expression for the value it (supposedly) returns."
-  (funcall continuation :return-value
-	   (funcall read-object-function :eval-read
+  (funcall continuation ':return-value
+	   (funcall read-object-function ':eval-read
 		    "Form to evaluate and return from ~S: "
 		    (function-name (send self :function)))))
 
@@ -2895,11 +2944,10 @@ cannot be RPLACD'ed.  The list is ~S."
 	   (condition))
 
 (defmethod (dont-clear-input-ucode-breakpoint :maybe-clear-input) (stream)
-  (declare (ignore stream))
-  nil)
+  stream nil)
 
 (defmethod (dont-clear-input-ucode-breakpoint :print-error-message-prefix) (sg brief stream)
-  (declare (ignore sg brief))
+  sg brief
   (princ ">> " stream))
 
 (defmethod (dont-clear-input-ucode-breakpoint :ucode-proceed-types) ()
@@ -2913,35 +2961,34 @@ cannot be RPLACD'ed.  The list is ~S."
 	   (continuation ignore)
   "Proceed."
   (format t " Continue from break.~%")
-  (funcall continuation :no-action))
+  (funcall continuation ':no-action))
 
-(defmethod (dont-clear-input-ucode-breakpoint :debugging-condition-p) ()
-  t)
+(defmethod (dont-clear-input-ucode-breakpoint :debugging-condition-p) () t)
 
 (defsignal trace-breakpoint step-break-error ()
   "Used by (TRACE (FOO ERROR))")
 
 (def-ucode-error breakpoint step-break-error
-  :format-string "Breakpoint")
+  ':format-string "Breakpoint")
 
 (def-ucode-error step-break step-break-error
-  :format-string "Step break")
+  ':format-string "Step break")
 
 (defflavor step-break-error () (dont-clear-input-ucode-breakpoint))
 
 (defmethod (step-break-error :ucode-proceed-types) ()
-  '(:no-action))
+  ())
 
 (def-ucode-error call-trap call-trap-error
-  :function (rp-function-word (sg-regular-pdl sg) (sg-ipmark sg))
-  :catch-value (aref (sg-regular-pdl sg) (+ (sg-ipmark sg) 2)))
+  ':function (rp-function-word (sg-regular-pdl sg) (sg-ipmark sg))
+  ':catch-value (aref (sg-regular-pdl sg) (+ (sg-ipmark sg) 2)))
 
 (defflavor call-trap-error (function catch-value)
 	   (dont-clear-input-ucode-breakpoint)
   :gettable-instance-variables
   :initable-instance-variables)
 
-(defun (:property call-trap enter-error-handler) (sg ignore)
+(defun (call-trap enter-error-handler) (sg ignore)
   (let ((innermost-visible-frame (sg-ipmark sg)))	;Make frame being entered visible.
     ;; Trap on exit from this frame -- unless it is a *CATCH.
     ;; In that case, it is redundant to trap again,
@@ -2964,15 +3011,15 @@ cannot be RPLACD'ed.  The list is ~S."
 value is ~S." catch-value)))
 
 (def-ucode-error exit-trap exit-trap-error
-  :function (rp-function-word (sg-regular-pdl sg) (sg-ap sg))
-  :values (sg-frame-value-list sg (sg-ap sg)))
+  ':function (rp-function-word (sg-regular-pdl sg) (sg-ap sg))
+  ':values (sg-frame-value-list sg (sg-ap sg)))
 
 (defflavor exit-trap-error (function values)
 	   (dont-clear-input-ucode-breakpoint)
   :gettable-instance-variables
   :initable-instance-variables)
 
-(defun (:property exit-trap enter-error-handler) (sg ignore)
+(defun (exit-trap enter-error-handler) (sg ignore)
   ;; Don't catch this trap again if user tries to return, etc.
   (setf (rp-trap-on-exit (sg-regular-pdl sg) (sg-ap sg)) 0)
   (let ((innermost-visible-frame (sg-ap sg)))
@@ -3009,7 +3056,7 @@ value is ~S." catch-value)))
 
 ;;; THROW-TRAP is used for both exit trap and tag not seen, starting in UCADR 260.
 ;;; If M-E contains NIL, the tag was not seen.
-(defun (:property throw-trap make-ucode-error-function) (ignore sg ignore)
+(defun (throw-trap make-ucode-error-function) (ignore sg ignore)
   (cond ((sg-contents sg 'm-e)
 	 ;; If tag was found, it must be trap-on-exit.
 	 (make-instance 'throw-exit-trap-error
@@ -3023,7 +3070,7 @@ value is ~S." catch-value)))
 			:count (sg-ac-b sg)
 			:action (sg-ac-c sg)))))
 
-(defun (:property throw-trap enter-error-handler) (sg ignore)
+(defun (throw-trap enter-error-handler) (sg ignore)
   (if (sg-contents sg 'm-e)
       ;; Do this only for trap-on-exit, not for tag not seen.
       (let ((cur-frame
@@ -3035,9 +3082,9 @@ value is ~S." catch-value)))
 ;;; THROW-EXIT-TRAP was used up to system 97.
 ;
 ;(def-ucode-error throw-exit-trap throw-exit-trap-error
-;  :function (function-name (car (%p-contents-as-locative (locf (sg-ac-d sg))))))
+;  ':function (function-name (car (%p-contents-as-locative (locf (sg-ac-d sg))))))
 ;
-;(defun (:property throw-exit-trap enter-error-handler) (sg ignore)
+;(defun (throw-exit-trap enter-error-handler) (sg ignore)
 ;  (let ((cur-frame
 ;	  (- (%pointer-difference (%p-contents-as-locative (locf (sg-ac-d sg)))
 ;				  (sg-regular-pdl sg))
@@ -3159,8 +3206,8 @@ The stacks are made at least that large if they are not already."
     (unless did-grow
       (setq did-grow ':special)))
   (when (and did-grow (not inhibit-error))
-    (sg-funcall-no-restart sg 'cerror :grow-pdl nil 'pdl-overflow-error
-						    :pdl-name did-grow)))
+    (sg-funcall-no-restart sg 'cerror ':grow-pdl nil 'pdl-overflow-error
+			   			     :pdl-name did-grow)))
 
 ;;; If the SPECPDL has been forwarded, update pointers to it from the regular pdl.
 ;;; The third and fourth args are locatives to the first slot in the old and new specpdl.
@@ -3228,7 +3275,7 @@ If called from the interpreter, it looks for a NAMED-LAMBDA on the stack."
 	   (return tem)))))
 
 (defun (:property current-function-name compiler:p1) (ignore)
-  `',compiler::name-to-give-function)
+  `',compiler:name-to-give-function)
 
 (compile-flavor-methods
  condition
@@ -3281,4 +3328,3 @@ If called from the interpreter, it looks for a NAMED-LAMBDA on the stack."
 
 (defconst abort-object (make-condition 'sys:abort "Abort.")
   "A condition-object for condition SYS:ABORT, used every time we want to abort.")
-
