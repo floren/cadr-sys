@@ -1,4 +1,4 @@
-;-*- Mode:LISP; Package:SI; Lowercase:T; Base:10; Readtable:T; Cold-Load:T -*-
+;-*- Mode:LISP; Package:SI; Lowercase:T; Base:8; Readtable:T; Cold-load: T -*-
 
 ;;; Character functions and variables.
 
@@ -21,7 +21,7 @@ They are Control, Meta, Super and Hyper.")
 (defconst char-super-bit 4
   "This bit, within the bits of a character, is the Super bit.")
 
-(defconst char-hyper-bit 8.
+(defconst char-hyper-bit 8
   "This bit, within the bits of a character, is the Hyper bit.")
 
 (defsubst char-code (char)
@@ -70,39 +70,39 @@ This is sans the font number and meta bits."
 
 (defsubst char< (&rest chars)
   "T if all the characters are monotonically increasing, considering bits, font and case."
-  (apply #'< chars))
+  (apply '< chars))
 
 (defsubst char> (&rest chars)
   "T if all the characters are monotonically decreasing, considering bits, font and case."
-  (apply #'> chars))
+  (apply '> chars))
 
 (defsubst char<= (&rest chars)
   "T if all the characters are monotonically nondecreasing, considering bits, font and case."
-  (apply #' chars))
+  (apply '<= chars))
 
 (defsubst char>= (&rest chars)
   "T if all the characters are monotonically nonincreasing, considering bits, font and case."
-  (apply #' chars))
+  (apply '>= chars))
 
 (defsubst char (&rest chars)
   "T if all the characters are monotonically nondecreasing, considering bits, font and case."
-  (apply #' chars))
+  (apply '<= chars))
 
 (defsubst char (&rest chars)
   "T if all the characters are monotonically nonincreasing, considering bits, font and case."
-  (apply #' chars))
+  (apply '>= chars))
 
 (defsubst char//= (&rest chars)
   "T if all the characters are distinct (no two equal), considering bits, font and case."
-  (apply #' chars))
+  (apply ' chars))
 
 (defsubst char= (&rest chars)
   "T if all the characters are equal, considering bits, font and case."
-  (apply #'= chars))
+  (apply '= chars))
 
 (defsubst char (&rest chars)
   "T if all the characters are distinct (no two equal), considering bits, font and case."
-  (apply #' chars))
+  (apply ' chars))
 
 (defun standard-char-p (char)
   "T if CHAR is one of the ASCII printing characters or the Return character."
@@ -232,17 +232,14 @@ Returns CHAR unchanged if CHAR is neither upper now lower case."
 	((lower-case-p char) (char-upcase char))
 	(t char)))
 
-(defun code-char (code &optional (bits 0) (font 0))
+(defsubst code-char (code &optional (bits 0) (font 0))
   "Returns a character whose code comes from CODE, bits from BITS and font from FONT.
 CODE can be a number or a character.
 NIL is returned if it is not possible to have a character object
 with the specified FONT and BITS."
-  (if (and ( 0 bits (1- char-bits-limit))
-	   ( 0 font (1- char-font-limit)))
-      (%make-pointer dtp-character
-		     (%logdpb bits %%kbd-control-meta
-			      (dpb font %%ch-font code)))
-    nil))
+  (%make-pointer dtp-character
+		 (%logdpb bits %%kbd-control-meta
+			  (dpb font %%ch-font code))))
 (deff make-char #'code-char)
 
 (defun digit-char (weight &optional (radix 10.) (font 0))
@@ -250,12 +247,12 @@ with the specified FONT and BITS."
 This is always NIL if WEIGHT is  RADIX.
 Otherwise, for WEIGHT between 0 and 9, you get characters 0 through 9;
 for higher weights, you get letters."
-  (if (not ( 0 weight (1- radix))) nil
-    (if (not ( 0 font char-font-limit)) nil
-      (%make-pointer dtp-character
-		     (dpb font %%ch-font (if (< weight 10.)
-					     (+ (char-code #/0) weight)
-					     (+ (char-code #/A) weight -10.)))))))
+  (if ( weight radix) nil	;Could the user ever have trouble checking this himself?
+    (code-char (if (< weight 10.)
+		   (+ #/0 weight)
+		   (+ #/A weight -10.))
+	       0
+	       font)))
 
 ;Now microcoded
 ;(defun char-int (char)
@@ -268,7 +265,6 @@ for higher weights, you get letters."
   "Returns the standard name of CHAR, as a string; or NIL if there is none.
 For example, /"RETURN/" for the character Return.
 Only works for characters which are not GRAPHIC-CHAR-P (unlike /"a/", for example.)"
-;character lossage
   (let ((elt (rassq (char-int char) xr-special-character-names)))
     (if elt (symbol-name (car elt)))))
 
@@ -278,29 +274,26 @@ or NIL if NAME has none."
   (let ((found (cdr (ass #'string-equal name xr-special-character-names))))
     (and found (int-char found))))
 
-(defconst *char-bit-alist*
+(defconst char-bit-alist
 	  `((:control . ,%%kbd-control)
 	    (:meta . ,%%kbd-meta)
 	    (:super . ,%%kbd-super)
 	    (:hyper . ,%%kbd-hyper))
   "Alist of bit names for CHAR-BIT vs byte specifiers to extract those bits from a character.")
 
-(defun char-bit (char bit-name)
+(defsubst char-bit (char bit-name)
   "T if the bit spec'd by BIT-NAME (a keyword) is on in CHAR.
 BIT-NAME can be :CONTROL, :META, :SUPER or :HYPER."
-  (let ((byte (cdr (assq bit-name *char-bit-alist*))))
-    (if byte
-	(%logldb-test byte char)
-      (ferror nil "~S is not a valid character-bit specifier" bit-name))))
+  (%logldb-test (cdr (assq bit-name char-bit-alist))
+		char))
 
 (defun set-char-bit (char bit-name new-value)
   "Returns a character like CHAR except that the bit BIT-NAME has value NEW-VALUE in it.
 BIT-NAME can be :CONTROL, :META, :SUPER or :HYPER.
 NEW-VALUE should be T or NIL."
-  (let ((byte (cdr (assq bit-name *char-bit-alist*))))
-    (if byte
-	(let* ((new-char (%logdpb (if new-value 1 0) byte char)))
-	  (if (typep char 'character)
-	      (int-char new-char)
-	    new-char))
-      (ferror nil "~S is not a valid character-bit specifier" bit-name))))
+  (let* ((new-char (%logdpb (if new-value 1 0)
+			    (cdr (assq bit-name char-bit-alist))
+			    char)))
+    (if (typep char 'character)
+	(int-char new-char)
+      new-char)))
