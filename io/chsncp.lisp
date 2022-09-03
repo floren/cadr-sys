@@ -1,4 +1,4 @@
-;;; -*- Mode:LISP; Package:CHAOS; Base:8; Readtable:ZL -*-
+;;; -*- Mode:LISP; Package:CHAOS; Base:8; Readtable:T -*-
 ;;; This is SYS: NETWORK; CHAOS; CHSNCP
 ;;;
 ;;;	** (c) Copyright 1980, 1984 Massachusetts Institute of Technology **
@@ -86,7 +86,7 @@ Note that the contents of the packet, as an array, includes its header.")
 (DEFVAR PKT-LEADER-SIZE :UNBOUND "Number of elements in array leader of a PKT.")
 
 ;;; Clock constants
-(DEFCONST RETRANSMISSION-INTERVAL 30.)		;  1/2 second
+(DEFCONST RETRANSMISSION-INTERVAL 60.)		;  1 second
 (DEFCONST PROBE-INTERVAL (* 60. 10.))		; 10 seconds
 (DEFCONST LONG-PROBE-INTERVAL (* 60. 60.))	;  1 minute
 (DEFCONST HOST-DOWN-INTERVAL (* 60. 90. 2))	;  3 minutes
@@ -144,7 +144,7 @@ and some other things for the net.")
 
 ;;; BRD in direction meters
 (DEFVAR *BRD-HISTORY* ()
-  "A list describing hosts which answered our BRDs (contact-name host-address)")
+  "A list describing answered BRDs (contact-name host-address)")
 (DEFVAR *BRD-PKTS-IN* 0 "Number of answered BRD packets")
 
 ;;; This is NIL at first to leave the machine in piece during the cold load
@@ -306,15 +306,28 @@ and the time at which the record was made.")
   (SETQ MY-OTHER-SUBNETS NIL)
   (DOTIMES (I (ARRAY-LENGTH ROUTING-TABLE))	;Clear out the routing table
     (SETF (AREF ROUTING-TABLE I) 0)
-    (SETF (AREF ROUTING-TABLE-COST I) MAXIMUM-ROUTING-COST)
-    (SETF (AREF ROUTING-TABLE-TYPE I) NIL))
+    (SETF (AREF ROUTING-TABLE-COST I) MAXIMUM-ROUTING-COST))
   (SETF (AREF ROUTING-TABLE MY-SUBNET) MY-ADDRESS)
   (SETF (AREF ROUTING-TABLE-COST MY-SUBNET) 10.)
-  (SI:SELECT-PROCESSOR
+  (SELECT-PROCESSOR
     (:CADR
       (SETF (AREF ROUTING-TABLE-TYPE MY-SUBNET) :CHAOS))
     (:LAMBDA
       (SETF (AREF ROUTING-TABLE-TYPE MY-SUBNET) :ETHERNET))))
+;;; RPK please check this
+;;; LMI-specific numeric host numbers garbage flushed from this function by RMS, 8/28/84
+;  (select processor-type-code
+;    (si:cadr-type-code
+;     (aset 'chaos routing-table-type my-subnet)
+;     (aset 3140 routing-table 7)
+;     )
+;    (si:lambda-type-code
+;     (aset 'ethernet routing-table-type my-subnet)
+;     (aset 3540 routing-table 6) ; cadr 2 on subnet 7
+;     ))
+;  (cond ((= my-address 3140)
+;	 (setq my-other-subnets '(7))
+;	 (aset 'ethernet routing-table-type 7)))
 
 ;;;; High Level Structures
 
@@ -335,47 +348,59 @@ CHAOS:HOST-DOWN-STATE, CHAOS:FOREIGN-STATE, CHAOS:BROADCAST-SENT-STATE"
   "This structure is a connection, abbreviated CONN."
   (LOCAL-WINDOW-SIZE NIL :DOCUMENTATION "Window size for receiving")
   (FOREIGN-WINDOW-SIZE NIL :DOCUMENTATION "Window size for transmitting")
-  (STATE 'INACTIVE-STATE :DOCUMENTATION "State of this connection.
-States in which a connection may be.
-INACTIVE-STATE
- This state indicates the CONN is not currently associated with any CHAOS channel.
-ANSWERED-STATE
- This state indicates the CONN has received an ANS from the other end of the channel;
- it is waiting to be read.
- No I/O is allowed except reading the ANS packet already on the READ-PKTS chain.
-CLS-RECEIVED-STATE
- This state indicates the CONN has received a CLS from the other end of the channel;
- any data packets that were received in order before the CLS are waiting
- to be read, followed by the CLS packet.
- No I/O is allowed except reading the packets already on th READ-PKTS chain.
-LISTENING-STATE
- This state is given to a CONN on which a LSN has been sent while it is awaiting the RFC.
-RFC-RECEIVED-STATE
- This state indicates that an RFC has been received on this CONN but that no response
- has yet been given (such as done by ACCEPT and REJECT).
-RFC-SENT-STATE
- This state indicates that there has been an RFC sent on this CONN but that no response
- has yet been received from the foreign host.
-OPEN-STATE
- This state is the normal state for an open connection
-LOS-RECEIVED-STATE
- This state indicates the CONN has received a LOS from the other end of the channel;
- the LOS packet will be the data packet waiting to be read; any READ-PKTS
- or SEND-PKTS are discarded
- No I/O is allowed except reading the packets already on th READ-PKTS chain.
-HOST-DOWN-STATE
- This state is entered when it is determined that the foreign
- host is down (or something). This is done in PROBE-CONN.
- No I/O is allowed except reading the packets already on th READ-PKTS chain.
-FOREIGN-STATE
- Allows UNC packets to go in and out, for implementing non-Chaosnet protocols
-BROADCAST-SENT-STATE
- We have transmitted a broadcast packet.  The following actions are possible:
- 1. The user can send more BRD packets.
- 2. The user can read all packets except OPNs (until buffering is exceeded)
- 3. OPNs, when there are no queued input packets, will cause the connection
-    to enter the OPEN state.  Any other packets received from other hosts after
-    this OPEN state is reached will evoke a LOS packet.")
+  (STATE 'INACTIVE-STATE :DOCUMENTATION "State of this connection")
+;;; States in which a connection may be.
+
+;;;	INACTIVE-STATE
+;;; This state indicates the CONN is not currently associated with any CHAOS channel.
+
+;;;	ANSWERED-STATE
+;;; This state indicates the CONN has received an ANS from the other end of the channel;
+;;;       it is waiting to be read.
+;;;   No I/O is allowed except reading the ANS packet already on the READ-PKTS chain.
+
+;;;	CLS-RECEIVED-STATE
+;;; This state indicates the CONN has received a CLS from the other end of the channel;
+;;;       any data packets that were received in order before the CLS are waiting
+;;;       to be read, followed by the CLS packet.
+;;;   No I/O is allowed except reading the packets already on th READ-PKTS chain.
+
+;;;	LISTENING-STATE
+;;; This state is given to a CONN on which a LSN has been sent while it is awaiting the RFC.
+
+;;;	RFC-RECEIVED-STATE
+;;; This state indicates that an RFC has been received on this CONN but that no response
+;;;	has yet been given (such as done by ACCEPT and REJECT).
+
+;;;	RFC-SENT-STATE
+;;; This state indicates that there has been an RFC sent on this CONN but that no response
+;;;	has yet been received from the foreign host.
+
+;;;	OPEN-STATE
+;;; This state is the normal state for an open connection
+
+;;;	LOS-RECEIVED-STATE
+;;; This state indicates the CONN has received a LOS from the other end of the channel;
+;;;	the LOS packet will be the data packet waiting to be read; any READ-PKTS
+;;;	or SEND-PKTS are discarded
+;;;   No I/O is allowed except reading the packets already on th READ-PKTS chain.
+
+;;;	HOST-DOWN-STATE
+;;; This state is entered when it is determined that the foreign
+;;;	host is down (or something). This is done in PROBE-CONN.
+;;;   No I/O is allowed except reading the packets already on th READ-PKTS chain.
+
+;;;	FOREIGN-STATE
+;;; Allows UNC packets to go in and out, for implementing non-Chaosnet protocols
+
+;;;	BROADCAST-SENT-STATE
+;;; We have transmitted a broadcast packet.  The following actions are possible:
+;;;	1. The user can send more BRD packets.
+;;;	2. The user can read all packets except OPNs (until buffering is exceeded)
+;;;	3. OPNs, when there are no queued input packets, will cause the connection
+;;;	   to enter the OPEN state.  Any other packets received from other hosts after
+;;;	   this OPEN state is reached will evoke a LOS packet.
+
   (FOREIGN-ADDRESS 0 :DOCUMENTATION "Address <his> for the other end of this CONN")
   (FOREIGN-INDEX-NUM 0 :DOCUMENTATION "Index number <his> for the other end of this CONN")
   ;; LOCAL-ADDRESS is a constant and therefore not needed or included
@@ -397,8 +422,8 @@ BROADCAST-SENT-STATE
   (SEND-PKT-ACKED 0 :DOCUMENTATION
 		  "The last packet number for which we received acknowledgement")
   (WINDOW-AVAILABLE 0 :DOCUMENTATION "Space in window not occupied by unacknowledged packets")
-  (RETRANSMISSION-INTERVAL 30.
-    :DOCUMENTATION "Retransmission interval for this CONN in 60ths.")
+  (RETRANSMISSION-INTERVAL 60.
+    :DOCUMENTATION "Retransmission interval for this CONN in 60ths. [NYI]")
 
   (INTERRUPT-FUNCTION NIL :DOCUMENTATION
     "Function to be called in when a new packet arrives at the head of READ-PKTS")
@@ -443,8 +468,8 @@ which record the contact names used in the two directions."))
 (DEFUN CONTACT-NAME (CONN)
   "Return the contact name with which connection CONN was created, or NIL if none.
 Can be NIL if the connection is in a weird state."
-  (OR (GETF (CONN-PLIST CONN) 'RFC-CONTACT-NAME)
-      (GETF (CONN-PLIST CONN) 'LISTEN-CONTACT-NAME)))
+  (OR (GET (LOCF (CONN-PLIST CONN)) 'RFC-CONTACT-NAME)
+      (GET (LOCF (CONN-PLIST CONN)) 'LISTEN-CONTACT-NAME)))
 
 (DEFSELECT ((:PROPERTY CONN NAMED-STRUCTURE-INVOKE))
   (:DESCRIBE (CONN)
@@ -524,7 +549,7 @@ The status slot is used by the NCP to remember a small amount of info about the 
 
 (DEFSELECT ((:PROPERTY PKT NAMED-STRUCTURE-INVOKE) IGNORE)
   (:PRINT-SELF (PKT STREAM IGNORE &OPTIONAL IGNORE)
-    (SI:PRINTING-RANDOM-OBJECT (PKT STREAM)
+    (SYS:PRINTING-RANDOM-OBJECT (PKT STREAM)
       (FORMAT STREAM "CHAOS packet :STRING ~S :STATUS ~S"
 	      (PKT-STRING PKT) (PKT-STATUS PKT))))
   (:DESCRIBE (PKT)
@@ -533,26 +558,25 @@ The status slot is used by the NCP to remember a small amount of info about the 
     (PRINT-PKT PKT)))
 
 ;;;; The following macros are for accessing the elements of RECENT-HEADERS
-(DEFMACRO RCNT-OPCODE (INDEX)
-  `(LDB #o1010 (AREF RECENT-HEADERS ,INDEX 0)))
-(DEFMACRO RCNT-NBYTES (INDEX)
-  `(LDB #o0014 (AREF RECENT-HEADERS ,INDEX 1)))
-(DEFMACRO RCNT-FWD-COUNT (INDEX)
-  `(LDB #o1404 (AREF RECENT-HEADERS ,INDEX 1)))
-(DEFMACRO RCNT-DEST-ADDRESS (INDEX)
-  `(AREF RECENT-HEADERS ,INDEX 2))
-(DEFMACRO RCNT-DEST-INDEX (INDEX)
-  `(AREF RECENT-HEADERS ,INDEX 3))
-(DEFMACRO RCNT-SOURCE-ADDRESS (INDEX)
-  `(AREF RECENT-HEADERS ,INDEX 4))
-(DEFMACRO RCNT-SOURCE-INDEX (INDEX)
-  `(AREF RECENT-HEADERS ,INDEX 5))
-(DEFMACRO RCNT-PKT-NUM (INDEX)
-  `(AREF RECENT-HEADERS ,INDEX 6))
-(DEFMACRO RCNT-ACK-NUM (INDEX)
-  `(AREF RECENT-HEADERS ,INDEX 7))
-(DEFMACRO RCNT-TIME-RECORDED (INDEX)
-  `(AREF RECENT-HEADERS ,INDEX 8))
+(DEFMACRO RCNT-OPCODE (INDEX) `(LDB #o1010 (AREF RECENT-HEADERS ,INDEX 0)))
+
+(DEFMACRO RCNT-NBYTES (INDEX) `(LDB #o0014 (AREF RECENT-HEADERS ,INDEX 1)))
+
+(DEFMACRO RCNT-FWD-COUNT (INDEX) `(LDB #o1404 (AREF RECENT-HEADERS ,INDEX 1)))
+
+(DEFMACRO RCNT-DEST-ADDRESS (INDEX) `(AREF RECENT-HEADERS ,INDEX 2))
+
+(DEFMACRO RCNT-DEST-INDEX (INDEX) `(AREF RECENT-HEADERS ,INDEX 3))
+
+(DEFMACRO RCNT-SOURCE-ADDRESS (INDEX) `(AREF RECENT-HEADERS ,INDEX 4))
+
+(DEFMACRO RCNT-SOURCE-INDEX (INDEX) `(AREF RECENT-HEADERS ,INDEX 5))
+
+(DEFMACRO RCNT-PKT-NUM (INDEX) `(AREF RECENT-HEADERS ,INDEX 6))
+
+(DEFMACRO RCNT-ACK-NUM (INDEX) `(AREF RECENT-HEADERS ,INDEX 7))
+
+(DEFMACRO RCNT-TIME-RECORDED (INDEX) `(AREF RECENT-HEADERS ,INDEX 8))
 
 ;;;; These are routines to print out the preceding structures in a readable form
 
@@ -560,8 +584,8 @@ The status slot is used by the NCP to remember a small amount of info about the 
   (FORMAT T
 	  "~%Chn: ~O (~O): Contact: ~S State: ~S From: ~O-~O to ~O-~O .~%"
 	  (LOCAL-INDEX-NUM CONN) (%POINTER CONN)
-	  (OR (GETF (CONN-PLIST CONN) 'RFC-CONTACT-NAME)
-	      (GETF (CONN-PLIST CONN) 'LISTEN-CONTACT-NAME))
+	  (OR (GET (LOCF (CONN-PLIST CONN)) 'RFC-CONTACT-NAME)
+	      (GET (LOCF (CONN-PLIST CONN)) 'LISTEN-CONTACT-NAME))
 	  (STATE CONN)
 	  MY-ADDRESS (LOCAL-INDEX-NUM CONN)
 	  (FOREIGN-ADDRESS CONN) (FOREIGN-INDEX-NUM CONN))
@@ -582,7 +606,7 @@ The status slot is used by the NCP to remember a small amount of info about the 
 		     "==> SEND-PKTS-LAST IS SCREWED! <==~%"))
 	 (OR (= LEN (SEND-PKTS-LENGTH CONN))
 	     (FORMAT T "==> SEND-PKTS-LENGTH IS SCREWED! <==~%")))
-      (UNLESS (EQ CONN (PKT-SOURCE-CONN PKT))
+      (unless (EQ CONN (PKT-SOURCE-CONN PKT))
 	(FORMAT T "~Following PKT has bad PKT-SOURCE-CONN PKT = ~S"
 		(PKT-SOURCE-CONN PKT)))
       (PRINT-PKT PKT SHORT-PKT-DISPLAY)))
@@ -635,30 +659,28 @@ The status slot is used by the NCP to remember a small amount of info about the 
   NIL)
 
 (DEFUN PRINT-ALL-PKTS (CHAIN &OPTIONAL (SHORT-DISPLAY T))
-  (DO ((PKT CHAIN (PKT-LINK PKT)))
-      ((NULL PKT))
+  (DO ((PKT CHAIN (PKT-LINK PKT))) ((NULL PKT))
     (PRINT-PKT PKT SHORT-DISPLAY)))
 
 ;;;; Definitions for interrupt hacking
 
 ;;; To access the data base
-(DEFMACRO INT-FREE-LIST ()
- `(%P-CONTENTS-OFFSET INT-FREE-LIST-POINTER 0))
-(DEFMACRO INT-RECEIVE-LIST ()
-  `(%P-CONTENTS-OFFSET INT-RECEIVE-LIST-POINTER 0))
-(DEFMACRO INT-TRANSMIT-LIST ()
- `(%P-CONTENTS-OFFSET INT-TRANSMIT-LIST-POINTER 0))
+(DEFMACRO INT-FREE-LIST () `(%P-CONTENTS-OFFSET INT-FREE-LIST-POINTER 0))
+
+(DEFMACRO INT-RECEIVE-LIST () `(%P-CONTENTS-OFFSET INT-RECEIVE-LIST-POINTER 0))
+
+(DEFMACRO INT-TRANSMIT-LIST () `(%P-CONTENTS-OFFSET INT-TRANSMIT-LIST-POINTER 0))
+
 ;;; The array leader offsets are defined in the SYSTEM package
-(DEFMACRO INT-PKT-WORD-COUNT (INT-PKT)
- `(ARRAY-LEADER ,INT-PKT %CHAOS-LEADER-WORD-COUNT))
-(DEFMACRO INT-PKT-THREAD (INT-PKT)
- `(ARRAY-LEADER ,INT-PKT %CHAOS-LEADER-THREAD))
-(DEFMACRO INT-PKT-CSR-1 (INT-PKT)
-  `(ARRAY-LEADER ,INT-PKT %CHAOS-LEADER-CSR-1))
-(DEFMACRO INT-PKT-CSR-2 (INT-PKT)
- `(ARRAY-LEADER ,INT-PKT %CHAOS-LEADER-CSR-2))
-(DEFMACRO INT-PKT-BIT-COUNT (INT-PKT)
- `(ARRAY-LEADER ,INT-PKT %CHAOS-LEADER-BIT-COUNT))
+(DEFMACRO INT-PKT-WORD-COUNT (INT-PKT) `(ARRAY-LEADER ,INT-PKT %CHAOS-LEADER-WORD-COUNT))
+
+(DEFMACRO INT-PKT-THREAD (INT-PKT) `(ARRAY-LEADER ,INT-PKT %CHAOS-LEADER-THREAD))
+
+(DEFMACRO INT-PKT-CSR-1 (INT-PKT) `(ARRAY-LEADER ,INT-PKT %CHAOS-LEADER-CSR-1))
+
+(DEFMACRO INT-PKT-CSR-2 (INT-PKT) `(ARRAY-LEADER ,INT-PKT %CHAOS-LEADER-CSR-2))
+
+(DEFMACRO INT-PKT-BIT-COUNT (INT-PKT) `(ARRAY-LEADER ,INT-PKT %CHAOS-LEADER-BIT-COUNT))
 
 ;This DEFSTRUCT applies to INT-PKT's also
 ;(DEFSTRUCT (PKT :ARRAY (:CONSTRUCTOR NIL) (:alterant nil))
@@ -684,7 +706,7 @@ The status slot is used by the NCP to remember a small amount of info about the 
 (DEFMACRO INT-PKT-CRC (INT-PKT)
   `(AREF ,INT-PKT (1- (INT-PKT-WORD-COUNT INT-PKT))))
 
-;;;; MACROS: for various random things
+;;; MACROS: for various random things
 
 (DEFMACRO PKTNUM-< (A B)
   "Compare two packet numbers, taking wrap-around into account."
@@ -737,8 +759,8 @@ The status slot is used by the NCP to remember a small amount of info about the 
     INT-TRANSMIT-LIST-POINTER (ALOC (FUNCTION SYSTEM-COMMUNICATION-AREA)
 				    %SYS-COM-CHAOS-TRANSMIT-LIST))
 
-  ;; Make 8 connections now so they're all on the same page.
-  (DOTIMES (I 8.)
+  ;; Make 10 connections now so they're all on the same page.
+  (DOTIMES (I 10)
     (PUSH (MAKE-CONN) FREE-CONN-LIST))
 
 ;  ;; Initialize the routing table
@@ -746,12 +768,12 @@ The status slot is used by the NCP to remember a small amount of info about the 
   )
 
 (DEFUN SETUP-MY-ADDRESS ()
-  (SI:SELECT-PROCESSOR
+  (SELECT-PROCESSOR
     (:CADR
      (SETQ MY-ADDRESS (%UNIBUS-READ MY-NUMBER-REGISTER))) ;Full address of this host.
     (:LAMBDA
-     (WHEN (FBOUNDP 'SI:FIND-PROCESSOR-CONFIGURATION-STRUCTURE)
-       (SI:FIND-PROCESSOR-CONFIGURATION-STRUCTURE))
+     (COND ((FBOUNDP 'SI:FIND-PROCESSOR-CONFIGURATION-STRUCTURE)
+	    (SI:FIND-PROCESSOR-CONFIGURATION-STRUCTURE)))
      (LET ((NAMES-FOR-THIS-MACHINE (MULTIPLE-VALUE-LIST (SI:GET-PACK-NAME)))
 	   MY-NAME)
        (COND ((VARIABLE-BOUNDP SI:*MY-PROC-NUMBER*)
@@ -759,17 +781,17 @@ The status slot is used by the NCP to remember a small amount of info about the 
 	     (T
 	      (SETQ MY-NAME (CAR NAMES-FOR-THIS-MACHINE))))
        (SETQ MY-ADDRESS NIL)
-       (IF (STRINGP MY-NAME)
-	   (SETQ MY-ADDRESS (ADDRESS-PARSE MY-NAME)))
-       (IF (NULL MY-ADDRESS)
-	   (SETQ MY-ADDRESS #o3412))		; FLAG THAT ADDRESS IS BAD
+       (COND ((STRINGP MY-NAME)
+	      (SETQ MY-ADDRESS (ADDRESS-PARSE MY-NAME))))
+       (COND ((NULL MY-ADDRESS)
+	      (SETQ MY-ADDRESS 3412)))		; FLAG THAT ADDRESS IS BAD
        )
      ;; This won't compile on the CADR in the 99 that I have.
      ;; I don't know where to find the definition of SI:%PROCESSOR-CONF-CHAOS-ADDRESS
-  #||
-     (WHEN (FBOUNDP 'SI:FIND-PROCESSOR-CONFIGURATION-STRUCTURE)
-       (SETF (SI:%PROCESSOR-CONF-CHAOS-ADDRESS-LO SI:*LAMBDA-PROC-CONF*) MY-ADDRESS))
-   ||#
+  #|
+     (COND ((FBOUNDP 'SI:FIND-PROCESSOR-CONFIGURATION-STRUCTURE)
+	    (SETF (SI:%PROCESSOR-CONF-CHAOS-ADDRESS-LO SI:*LAMBDA-PROC-CONF*) MY-ADDRESS)))
+   |#
      ))
   (SETQ MY-SUBNET (LDB #o1010 MY-ADDRESS))	;Subnet of this host.
   (LET ((EXISTING-HOST (SI:GET-HOST-FROM-ADDRESS MY-ADDRESS :CHAOS)))
@@ -802,8 +824,7 @@ The status slot is used by the NCP to remember a small amount of info about the 
   ;; This will cause the initialization to happen if it hasn't already
   (ADD-INITIALIZATION "CHAOS-NCP" '(INITIALIZE-NCP-COLD) '(:COLD :FIRST))
   (SETUP-MY-ADDRESS)
-  (SI:SELECT-PROCESSOR
-    (:LAMBDA (FUNCALL (INTERN "LAMBDA-ETHER-INIT" 'ETHER))))
+  (IF-IN-LAMBDA (FUNCALL (INTERN "LAMBDA-ETHER-INIT" 'ETHER)))
   (ENABLE))
 
 ;;;; Low Level PKT Management
@@ -814,19 +835,17 @@ The status slot is used by the NCP to remember a small amount of info about the 
 ;;; This should only be called by allocate and with interrupts inhibited
 ;;; Make sure it doesnt happen in a temporary area.
 (DEFUN MAKE-PKT (&AUX PKT (DEFAULT-CONS-AREA BACKGROUND-CONS-AREA))
-  (SETQ PKT (MAKE-ARRAY MAX-WORDS-PER-PKT
-			:TYPE ART-16B
-			:LEADER-LENGTH PKT-LEADER-SIZE
-			:NAMED-STRUCTURE-SYMBOL 'PKT))
-  (SETF (PKT-STRING PKT)	     ;Create indirect array to reference as a string
-	(MAKE-ARRAY MAX-DATA-BYTES-PER-PKT
-		    :TYPE ART-STRING
-		    :FILL-POINTER 0
-		    :DISPLACED-TO PKT
-		    :DISPLACED-INDEX-OFFSET 16.))
-  (SETF (PKT-MADE-LINK PKT) MADE-PKTS)
-  (SETQ MADE-PKTS PKT)
-  PKT)
+    (SETQ PKT (MAKE-ARRAY MAX-WORDS-PER-PKT :TYPE 'ART-16B
+					    :LEADER-LENGTH PKT-LEADER-SIZE
+					    :NAMED-STRUCTURE-SYMBOL 'PKT))
+    (SETF (PKT-STRING PKT)	     ;Create indirect array to reference as a string
+	  (MAKE-ARRAY MAX-DATA-BYTES-PER-PKT :TYPE 'ART-STRING
+					     :FILL-POINTER 0
+					     :DISPLACED-TO PKT
+					     :DISPLACED-INDEX-OFFSET 16.))
+    (SETF (PKT-MADE-LINK PKT) MADE-PKTS)
+    (SETQ MADE-PKTS PKT)
+    PKT)
 
 (DEFUN ALLOCATE-PKT (&AUX PKT)
   "Allocate, initialize and return a packet, reusing one if possible."
@@ -842,7 +861,7 @@ The status slot is used by the NCP to remember a small amount of info about the 
 		       (MAKE-PKT))))
     (SETF (PKT-TIME-TRANSMITTED PKT) 0)
     (SETF (PKT-TIMES-TRANSMITTED PKT) 0)
-    (SETF (FILL-POINTER (PKT-STRING PKT)) 0)
+    (setf (fill-pointer (PKT-STRING PKT)) 0)
     (SETF (PKT-LINK PKT) T)
     (SETF (PKT-OPCODE PKT) 0)
     (SETF (PKT-NBYTES PKT) 0)
@@ -862,33 +881,32 @@ GET-PKT or GET-NEXT-PKT."
           (SETQ FREE-PKTS PKT))
          (T (SETF (PKT-BEING-RETRANSMITTED PKT) 'FREE)))))
 
-(DEFUN SET-PKT-STRING (PKT STRING &REST OTHER-STRINGS)
+(DEFUN SET-PKT-STRING (PKT STRING &REST OTHER-STRINGS &AUX LEN)
   "Store data into packet PKT from STRING and OTHER-STRINGS concatenated.
 The PKT-NBYTES field is updated."
-  (SETQ STRING (STRING STRING))
-  (LET ((LEN (ARRAY-ACTIVE-LENGTH STRING))
-	(PKG-STRING (PKG-STRING PKT)))
-    (COPY-ARRAY-PORTION STRING 0 LEN PKT-STRING 0 LEN)
-    (WHEN OTHER-STRINGS
-      (DO ((STRINGS OTHER-STRINGS (CDR STRINGS)))
+    (COPY-ARRAY-PORTION (SETQ STRING (STRING STRING)) 0 (ARRAY-ACTIVE-LENGTH STRING)
+			(PKT-STRING PKT) 0 (ARRAY-ACTIVE-LENGTH STRING))
+    (SETQ LEN (ARRAY-ACTIVE-LENGTH STRING))
+    (when OTHER-STRINGS
+      (DO ((STRINGS OTHER-STRINGS (CDR STRINGS))
+	   (PKT-STRING (PKT-STRING PKT)))
 	  ((OR (NULL STRINGS) ( LEN MAX-DATA-BYTES-PER-PKT)))
-	;;>> should use copy-array-portion
 	(DO ((IDX 0 (1+ IDX))
 	     (STR (STRING (CAR STRINGS)))
 	     (STR-LEN (STRING-LENGTH (STRING (CAR STRINGS)))))
 	    ((OR ( IDX STR-LEN) ( LEN MAX-DATA-BYTES-PER-PKT)))
-	  (SETF (CHAR PKT-STRING LEN) (CHAR STR IDX))
-	  (INCF LEN))))
+	  (ASET (AREF STR IDX) PKT-STRING LEN)
+	  (SETQ LEN (1+ LEN)))))
     (SETQ LEN (MIN MAX-DATA-BYTES-PER-PKT LEN))
     (SETF (PKT-NBYTES PKT) LEN)
-    (SETF (FILL-POINTER (PKT-STRING PKT)) LEN)))
+    (STORE-ARRAY-LEADER LEN (PKT-STRING PKT) 0))
 
 ;;;; INT-PKT management routines
 
 (DEFUN FREE-INT-PKT (INT-PKT)
   "Returns an INT-PKT to the free list"
-  (UNLESS (= (%AREA-NUMBER INT-PKT) CHAOS-BUFFER-AREA)
-    (FERROR NIL "Attempt to free non-interrupt packet ~A" INT-PKT))
+  (OR (= (%AREA-NUMBER INT-PKT) CHAOS-BUFFER-AREA)
+      (FERROR NIL "Attempt to free non-interrupt packet ~A" INT-PKT))
   (PROG (OLD-FREE-LIST)
      LOOP
 	(SETQ OLD-FREE-LIST (INT-FREE-LIST))
@@ -901,7 +919,7 @@ The PKT-NBYTES field is updated."
   (WITHOUT-INTERRUPTS
     (DO ((N 0 (1+ N))
 	 (PKT (INT-FREE-LIST) (INT-PKT-THREAD PKT)))
-	((OR (NULL PKT) (> N #o100)) N))))
+	((OR (NULL PKT) (> N 100)) N))))
 
 (DEFMACRO CONVERT-TO-PKT (INT-PKT &OPTIONAL (FREE-PKT-FLAG T))
   "Allocates a new packet, copies the INT-PKT to it, and then deallocates the INT-PKT"
@@ -913,8 +931,8 @@ The PKT-NBYTES field is updated."
        (SETQ ,NW (PKT-NWORDS ,INT-PKT-I))
        (WITHOUT-INTERRUPTS
 	 (%BLT (%MAKE-POINTER-OFFSET DTP-FIX ,INT-PKT-I
-				     (SI::ARRAY-DATA-OFFSET ,INT-PKT-I))
-	       (%MAKE-POINTER-OFFSET DTP-FIX ,PKT (SI::ARRAY-DATA-OFFSET ,PKT))
+				     (SI:ARRAY-DATA-OFFSET ,INT-PKT-I))
+	       (%MAKE-POINTER-OFFSET DTP-FIX ,PKT (SI:ARRAY-DATA-OFFSET ,PKT))
 	       (CEILING ,NW 2)
 	       1))
        (STORE-ARRAY-LEADER (PKT-NBYTES ,INT-PKT-I) (PKT-STRING ,PKT) 0)
@@ -927,7 +945,7 @@ that it is ok that the process this gets called from can be safely suspended
 or that a packet is reserved  (in other words, freeing up INT-PKTS better
 not rely on the caller!)."
   (COND ((NULL RESERVED-INT-PKT)
-	 (DO-FOREVER
+	 (DO-forever
 	   (SETQ FREE-LIST (INT-FREE-LIST))
 	   (COND ((NULL FREE-LIST)
 		  (IF WAIT-IF-NECESSARY
@@ -977,11 +995,12 @@ not rely on the caller!)."
        (FERROR NIL "Attempt to reuse ~S, which is already in use." CONN))
   (DO ((FP (\ (1+ INDEX-CONN-FREE-POINTER) MAXIMUM-INDEX) (\ (1+ FP) MAXIMUM-INDEX))
        (COUNTER MAXIMUM-INDEX (1- COUNTER)))
-      ((%STORE-CONDITIONAL (LOCF (AREF INDEX-CONN (IF (= FP 0) (SETQ FP 1) FP)))
+      ((%STORE-CONDITIONAL (AP-1 INDEX-CONN (IF (= FP 0) (SETQ FP 1) FP))
 			   NIL
 			   CONN)
        (SETQ INDEX-CONN-FREE-POINTER FP)
-       (SETF (LOCAL-INDEX-NUM CONN) (DPB (INCF (AREF UNIQUIZER-TABLE FP))
+       (SETF (LOCAL-INDEX-NUM CONN) (DPB (ASET (1+ (AR-1 UNIQUIZER-TABLE FP))
+					       UNIQUIZER-TABLE FP)
 					 (DPB MAXIMUM-INDEX-LOG-2-MINUS-1
 					      #o0606
 					      (- #o20 MAXIMUM-INDEX-LOG-2-MINUS-1))
@@ -1000,7 +1019,7 @@ not rely on the caller!)."
     (FREE-ALL-RECEIVED-PKTS CONN)
     (FREE-ALL-SEND-PKTS CONN)
     (SETF (STATE CONN) 'INACTIVE-STATE)
-    (SETF (AREF INDEX-CONN (LDB MAXIMUM-INDEX-LOG-2-MINUS-1 (LOCAL-INDEX-NUM CONN))) NIL)
+    (AS-1 NIL INDEX-CONN (LDB MAXIMUM-INDEX-LOG-2-MINUS-1 (LOCAL-INDEX-NUM CONN)))
     (SETQ DISTINGUISHED-PORT-CONN-TABLE
 	  (DELQ (RASSQ CONN DISTINGUISHED-PORT-CONN-TABLE) DISTINGUISHED-PORT-CONN-TABLE))
     (LET ((CONS (MEMQ CONN CONN-LIST)))
@@ -1013,22 +1032,22 @@ not rely on the caller!)."
 
 ;;; Must be called with interrupts off.
 (DEFUN FREE-ALL-READ-PKTS (CONN)
-  (DO ((PKT (READ-PKTS CONN) (PKT-LINK PKT))
-       (PREV NIL PKT))
-      (NIL)
-    (AND PREV (FREE-PKT PREV))
-    (OR PKT (RETURN NIL)))
-  (SETF (READ-PKTS CONN) NIL)
-  (SETF (READ-PKTS-LAST CONN) NIL))
+    (DO ((PKT (READ-PKTS CONN) (PKT-LINK PKT))
+	 (PREV NIL PKT))
+	(NIL)
+      (AND PREV (FREE-PKT PREV))
+      (OR PKT (RETURN NIL)))
+    (SETF (READ-PKTS CONN) NIL)
+    (SETF (READ-PKTS-LAST CONN) NIL))
 
 ;;; Must be called with interrupts off.
 (DEFUN FREE-ALL-RECEIVED-PKTS (CONN)
-  (DO ((PKT (RECEIVED-PKTS CONN) (PKT-LINK PKT))
-       (PREV NIL PKT))
-      (NIL)
-    (AND PREV (FREE-PKT PREV))
-    (OR PKT (RETURN NIL)))
-  (SETF (RECEIVED-PKTS CONN) NIL))
+    (DO ((PKT (RECEIVED-PKTS CONN) (PKT-LINK PKT))
+	 (PREV NIL PKT))
+	(NIL)
+      (AND PREV (FREE-PKT PREV))
+      (OR PKT (RETURN NIL)))
+    (SETF (RECEIVED-PKTS CONN) NIL))
 
 ;;; Must be called with interrupts off.
 (DEFUN FREE-ALL-SEND-PKTS (CONN)
@@ -1045,9 +1064,9 @@ not rely on the caller!)."
   "Causes the CONN's INTERRUPT-FUNCTION to be run in the background process with the
 specified reason and arguments
  Reasons are:
-  :INPUT		input has arrived
-  :OUTPUT		the window, which was full, now has room in it
-  :CHANGE-OF-STATE	the state of the connection has just changed"
+	:INPUT			input has arrived
+	:OUTPUT			the window, which was full, now has room in it
+	:CHANGE-OF-STATE	the state of the connection has just changed"
   (AND IFUN
        (BACKGROUND-TASK `(INTERRUPT-CONN-INTERNAL ',IFUN ',REASON ',CONN
 						  ',(APPEND ARGS NIL)))))
@@ -1057,7 +1076,7 @@ specified reason and arguments
 (DEFUN INTERRUPT-CONN-INTERNAL (IFUN REASON CONN ARGS)
   (OR (EQ (STATE CONN) 'INACTIVE-STATE)
       (NEQ (INTERRUPT-FUNCTION CONN) IFUN)
-      (APPLY IFUN REASON CONN ARGS)))
+      (LEXPR-FUNCALL IFUN REASON CONN ARGS)))
 
 ;;;; High Level Transmission Routines
 
@@ -1069,31 +1088,30 @@ specified reason and arguments
 If the second arg is T, put an ACK aboard this PKT.
 This is a very low level function, called mainly by the following 2 functions.
 /(Also called by the retransmitter and forwarder.)"
-  (AND (> (PKT-NBYTES PKT) MAX-DATA-BYTES-PER-PKT)
-       (FERROR NIL "Attempt to transmit an invalid packet (~S).
-The length ~O is greater than the maximum packet size (~O)."
-	       PKT (PKT-NBYTES PKT) MAX-DATA-BYTES-PER-PKT))
-  (WHEN ACK-P
-    (WITHOUT-INTERRUPTS
-      (LET ((CONN (PKT-SOURCE-CONN PKT)))
-	(OR CONN (FERROR NIL "~S has null connection." PKT))
-	(LET ((ACKN (PKT-NUM-READ CONN)))
-	  (SETF (PKT-ACK-NUM PKT) ACKN)
-	  (SETF (PKT-NUM-ACKED CONN) ACKN)))))
-  (SETF (PKT-TIME-TRANSMITTED PKT) (TIME))
-  (SETF (PKT-TIMES-TRANSMITTED PKT) (1+ (PKT-TIMES-TRANSMITTED PKT)))
-  (TRANSMIT-INT-PKT (CONVERT-TO-INT-PKT PKT)) )
+    (AND (> (PKT-NBYTES PKT) MAX-DATA-BYTES-PER-PKT)
+	 (FERROR NIL "Attempt to transmit an invalid packet (~S).~%The length ~O is greater than the maximum packet size (~O)."
+		 PKT (PKT-NBYTES PKT) MAX-DATA-BYTES-PER-PKT))
+    (WHEN ACK-P
+      (WITHOUT-INTERRUPTS
+	(LET ((CONN (PKT-SOURCE-CONN PKT)))
+	  (OR CONN (FERROR NIL "~S has null connection." PKT))
+	  (LET ((ACKN (PKT-NUM-READ CONN)))
+	    (SETF (PKT-ACK-NUM PKT) ACKN)
+	    (SETF (PKT-NUM-ACKED CONN) ACKN)))))
+    (SETF (PKT-TIME-TRANSMITTED PKT) (TIME))
+    (SETF (PKT-TIMES-TRANSMITTED PKT) (1+ (PKT-TIMES-TRANSMITTED PKT)))
+    (TRANSMIT-INT-PKT (CONVERT-TO-INT-PKT PKT)) )
 
 (DEFUN TRANSMIT-INT-PKT-FOR-CONN (CONN PKT)
-  (SETF (PKT-SOURCE-ADDRESS PKT) MY-ADDRESS)
-  (SETF (PKT-SOURCE-INDEX-NUM PKT) (LOCAL-INDEX-NUM CONN))
-  (SETF (PKT-DEST-ADDRESS PKT) (FOREIGN-ADDRESS CONN))
-  (SETF (PKT-DEST-INDEX-NUM PKT) (LDB 0020 (FOREIGN-INDEX-NUM CONN)))
-  (WITHOUT-INTERRUPTS
-    (LET ((ACKN (PKT-NUM-READ CONN)))
-      (SETF (PKT-ACK-NUM PKT) ACKN)
-      (SETF (PKT-NUM-ACKED CONN) ACKN)))
-  (TRANSMIT-INT-PKT PKT))
+    (SETF (PKT-SOURCE-ADDRESS PKT) MY-ADDRESS)
+    (SETF (PKT-SOURCE-INDEX-NUM PKT) (LOCAL-INDEX-NUM CONN))
+    (SETF (PKT-DEST-ADDRESS PKT) (FOREIGN-ADDRESS CONN))
+    (SETF (PKT-DEST-INDEX-NUM PKT) (LDB 0020 (FOREIGN-INDEX-NUM CONN)))
+    (WITHOUT-INTERRUPTS
+      (LET ((ACKN (PKT-NUM-READ CONN)))
+        (SETF (PKT-ACK-NUM PKT) ACKN)
+	(SETF (PKT-NUM-ACKED CONN) ACKN)))
+    (TRANSMIT-INT-PKT PKT))
 
 (DEFUN TRANSMIT-LOS-INT-PKT (INT-PKT OP &OPTIONAL REASON &AUX DH DI LEN)
   "Given a losing pkt or an RFC we want to reject, shuffle the
@@ -1102,16 +1120,15 @@ If the OP is CLS, include a string which is the reason the RFC was
 rejected.  Note that the very same pkt is used, so when this is called
 the pkt had better not be on any lists or anything."
   (SETF (PKT-OPCODE INT-PKT) OP)
-  (WHEN REASON
-    (SETF (PKT-NBYTES INT-PKT) (SETQ LEN (ARRAY-ACTIVE-LENGTH REASON)))
-    (DO ((SIDX 0 (+ SIDX 2))
-	 (WIDX FIRST-DATA-WORD-IN-PKT (1+ WIDX)))
-	(( SIDX LEN))
-      (SETF (AREF INT-PKT WIDX) (IF (= (1+ SIDX) LEN)
-				    (AREF REASON SIDX)
-				    (DPB (AREF REASON (1+ SIDX))
-					 #o1010
-					 (AREF REASON SIDX))))))
+  (COND (REASON
+	  (SETF (PKT-NBYTES INT-PKT) (SETQ LEN (ARRAY-ACTIVE-LENGTH REASON)))
+	  (DO ((SIDX 0 (+ SIDX 2))
+	       (WIDX FIRST-DATA-WORD-IN-PKT (1+ WIDX)))
+	      (( SIDX LEN))
+	    (ASET (IF (= (1+ SIDX) LEN)
+		      (AREF REASON SIDX)
+		      (DPB (AREF REASON (1+ SIDX)) 1010 (AREF REASON SIDX)))
+		  INT-PKT WIDX))))
   (SETQ DH (PKT-DEST-ADDRESS INT-PKT)
 	DI (PKT-DEST-INDEX-NUM INT-PKT))
   (SETF (PKT-DEST-ADDRESS INT-PKT) (PKT-SOURCE-ADDRESS INT-PKT))
@@ -1129,33 +1146,33 @@ they default to 0.  If T is provided for either, the usual thing happens."
     (SETQ PKTN (PKTNUM-1+ (PKT-NUM-SENT CONN)))
     (SETF (PKT-NUM-SENT CONN) PKTN))
   (SETF (PKT-NUM PKT) PKTN)
-  (IF (EQ ACK-PKTN T)
-      (SETQ ACK-P T)
-    (SETF (PKT-ACK-NUM PKT) ACK-PKTN))
+  (COND ((EQ ACK-PKTN T) (SETQ ACK-P T))
+	(T (SETF (PKT-ACK-NUM PKT) ACK-PKTN)))
   (SETF (PKT-SOURCE-ADDRESS PKT) MY-ADDRESS)
   (SETF (PKT-SOURCE-INDEX-NUM PKT) (LOCAL-INDEX-NUM CONN))
   (SETF (PKT-DEST-ADDRESS PKT) (FOREIGN-ADDRESS CONN))
   (SETF (PKT-DEST-INDEX-NUM PKT) (LDB 0020 (FOREIGN-INDEX-NUM CONN)))
   (TRANSMIT-PKT PKT ACK-P))
 
-(DEFVAR STS-WHY-ARRAY (MAKE-ARRAY #o100 :LEADER-LIST '(100 0)))
+(DEFVAR STS-WHY-ARRAY (MAKE-ARRAY 100 :LEADER-LIST '(100 0)))
 
 (DEFUN PRINT-STS-WHY ()
   (LET ((N (ARRAY-LEADER STS-WHY-ARRAY 1)))
-    (DO I (\ (1+ N) #o100) (\ (1+ I) #o100) NIL
-      (PRINT (AREF STS-WHY-ARRAY I))
+    (DO I (\ (1+ N) 100) (\ (1+ I) 100) NIL
+      (PRINT (AR-1 STS-WHY-ARRAY I))
       (AND (= I N) (RETURN NIL)))))
 
 ;;; Internal routine to send a status packet to a connection.
 (DEFUN TRANSMIT-STS (CONN WHY &AUX PKT)
-  (SETF (AREF STS-WHY-ARRAY (ARRAY-LEADER STS-WHY-ARRAY 1)) WHY)
-  (SETF (ARRAY-LEADER STS-WHY-ARRAY 1) (\ (1+ (ARRAY-LEADER STS-WHY-ARRAY 1)) #o100))
-  (SETQ PKT (ALLOCATE-INT-PKT))
-  (SETF (PKT-OPCODE PKT) STS-OP)
-  (SETF (PKT-NBYTES PKT) 4)
-  (SETF (PKT-FIRST-DATA-WORD PKT) (PKT-NUM-RECEIVED CONN))
-  (SETF (PKT-SECOND-DATA-WORD PKT) (LOCAL-WINDOW-SIZE CONN))
-  (TRANSMIT-INT-PKT-FOR-CONN CONN PKT))
+    (AS-1 WHY STS-WHY-ARRAY (ARRAY-LEADER STS-WHY-ARRAY 1))
+    (STORE-ARRAY-LEADER (\ (1+ (ARRAY-LEADER STS-WHY-ARRAY 1)) 100)
+			STS-WHY-ARRAY 1)
+    (SETQ PKT (ALLOCATE-INT-PKT))
+    (SETF (PKT-OPCODE PKT) STS-OP)
+    (SETF (PKT-NBYTES PKT) 4)
+    (SETF (PKT-FIRST-DATA-WORD PKT) (PKT-NUM-RECEIVED CONN))
+    (SETF (PKT-SECOND-DATA-WORD PKT) (LOCAL-WINDOW-SIZE CONN))
+    (TRANSMIT-INT-PKT-FOR-CONN CONN PKT))
 
 ;;;; Output-Main Program level
 
@@ -1183,10 +1200,10 @@ When you are finished with it, call RETURN-PKT to allow it to be reused."
 ;;; CONN must be in OPEN-STATE, and the OPCODE must be a DAT opcode.
 (DEFUN SEND-PKT (CONN PKT &OPTIONAL (OPCODE DAT-OP))
   "Send the data packet PKT to connection CONN.  OPCODE specifies the type of packet;
-The default is DAT (opcode #o200)  PKT is returned to the chaosnet NCP
+The default is DAT (opcode 200).  PKT is returned to the chaosnet ncp
 and should not be used further by the caller.
 The value is the packet number assigned to the packet."
-  (CASE (STATE CONN)
+  (SELECTQ (STATE CONN)
     (OPEN-STATE
       (OR (BIT-TEST DAT-OP OPCODE) (= EOF-OP OPCODE)
 	  (FERROR NIL "~O is not a legal opcode." OPCODE))
@@ -1216,7 +1233,7 @@ The value is the packet number assigned to the packet."
 (DEFUN SEND-STRING (CONN &REST STRINGS &AUX PKT)
   "Send data made by concatenating STRINGS down connection CONN."
   (SETQ PKT (GET-PKT))
-  (APPLY #'SET-PKT-STRING PKT STRINGS)
+  (APPLY 'SET-PKT-STRING PKT STRINGS)
   (SEND-PKT CONN PKT))
 
 ;;; User level routine to transmit an uncontrolled packet.
@@ -1330,11 +1347,11 @@ which is in ~S, not a valid state"
 (DEFUN RETURN-PKT (PKT)
   "Tell the chaosnet ncp you are finished with packet PKT.
 PKT should be a /"released/" packet, obtained with GET-PKT or GET-NEXT-PKT."
-  (CASE (PKT-STATUS PKT)
+  (SELECTQ (PKT-STATUS PKT)
     (RELEASED
      (SETF (PKT-STATUS PKT) NIL)
      (FREE-PKT PKT))
-    (OTHERWISE
+    (:OTHERWISE
      (FERROR NIL "Attempt to return unreleased packet (~S) to the NCP." PKT))))
 
 ;;;; Receiver Interrupt level
@@ -1373,7 +1390,7 @@ PKT should be a /"released/" packet, obtained with GET-PKT or GET-NEXT-PKT."
 		    (> (PKT-NBYTES INT-PKT) MAX-DATA-BYTES-PER-PKT))
 		(FREE-INT-PKT INT-PKT)
 		(INCF PKTS-OVER-FORWARDED))
-	       (T (INCF (PKT-FWD-COUNT INT-PKT))
+	       (T (SETF (PKT-FWD-COUNT INT-PKT) (1+ (PKT-FWD-COUNT INT-PKT)))
 		  (INCF PKTS-FORWARDED)
 		  (TRANSMIT-INT-PKT INT-PKT))))
 	(T (RECORD-INT-PKT-HEADER INT-PKT)
@@ -1422,26 +1439,26 @@ PKT should be a /"released/" packet, obtained with GET-PKT or GET-NEXT-PKT."
 
 (DEFUN RECORD-INT-PKT-HEADER (INT-PKT)
   (DO ((I 0 (1+ I))) ((= I 8.))
-    (SETF (AREF RECENT-HEADERS RECENT-HEADERS-POINTER I) (AREF INT-PKT I)))
-  (SETF (AREF RECENT-HEADERS RECENT-HEADERS-POINTER 8.) (TIME))
-  (SETQ RECENT-HEADERS-POINTER (\ (1+ RECENT-HEADERS-POINTER) #o200)))
+    (ASET (AR-1 INT-PKT I) RECENT-HEADERS RECENT-HEADERS-POINTER I))
+  (ASET (TIME) RECENT-HEADERS RECENT-HEADERS-POINTER 8.)
+  (SETQ RECENT-HEADERS-POINTER (\ (1+ RECENT-HEADERS-POINTER) 200)))
 
 ;;; Discard packets from send-list which have been receipted by other end
 (DEFUN RECEIPT (CONN ACK-LEV)
  (WITHOUT-INTERRUPTS
-   (LET ((SENDS (SEND-PKTS CONN))	;(Save array references...)
-	 (NEXT NIL)			;Prevent weird screw.
-	 (LENGTH (SEND-PKTS-LENGTH CONN)))
-     (DO ((PKT SENDS NEXT))		;For each PKT not yet ACKed which this ACKs,
-	 ((OR (NULL PKT) (PKTNUM-< ACK-LEV (PKT-NUM PKT))))
-;      (SETQ NEXT (PKT-LINK PKT))
-       (SETQ NEXT (SETQ SENDS (PKT-LINK PKT)))  ;Two variables only for "clairity"
-       (FREE-PKT PKT)
-       (SETQ LENGTH (1- LENGTH)))
-     (SETF (SEND-PKTS CONN) SENDS)
-     (SETF (SEND-PKTS-LENGTH CONN) LENGTH)
-     (IF (NULL SENDS)
-	 (SETF (SEND-PKTS-LAST CONN) NIL)))))
+  (LET ((SENDS (SEND-PKTS CONN))	;(Save array references...)
+	(NEXT NIL)			;Prevent weird screw.
+	(LENGTH (SEND-PKTS-LENGTH CONN)))
+    (DO ((PKT SENDS NEXT))		;For each PKT not yet ACKed which this ACKs,
+	((OR (NULL PKT) (PKTNUM-< ACK-LEV (PKT-NUM PKT))))
+;     (SETQ NEXT (PKT-LINK PKT))
+      (SETQ NEXT (SETQ SENDS (PKT-LINK PKT)))  ;Two variables only for "clairity"
+      (FREE-PKT PKT)
+      (SETQ LENGTH (1- LENGTH)))
+    
+    (SETF (SEND-PKTS CONN) SENDS)
+    (SETF (SEND-PKTS-LENGTH CONN) LENGTH)
+    (COND ((NULL SENDS) (SETF (SEND-PKTS-LAST CONN) NIL))))))
 
 ;;; A new ack has come in, so adjust the amount left in the window.  If the window was
 ;;; full, and has now become "un-full", cause an output interrupt
@@ -1526,13 +1543,13 @@ PKT should be a /"released/" packet, obtained with GET-PKT or GET-NEXT-PKT."
 		      (RETURN NIL))))))))
 
 (DEFUN RECEIVE-UNC (CONN INT-PKT &AUX PKT)
-  (BLOCK NIL
+  (PROG ()
     (COND ((EQ (STATE CONN) 'FOREIGN-STATE))	;Foreign-protocol state--no checks
 	  ((NEQ (STATE CONN) 'OPEN-STATE)
 	   (RETURN (TRANSMIT-LOS-INT-PKT INT-PKT LOS-OP "Connection not open")))
 	  ((NOT (= (PKT-SOURCE-INDEX-NUM INT-PKT) (FOREIGN-INDEX-NUM CONN)))
 	   (RETURN (TRANSMIT-LOS-INT-PKT INT-PKT LOS-OP
-		     "That is not your index number for this connection"))))
+			  "That is not your index number for this connection"))))
     (COND (( (LOOP FOR X = (READ-PKTS CONN) THEN (PKT-LINK X)
 		    WHILE X
 		    COUNT T)
@@ -1568,7 +1585,7 @@ PKT should be a /"released/" packet, obtained with GET-PKT or GET-NEXT-PKT."
 	     (RETURN T)))
       (DO ((I 1 (1+ I)))
 	  (( I MAXIMUM-INDEX) NIL)
-	(AND (SETQ CONN (AREF INDEX-CONN I))
+	(AND (SETQ CONN (AR-1 INDEX-CONN I))
 	     (= (FOREIGN-ADDRESS CONN) (PKT-SOURCE-ADDRESS INT-PKT))
 	     (= (FOREIGN-INDEX-NUM CONN) (PKT-SOURCE-INDEX-NUM INT-PKT))
 	     (RETURN T)))))
@@ -1587,11 +1604,11 @@ PKT should be a /"released/" packet, obtained with GET-PKT or GET-NEXT-PKT."
 (DEFUN HANDLE-RFC-PKT (PKT CLS-ON-ERROR-P &AUX LSN SERVER CONTACT-NAME)
   "Handle an RFC packet.  If CLS-ON-ERROR-P is T, send a CLS if there's no server"
   (SETQ CONTACT-NAME (CONTACT-NAME-FROM-RFC PKT))
-  (COND ((SETQ LSN (ASS #'EQUALP CONTACT-NAME PENDING-LISTENS))
+  (COND ((SETQ LSN (ASS 'EQUALP CONTACT-NAME PENDING-LISTENS))
 	 (SETQ PENDING-LISTENS (DELQ LSN PENDING-LISTENS))
 	 (RFC-MEETS-LSN (CDR LSN) PKT))
 	((AND (OR (EQUALP CONTACT-NAME "STATUS") CHAOS-SERVERS-ENABLED)
-	      (SETQ SERVER (ASS #'EQUALP CONTACT-NAME SERVER-ALIST)))
+	      (SETQ SERVER (ASS 'EQUALP CONTACT-NAME SERVER-ALIST)))
 	 (WITHOUT-INTERRUPTS	;seems like a good idea, altho probably not necessary
 	   (SETF (PKT-LINK PKT) PENDING-RFC-PKTS)
 	   (SETQ PENDING-RFC-PKTS PKT))
@@ -1604,10 +1621,10 @@ PKT should be a /"released/" packet, obtained with GET-PKT or GET-NEXT-PKT."
 	   (FREE-PKT PKT))))
 
 (DEFUN CONTACT-NAME-FROM-RFC (PKT &AUX CONTACT-STRING TEM)
-  (SETQ CONTACT-STRING (PKT-STRING PKT))
-  (COND ((SETQ TEM (STRING-SEARCH-CHAR #o40 CONTACT-STRING))
-	 (NSUBSTRING CONTACT-STRING 0 TEM))
-	(T CONTACT-STRING)))
+    (SETQ CONTACT-STRING (PKT-STRING PKT))
+    (COND ((SETQ TEM (STRING-SEARCH-CHAR #o40 CONTACT-STRING))
+	   (NSUBSTRING CONTACT-STRING 0 TEM))
+	  (T CONTACT-STRING)))
 
 ;;; Receving a BRD is like receiving an RFC
 (DEFUN RECEIVE-BRD (INT-PKT &AUX BIT-MAP-LENGTH BYTE-IN-MAP PKT)
@@ -1620,6 +1637,7 @@ PKT should be a /"released/" packet, obtained with GET-PKT or GET-NEXT-PKT."
 	 (INCF *BRD-PKTS-IN*)
 	 (SETQ PKT (CONVERT-TO-PKT INT-PKT))
 	 (SET-PKT-STRING PKT (SUBSTRING (PKT-STRING PKT) BIT-MAP-LENGTH))
+	 (PUSH (LIST (SUBSTRING (PKT-STRING PKT) 0) (PKT-SOURCE-ADDRESS PKT)) *BRD-HISTORY*)
 	 (HANDLE-RFC-PKT PKT NIL))
 	(T
 	 (FREE-INT-PKT INT-PKT))))
@@ -1644,7 +1662,7 @@ PKT should be a /"released/" packet, obtained with GET-PKT or GET-NEXT-PKT."
 
 ;;; So far both host and both index numbers have been verified.
 (DEFUN RECEIVE-OPN (CONN INT-PKT)
-  (CASE (STATE CONN)
+  (SELECTQ (STATE CONN)
     (RFC-SENT-STATE (SETF (FOREIGN-INDEX-NUM CONN) (PKT-SOURCE-INDEX-NUM INT-PKT))
 		    (SETF (FOREIGN-WINDOW-SIZE CONN) (PKT-SECOND-DATA-WORD INT-PKT))
 		    (SETF (PKT-NUM-READ CONN) (PKT-NUM INT-PKT))
@@ -1728,20 +1746,20 @@ PKT should be a /"released/" packet, obtained with GET-PKT or GET-NEXT-PKT."
 	   (TRANSMIT-NORMAL-PKT CONN PKT (PKT-NUM-SENT CONN) (LOCAL-WINDOW-SIZE CONN)))))
 
 (DEFUN RECEIVE-ANS (CONN INT-PKT &AUX PKT)
-  (COND ((NOT (MEMQ (STATE CONN) '(RFC-SENT-STATE BROADCAST-SENT-STATE)))
-	 (FREE-INT-PKT INT-PKT))
-	(T (SETQ PKT (CONVERT-TO-PKT INT-PKT))
-	   (SETF (STATE CONN) 'ANSWERED-STATE)
-	   (SETF (READ-PKTS CONN) PKT)
-	   (SETF (PKT-LINK PKT) NIL)
-	   (INTERRUPT-CONN :CHANGE-OF-STATE CONN 'ANSWERED-STATE)
-	   (INTERRUPT-CONN :INPUT CONN))))
+    (COND ((NOT (MEMQ (STATE CONN) '(RFC-SENT-STATE BROADCAST-SENT-STATE)))
+	   (FREE-INT-PKT INT-PKT))
+	  (T (SETQ PKT (CONVERT-TO-PKT INT-PKT))
+             (SETF (STATE CONN) 'ANSWERED-STATE)
+	     (SETF (READ-PKTS CONN) PKT)
+	     (SETF (PKT-LINK PKT) NIL)
+	     (INTERRUPT-CONN :CHANGE-OF-STATE CONN 'ANSWERED-STATE)
+	     (INTERRUPT-CONN :INPUT CONN))))
 
 ;;;; Timed Responses and background tasks
 
 (DEFUN BACKGROUND (&AUX LAST-WAKEUP-TIME (LAST-PROBE-TIME (TIME)) TASKS TIME)
   (RESET-ROUTING-TABLE)
-  (DO-FOREVER
+  (DO () (NIL)
     (SETQ TIME (TIME))
     (SETQ LAST-WAKEUP-TIME TIME)
     (DO () ((OR ( (TIME-DIFFERENCE TIME LAST-WAKEUP-TIME) RETRANSMISSION-INTERVAL)
@@ -1764,100 +1782,98 @@ PKT should be a /"released/" packet, obtained with GET-PKT or GET-NEXT-PKT."
     (COND (RETRANSMISSION-NEEDED
 	   (SETQ RETRANSMISSION-NEEDED NIL
 		 MORE-RETRANSMISSION-NEEDED NIL)
-	   (MAPC #'RETRANSMISSION CONN-LIST)	;Retransmit on all connections
+	   (MAPC 'RETRANSMISSION CONN-LIST)	;Retransmit on all connections
 	   (WITHOUT-INTERRUPTS
 	     (SETQ RETRANSMISSION-NEEDED
 		   (OR RETRANSMISSION-NEEDED MORE-RETRANSMISSION-NEEDED)))))
-    (WHEN ( (TIME-DIFFERENCE TIME LAST-PROBE-TIME) PROBE-INTERVAL)
-      (SETQ LAST-PROBE-TIME TIME)
-      (DOTIMES (I (ARRAY-LENGTH ROUTING-TABLE-COST))
-	(UNLESS (AREF ROUTING-TABLE-TYPE I)
-	  ;; If we have a direct connection of known type,
-	  ;; don't do the processing for indirect links.
-	  (SETF (AREF ROUTING-TABLE-COST I) (MIN (+ (AREF ROUTING-TABLE-COST I) 2) #o1000))))
-      (MAPC #'PROBE-CONN CONN-LIST))))		;Do probes and timeouts
+    (COND (( (TIME-DIFFERENCE TIME LAST-PROBE-TIME) PROBE-INTERVAL)
+	   (SETQ LAST-PROBE-TIME TIME)
+	   (DOTIMES (I (ARRAY-LENGTH ROUTING-TABLE-COST))
+	     (UNLESS (AREF ROUTING-TABLE-TYPE I)
+	       ;; If we have a direct connection of known type,
+	       ;; don't do the processing for indirect links.
+	       (ASET (MIN (+ (AREF ROUTING-TABLE-COST I) 2) 1000)
+		     ROUTING-TABLE-COST I)))
+	   (MAPC 'PROBE-CONN CONN-LIST)))))	;Do probes and timeouts
 
 ;;; Retransmit all unreceipted packets not recently sent
 (DEFUN RETRANSMISSION (CONN &AUX TIME (INHIBIT-SCHEDULING-FLAG T))
-  (WHEN (MEMQ (STATE CONN) '(OPEN-STATE RFC-SENT-STATE))
-    ;; Only if it is open or awaiting a response from RFC
-    (BLOCK CONN-DONE
-      (DO-FOREVER
-	;; Doing this outside the loop can lose
-	;; because then TIME can be less than (PKT-TIME-TRANSMITTED PKT).
-	(SETQ TIME (TIME))
-	(LET ((INHIBIT-SCHEDULING-FLAG T))
-	  (DO ((PKT (SEND-PKTS CONN) (PKT-LINK PKT)))
-	      ((NULL PKT) (RETURN-FROM CONN-DONE NIL))
-	    (COND ((NOT (EQ CONN (PKT-SOURCE-CONN PKT)))
-		   (FERROR NIL "~S in SEND-PKTS list for incorrect CONN:
+  (COND ((MEMQ (STATE CONN) '(OPEN-STATE RFC-SENT-STATE))
+	 ;Only if it is open or awaiting a response from RFC
+	 (SETQ TIME (TIME))
+         (DO-NAMED CONN-DONE
+           () (NIL)
+	   (LET ((INHIBIT-SCHEDULING-FLAG T))
+             (DO ((PKT (SEND-PKTS CONN) (PKT-LINK PKT)))
+                 ((NULL PKT) (RETURN-FROM CONN-DONE NIL))
+	       (COND ((NOT (EQ CONN (PKT-SOURCE-CONN PKT)))
+		      (FERROR NIL "~S in SEND-PKTS list for incorrect CONN:
 CONN ~S, (PKT-SOURCE-CONN PKT) ~S." PKT CONN (PKT-SOURCE-CONN PKT))))
-	    (SETQ MORE-RETRANSMISSION-NEEDED T)
-	    (WHEN ( (TIME-DIFFERENCE TIME (PKT-TIME-TRANSMITTED PKT))
-		     (LSH (CONN-RETRANSMISSION-INTERVAL CONN)
-			  ;; Retransmit the lowest numbered packet most often
-			  (MAX 0 (MIN 5 (1- (%POINTER-DIFFERENCE (PKT-NUM PKT)
-								 (SEND-PKT-ACKED CONN)))))))
-	      (SETF (PKT-BEING-RETRANSMITTED PKT) T)
-	      (SETQ INHIBIT-SCHEDULING-FLAG NIL)
-	      (TRANSMIT-PKT PKT T)
-	      (INCF PKTS-RETRANSMITTED)
-	      (SETQ INHIBIT-SCHEDULING-FLAG T)
-	      (COND ((EQ (PKT-BEING-RETRANSMITTED PKT) 'FREE)
-		     (SETF (PKT-BEING-RETRANSMITTED PKT) NIL)
-		     (FREE-PKT PKT))
-		    (T (SETF (PKT-BEING-RETRANSMITTED PKT) NIL)))
-	      (RETURN NIL)))))		;Must always start from beginning of chain if
+	       (SETQ MORE-RETRANSMISSION-NEEDED T)
+	       (COND (( (TIME-DIFFERENCE TIME (PKT-TIME-TRANSMITTED PKT))
+			 (LSH (CONN-RETRANSMISSION-INTERVAL CONN)
+			      ;; Retransmit the lowest numbered packet most often
+			      (MAX 0 (MIN 5 (1- (%POINTER-DIFFERENCE (PKT-NUM PKT)
+								     (SEND-PKT-ACKED CONN)))))))
+		      (SETF (PKT-BEING-RETRANSMITTED PKT) T)
+		      (SETQ INHIBIT-SCHEDULING-FLAG NIL)
+		      (TRANSMIT-PKT PKT T)
+		      (INCF PKTS-RETRANSMITTED)
+		      (SETQ INHIBIT-SCHEDULING-FLAG T)
+		      (COND ((EQ (PKT-BEING-RETRANSMITTED PKT) 'FREE)
+			     (SETF (PKT-BEING-RETRANSMITTED PKT) NIL)
+			     (FREE-PKT PKT))
+			    (T (SETF (PKT-BEING-RETRANSMITTED PKT) NIL)))
+		      (RETURN NIL)))))  ;Must always start from beginning of chain if
 					; turned on scheduling, since chain could be invalid
-      (PROCESS-ALLOW-SCHEDULE))))
+           (PROCESS-ALLOW-SCHEDULE)))))
 
 ;;; Send a SNS on this conn if necessary.  Decide whether foreign host is down.
 ;;; This gets called every PROBE-INTERVAL.
 (DEFUN PROBE-CONN (CONN &AUX DELTA-TIME)
-  (WHEN (MEMQ (STATE CONN) '(OPEN-STATE RFC-SENT-STATE))
-    ;Only if it is open or awaiting a response from RFC
-    (SETQ DELTA-TIME (TIME-DIFFERENCE (TIME) (TIME-LAST-RECEIVED CONN)))
-    (COND ((> DELTA-TIME HOST-DOWN-INTERVAL)
-	   (WITHOUT-INTERRUPTS
-	     (FREE-ALL-SEND-PKTS CONN)
-	     (FREE-ALL-RECEIVED-PKTS CONN)
-	     (SETF (STATE CONN) 'HOST-DOWN-STATE))
-	   (INTERRUPT-CONN :CHANGE-OF-STATE CONN 'HOST-DOWN-STATE))
-	  ((AND (EQ (STATE CONN) 'OPEN-STATE)	;Send SNS only on open connections
-		(OR (< (WINDOW-AVAILABLE CONN) (FOREIGN-WINDOW-SIZE CONN))
-		    (> DELTA-TIME LONG-PROBE-INTERVAL)))
-	   (LET ((PKT (ALLOCATE-INT-PKT)))
-	     (SETF (PKT-OPCODE PKT) SNS-OP)
-	     (SETF (PKT-NBYTES PKT) 0)
-	     (TRANSMIT-INT-PKT-FOR-CONN CONN PKT))))))
+  (COND ((MEMQ (STATE CONN) '(OPEN-STATE RFC-SENT-STATE))
+	 ;Only if it is open or awaiting a response from RFC
+	 (SETQ DELTA-TIME (TIME-DIFFERENCE (TIME) (TIME-LAST-RECEIVED CONN)))
+	 (COND ((> DELTA-TIME HOST-DOWN-INTERVAL)
+		(WITHOUT-INTERRUPTS
+		  (FREE-ALL-SEND-PKTS CONN)
+		  (FREE-ALL-RECEIVED-PKTS CONN)
+		  (SETF (STATE CONN) 'HOST-DOWN-STATE))
+		(INTERRUPT-CONN :CHANGE-OF-STATE CONN 'HOST-DOWN-STATE))
+	       ((AND (EQ (STATE CONN) 'OPEN-STATE)	;Send SNS only on open connections
+		     (OR (< (WINDOW-AVAILABLE CONN) (FOREIGN-WINDOW-SIZE CONN))
+			 (> DELTA-TIME LONG-PROBE-INTERVAL)))
+		(LET ((PKT (ALLOCATE-INT-PKT)))
+		  (SETF (PKT-OPCODE PKT) SNS-OP)
+		  (SETF (PKT-NBYTES PKT) 0)
+		  (TRANSMIT-INT-PKT-FOR-CONN CONN PKT)))))))
 
 ;;;; Hardware Interface
 
 (DEFUN INTERFACE-RESET-AND-ENABLE ()
-  (SI:SELECT-PROCESSOR
-    (:CADR
+  (select-processor
+    (:cadr
      (%UNIBUS-WRITE CONTROL-STATUS-REGISTER
 		    (DPB -1 %%CHAOS-CSR-RESET 0))
      (%UNIBUS-WRITE CONTROL-STATUS-REGISTER
 		    (DPB -1 %%CHAOS-CSR-INTERRUPT-ENABLES 0)))
-    (:LAMBDA
+    (:lambda
       NIL)))
 
 (DEFUN INTERFACE-RESET ()
-  (SI:SELECT-PROCESSOR
-    (:CADR
+  (select-processor
+    (:cadr
      (%UNIBUS-WRITE CONTROL-STATUS-REGISTER
 		    (DPB -1 %%CHAOS-CSR-RESET 0)))
-    (:LAMBDA
+    (:lambda
       NIL)))
 
 (DEFUN RECEIVER-RESET ()
-  (SI:SELECT-PROCESSOR
-    (:CADR
+  (select-processor
+    (:cadr
      (%UNIBUS-WRITE CONTROL-STATUS-REGISTER
-		    (DPB 1 %%CHAOS-CSR-RECEIVER-CLEAR
-			 (%UNIBUS-READ CONTROL-STATUS-REGISTER))))
-    (:LAMBDA
+		    (DPB 1 %%CHAOS-CSR-RECEIVER-CLEAR (%UNIBUS-READ CONTROL-STATUS-REGISTER))))
+    (:lambda
       NIL)))
 
 ;;; Top level function for receiver to be called directly from scheduler. (Instead of the
@@ -1865,15 +1881,15 @@ CONN ~S, (PKT-SOURCE-CONN PKT) ~S." PKT CONN (PKT-SOURCE-CONN PKT))))
 (DEFUN RECEIVE-ANY-FUNCTION (&AUX INT-PKT)
   (DO ((RESERVED-INT-PKT NIL))
       ((NOT (AND ENABLE (OR FAKE-RECEIVE-LIST (INT-RECEIVE-LIST)))))
-    (WHEN (SETQ INT-PKT (RECEIVE-PROCESS-NEXT-INT-PKT))
+    (when (SETQ INT-PKT (RECEIVE-PROCESS-NEXT-INT-PKT))
       ;; WITHOUT-INTERRUPTS not necc since from scheduler.
       (RECEIVE-INT-PKT INT-PKT))
-    (WHEN RESERVED-INT-PKT
+    (when RESERVED-INT-PKT
       (FERROR NIL "Int PKT about to be lost!")))	;Hopefully this will get printed
   (SI:SET-PROCESS-WAIT CURRENT-PROCESS
 		       #'(LAMBDA () (AND ENABLE (OR FAKE-RECEIVE-LIST (INT-RECEIVE-LIST))))
 		       NIL)
-  (SETF (SI:PROCESS-WAIT-WHOSTATE CURRENT-PROCESS) "Chaos Packet"))
+  (SETF (SI:PROCESS-WHOSTATE CURRENT-PROCESS) "Chaos Packet"))
 
 ;;; Returns NIL if there was a CRC error, INT-PKT if win.
 (DEFUN RECEIVE-PROCESS-NEXT-INT-PKT ()
@@ -1883,7 +1899,7 @@ CONN ~S, (PKT-SOURCE-CONN PKT) ~S." PKT CONN (PKT-SOURCE-CONN PKT))))
 	      (SETQ INT-PKT FAKE-RECEIVE-LIST
 		    FAKE-RECEIVE-LIST (INT-PKT-THREAD FAKE-RECEIVE-LIST))
 	      (SETF (INT-PKT-BIT-COUNT INT-PKT)
-		    (* #o20 (+ (PKT-NWORDS INT-PKT) 3)))
+		    (* 20 (+ (PKT-NWORDS INT-PKT) 3)))
 	      (SETF (INT-PKT-THREAD INT-PKT) NIL)
 	      (RETURN INT-PKT))
 	  (DO-FOREVER
@@ -1892,11 +1908,11 @@ CONN ~S, (PKT-SOURCE-CONN PKT) ~S." PKT CONN (PKT-SOURCE-CONN PKT))))
 					(INT-PKT-THREAD OLD-RECEIVE-LIST))
 		(RETURN (SETQ INT-PKT OLD-RECEIVE-LIST))))))
 	(SETF (INT-PKT-THREAD INT-PKT) NIL)
-	(WHEN (< (INT-PKT-WORD-COUNT INT-PKT) (+ FIRST-DATA-WORD-IN-PKT 3))
-	  ;; Less than the minimum size that can exist in the current protocol?
-	  (SETQ PKTS-OTHER-DISCARDED (1+ PKTS-OTHER-DISCARDED))
-	  (FREE-INT-PKT INT-PKT)
-	  (RETURN NIL))
+	(COND ((< (INT-PKT-WORD-COUNT INT-PKT) (+ FIRST-DATA-WORD-IN-PKT 3))
+	       ;; Less than the minimum size that can exist in the current protocol?
+	       (SETQ PKTS-OTHER-DISCARDED (1+ PKTS-OTHER-DISCARDED))
+	       (FREE-INT-PKT INT-PKT)
+	       (RETURN NIL)))
 	(SETQ PKTS-RECEIVED (1+ PKTS-RECEIVED))
 	(SETQ DEST (INT-PKT-HARDWARE-DEST INT-PKT)
 	      BITS (INT-PKT-BIT-COUNT INT-PKT)
@@ -1925,139 +1941,145 @@ CONN ~S, (PKT-SOURCE-CONN PKT) ~S." PKT CONN (PKT-SOURCE-CONN PKT))))
 ;;; The host and subnet can be passed as optional arguments, so that
 ;;; this function can be used for debugging purposes.
 
+
+
 (DEFUN TRANSMIT-INT-PKT (INT-PKT &OPTIONAL (HOST (PKT-DEST-ADDRESS INT-PKT))
                                            (SUBNET (PKT-DEST-SUBNET INT-PKT))
 				 &AUX HARDWARE-P LOCAL-PROC OTHER-LOCAL-PROCS)
   ;;; Simple routing if he is not on my subnet.
-  (COND ((AND (NOT (= SUBNET MY-SUBNET))
-	      (NOT (MEMQ SUBNET MY-OTHER-SUBNETS)))
-	 (AND ( SUBNET (LENGTH ROUTING-TABLE))
-	      (SETQ SUBNET 0))
-	 (SETQ HOST (AREF ROUTING-TABLE SUBNET))))
-  (IF ( (LDB #o1010 HOST) (LENGTH ROUTING-TABLE))
-      (FERROR NIL "bad routing table"))
-  (SETF (INT-PKT-WORD-COUNT INT-PKT) (1+ (PKT-NWORDS INT-PKT)))
-  (SETF (AREF INT-PKT (1- (INT-PKT-WORD-COUNT INT-PKT))) HOST)
-  (OR (= (%AREA-NUMBER INT-PKT) CHAOS-BUFFER-AREA)
-      (FERROR NIL "Attempt to transmit non-interrupt packet ~A." INT-PKT))
-  (AND (BIT-TEST #o200 (PKT-OPCODE INT-PKT)) (SETQ DATA-PKTS-OUT (1+ DATA-PKTS-OUT)))
-  (COND ((ZEROP HOST)
-	 ;; This means we know no path to the destination.
-	 ;; Just give up.
-	 (FREE-INT-PKT INT-PKT))
-	((= HOST MY-ADDRESS)
-	 ;; loop back to myself ... system 98+ handles this a different way
-	 (LET ((N-16-BIT-WORDS (+ (CEILING (+ (CHAOS:PKT-NBYTES INT-PKT) 16.) 2) 3)))
-	   (SETF (INT-PKT-WORD-COUNT INT-PKT) (1+ N-16-BIT-WORDS))
-	   (SETF (INT-PKT-CSR-1 INT-PKT) 0)	; say no CRC-1 error
-	   (SETF (INT-PKT-CSR-2 INT-PKT) 0)	; say no CRC-2 error
-	   (SETF (INT-PKT-BIT-COUNT INT-PKT)
-		 (* (- N-16-BIT-WORDS 3) #o20))	; fill in bit count
-	   ;; set the hardware destination
-	   (SETF (AREF INT-PKT (- (INT-PKT-WORD-COUNT INT-PKT) 3)) MY-ADDRESS)
-	   (WITHOUT-INTERRUPTS
-	     (RECEIVE-INT-PKT INT-PKT))))
-	(T
-	 (ECASE (AREF ROUTING-TABLE-TYPE (LDB #o1010 HOST))
-	   (:ETHERNET
-	    (COND ((AND (FBOUNDP 'SI:SHARE-MODE-ACTIVE-P)
-			(SI:SHARE-MODE-ACTIVE-P))
-		   (COND
-		     ;; broadcast -- send to everyone
-		     ((ZEROP HOST)
-		      (SETQ OTHER-LOCAL-PROCS SI:*OTHER-PROCESSORS*)
-		      (SETQ HARDWARE-P (EQ SI:*ETHERNET-HARDWARE-CONTROLLER* SI:*MY-OP*)))
+    (COND ((AND (NOT (= SUBNET MY-SUBNET))
+		(NOT (MEMBER SUBNET MY-OTHER-SUBNETS)))
+	   (AND ( SUBNET (ARRAY-LENGTH ROUTING-TABLE))
+		(SETQ SUBNET 0))
+	   (SETQ HOST (AR-1 ROUTING-TABLE SUBNET))))
+    (IF (>= (LDB 1010 HOST) (ARRAY-LENGTH ROUTING-TABLE))
+	(FERROR NIL "bad routing table"))
+    (SETF (INT-PKT-WORD-COUNT INT-PKT) (1+ (PKT-NWORDS INT-PKT)))
+    (ASET HOST INT-PKT (1- (INT-PKT-WORD-COUNT INT-PKT)))
+    (OR (= (%AREA-NUMBER INT-PKT) CHAOS-BUFFER-AREA)
+	(FERROR NIL "Attempt to transmit non-interrupt packet ~A." INT-PKT))
+    (AND (BIT-TEST 200 (PKT-OPCODE INT-PKT)) (SETQ DATA-PKTS-OUT (1+ DATA-PKTS-OUT)))
+    (COND ((ZEROP HOST)
+	   ;; This means we know no path to the destination.
+	   ;; Just give up.
+	   (FREE-INT-PKT INT-PKT))
+	  ((= HOST MY-ADDRESS)
+	   ;;loop back to myself ... system 98+ handles this a different way
+	   (LET ((N-16-BIT-WORDS (+ (CEILING (+ (CHAOS:PKT-NBYTES INT-PKT) 16.) 2) 3)))
+	     (SETF (INT-PKT-WORD-COUNT INT-PKT) (1+ N-16-BIT-WORDS))
+	     (SETF (INT-PKT-CSR-1 INT-PKT) 0)	; say no CRC-1 error
+	     (SETF (INT-PKT-CSR-2 INT-PKT) 0)	; say no CRC-2 error
+	     (SETF (INT-PKT-BIT-COUNT INT-PKT)
+		   (* (- N-16-BIT-WORDS 3) 20))	; fill in bit count
+	     (ASET MY-ADDRESS	; set the hardware destination
+		   INT-PKT
+		   (- (INT-PKT-WORD-COUNT INT-PKT) 3))
+	     (WITHOUT-INTERRUPTS
+	       (RECEIVE-INT-PKT INT-PKT))))
+	  (T
+	   (CCASE (AREF ROUTING-TABLE-TYPE (LDB 1010 HOST))
+	     (:ETHERNET
+	      (COND ((AND (FBOUNDP 'SI:SHARE-MODE-ACTIVE-P)
+			  (SI:SHARE-MODE-ACTIVE-P))
+		     (COND
+		       ;;broadcast -- send to everyone
+		       ((ZEROP HOST)
+			(SETQ OTHER-LOCAL-PROCS SI:*OTHER-PROCESSORS*)
+			(SETQ HARDWARE-P (EQ SI:*ETHERNET-HARDWARE-CONTROLLER* SI:*MY-OP*)))
+		       
+		       ;;if he's local, just send to him
+		       ((SETQ LOCAL-PROC (UNIX:PROCESSOR-FOR-HOST-IF-ON-MY-NUBUS HOST)))
+		       
+		       ;;it's definitely going out of this machine - give it to
+		       ;;the hardware controller
+		       ((EQ SI:*ETHERNET-HARDWARE-CONTROLLER* SI:*MY-OP*)
+			(SETQ HARDWARE-P T))
+		       (T
+			(SETQ LOCAL-PROC SI:*ETHERNET-HARDWARE-CONTROLLER*))))
+		    (T
+		     (SETQ HARDWARE-P T)))
+	      
+	      (COND ((NOT (NULL HARDWARE-P))
+		     (LET ((ETHER-ADDRESS (ETHERNET:GET-ETHERNET-ADDRESS HOST)))
+		       (COND ((NOT (NULL ETHER-ADDRESS))
+			      (FUNCALL (SELECT PROCESSOR-TYPE-CODE
+					 (SI:CADR-TYPE-CODE
+					  'ETHERNET:SEND-INT-PKT-VIA-UNIBUS-ETHERNET)
+					 (SI:LAMBDA-TYPE-CODE
+					  'ETHERNET:SEND-INT-PKT-VIA-MULTIBUS-ETHERNET))
+				       INT-PKT
+				       ETHERNET:MY-ETHERNET-ADDRESS	;source
+				       ETHER-ADDRESS	;destination
+				       ETHERNET:CHAOS-ETHERNET-TYPE)
+			      (INCF ETHERNET:*ETHERNET-CHAOS-PKTS-TRANSMITTED*)
+			      (INCF PKTS-TRANSMITTED))
+			     (T
+			      (INCF ETHERNET:
+				*ETHERNET-CHAOS-PKTS-NOT-TRANSMITTED-LACKING-ETHERNET-ADDRESS*))
+			     ))))
 
-		     ;; if he's local, just send to him
-		     ((SETQ LOCAL-PROC (UNIX:PROCESSOR-FOR-HOST-IF-ON-MY-NUBUS HOST)))
+	      (DOLIST (OP OTHER-LOCAL-PROCS)
+		(UNIX:TRANSMIT-INT-PKT-TO-SHARING-HOST INT-PKT OP))
 
-		     ;; it's definitely going out of this machine - give it to
-		     ;; the hardware controller
-		     ((EQ SI:*ETHERNET-HARDWARE-CONTROLLER* SI:*MY-OP*)
-		      (SETQ HARDWARE-P T))
-		     (T
-		      (SETQ LOCAL-PROC SI:*ETHERNET-HARDWARE-CONTROLLER*))))
-		  (T
-		   (SETQ HARDWARE-P T)))
+	      (IF LOCAL-PROC
+		  (UNIX:TRANSMIT-INT-PKT-TO-SHARING-HOST INT-PKT LOCAL-PROC))
 
-	    (COND ((NOT (NULL HARDWARE-P))
-		   (LET ((ETHER-ADDRESS (ETHERNET:GET-ETHERNET-ADDRESS HOST)))
-		     (COND ((NOT (NULL ETHER-ADDRESS))
-			    (FUNCALL (SI:SELECT-PROCESSOR
-				       (:CADR
-					 'ETHERNET:SEND-INT-PKT-VIA-UNIBUS-ETHERNET)
-				       (:LAMBDA
-					 'ETHERNET:SEND-INT-PKT-VIA-MULTIBUS-ETHERNET))
-				     INT-PKT
-				     ETHERNET:MY-ETHERNET-ADDRESS	;source
-				     ETHER-ADDRESS			;destination
-				     ETHERNET:CHAOS-ETHERNET-TYPE)
-			    (INCF ETHERNET:*ETHERNET-CHAOS-PKTS-TRANSMITTED*)
-			    (INCF PKTS-TRANSMITTED))
-			   (T
-			    (INCF ETHERNET:*ETHERNET-CHAOS-PKTS-NOT-TRANSMITTED-LACKING-ETHERNET-ADDRESS*))))))
-
-	    (DOLIST (OP OTHER-LOCAL-PROCS)
-	      (UNIX:TRANSMIT-INT-PKT-TO-SHARING-HOST INT-PKT OP))
-
-	    (IF LOCAL-PROC
-		(UNIX:TRANSMIT-INT-PKT-TO-SHARING-HOST INT-PKT LOCAL-PROC))
-
-	    (FREE-INT-PKT INT-PKT))
-	   (:CHAOS
-	    (SI:SELECT-PROCESSOR
-	      (:LAMBDA (FERROR NIL "Trying to use chaosnet hardware")))
-	    (WITHOUT-INTERRUPTS
-	      (PROG (OLD-TRANSMIT-LIST)
-		    (SETQ PKTS-TRANSMITTED (1+ PKTS-TRANSMITTED))
-		 LOOP
-		    (SETQ OLD-TRANSMIT-LIST (INT-TRANSMIT-LIST))
-		    (SETF (INT-PKT-THREAD INT-PKT) OLD-TRANSMIT-LIST)
-		    (OR (%STORE-CONDITIONAL INT-TRANSMIT-LIST-POINTER
-					    OLD-TRANSMIT-LIST
-					    INT-PKT)
-			(GO LOOP))
-		    (%CHAOS-WAKEUP))))))))
+	      (FREE-INT-PKT INT-PKT))
+	     (:CHAOS
+	      (IF (= PROCESSOR-TYPE-CODE SI:LAMBDA-TYPE-CODE)
+		  (FERROR NIL "Trying to use chaosnet hardware"))
+	      (WITHOUT-INTERRUPTS
+		(PROG (OLD-TRANSMIT-LIST)
+		      (SETQ PKTS-TRANSMITTED (1+ PKTS-TRANSMITTED))
+		      LOOP
+		      (SETQ OLD-TRANSMIT-LIST (INT-TRANSMIT-LIST))
+		      (SETF (INT-PKT-THREAD INT-PKT) OLD-TRANSMIT-LIST)
+		      (OR (%STORE-CONDITIONAL INT-TRANSMIT-LIST-POINTER
+					      OLD-TRANSMIT-LIST
+					      INT-PKT)
+			  (GO LOOP))
+		      (%CHAOS-WAKEUP))))))))
 
 
-;(DEFUN TRANSMIT-INT-PKT (INT-PKT &OPTIONAL (HOST (PKT-DEST-ADDRESS INT-PKT))
-;                                           (SUBNET (PKT-DEST-SUBNET INT-PKT))
-;				 &AUX HARDWARE-P LOCAL-PROC OTHER-LOCAL-PROCS)
-;    ;;; Simple routing if he is not on my subnet.
-;    (UNLESS (= SUBNET MY-SUBNET)
-;      (IF ( SUBNET (ARRAY-LENGTH ROUTING-TABLE))
-;	  (SETQ SUBNET 0))
-;      (SETQ HOST (AREF ROUTING-TABLE SUBNET)))
-;    (SETF (INT-PKT-WORD-COUNT INT-PKT) (1+ (PKT-NWORDS INT-PKT)))
-;    (ASET HOST INT-PKT (1- (INT-PKT-WORD-COUNT INT-PKT)))
-;    (OR (= (%AREA-NUMBER INT-PKT) CHAOS-BUFFER-AREA)
-;        (FERROR NIL "Attempt to transmit non-interrupt packet ~A." INT-PKT))
-;    (if (BIT-TEST #o200 (PKT-OPCODE INT-PKT)) (incf DATA-PKTS-OUT))
-;    (WITHOUT-INTERRUPTS
-;     (PROG (OLD-TRANSMIT-LIST)
-;	   (INCF PKTS-TRANSMITTED)
-;	   (WHEN (= HOST MY-ADDRESS)
-;	     ;; Handle "transmission" to this very machine -- just pretend pkt was received.
-;	     (SETF (INT-PKT-THREAD INT-PKT) FAKE-RECEIVE-LIST)
-;	     (INCF (INT-PKT-WORD-COUNT INT-PKT) 2)
-;	     (SETF (INT-PKT-HARDWARE-DEST INT-PKT) MY-ADDRESS)
-;	     (SETQ FAKE-RECEIVE-LIST INT-PKT)
-;	     (RETURN))
-;	LOOP
-;	   (SETQ OLD-TRANSMIT-LIST (INT-TRANSMIT-LIST))
-;           (SETF (INT-PKT-THREAD INT-PKT) OLD-TRANSMIT-LIST)
-;           (OR (%STORE-CONDITIONAL INT-TRANSMIT-LIST-POINTER OLD-TRANSMIT-LIST INT-PKT)
-;               (GO LOOP))
-;           (%CHAOS-WAKEUP))))
-;)
+
+(COMMENT
+(DEFUN TRANSMIT-INT-PKT (INT-PKT &OPTIONAL (HOST (PKT-DEST-ADDRESS INT-PKT))
+                                           (SUBNET (PKT-DEST-SUBNET INT-PKT))
+				 &AUX HARDWARE-P LOCAL-PROC OTHER-LOCAL-PROCS)
+    ;;; Simple routing if he is not on my subnet.
+    (UNLESS (= SUBNET MY-SUBNET)
+      (IF ( SUBNET (ARRAY-LENGTH ROUTING-TABLE))
+	  (SETQ SUBNET 0))
+      (SETQ HOST (AREF ROUTING-TABLE SUBNET)))
+    (SETF (INT-PKT-WORD-COUNT INT-PKT) (1+ (PKT-NWORDS INT-PKT)))
+    (ASET HOST INT-PKT (1- (INT-PKT-WORD-COUNT INT-PKT)))
+    (OR (= (%AREA-NUMBER INT-PKT) CHAOS-BUFFER-AREA)
+        (FERROR NIL "Attempt to transmit non-interrupt packet ~A." INT-PKT))
+    (if (BIT-TEST #o200 (PKT-OPCODE INT-PKT)) (incf DATA-PKTS-OUT))
+    (WITHOUT-INTERRUPTS
+     (PROG (OLD-TRANSMIT-LIST)
+	   (INCF PKTS-TRANSMITTED)
+	   (WHEN (= HOST MY-ADDRESS)
+	     ;; Handle "transmission" to this very machine -- just pretend pkt was received.
+	     (SETF (INT-PKT-THREAD INT-PKT) FAKE-RECEIVE-LIST)
+	     (INCF (INT-PKT-WORD-COUNT INT-PKT) 2)
+	     (SETF (INT-PKT-HARDWARE-DEST INT-PKT) MY-ADDRESS)
+	     (SETQ FAKE-RECEIVE-LIST INT-PKT)
+	     (RETURN))
+	LOOP
+	   (SETQ OLD-TRANSMIT-LIST (INT-TRANSMIT-LIST))
+           (SETF (INT-PKT-THREAD INT-PKT) OLD-TRANSMIT-LIST)
+           (OR (%STORE-CONDITIONAL INT-TRANSMIT-LIST-POINTER OLD-TRANSMIT-LIST INT-PKT)
+               (GO LOOP))
+           (%CHAOS-WAKEUP))))
+)
 
 ;;; DEBUGGING: The following are functions for printing out information, 
 ;;; principally for debugging.
 
 (DEFUN STATUS ( &AUX CSR LC)
   "Print out contents of hardware registers (CADR Only)"
-  (SI:SELECT-PROCESSOR
-    (:LAMBDA (FERROR NIL "LAMBDAs don't have chaosnet boards")))
+  (IF-IN-LAMBDA (FERROR NIL "LAMBDAs don't have chaosnet boards"))
   (SETQ CSR (%UNIBUS-READ CONTROL-STATUS-REGISTER))
   (TERPRI) (TERPRI)
   (AND (LDB-TEST %%CHAOS-CSR-TIMER-INTERRUPT-ENABLE CSR)
@@ -2116,58 +2138,58 @@ You must call CHAOS:ENABLE to turn the chaosnet ncp on again
 before you can use the chaosnet; but many user-level functions
 that use the net will do that for you.  
 Calling this function with ENABLE-P of T will have the same effect."
-  (DISABLE)
-  (WITHOUT-INTERRUPTS
-    (SETQ BACKGROUND-REQUESTS NIL)		;Get rid of requests for connections flushing
-    (SETQ RETRANSMISSION-NEEDED T)
-    (DO ((CL CONN-LIST (CDR CL)))
-	((NULL CL))
-      (FREE-ALL-READ-PKTS (CAR CL))
-      (FREE-ALL-RECEIVED-PKTS (CAR CL))
-      (FREE-ALL-SEND-PKTS (CAR CL))
-      (SETF (STATE (CAR CL)) 'INACTIVE-STATE))
-    (DO ((I 1 (1+ I)))
-	((= I MAXIMUM-INDEX))
-      (SETF (AREF INDEX-CONN I) NIL))
-    (SETQ DISTINGUISHED-PORT-CONN-TABLE NIL)
-    (SETQ CONN-LIST NIL)
-    (OR (AND (INTEGERP INDEX-CONN-FREE-POINTER)
-	     (> MAXIMUM-INDEX INDEX-CONN-FREE-POINTER -1))
-	(SETQ INDEX-CONN-FREE-POINTER 1))
+   (DISABLE)
+   (WITHOUT-INTERRUPTS
+     (SETQ BACKGROUND-REQUESTS NIL)		;Get rid of requests for connections flushing
+     (SETQ RETRANSMISSION-NEEDED T)
+     (DO ((CL CONN-LIST (CDR CL)))
+	 ((NULL CL))
+       (FREE-ALL-READ-PKTS (CAR CL))
+       (FREE-ALL-RECEIVED-PKTS (CAR CL))
+       (FREE-ALL-SEND-PKTS (CAR CL))
+       (SETF (STATE (CAR CL)) 'INACTIVE-STATE))
+     (DO ((I 1 (1+ I)))
+	 ((= I MAXIMUM-INDEX))
+       (ASET NIL INDEX-CONN I))
+     (SETQ DISTINGUISHED-PORT-CONN-TABLE NIL)
+     (SETQ CONN-LIST NIL)
+     (OR (AND (FIXP INDEX-CONN-FREE-POINTER)
+	      (> MAXIMUM-INDEX INDEX-CONN-FREE-POINTER -1))
+	 (SETQ INDEX-CONN-FREE-POINTER 1))
 
-    ;; The initialization is needed because if the LISP Machine has an open connection,
-    ;; it gets reloaded, and the connection is established on the same index before the
-    ;; other end has gone into INCXMT state, then the RFC will look like a duplicate.
-    ;; Though this may sound like a rare event, it is exactly what happens with the
-    ;; file job connection!!
-    (DO ((INDEX 0 (1+ INDEX)))
-	(( INDEX MAXIMUM-INDEX))
-      (SETF (AREF UNIQUIZER-TABLE INDEX) (+ (TIME) INDEX)))
+     ;; The initialization is needed because if the LISP Machine has an open connection,
+     ;; it gets reloaded, and the connection is established on the same index before the
+     ;; other end has gone into INCXMT state, then the RFC will look like a duplicate.
+     ;; Though this may sound like a rare event, it is exactly what happens with the
+     ;; file job connection!!
+     (DO ((INDEX 0 (1+ INDEX)))
+         ((>= INDEX MAXIMUM-INDEX))
+       (ASET (+ (TIME) INDEX) UNIQUIZER-TABLE INDEX))
 
-    ;; Should actually try and free up these
-    (SETQ PENDING-LISTENS NIL)
-    (SETQ PENDING-RFC-PKTS NIL)
-    (SETQ FAKE-RECEIVE-LIST NIL)
-    (SETQ *BRD-PKTS-IN* 0
-	  *BRD-PKTS-OUT* 0
-	  *BRD-HISTORY* NIL
-	  *BRD-REPLIES-IN* 0
-	  *RECEIVE-BROADCAST-PACKETS-P* NIL)
-    ;; This is a pretty arbitrary number, but it used to be MAXIMUM-INDEX which
-    ;; grew like mad causing an absurd number of pages to get wired.  This is undoubtedly
-    ;; enough for average use.
-    (CREATE-CHAOSNET-BUFFERS 40.) )
-  (IF ENABLE-P
-      (PROGN (ENABLE)
-	     "Reset and enabled")
-    "Reset and disabled"))
+     ;; Should actually try and free up these
+     (SETQ PENDING-LISTENS NIL)
+     (SETQ PENDING-RFC-PKTS NIL)
+     (SETQ FAKE-RECEIVE-LIST NIL)
+     (SETQ *BRD-PKTS-IN* 0
+	   *BRD-PKTS-OUT* 0
+	   *BRD-HISTORY* NIL
+	   *BRD-REPLIES-IN* 0
+	   *RECEIVE-BROADCAST-PACKETS-P* NIL)
+     ;; This is a pretty arbitrary number, but it used to be MAXIMUM-INDEX which
+     ;; grew like mad causing an absurd number of pages to get wired.  This is undoubtedly
+     ;; enough for average use.
+     (CREATE-CHAOSNET-BUFFERS 40.) )
+   (IF ENABLE-P
+       (PROGN (ENABLE)
+	      "Reset and enabled")
+     "Reset and disabled"))
 
 (ADD-INITIALIZATION "Turn off chaosnet" '(RESET) '(BEFORE-COLD))
 
 (DEFUN PKT-ADD-32 (PKT COUNT)
   (LET ((IDX (+ FIRST-DATA-WORD-IN-PKT (TRUNCATE (PKT-NBYTES PKT) 2))))
-    (SETF (AREF PKT IDX) (LDB #o0020 COUNT)
-	  (SETF (AREF PKT (1+ IDX)) (LDB #o2020 COUNT)))
+    (ASET (LDB #o0020 COUNT) PKT IDX)
+    (ASET (LDB #o2020 COUNT) PKT (1+ IDX))
     (SETF (PKT-NBYTES PKT) (+ (PKT-NBYTES PKT) 4))))
 
 (DEFUN SEND-STATUS (&AUX CONN PKT STRING)
@@ -2267,11 +2289,11 @@ Calling this function with ENABLE-P of T will have the same effect."
 (DEFUN START-RUT-TRANSMITTER-PROCESS ()
   (IF (NULL RUT-TRANSMITTER-PROCESS)
       (SETQ RUT-TRANSMITTER-PROCESS
-	    (MAKE-PROCESS "Chaos RUT transmitter" :WARM-BOOT-ACTION NIL :PRIORITY 25.)))
+	    (MAKE-PROCESS "Chaos RUT transmitter" ':WARM-BOOT-ACTION NIL ':PRIORITY 25.)))
   (COND ((NULL MY-OTHER-SUBNETS)
 	 (PROCESS-DISABLE RUT-TRANSMITTER-PROCESS))
 	(T
-	 (GLOBAL:SEND RUT-TRANSMITTER-PROCESS :PRESET 'RUT-TRANSMITTER-TOP-LEVEL)
+	 (GLOBAL:SEND RUT-TRANSMITTER-PROCESS ':PRESET 'RUT-TRANSMITTER-TOP-LEVEL)
 	 (PROCESS-RESET-AND-ENABLE RUT-TRANSMITTER-PROCESS))))
 
 (DEFVAR *NUMBER-OF-ROUTING-PACKETS* 0)
@@ -2286,22 +2308,23 @@ Calling this function with ENABLE-P of T will have the same effect."
 	  ((NULL SUB) (FREE-INT-PKT INT-PKT))
 	(DO ((SUBNET 1 (1+ SUBNET))
 	     (I FIRST-DATA-WORD-IN-PKT)
-	     (N 0))
+	     (N 0)
+	     )
 	    ((= SUBNET (ARRAY-LENGTH ROUTING-TABLE))
 	     (SETF (PKT-NBYTES INT-PKT) (* N 4)))
-	  (WHEN (< (AREF ROUTING-TABLE-COST SUBNET) MAXIMUM-ROUTING-COST)
-	    (SETF (AREF INT-PKT I) SUBNET)
-	    (SETF (AREF INT-PKT (1+ I)) (AREF ROUTING-TABLE-COST SUBNET))
-	    (INCF I 2)
-	    (INCF N 1)))
+	  (COND ((< (AREF ROUTING-TABLE-COST SUBNET) MAXIMUM-ROUTING-COST)
+		 (ASET SUBNET INT-PKT I)
+		 (ASET (AREF ROUTING-TABLE-COST SUBNET) INT-PKT (1+ I))
+		 (SETQ I (+ I 2))
+		 (SETQ N (+ N 1)))))
 	(SETF (PKT-OPCODE INT-PKT) RUT-OP)
 	(SETF (PKT-SOURCE-ADDRESS INT-PKT) (CAR ADDR))
 	(SETF (PKT-SOURCE-INDEX-NUM INT-PKT) 0)
 	(SETF (PKT-DEST-ADDRESS INT-PKT) 0)
 	(SETF (PKT-DEST-INDEX-NUM INT-PKT) 0)
-	(TRANSMIT-INT-PKT INT-PKT 0 (CAR SUB))	; frees int-pkt
+	(TRANSMIT-INT-PKT INT-PKT 0 (CAR SUB)) ; frees int-pkt
 	(INCF *NUMBER-OF-ROUTING-PACKETS*))
-      (PROCESS-SLEEP (* 60. 10.)))))
+      (PROCESS-SLEEP (* 60. 10.))))) 
 
 (ADD-INITIALIZATION "CHAOS-NCP" '(INITIALIZE-NCP-ONCE) '(ONCE))
 (ADD-INITIALIZATION "CHAOS-NCP" '(INITIALIZE-NCP-COLD) '(COLD))
