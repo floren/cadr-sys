@@ -1800,9 +1800,11 @@ PKT should be a /"released/" packet, obtained with GET-PKT or GET-NEXT-PKT."
 (DEFUN RETRANSMISSION (CONN &AUX TIME (INHIBIT-SCHEDULING-FLAG T))
   (COND ((MEMQ (STATE CONN) '(OPEN-STATE RFC-SENT-STATE))
 	 ;Only if it is open or awaiting a response from RFC
-	 (SETQ TIME (TIME))
          (DO-NAMED CONN-DONE
-           () (NIL)
+		   () (NIL)
+	   ;; Doing this outside the loop can lose
+	   ;; because then TIME can be less than (PKT-TIME-TRANSMITTED PKT).
+	   (SETQ TIME (TIME))
 	   (LET ((INHIBIT-SCHEDULING-FLAG T))
              (DO ((PKT (SEND-PKTS CONN) (PKT-LINK PKT)))
                  ((NULL PKT) (RETURN-FROM CONN-DONE NIL))
