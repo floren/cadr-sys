@@ -97,9 +97,9 @@ Usually this is a screen.")
 (UNLESS (FBOUNDP 'MOUSE-WAKEUP)
   (FSET 'MOUSE-WAKEUP #'(LAMBDA () NIL)))
 
-(DEFVAR SHEET-AREA (MAKE-AREA :NAME 'SHEET-AREA)
+(DEFVAR SHEET-AREA (MAKE-AREA ':NAME 'SHEET-AREA)
   "Area which windows and some related data are consed in.")
-(DEFVAR WHO-LINE-AREA (MAKE-AREA :NAME 'WHO-LINE-AREA)
+(DEFVAR WHO-LINE-AREA (MAKE-AREA ':NAME 'WHO-LINE-AREA)
   "Area for the who-line to cons in.")
 
 (DEFMACRO SHEET-CONSING (&BODY BODY)
@@ -107,7 +107,7 @@ Usually this is a screen.")
   `(LET ((DEFAULT-CONS-AREA (%AREA-NUMBER SELF)))
      . ,BODY))
 
-(DEFVAR BLINKER-AREA (MAKE-AREA :NAME 'BLINKER-AREA)
+(DEFVAR BLINKER-AREA (MAKE-AREA ':NAME 'BLINKER-AREA)
   "Area which blinkers are consed in.")
 
 (DEFFLAVOR SHEET
@@ -161,7 +161,7 @@ Usually this is a screen.")
 	    ERASE-ALUF		;ALU function for erasing characters/lines/whole thing	    
 	    (BLINKER-LIST NIL)	;Possibly null list of blinkers on this sheet
 
-	    (DEEXPOSED-TYPEOUT-ACTION :NORMAL)
+	    (DEEXPOSED-TYPEOUT-ACTION ':NORMAL)
 	    (TEMPORARY-BIT-ARRAY NIL)
 	    (TEMPORARY-WINDOWS-LOCKED NIL)
 	    RESTORED-BITS-P
@@ -194,7 +194,7 @@ Usually this is a screen.")
 		       (:PASS-ON (:BASE-FLAVOR-LAST LM TM RM BM) :COMPUTE-MARGINS)
 		       (:DAEMON-WITH-OVERRIDE :BASE-FLAVOR-LAST
 					      :WHO-LINE-DOCUMENTATION-STRING))
-  (:DOCUMENTATION "A lowest level window type
+  (:DOCUMENTATION :LOWLEVEL-MIXIN "A lowest level window type
 This is the data structure known about by the microcode."))
 
 (DEFUN SHEET-INSTANCE-AREA-FUNCTION (INIT-PLIST)
@@ -231,21 +231,18 @@ It maps standard font purposes into names of fonts.")
 	    LOCATIONS-PER-LINE
 	    (LEVEL-COUNT 0)
 	    (MOUSE-BLINKERS NIL)
-;>> not patched in 99
-	    (screen-manager-bit-arrays ())
 	    )
 	   (SHEET)
 ; :ORDERED-INSTANCE-VARIABLES			;This cannot work
   (:OUTSIDE-ACCESSIBLE-INSTANCE-VARIABLES BUFFER-HALFWORD-ARRAY DEFAULT-FONT
 					  CONTROL-ADDRESS PROPERTY-LIST FONT-ALIST
-					  BITS-PER-PIXEL BUFFER MOUSE-BLINKERS
-					  screen-manager-bit-arrays)
+					  BITS-PER-PIXEL BUFFER MOUSE-BLINKERS)
   (:INITABLE-INSTANCE-VARIABLES
     BITS-PER-PIXEL FONT-ALIST BUFFER CONTROL-ADDRESS BUFFER-HALFWORD-ARRAY DEFAULT-FONT
     PROPERTY-LIST LOCATIONS-PER-LINE)
   (:GETTABLE-INSTANCE-VARIABLES MOUSE-BLINKERS BUFFER BUFFER-HALFWORD-ARRAY FONT-ALIST)
   (:SETTABLE-INSTANCE-VARIABLES MOUSE-BLINKERS)
-  (:DOCUMENTATION "The software data structure for the actual screen
+  (:DOCUMENTATION :SPECIAL-PURPOSE "The software data structure for the actual screen
 The top of a window hierachy should be of this type.  There will be only one for each
 hardware display."))
 
@@ -392,9 +389,9 @@ of one line does not immediately follow the last pixel of the previous line."
 	((X-POS NIL)		;X position of blinker (left) NIL if should follow sheet
 	 (Y-POS NIL)		;Y position of blinker (top)
 	 SHEET			;Sheet associated with
-	 (VISIBILITY :BLINK)	;NIL invisible, T visible, :BLINK blinking, :ON visible but
+	 (VISIBILITY ':BLINK)	;NIL invisible, T visible, :BLINK blinking, :ON visible but
 				; blinking when selected, :OFF invisibile but ...
-	 (DESELECTED-VISIBILITY :ON)	;Blinker's visibility when the sheet it is on is
+	 (DESELECTED-VISIBILITY ':ON)	;Blinker's visibility when the sheet it is on is
 				; not selected, reasonable values :ON, :OFF and :BLINK
 	 (HALF-PERIOD 15.)	;Time interval (60ths) between phase blinks
 	 (PHASE NIL)		;NIL not visible, anything else visible in some form
@@ -413,31 +410,31 @@ of one line does not immediately follow the last pixel of the previous line."
 
 (DEFMACRO BLINKER-SET-CURSORPOS (BLINKER X Y)
   "Move BLINKER to position X, Y (relative to margins of BLINKER's sheet)."
-  `(SEND ,BLINKER :SET-CURSORPOS ,X ,Y))
+  `(SEND ,BLINKER ':SET-CURSORPOS ,X ,Y))
 
 (DEFMACRO BLINKER-READ-CURSORPOS (BLINKER)
   "Return BLINKER's X, Y position (relative to margins of BLINKER's sheet)."
-  `(SEND ,BLINKER :READ-CURSORPOS))
+  `(SEND ,BLINKER ':READ-CURSORPOS))
 
 (DEFMACRO BLINKER-SET-VISIBILITY (BLINKER VISIBILITY)
   "Set visibility of BLINKER to VISIBLITY."
-  `(SEND ,BLINKER :SET-VISIBILITY ,VISIBILITY))
+  `(SEND ,BLINKER ':SET-VISIBILITY ,VISIBILITY))
 
 (DEFMACRO BLINK (BLINKER)
-  `(SEND ,BLINKER :BLINK))
+  `(SEND ,BLINKER ':BLINK))
 
 (DEFMACRO BLINKER-SET-SIZE (BLINKER WIDTH HEIGHT)
   "Set size of BLINKER to WIDTH by HEIGHT."
-  `(SEND ,BLINKER :SET-SIZE ,WIDTH ,HEIGHT))
+  `(SEND ,BLINKER ':SET-SIZE ,WIDTH ,HEIGHT))
 
 (DEFMACRO BLINKER-SET-CHARACTER (BLINKER FONT CHAR)
   "Set character BLINKER displays as to CHAR, in FONT.
 Applies only to character blinkers."
-  `(SEND ,BLINKER :SET-CHARACTER ,CHAR ,FONT))
+  `(SEND ,BLINKER ':SET-CHARACTER ,CHAR ,FONT))
 
 (DEFMACRO BLINKER-SET-SHEET (BLINKER SHEET)
   "Set the sheet BLINKER moves on to SHEET."
-  `(SEND ,BLINKER :SET-SHEET ,SHEET))
+  `(SEND ,BLINKER ':SET-SHEET ,SHEET))
 
 ;;; This macro generates the prologue code that most of the
 ;;; interesting blinker methods need.
@@ -447,11 +444,10 @@ DO-NOT-OPEN-P non-NIL inhibits removing SELF from the screen,
 in case the caller wishes to avoid doing so if it turns
 out that no change needs to be made."
   `(LET ((INHIBIT-SCHEDULING-FLAG T))
-     (DO ()
-	 ((OR (NOT (SHEET-OUTPUT-HELD-P SHEET))
-	      (NULL PHASE)))
+     (DO () ((OR (NOT (SHEET-OUTPUT-HELD-P SHEET))
+		 (NULL PHASE)))
        (SETQ INHIBIT-SCHEDULING-FLAG NIL)
-       (SEND SHEET :OUTPUT-HOLD-EXCEPTION)
+       (SEND SHEET ':OUTPUT-HOLD-EXCEPTION)
        (SETQ INHIBIT-SCHEDULING-FLAG T))
      ,@(IF (NOT DO-NOT-OPEN-P)
 	   `((OPEN-BLINKER SELF)))
@@ -460,20 +456,22 @@ out that no change needs to be made."
        ,(OR DO-NOT-OPEN-P '(SETQ TIME-UNTIL-BLINK 0)))))
 
 (DEFFLAVOR RECTANGULAR-BLINKER
-	((WIDTH NIL)
+	((WIDTH NIL)		;The width
 	 (HEIGHT NIL))
 	(BLINKER)
   (:INITABLE-INSTANCE-VARIABLES WIDTH HEIGHT)
-  (:DOCUMENTATION "A blinker that displays as a solid rectangle."))
+  (:DOCUMENTATION :COMBINATION
+   "A blinker that displays as a solid rectangle."))
 
 (DEFFLAVOR MOUSE-BLINKER-MIXIN ((X-OFFSET 0) (Y-OFFSET 0)) ()
   (:REQUIRED-FLAVORS BLINKER)
   :INITTABLE-INSTANCE-VARIABLES
-  (:DOCUMENTATION "Blinker that is capable of being MOUSE-BLINKER"))
+  (:DOCUMENTATION :MIXIN "Blinker that is capable of being MOUSE-BLINKER"))
 
 (DEFFLAVOR MOUSE-BLINKER-FAST-TRACKING-MIXIN () (MOUSE-BLINKER-MIXIN)
   (:REQUIRED-FLAVORS BLINKER)
-  (:DOCUMENTATION "Blinker that is capable of being MOUSE-BLINKER and gets tracked by microcode."))
+  (:DOCUMENTATION :MIXIN
+     "Blinker that is capable of being MOUSE-BLINKER and gets tracked by microcode."))
 
 ;;;Who line variables
 (DEFVAR WHO-LINE-WINDOW)	;Sheet used for writing the who line
@@ -632,8 +630,7 @@ will refresh completely when it is exposed.)"
 			 . ,BODY)
 		  (SETF (SHEET-OUTPUT-HOLD-FLAG ,SHEET) .OLD.OUTPUT.HOLD.)))))))
 
-;;;; I/O buffer stuff
-
+;;; I/O buffer stuff
 (DEFSTRUCT (IO-BUFFER :ARRAY-LEADER :NAMED (:CONSTRUCTOR NIL) (:ALTERANT NIL)
 		      (:SIZE-SYMBOL IO-BUFFER-LEADER-SIZE))
   "Input-output buffer for the window system"
@@ -677,12 +674,12 @@ T means data may not be put in or taken out
   (ARRAY-LEADER INPUT-RECORD 1))
 
 (DEFMACRO IO-BUFFER-EMPTY-P (BUFFER)
-  "T if IO-buffer BUFFER is empty."
+  "T if io-buffer BUFFER is empty."
   `(= (IO-BUFFER-INPUT-POINTER ,BUFFER)
       (IO-BUFFER-OUTPUT-POINTER ,BUFFER)))
 
 (DEFMACRO IO-BUFFER-FULL-P (BUFFER)
-  "T if IO-buffer BUFFER is full (no more can be put in it)."
+  "T if io-buffer BUFFER is full (no more can be put in it)."
   ;; Always leave room for at one unget to be done
   `(= (\ (+ (IO-BUFFER-INPUT-POINTER ,BUFFER) 2) (IO-BUFFER-SIZE ,BUFFER))
       (IO-BUFFER-OUTPUT-POINTER ,BUFFER)))
@@ -692,22 +689,22 @@ T means data may not be put in or taken out
 SHEET will be reexposed afterward if it was exposed to begin with.
 Many kinds of changes to SHEET are simpler to make
 if you know that SHEET is not exposed."
-  `(LET ((.STATUS. (SEND ,SHEET :STATUS)))
+  `(LET ((.STATUS. (SEND ,SHEET ':STATUS)))
      (DELAYING-SCREEN-MANAGEMENT
       (UNWIND-PROTECT
-	(PROGN (SEND ,SHEET :DEEXPOSE :DEFAULT :NOOP)
+	(PROGN (SEND ,SHEET ':DEEXPOSE ':DEFAULT ':NOOP)
 	       . ,BODY)
-	(SEND ,SHEET :SET-STATUS .STATUS.)))))
+	(SEND ,SHEET ':SET-STATUS .STATUS.)))))
 
 ;(DEFMACRO WINDOW-BIND ((WINDOW NEW-TYPE . INIT-PAIRS) &BODY BODY)
 ;  "Change the flavor of WINDOW to NEW-TYPE over execution of BODY.
-;INIT-PAIRS are extra arguments to pass to MAKE-INSTANCE."
+;INIT-PAIRS are extra arguments to pass to MAKE-WINDOW."
 ;  (CHECK-ARG WINDOW SYMBOLP "a symbol which is set to a window")
-;    `(LET ((.O.WINDOW. ,WINDOW) (.N.WINDOW.) (,WINDOW ,WINDOW) (*TERMINAL-IO* *TERMINAL-IO*))
+;    `(LET ((.O.WINDOW. ,WINDOW) (.N.WINDOW.) (,WINDOW ,WINDOW) (TERMINAL-IO TERMINAL-IO))
 ;       (UNWIND-PROTECT
 ;	 (PROGN (SETQ .N.WINDOW. (WINDOW-PUSH ,WINDOW ,NEW-TYPE . ,INIT-PAIRS))
 ;		(SETQ ,WINDOW .N.WINDOW.)
-;		(AND (EQ .O.WINDOW. *TERMINAL-IO*) (SETQ *TERMINAL-IO* ,WINDOW))
+;		(AND (EQ .O.WINDOW. TERMINAL-IO) (SETQ TERMINAL-IO ,WINDOW))
 ;	   . ,BODY)
 ;	 (AND .N.WINDOW. (WINDOW-POP .O.WINDOW. .N.WINDOW.))))))
 
@@ -715,10 +712,10 @@ if you know that SHEET is not exposed."
 (DEFMACRO PRESERVE-SUBSTITUTE-STATUS (WINDOW &BODY BODY)
   "Execute BODY, then select WINDOW if it (or its substitute) used to be selected."
   `(LET* ((.WINDOW. ,WINDOW)
-	  (.STATUS. (SEND .WINDOW. :SELF-OR-SUBSTITUTE-SELECTED-P)))
+	  (.STATUS. (SEND .WINDOW. ':SELF-OR-SUBSTITUTE-SELECTED-P)))
      (UNWIND-PROTECT
        (PROGN . ,BODY)
-       (IF .STATUS. (SEND .WINDOW. :SELECT)))))
+       (IF .STATUS. (SEND .WINDOW. ':SELECT)))))
 
 (DEFMACRO WITH-SELECTION-SUBSTITUTE ((WINDOW FOR-WINDOW) &BODY BODY)
   "Execute BODY with WINDOW as a selection substitute for FOR-WINDOW.
@@ -726,14 +723,14 @@ While FOR-WINDOW has the selection substitute, the substitute
 will be selected whenever FOR-WINDOW would have been selected."
   `(LET* ((.WINDOW. ,WINDOW)
 	  (.FOR-WINDOW. ,FOR-WINDOW)
-	  (.OSTATUS. (AND .WINDOW. (SEND .WINDOW. :STATUS)))
-	  (.OSUBST. (SEND .FOR-WINDOW. :SELECTION-SUBSTITUTE)))
-     (SEND .FOR-WINDOW. :SET-SELECTION-SUBSTITUTE .WINDOW.)
+	  (.OSTATUS. (and .window. (SEND .WINDOW. ':STATUS)))
+	  (.OSUBST. (SEND .FOR-WINDOW. ':SELECTION-SUBSTITUTE)))
+     (SEND .FOR-WINDOW. ':SET-SELECTION-SUBSTITUTE .WINDOW.)
      (UNWIND-PROTECT
        (PROGN . ,BODY)
        (DELAYING-SCREEN-MANAGEMENT
-	 (SEND .FOR-WINDOW. :SET-SELECTION-SUBSTITUTE .OSUBST.)
-	 (IF .WINDOW. (SEND .WINDOW. :SET-STATUS .OSTATUS.))))))
+	 (SEND .FOR-WINDOW. ':SET-SELECTION-SUBSTITUTE .OSUBST.)
+	 (IF .WINDOW. (SEND .WINDOW. ':SET-STATUS .OSTATUS.))))))
 
 ;;; Temporarily select a window
 (DEFMACRO WINDOW-CALL ((WINDOW FINAL-ACTION . FINAL-ACTION-ARGS) &BODY BODY)
@@ -744,7 +741,7 @@ with FINAL-ACTION-ARGS as args.
   `(LET ((.CURRENT-WINDOW. SELECTED-WINDOW))
      (UNWIND-PROTECT
        (PROGN
-	 (SEND ,WINDOW :SELECT)
+	 (SEND ,WINDOW ':SELECT)
 	 . ,BODY)
        ;; Reselect old window -- be careful not to reselect if we aren't still the currently
        ;; selected window, thus preventing spurious selection
@@ -752,9 +749,9 @@ with FINAL-ACTION-ARGS as args.
 	    `(DELAYING-SCREEN-MANAGEMENT
 	       (LET ((.FLAG. (SHEET-ME-OR-MY-KID-P SELECTED-WINDOW ,WINDOW)))
 		 (SEND ,WINDOW ',FINAL-ACTION . ,FINAL-ACTION-ARGS)
-		 (AND .CURRENT-WINDOW. .FLAG. (SEND .CURRENT-WINDOW. :SELECT NIL))))
+		 (AND .CURRENT-WINDOW. .FLAG. (SEND .CURRENT-WINDOW. ':SELECT NIL))))
 	    `(AND .CURRENT-WINDOW. (SHEET-ME-OR-MY-KID-P SELECTED-WINDOW ,WINDOW)
-		  (SEND .CURRENT-WINDOW. :SELECT NIL))))))
+		  (SEND .CURRENT-WINDOW. ':SELECT NIL))))))
 
 (DEFMACRO WINDOW-MOUSE-CALL ((WINDOW FINAL-ACTION . FINAL-ACTION-ARGS) &BODY BODY)
   "Mouse-select WINDOW then execute BODY.  Afterward, send a FINAL-ACTION message.
@@ -767,13 +764,13 @@ with FINAL-ACTION-ARGS as args.
   `(LET ((.CURRENT-WINDOW. SELECTED-WINDOW))
      (UNWIND-PROTECT
        (PROGN
-	 (SEND ,WINDOW :MOUSE-SELECT)
+	 (SEND ,WINDOW ':MOUSE-SELECT)
 	 . ,BODY)
        ,(IF FINAL-ACTION
 	    `(DELAYING-SCREEN-MANAGEMENT
 	       (SEND ,WINDOW ',FINAL-ACTION . ,FINAL-ACTION-ARGS)
-	       (AND .CURRENT-WINDOW. (SEND .CURRENT-WINDOW. :SELECT NIL)))
-	    `(AND .CURRENT-WINDOW. (SEND .CURRENT-WINDOW. :SELECT NIL))))))
+	       (AND .CURRENT-WINDOW. (SEND .CURRENT-WINDOW. ':SELECT NIL)))
+	    `(AND .CURRENT-WINDOW. (SEND .CURRENT-WINDOW. ':SELECT NIL))))))
 
 ;;; Maybe this should go somewhere else
 (DEFMACRO DOPLIST ((PLIST PROP IND) &BODY BODY)
@@ -785,8 +782,6 @@ with FINAL-ACTION-ARGS as args.
 	   ,PROP (CADR PLIST))
      . ,BODY))
 
-;;;; window resources
-
 ;;; There are certain kinds of windows that are associated with screens.  These include
 ;;; the system menu, and associated windows.  This a facility for defining those
 ;;; kinds of windows, and allocating them automatically.
@@ -806,7 +801,7 @@ Options are
  Default is one, which is made an inferior of DEFAULT-SCREEN.
 :CONSTRUCTOR -- as with DEFRESOURCE.
 :MAKE-WINDOW -- value is list of flavor name followed by keyword args.
- The default constructor passes this list to MAKE-INSTANCE,
+ The default constructor passes this list to MAKE-WINDOW,
  evaluating the elements of it.
 :REUSABLE-WHEN (one of :DEEXPOSED or :DEACTIVATED).  The default is to be
  reusable when nobody is using it and it is not locked.
@@ -814,31 +809,31 @@ Options are
  a window that is not exposed or not active can automatically be reused."
   (IF (STRINGP (CAR OPTIONS)) (SETQ DOC (POP OPTIONS)))
   (LOOP FOR (KEYWORD VALUE) ON OPTIONS BY 'CDDR
-	DO (CASE KEYWORD
+	DO (SELECTQ KEYWORD
 	     (:INITIAL-COPIES (SETQ INITIAL-COPIES VALUE))
 	     (:CONSTRUCTOR (SETQ CONSTRUCTOR VALUE))
 	     ((:MAKE-WINDOW :WINDOW-CREATE)	;:WINDOW-CREATE obsolete old name
-		(SETQ CONSTRUCTOR `(MAKE-INSTANCE ',(CAR VALUE)
-						  :SUPERIOR SUPERIOR
-						  ,@(LOOP FOR (KEYWORD VALUE)
-							  ON (CDR VALUE) BY 'CDDR
-							  COLLECT `',KEYWORD
-							  COLLECT VALUE))))
+		(SETQ CONSTRUCTOR `(MAKE-WINDOW ',(CAR VALUE)
+				     ':SUPERIOR SUPERIOR
+				     ,@(LOOP FOR (KEYWORD VALUE) ON (CDR VALUE) BY 'CDDR
+					     COLLECT `',KEYWORD
+					     COLLECT VALUE))))
 	     (:REUSABLE-WHEN
-		(SETQ CHECKER (CASE VALUE
+		(SETQ CHECKER (SELECTQ VALUE
 				(:DEEXPOSED 'CHECK-DEEXPOSED-WINDOW-RESOURCE)
 				(:DEACTIVATED 'CHECK-DEACTIVATED-WINDOW-RESOURCE)
-				(OTHERWISE (FERROR NIL "~S ~S - only ~S and ~S are allowed"
-						   KEYWORD VALUE :DEEXPOSED :DEACTIVATED)))))
+				(OTHERWISE (FERROR NIL "~S ~S - only :DEEXPOSED and ~
+						       :DEACTIVATED are allowed"
+						   KEYWORD VALUE)))))
 	     (OTHERWISE (FERROR NIL "~S invalid DEFWINDOW-RESOURCE option" KEYWORD))))
-  (OR CONSTRUCTOR (FERROR NIL "~S requires either the ~S or the ~S option."
-			  'DEFWINDOW-RESOURCE :CONSTRUCTOR :MAKE-WINDOW))
+  (OR CONSTRUCTOR (FERROR NIL "DEFWINDOW-RESOURCE requires either the :CONSTRUCTOR or~@
+			       the :MAKE-WINDOW option."))
   (LET ((STUFF `(:INITIAL-COPIES ,INITIAL-COPIES
 		 :CONSTRUCTOR ,CONSTRUCTOR
 		 :CHECKER ,CHECKER)))
     (IF DOC (PUSH DOC STUFF))
     `(PROGN
-       (PUSHNEW ',NAME WINDOW-RESOURCE-NAMES :TEST #'EQ)
+       (PUSHNEW ',NAME WINDOW-RESOURCE-NAMES :TEST 'EQ)
        (DEFRESOURCE ,NAME ,(APPEND PARAMETERS
 				   (IF (MEMQ '&OPTIONAL PARAMETERS) 
 				       '((SUPERIOR MOUSE-SHEET))
@@ -847,7 +842,7 @@ Options are
 
 ;;; This gets a list of all window resources
 ;;; so that :CHANGE-OF-DEFAULT-FONT can find the windows even when not active.
-(DEFVAR WINDOW-RESOURCE-NAMES ()
+(DEFVAR WINDOW-RESOURCE-NAMES NIL
   "List of names of all DEFWINDOW-RESOURCEs.")
 ;;; This name was used by mistake in the window manual.
 (FORWARD-VALUE-CELL 'WINDOW-RESOURCE-LIST 'WINDOW-RESOURCE-NAMES)
@@ -942,7 +937,7 @@ you'll be doing screen management on the same stuff right away."
 The mouse process no longer sends windows messages about the mouse.
 It does update TV:MOUSE-X and TV:MOUSE-Y.
 BODY can wait for changes in the tracked mouse position with TV:MOUSE-WAIT.
-BODY must set the mouse blinker right away, for example by (MOUSE-STANDARD-BLINKER)."
+BODY must setthe mouse blinker right away, for example by (MOUSE-STANDARD-BLINKER)."
   `(LET ((.OLD.VALUE. WINDOW-OWNING-MOUSE))
      (LET-GLOBALLY ((WHO-LINE-MOUSE-GRABBED-DOCUMENTATION NIL))
        (UNWIND-PROTECT
@@ -951,16 +946,6 @@ BODY must set the mouse blinker right away, for example by (MOUSE-STANDARD-BLINK
 	   . ,BODY)
 	 (SETQ WINDOW-OWNING-MOUSE .OLD.VALUE.)
 	 (SETQ MOUSE-RECONSIDER T)))))
-
-(DEFMACRO WITH-MOUSE-GRABBED-ON-SHEET ((SHEET) &BODY BODY)
-  "Like TV:WITH-MOUSE-GRABBED, but additionally restricts the mouse to moving within SHEET."
-  (IF (NULL SHEET) (SETQ SHEET 'SELF))
-  `(LET ((.OLD.VALUE. MOUSE-SHEET))
-     (UNWIND-PROTECT
-       (WITH-MOUSE-GRABBED
-	 (MOUSE-SET-SHEET ,SHEET)
-	 . ,BODY)
-       (MOUSE-SET-SHEET .OLD.VALUE.))))
 
 (DEFMACRO WITH-MOUSE-USURPED (&BODY BODY)
   "Tell mouse process to do absolutely nothing while BODY is executed.
@@ -975,29 +960,27 @@ BODY can track the mouse using TV:MOUSE-INPUT."
 	 (SETQ MOUSE-RECONSIDER T)))))
 
 ;;; Tell the mouse process to switch "modes" and wait for it to do so
-(DEFUN WITH-MOUSE-GRABBED-INTERNAL (WOM)
-  (WITHOUT-INTERRUPTS
-    (SETQ WINDOW-OWNING-MOUSE WOM)
-    (WHEN (NEQ WOM MOUSE-WINDOW)
-      (SETQ MOUSE-RECONSIDER T
-	    INHIBIT-SCHEDULING-FLAG NIL)
-      (PROCESS-WAIT "Grab Mouse" #'(LAMBDA (WOM)
-				     (AND (NULL MOUSE-RECONSIDER)
-					  (EQ MOUSE-WINDOW WOM)))
-		    WOM))))
+(DEFUN WITH-MOUSE-GRABBED-INTERNAL (WOM &AUX (INHIBIT-SCHEDULING-FLAG T))
+  (SETQ WINDOW-OWNING-MOUSE WOM)
+  (WHEN (NEQ WOM MOUSE-WINDOW)
+    (SETQ MOUSE-RECONSIDER T
+	  INHIBIT-SCHEDULING-FLAG NIL)
+    (PROCESS-WAIT "Grab Mouse" #'(LAMBDA (WOM) (AND (NULL MOUSE-RECONSIDER)
+						    (EQ MOUSE-WINDOW WOM)))
+		  WOM)))
 
 ;;; Server structure used by WHOLIN and PEEK
 (DEFSTRUCT (SERVER-DESC :CONC-NAME (:TYPE :LIST) (:ALTERANT NIL))
   CONNECTION HOST-NAME CONTACT-NAME PROCESS FUNCTION ARGS)
 
 
-;;; (used to be defined in window; stream)
+;;; used to be defined in window; stream
 ;;; The third, fourth and fifth components of this structure are used only by WINDOW; RH
 ;;; and not by the default rubout handler.
 (DEFSTRUCT (RUBOUT-HANDLER-BUFFER (:TYPE :ARRAY-LEADER)
 				  (:MAKE-ARRAY (:LENGTH #o1000))
 				  (:DEFAULT-POINTER RUBOUT-HANDLER-BUFFER)
-				  (:CONC-NAME RHB-)
+				  (:CONC-NAME "RHB-")
 				  (:ALTERANT NIL))
   (FILL-POINTER 0 :documentation
     "Furthest index in buffer of any input")
