@@ -335,6 +335,16 @@
 	     (SETF (TV:SHEET-END-PAGE-FLAG) EPF))
 	   (SIGNAL-CONDITION EH:ABORT-OBJECT)))))
 
+(defmethod (editor-typeout-window :before :deactivate) ()
+  (tv:prepare-sheet (self)
+    (let ((bottom (min (tv:sheet-inside-bottom) (1+ (send self :bottom-reached)))))
+      (tv:%draw-rectangle (tv:sheet-inside-width)
+			  (- bottom (tv:sheet-inside-top))
+			  (tv:sheet-inside-left)
+			  (tv:sheet-inside-top)
+			  (tv:sheet-erase-aluf self)
+			  self))))
+
 (DEFFLAVOR ZWEI-TYPEOUT-MIXIN () (TV:WINDOW-WITH-TYPEOUT-MIXIN)
   (:REQUIRED-FLAVORS ZWEI-WITHOUT-TYPEOUT)
   (:INIT-KEYWORDS :ITEM-TYPE-ALIST)
@@ -648,6 +658,10 @@ even if the window had not been selected.")
 	 (TV:SHEET-HOME SELF)
 	 (SETQ TYPEIN-STATUS :CLEAR))))
 
+(DEFMETHOD (TYPEIN-WINDOW :AFTER :CLEAR-WINDOW) ()
+  (SETQ TYPEIN-STATUS ':CLEAR))
+
+; old name
 (DEFMETHOD (TYPEIN-WINDOW :AFTER :CLEAR-SCREEN) ()
   (SETQ TYPEIN-STATUS :CLEAR))
 
@@ -723,6 +737,8 @@ even if the window had not been selected.")
   (OR (MEMQ TYPEIN-STATUS '(:IN-USE :IN-USE-STAYS))
       (SEND SELF ':PREPARE-FOR-TYPEOUT)))
 
+(DEFMETHOD (TYPEIN-WINDOW :BEFORE :CLEAR-WINDOW) MAKE-INCOMPLETE)
+; old name
 (DEFMETHOD (TYPEIN-WINDOW :BEFORE :CLEAR-SCREEN) MAKE-INCOMPLETE)
 (DEFMETHOD (TYPEIN-WINDOW :BEFORE :TYO) MAKE-INCOMPLETE)
 (DEFMETHOD (TYPEIN-WINDOW :BEFORE :STRING-OUT) MAKE-INCOMPLETE)
