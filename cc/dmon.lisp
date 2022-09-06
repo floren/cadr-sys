@@ -54,10 +54,7 @@
     (cc-fast-address-test-mem i))
   (COND ((NULL ALREADY-LOADED)
 	 (CC-ZERO-ENTIRE-MACHINE RESET-P)
-	 ;; Read in MEMD ULOAD if have not already done so.
-	 (IF (ZEROP (LENGTH MTEST-UCODE))
-	     (MTEST-UCODE-STREAM :RESET))
-	 (SETQ UCODE-COUNTER 0)
+	 (setq ucode-counter 0)
 	 (CC-UCODE-LOADER NIL "SYS: UBIN; MEMD ULOAD >" NIL 'mtest-ucode-stream)))
   (COND ((ZEROP MAP-OFFSET) (CC-FAST-LOAD-STRAIGHT-MAP))
 	(T (CC-LOAD-STRAIGHT-MAP MAP-OFFSET)))
