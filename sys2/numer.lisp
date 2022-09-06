@@ -1,33 +1,7 @@
 ;;; -*- Mode:LISP; Package:SYSTEM-INTERNALS; Base:10; Lowercase:T; Readtable:T -*-
 ;	** (c) Copyright 1980 Massachusetts Institute of Technology **
 
-(defun expt-hard (base-number power-number)
-  (cond ;; ((eq power-number 0)			;integer 0
-	;;  (numeric-contage 1 base-number))
-	((= power-number 0)
-	 ;; (if (zerop base-number)
-	 ;; (ferror 'sys:illegal-expt base-number power-number
-	 ;;     "An attempt was made to raise zero to the power of a non-integer zero ~*~D")
-	   (numeric-contage (numeric-contage 1 power-number) base-number))
-	;;)
-	((zerop base-number)
-	 (if (plusp (realpart power-number))
-	     (numeric-contage base-number power-number)
-	   (ferror 'sys:illegal-expt base-number power-number
-		   "An attempt was made to raise zero to power ~*~D, whose real part is not > 0")))
-	((integerp power-number)
-	 (let ((minusp (minusp power-number)))
-	   (setq power-number (abs power-number))
-	   (do ((ans (if (oddp power-number) base-number (numeric-contage 1 base-number))
-		     (if (oddp power-number) (* ans base-number) ans)))
-	       ((zerop (setq power-number (ash power-number -1)))
-		(if minusp (cli:// ans) ans))
-	     ;; to avoid overflow, procrastinate squaring
-	     (setq base-number (* base-number base-number)))))
-	;; this is a truly losing algorithm ...
-	(t (exp (* power-number (log base-number))))))
-
-
+
 ;;; Integer square-root
 (defun isqrt (n)
   "Square root of an integer; the greatest positive integer  (SQRT N)"
@@ -62,7 +36,7 @@ Result is a short-float or complex short-float according to type of NUMBER"
 			 (r (sqrt (// (+ real abs) 2))))
 		    (%complex-cons r (// imag (+ r r)))))
 		 ((< n 0.0)
-		  (%complex-cons (- n n) (sqrt (- n))))
+		  (%complex-cons (zero-of-type n) (sqrt (- n))))
 		 ((= n 0.0)
 		  0.0)
 		 (t
@@ -75,7 +49,7 @@ Result is a short-float or complex short-float according to type of NUMBER"
                           (+ single-float-exponent-offset
 			     (if (oddp exp)
 				 (1+ (dpb (ldb #o0127 exp) #o0027 exp))
-			         (dpb (ldb #o0127 exp) #o0027 exp))))
+			       (dpb (ldb #o0127 exp) #o0027 exp))))
 		    (do ((i 0 (1+ i))
 			 (an (* i2 (+ 0.4826004 f (if (oddp exp) -0.25 0.0)))))
 			((= i 4) an)
@@ -94,7 +68,7 @@ Result is a short-float or complex short-float according to type of NUMBER"
 /(ie by default this is the /"natural/" logarithm function. Supply BASE for an unnatural log."
   (declare (arglist n &optional (base (exp 1))))
   (unless (typep n 'float) (setq n (float n 0f0)))
-  (setq zero (- n n))
+  (setq zero (zero-of-type n))
   (when b
     (if (and (zerop b) (not (zerop n)))
 	(return-from log (numeric-contage b n))
@@ -154,7 +128,7 @@ Result is a short-float or complex short-float according to type of NUMBER"
 			   (// -617.97226953
 			       (+ (* f f) 87.417497202)))))
 	      (1+ n)))))
-
+
 (defun cosd (ang)
   "Cosine of an angle measured in degrees.  Small flonum arg gets small flonum value."
   (sin (+ (* ang 0.0174532926) 1.570796326) ang))
@@ -198,15 +172,12 @@ If TYPE-SPECIMEN is specified, its type determines the type of the result."
 			      (* y2 (+ 0.07968967928
 				       (* y2 (+ -0.00467376557
 						(* y2 0.00015148419))))))))))))))
-
-(defun tan (x) (ferror nil "Foo. I haven't written this yet."))
-(defun tand (x) (ferror nil "Foo. I haven't written this yet."))
-
 (defun cli:atan (y x)
   "Arctangent in radians of y//x, between - and . Small flonum arg gets small flonum value."
    (if (< y 0)
        (- (atan (- y) x))
      (atan y x)))
+
 (deff atan2 'cli:atan)
 
 (defun atan (y x)
@@ -242,15 +213,30 @@ If TYPE-SPECIMEN is specified, its type determines the type of the result."
 	     ans)))))
 
 
-(defun asin (x) (ferror nil "Foo. I haven't written this yet."))
-(defun acos (x) (ferror nil "Foo. I haven't written this yet."))
+(defun expt-hard (base-number power-number)
+  (cond ;; ((eq power-number 0)			;integer 0
+	;;  (numeric-contage 1 base-number))
+	((= power-number 0)
+	 ;; (if (zerop base-number)
+	 ;; (ferror 'sys:illegal-expt base-number power-number
+	 ;;     "An attempt was made to raise zero to the power of a non-integer zero ~*~D")
+	   (numeric-contage (numeric-contage 1 power-number) base-number))
+	;;)
+	((zerop base-number)
+	 (if (plusp (realpart power-number))
+	     (numeric-contage base-number power-number)
+	   (ferror 'sys:illegal-expt base-number power-number
+		   "An attempt was made to raise zero to power ~*~D, whose real part is not > 0")))
+	((integerp power-number)
+	 (do ((ans (if (oddp power-number) base-number (numeric-contage 1 base-number))
+		   (if (oddp power-number) (* ans base-number) ans)))
+	     ((zerop (setq power-number (ash power-number -1)))
+	      ans)
+	   ;; to avoid overflow, procrastinate squaring
+	   (setq base-number (* base-number base-number))))
+	;; this is a truly losing algorithm ...
+	(t (exp (* power-number (log base-number))))))
 
-(defun sinh (x) (ferror nil "Foo. I haven't written this yet."))
-(defun cosh (x) (ferror nil "Foo. I haven't written this yet."))
-(defun tanh (x) (ferror nil "Foo. I haven't written this yet."))
-(defun asinh (x) (ferror nil "Foo. I haven't written this yet."))
-(defun acosh (x) (ferror nil "Foo. I haven't written this yet."))
-(defun atanh (x) (ferror nil "Foo. I haven't written this yet."))
 
 ;;;; Randomness
 
@@ -310,7 +296,7 @@ If STATE is T, a new state object is created and initialized based on the micros
    (SETQ X (RANDOM-SEED ARRAY))
    (DOLIST (BYTE-SPEC
 	     (CASE %%Q-POINTER
-;	       (24. '(#o1414 #o0014))		;no more...
+	       (24. '(#o1414 #o0014))
 	       (25. '(#o1414 #o0014 #o3001))
 	       (31. '(#o1414 #o0014 #o3011))
 	       (T (FERROR NIL "Bug in RANDOM-INITIALIZE"))))
@@ -369,103 +355,6 @@ ARRAY can be an array used for data by the random number generator (and updated)
 
 ;;; Force *RANDOM-STATE* to get a value.
 (RANDOM)
-
-;;;; Special floating arithmetic functions.
-
-(defun float (number &optional other)
-  "Convert NUMBER to floating point, of same precision as OTHER.
-If OTHER is omitted, a full size flonum is returned."
-  (if (small-floatp other)
-      (small-float number)
-    (float number)))
-
-(defun ffloor (dividend &optional divisor)
-  "Like FLOOR but converts first value to a float."
-  (declare (values quotient remainder))
-  (multiple-value-bind (quotient remainder)
-      (floor dividend (or divisor 1))
-    (values (float quotient) remainder)))
-
-(defun fceiling (dividend &optional divisor)
-  "Like CEILING but converts first value to a float."
-  (declare (values quotient remainder))
-  (multiple-value-bind (quotient remainder)
-      (ceiling dividend (or divisor 1))
-    (values (float quotient) remainder)))
-
-(defun ftruncate (dividend &optional divisor)
-  "Like TRUNCATE but converts first value to a float."
-  (declare (values quotient remainder))
-  (multiple-value-bind (quotient remainder)
-      (truncate dividend (or divisor 1))
-    (values (float quotient) remainder)))
-
-(defun fround (dividend &optional divisor)
-  "Like ROUND but converts first value to a float."
-  (declare (values quotient remainder))
-  (multiple-value-bind (quotient remainder)
-      (round dividend (or divisor 1))
-    (values (float quotient) remainder)))
-
-(defun float-radix (float)
-  "Returns the radix of the exponent of a float.  That is always 2."
-  (check-type float float)
-  2)
-
-(defun float-digits (float)
-  "Returns the number of bits of fraction part FLOAT has.
-This depends only on the data type of FLOAT (single-float vs short-float)."
-  (typecase float
-    (short-float short-float-mantissa-length)
-    (t           single-float-mantissa-length)))
-
-(defun float-precision (float)
-  "Returns the number of significant bits of fraction part FLOAT has.
-For normalized arguments this is defined to be the same as FLOAT-DIGITS,
-and all floats are normalized on the Lisp machine, so they are identical."
-  (typecase float
-    (short-float short-float-mantissa-length)
-    (t           single-float-mantissa-length)))
-
-(defun decode-float (float)
-  "Returns three values describing the fraction part, exponent, and sign of FLOAT.
-The first is a float between 1/2 and 1 (but zero if the arg is zero).
-This value, times two to a suitable power, equals FLOAT except in sign.
-The second value is an integer, the exponent of two needed for that calculation.
-The third value is a float whose sign and type match FLOAT's
-and whose magnitude is 1."
-  (declare (values fraction-flonum exponent sign-flonum))
-  (values (abs (float-fraction float))
-	  (float-exponent float)
-	  (if (minusp float)
-	      (if (small-floatp float) -1.0s0 -1.0)
-	      (if (small-floatp float) 1.0s0 1.0))))
-
-(defun integer-decode-float (float)
-  "Returns three values describing the fraction part, exponent, and sign of FLOAT.
-The first is an integer representing the fraction part of FLOAT.
-This value floated, times two to a suitable power, equals FLOAT except in sign.
-The second value is an integer, the exponent of two needed for that calculation.
-The third value is a float whose sign and type match FLOAT's
-and whose magnitude is 1."
-  (declare (values fraction exponent sign-flonum))
-  (values (flonum-mantissa (abs float))
-	  (flonum-exponent (abs float))
-	  (if (minusp float)
-	      (if (small-floatp float) -1.0s0 -1.0)
-	      (if (small-floatp float) 1.0s0 1.0))))
-
-(defun float-sign (sign-flonum &optional magnitude-flonum)
-  "Returns a float whose sign matches SIGN-FLONUM and magnitude matches MAGNITUDE-FLONUM.
-If MAGNITUDE-FLONUM is omitted, it defaults to 1.
-The type of float returned matches MAGNITUDE-FLONUM
-if that is specified; else SIGN-FLONUM."
-  (if magnitude-flonum
-      (if (eq (minusp sign-flonum) (minusp magnitude-flonum))
-	  magnitude-flonum (- magnitude-flonum))
-    (if (minusp sign-flonum)
-	(if (small-floatp sign-flonum) -1.0s0 -1.0)
-        (if (small-floatp sign-flonum) 1.0s0 1.0))))
 
 (defconst pi 3.1415926535
   "The mathematical constant PI.")
@@ -561,6 +450,6 @@ if that is specified; else SIGN-FLONUM."
 ; sin,cos		complex
 ; tan			define
 ; tand			define			
-; asin,acos		define
+; asin,acos,atan	define
 ; sinh,cosh,tanh	define
 ; asinh,acosh,atanh	define
