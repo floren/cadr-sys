@@ -1,6 +1,5 @@
-;-*- Mode:LISP; Package:FILE-SYSTEM; Base:8; Readtable:ZL -*-
-
-;;; Global interface functions, and random file stuff
+;-*- Mode:LISP; Package:FILE-SYSTEM; Base:8; Readtable:T -*-
+;;;; Global interface functions, and random file stuff
 
 ;;; First define the error flavors and signal names used by all file errors.
 
@@ -10,7 +9,7 @@
   :INITTABLE-INSTANCE-VARIABLES)
 
 (DEFMETHOD (FILE-ERROR :AFTER :INIT) (IGNORE)
-  (SETQ PATHNAME (GETF SI:PROPERTY-LIST :PATHNAME))
+  (SETQ PATHNAME (GETF SI:PROPERTY-LIST ':PATHNAME))
   (OR (VARIABLE-BOUNDP OPERATION)
       (SETQ OPERATION (GETF SI:PROPERTY-LIST ':OPERATION))))
 
@@ -20,12 +19,12 @@
 (DEFMETHOD (FILE-ERROR :CASE :PROCEED-ASKING-USER :RETRY-FILE-OPERATION)
 	   (CONTINUATION IGNORE)
   "Proceeds, trying the file operation again."
-  (FUNCALL CONTINUATION :RETRY-FILE-OPERATION))
+  (FUNCALL CONTINUATION ':RETRY-FILE-OPERATION))
 
 (DEFMETHOD (FILE-ERROR :CASE :PROCEED-ASKING-USER :NEW-PATHNAME)
 	   (CONTINUATION READ-OBJECT-FUNCTION)
   "Proceeds, reading a new filename and using that instead."
-  (FUNCALL CONTINUATION :NEW-PATHNAME
+  (FUNCALL CONTINUATION ':NEW-PATHNAME
 	   (FUNCALL READ-OBJECT-FUNCTION
 		    `(:PATHNAME :DEFAULTS ,PATHNAME)
 		    "Pathname to use instead: (default ~A) "
@@ -94,20 +93,20 @@ This is if the file server itself says it hasn't got enough resources.")
 
 (DEFMETHOD (FILE-OPERATION-FAILURE :CASE :PROCEED-ASKING-USER :DIRED) (&REST IGNORE)
   "Runs DIRED, then returns to the debugger."
-  (DIRED (SEND (SEND SELF :PATHNAME) :NEW-PATHNAME
-	       :NAME :WILD :TYPE :WILD :VERSION :WILD))
+  (DIRED (SEND (SEND SELF ':PATHNAME) ':NEW-PATHNAME
+	       ':NAME ':WILD ':TYPE ':WILD ':VERSION ':WILD))
   NIL)
 
 (DEFMETHOD (FILE-OPERATION-FAILURE :CASE :PROCEED-ASKING-USER :CLEAN-DIRECTORY) (&REST IGNORE)
   "Cleans the directory, then returns to debugger."
-  (ZWEI:CLEAN-DIRECTORY (SEND (SEND SELF :PATHNAME) :NEW-PATHNAME
-			      :NAME :WILD :TYPE :WILD :VERSION :WILD))
+  (ZWEI:CLEAN-DIRECTORY (SEND (SEND SELF ':PATHNAME) ':NEW-PATHNAME
+			      ':NAME ':WILD ':TYPE ':WILD ':VERSION ':WILD))
   NIL)
 
 (DEFMETHOD (FILE-OPERATION-FAILURE :CASE :PROCEED-ASKING-USER :EXPUNGE-DIRECTORY) (&REST IGNORE)
   "Expunges the directory, then returns to debugger."
-  (EXPUNGE-DIRECTORY (SEND (SEND SELF :PATHNAME) :NEW-PATHNAME
-			   :NAME :WILD :TYPE :WILD :VERSION :WILD))
+  (EXPUNGE-DIRECTORY (SEND (SEND SELF ':PATHNAME) ':NEW-PATHNAME
+			   ':NAME ':WILD ':TYPE ':WILD ':VERSION ':WILD))
   NIL)
 
 (DEFSIGNAL FILE-OPERATION-FAILURE-1 FILE-OPERATION-FAILURE (PATHNAME OPERATION)
@@ -173,7 +172,7 @@ This is if the file server itself says it hasn't got enough resources.")
 	   "An attribute in the file attribute list had a bad value.
 This is detected in the Lisp machine, not in the file server.")
 
-;;;; Subclasses of FILE-OPERATION-FAILURE.
+;;; Subclasses of FILE-OPERATION-FAILURE.
 
 (DEFFLAVOR FILE-LOOKUP-ERROR () (FILE-OPERATION-FAILURE))
 
@@ -197,13 +196,13 @@ This is detected in the Lisp machine, not in the file server.")
 (DEFMETHOD (DIRECTORY-NOT-FOUND-ERROR :CASE :PROCEED-ASKING-USER :CREATE-DIRECTORY-AND-RETRY)
 	   (CONTINUATION IGNORE)
   "Creates the directory and tries again."
-  (CREATE-DIRECTORY (SEND SELF :PATHNAME) :RECURSIVE T)
-  (FUNCALL CONTINUATION :RETRY-FILE-OPERATION))
+  (CREATE-DIRECTORY (SEND SELF ':PATHNAME) ':RECURSIVE T)
+  (FUNCALL CONTINUATION ':RETRY-FILE-OPERATION))
 
 (DEFPROP DNF DIRECTORY-NOT-FOUND FILE-ERROR)
 (DEFPROP DIRECTORY-NOT-FOUND DNF FILE-ERROR)
 (DEFSIGNAL DIRECTORY-NOT-FOUND DIRECTORY-NOT-FOUND-ERROR (PATHNAME OPERATION)
-  "Containing directory is not found.")
+	   "Containing directory is not found.")
 
 (DEFPROP DEV DEVICE-NOT-FOUND FILE-ERROR)
 (DEFPROP DEVICE-NOT-FOUND DEV FILE-ERROR)
@@ -271,7 +270,7 @@ This is detected in the Lisp machine, not in the file server.")
 	   (FILE-OPERATION-FAILURE WRONG-KIND-OF-FILE INVALID-OPERATION-FOR-DIRECTORY)
 	   (PATHNAME OPERATION))
 
-;;;; CREATION-FAILUREs
+;;; CREATION-FAILUREs
 
 (DEFPROP FAE FILE-ALREADY-EXISTS FILE-ERROR)
 (DEFPROP FILE-ALREADY-EXISTS FAE FILE-ERROR)
@@ -308,7 +307,7 @@ This is detected in the Lisp machine, not in the file server.")
   "Some problem creating a link.")
 
 (DEFFLAVOR RENAME-FAILURE () (FILE-OPERATION-FAILURE)
-  (:DEFAULT-INIT-PLIST :OPERATION :RENAME))
+  (:DEFAULT-INIT-PLIST :OPERATION ':RENAME))
 ;Should have property :NEW-PATHNAME.
 
 (DEFPROP REF RENAME-TO-EXISTING-FILE FILE-ERROR)
@@ -322,7 +321,7 @@ This is detected in the Lisp machine, not in the file server.")
 	   "PATHNAME and NEW-PATHNAME are on different directories.")
 
 (DEFFLAVOR CHANGE-PROPERTY-FAILURE () (FILE-OPERATION-FAILURE)
-  (:DEFAULT-INIT-PLIST :OPERATION :CHANGE-PROPERTIES))
+  (:DEFAULT-INIT-PLIST :OPERATION ':CHANGE-PROPERTIES))
 
 (DEFPROP UKP UNKNOWN-PROPERTY FILE-ERROR)
 (DEFPROP UNKNOWN-PROPERTY UKP FILE-ERROR)
@@ -340,7 +339,7 @@ This is detected in the Lisp machine, not in the file server.")
   "Property name is syntactically bad.")
 
 (DEFFLAVOR DELETE-FAILURE () (FILE-OPERATION-FAILURE)
-  (:DEFAULT-INIT-PLIST :OPERATION :DELETE))
+  (:DEFAULT-INIT-PLIST :OPERATION ':DELETE))
 
 (DEFPROP DNE DIRECTORY-NOT-EMPTY FILE-ERROR)
 (DEFPROP DIRECTORY-NOT-EMPTY DNE FILE-ERROR)
@@ -418,44 +417,24 @@ This is detected in the Lisp machine, not in the file server.")
 
 (DEFUN OPEN (FILENAME &REST KEYWORD-ARGS)
   "Open a file and return a stream.  FILENAME is a pathname or a string.
-DIRECTION is :INPUT, :OUTPUT, :PROBE, :PROBE-LINK :PROBE-DIRECTORY
-ELEMENT-TYPE specifies how the data of the stream file are to be interpreted.
-  Possible values include :DEFAULT CHARACTER (UNSIGNED-BYTE n) (SIGNED-BYTE n) (MOD n) BIT
-One may also specify the type using the following two options:
-  CHARACTERS may be T, NIL or :DEFAULT.
-  BYTE-SIZE specifies byte size to use for non-character files.
-IF-EXISTS specifies what to do if FILENAME already exists when opening it for output.
-  NIL means return NIL from OPEN if file already exists
-  :ERROR Signal an error (FS:FILE-ALREADY-EXISTS) See the ERROR option
-  :NEW-VERSION Defualt for when FILENAME's version is :NEWEST. Create a higher-version file
-  :SUPERSEDE Create a new file which, when closed, replaces the old one
-  :OVERWRITE Writes over the data of the old file.
-    Sets file length to length of the data written during this open when the file is closed.
-  :TRUNCATE Like :OVERWRITE, but sets length to 0 immediately upon open
-  :APPEND Append new data to the end of the existing file
-  :RENAME Rename the existing file to something and then create and use a new one
-  :RENAME-AND-DELETE Like :RENAME, only the old (renamed) file is deleted when we close
-IF-DOES-NOT-EXIST is one of :CREATE (default for most output opens, except if otherwise
-  specified by IF-EXISTS), :ERROR (default for input opens, and the other output opens)
-  means signal FS:FILE-NOT-FOUND, or NIL (default for :PROBE-mumble opens) meaning return NIL
-ERROR specifies what to do if an error is signaled in the process of opening the file
-  T (the default) means that nothing special is done; handlers are invoked if they exist
-   or else the debugger is entered.
-  NIL means to return the condition object itself as the value of OPEN
-  :REPROMPT means to ask the user for a different filename to use instead, and retries.
-   See also WITH-OPEN-FILE-RETRY and FILE-RETRY-NEW-PATHNAME, which may be The Right Thing
-PRESERVE-DATES means not to alter the files reference or modification dates
-ESTIMATED-SIZE informs the remote file system what thew estimated final file size will be
-RAW, SUPER-IMAGE disable character set translation from ascii servers
-DELETED, TEMPORARY mean to allow opening of deleted or temporary files respectively,
-  on systems which support those concepts.
-SUBMIT means to submit the file as a batch job on the remote host when the file is closed.
-
+DIRECTION is :INPUT, :OUTPUT or :PROBE for non-data stream.
+ERROR if NIL says return an error object rather than getting an error.
+CHARACTERS says whether to transfer character data; :DEFAULT means do what the file says.
+BYTE-SIZE defaults according to CHARACTERS; :DEFAULT says use file's byte size.
+NEW-FILE if non-nil says creating a file is ok; defaults T if output stream
+NEW-VERSION says version :NEWEST creates a new version; defaults to NEW-FILE.
+OLD-FILE says what to do with existing file; possibilities are
+ :ERROR, :REWRITE (or T), :APPEND, :REPLACE (or NIL), :RENAME,
+ :RENAME-AND-DELETE, :NEW-VERSION.  Default is (NOT NEW-FILE).
+FLAVOR is NIL, :DIRECTORY, :LINK or file-system dependent values.
+LINK-TO specifies link target, when you create a file with flavor :LINK.
+INHIBIT-LINKS says don't chase a link; open the link itself.
+DELETED says it is ok to open deleted but not expunged files.
+PRESERVE-DATES says do not alter the files read or write dates.
 Other system-specific keywords may be supported for some file systems."
-  (DECLARE (ARGLIST FILENAME &KEY (DIRECTION :INPUT) (ERROR T) (ELEMENT-TYPE :DEFAULT)
-		    		  CHARACTERS BYTE-SIZE IF-EXISTS IF-DOES-NOT-EXIST ERROR
-				  PRESERVE-DATES DELETED TEMPORARY SUBMIT PRESERVE-DATES
-				  RAW SUPER-IMAGE INHIBIT-LINKS
+  (DECLARE (ARGLIST FILENAME &KEY (DIRECTION :INPUT) (ERROR T)
+		    		  (CHARACTERS T) BYTE-SIZE NEW-FILE NEW-VERSION OLD-FILE 
+				  FLAVOR LINK-TO INHIBIT-LINKS DELETED PRESERVE-DATES
 			     &ALLOW-OTHER-KEYS))
   (FORCE-USER-TO-LOGIN)
   (IF (STREAMP FILENAME)
@@ -464,7 +443,7 @@ Other system-specific keywords may be supported for some file systems."
   (SETQ LAST-FILE-OPENED FILENAME)
   (IF (OR (NULL KEYWORD-ARGS)			;No args is good args
 	  (NOT (NULL (CDR KEYWORD-ARGS))))
-      (FILE-RETRY-NEW-PATHNAME-IF (MEMQ (GETF KEYWORD-ARGS ':ERROR) '(:RETRY :REPROMPT))
+      (FILE-RETRY-NEW-PATHNAME-IF (MEMQ (GET (LOCF KEYWORD-ARGS) :ERROR) '(:RETRY :REPROMPT))
 				  (FILENAME FILE-ERROR)
         (LEXPR-SEND FILENAME :OPEN FILENAME KEYWORD-ARGS))
     ;; Old Syntax.
@@ -476,8 +455,8 @@ Other system-specific keywords may be supported for some file systems."
 	 (CHARACTERS T)
 	 (DIRECTION :INPUT)
 	 (BYTE-SIZE NIL)
-	 (ERRORP T)
-	 (ERRORP-SPECD NIL)
+	 (ERROR-P T)
+	 (ERROR-P-SPECD NIL)
 	 (DELETED-P NIL)
 	 (TEMPORARY-P NIL)
 	 ;; These two are really only useful for machines that do not natively store
@@ -486,21 +465,21 @@ Other system-specific keywords may be supported for some file systems."
 	 (SUPER-IMAGE-P NIL)
 	 )
 	((NULL KEYL)
-	 (FILE-RETRY-NEW-PATHNAME-IF (MEMQ ERRORP '(:RETRY :REPROMPT))
+	 (FILE-RETRY-NEW-PATHNAME-IF (MEMQ ERROR-P '(:RETRY :REPROMPT))
 				     (FILENAME FILE-ERROR)
 	   ;; Because we don't want to send meaningless keywords to file systems
 	   ;; which don't support them, and we don't want to cons...
 	   (%ASSURE-PDL-ROOM 19.)			;Worst case
 	   (%OPEN-CALL-BLOCK FILENAME 0 4)	;D-RETURN
-	   (%PUSH :OPEN)	(%PUSH FILENAME)
-	   (%PUSH :CHARACTERS)	(%PUSH CHARACTERS)
-	   (%PUSH :DIRECTION)	(%PUSH DIRECTION)
-	   (COND (BYTE-SIZE	(%PUSH :BYTE-SIZE)	(%PUSH BYTE-SIZE)))
-	   (COND (ERRORP-SPECD	(%PUSH :ERROR)		(%PUSH ERRORP)))
-	   (COND (DELETED-P	(%PUSH :DELETED)		(%PUSH DELETED-P)))
-	   (COND (TEMPORARY-P	(%PUSH :TEMPORARY)	(%PUSH TEMPORARY-P)))
-	   (COND (SUPER-IMAGE-P	(%PUSH :SUPER-IMAGE)	(%PUSH SUPER-IMAGE-P)))
-	   (COND (RAW-P		(%PUSH :RAW)		(%PUSH RAW-P)))
+	   (%PUSH ':OPEN)       (%PUSH FILENAME)
+	   (%PUSH ':CHARACTERS) (%PUSH CHARACTERS)
+	   (%PUSH ':DIRECTION)  (%PUSH DIRECTION)
+	   (COND (BYTE-SIZE     (%PUSH ':BYTE-SIZE)   (%PUSH BYTE-SIZE)))
+	   (COND (ERROR-P-SPECD (%PUSH ':ERROR)       (%PUSH ERROR-P)))
+	   (COND (DELETED-P     (%PUSH ':DELETED)     (%PUSH DELETED-P)))
+	   (COND (TEMPORARY-P   (%PUSH ':TEMPORARY)   (%PUSH TEMPORARY-P)))
+	   (COND (SUPER-IMAGE-P (%PUSH :SUPER-IMAGE) (%PUSH SUPER-IMAGE-P)))
+	   (COND (RAW-P	      (%PUSH ':RAW)	    (%PUSH RAW-P)))
 	   (%ACTIVATE-OPEN-CALL-BLOCK)))
       (SETQ KEY (CAR KEYL))
       (SELECTOR KEY STRING-EQUAL
@@ -512,10 +491,10 @@ Other system-specific keywords may be supported for some file systems."
 			     BYTE-SIZE (CAR KEYL)))
 	((:PROBE) (SETQ DIRECTION NIL
 			 CHARACTERS NIL
-			 ERRORP (IF (NOT ERRORP-SPECD) NIL ERRORP)
-			 ERRORP-SPECD T))
-	((:NOERROR) (SETQ ERRORP NIL ERRORP-SPECD T))
-	((:ERROR) (SETQ ERRORP T ERRORP-SPECD T))
+			 ERROR-P-SPECD T
+			 ERROR-P (IF (NOT ERROR-P-SPECD) NIL ERROR-P)))
+	((:NOERROR) (SETQ ERROR-P NIL ERROR-P-SPECD T))
+	((:ERROR) (SETQ ERROR-P T ERROR-P-SPECD T))
 	((:RAW) (SETQ RAW-P T))
 	((:SUPER-IMAGE) (SETQ SUPER-IMAGE-P T))
 	((:DELETED) (SETQ DELETED-P T))
@@ -529,7 +508,7 @@ Other system-specific keywords may be supported for some file systems."
 	      (SEND BASE-PATHNAME :UNSPECIFIC-TYPE-IS-DEFAULT))
 	 ;; If type is really insignificant, replace it with NIL
 	 ;; so we will get the same behavior as if it were already NIL.
-	 (SETQ BASE-PATHNAME (SEND BASE-PATHNAME :NEW-TYPE NIL)))
+	 (SETQ BASE-PATHNAME (SEND BASE-PATHNAME ':NEW-TYPE NIL)))
 	;; Otherwise, will use only the specified type,
 	;; so the elements of TYPE-LIST matter only in how many they are,
 	;; and we might as well have only one to avoid wasting time on duplicate opens.
@@ -543,18 +522,19 @@ Other system-specific keywords may be supported for some file systems."
 				      BASE-PATHNAME DEFAULTS TYPE))
 				TYPE-LIST)))
     (CONDITION-CASE (OPEN-VALUE)
-	(APPLY #'OPEN (FS:MERGE-PATHNAME-DEFAULTS BASE-PATHNAME DEFAULTS TYPE)
+	(APPLY 'OPEN (FS:MERGE-PATHNAME-DEFAULTS
+		       BASE-PATHNAME DEFAULTS TYPE)
 	       OPEN-OPTIONS)
       (FILE-NOT-FOUND)
       (:NO-ERROR (RETURN OPEN-VALUE)))))
 
 (DEFUN CLOSE (STREAM &OPTIONAL ABORTP)
   "Close STREAM.  ABORTP says discard file, if output."
-  (SEND STREAM :CLOSE ABORTP))
+  (SEND STREAM ':CLOSE ABORTP))
 
 (DEFUN CLI:CLOSE (STREAM &KEY ABORT)
   "Close STREAM.  ABORT non-NIL says discard file, if output."
-  (SEND STREAM :CLOSE (IF ABORT :ABORT)))
+  (SEND STREAM ':CLOSE (IF ABORT ':ABORT)))
 
 (DEFUN WILDCARDED-FILE-OPERATION (STRING-OR-STREAM
 				  HELPER-FUNCTION
@@ -570,14 +550,16 @@ The arguments passed to HELPER-FUNCTION each time are
 DIR-LIST-OPTIONS are passed to FS:DIRECTORY-LIST when finding out
 what files exist to be processed."
   (FORCE-USER-TO-LOGIN)
-  (IF (TYPEP STRING-OR-STREAM '(OR STRING PATHNAME))	;not a stream
+  (IF (OR (STRINGP STRING-OR-STREAM)
+	  (TYPEP STRING-OR-STREAM 'PATHNAME))	;Not a stream
       (LET ((SPECIFIED-PATHNAME (MERGE-PATHNAME-DEFAULTS STRING-OR-STREAM)))
-	(LEXPR-SEND SPECIFIED-PATHNAME :WILDCARD-MAP HELPER-FUNCTION
+	(LEXPR-SEND SPECIFIED-PATHNAME ':WILDCARD-MAP HELPER-FUNCTION
 		    NIL DIR-LIST-OPTIONS SPECIFIED-PATHNAME ARGS))
-    (LET ((SPECIFIED-PATHNAME (SEND STRING-OR-STREAM :TRUENAME)))
-      (LIST (APPLY HELPER-FUNCTION SPECIFIED-PATHNAME
-		   		   SPECIFIED-PATHNAME
-				   ARGS)))))
+    (LET ((SPECIFIED-PATHNAME (SEND STRING-OR-STREAM ':TRUENAME)))
+      (LIST (APPLY HELPER-FUNCTION
+		   SPECIFIED-PATHNAME
+		   SPECIFIED-PATHNAME
+		   ARGS)))))
 
 ;;; Handle special file query stuff.  Each of the file operations expects
 ;;; the query optional argument to be a format style function.  The result
@@ -593,12 +575,12 @@ what files exist to be processed."
 (DEFVAR *FILE-QUERY-FLAG* NIL)
 (DEFVAR *FILE-QUERY-OPTIONS*
 	`(:CHOICES (,@FORMAT:Y-OR-N-P-CHOICES
-		    ((:PROCEED "Proceed.") #/P #/HAND-RIGHT))))
+		    ((:PROCEED "Proceed.") #/P #/HAND-RIGHT))))
 
 (DEFUN FILE-QUERY-FUNCTION (FORMAT-STRING &REST ARGS)
   (IF (NULL *FILE-QUERY-FLAG*)
-      :NEVER-ASKED
-      (LET ((QRESULT (APPLY #'FQUERY *FILE-QUERY-OPTIONS* FORMAT-STRING ARGS)))
+      ':NEVER-ASKED
+      (LET ((QRESULT (APPLY 'FQUERY *FILE-QUERY-OPTIONS* FORMAT-STRING ARGS)))
 	(IF (EQ QRESULT ':PROCEED)
 	    (SETQ *FILE-QUERY-FLAG* NIL))
 	QRESULT)))
@@ -607,9 +589,9 @@ what files exist to be processed."
   "Return a suitable query-function to pass to PRIMITIVE-DELETE-FILE, etc.
 This query function, a closure, accepts a format-string and format-arguments,
 queries the user and returns T or NIL.
-If the user types P instead of Y, the query function returns :PROCEED
-and also returns :NEVER-ASKED on all successive calls without asking any more.
-If QUERY? is NIL, the query function always returns :NEVER-ASKED without asking."
+If the user types P instead of Y, the query function returns ':PROCEED
+and also returns ':NEVER-ASKED on all successive calls without asking any more.
+If QUERY? is NIL, the query function always returns ':NEVER-ASKED without asking."
   (LET-CLOSED ((*FILE-QUERY-FLAG* QUERY?)) 'FILE-QUERY-FUNCTION))
 
 (DEFF COPYF 'COPY-FILE) ;a logical assumption
@@ -646,8 +628,8 @@ Values returned:
 Error objects can appear in the values only if ERROR is NIL."
   (DECLARE (ARGLIST PATHNAME-OR-STREAM NEW-NAME
 		    &KEY (ERROR T) (COPY-CREATION-DATE T) (COPY-AUTHOR T)
-		    REPORT-STREAM (CREATE-DIRECTORIES :QUERY)
-		    (CHARACTERS :DEFAULT) (BYTE-SIZE :DEFAULT))
+		    REPORT-STREAM (CREATE-DIRECTORIES ':QUERY)
+		    (CHARACTERS ':DEFAULT) (BYTE-SIZE ':DEFAULT))
 	   (VALUES TARGET-PATHNAME TARGET-TRUENAME RESULT-PATHNAME COPY-MODE))
   (FORCE-USER-TO-LOGIN)
   (LET ((RESULT
@@ -656,13 +638,12 @@ Error objects can appear in the values only if ERROR is NIL."
 	      (FILE-RETRY-NEW-PATHNAME-IF (MEMQ ERROR '(:RETRY :REPROMPT))
 					  (PATHNAME-OR-STREAM FILE-ERROR)
 		(LET ((MERGED-PATHNAME (MERGE-PATHNAME-DEFAULTS PATHNAME-OR-STREAM)))
-		  (LEXPR-SEND MERGED-PATHNAME
-			      :WILDCARD-MAP #'PRIMITIVE-COPY-FILE
-			      :MAYBE NIL
-			      MERGED-PATHNAME
-			      (PARSE-PATHNAME NEW-NAME NIL MERGED-PATHNAME) OPTIONS)))
-	    (LET ((TRUENAME (SEND PATHNAME-OR-STREAM :TRUENAME)))
-	      (LIST (APPLY #'PRIMITIVE-COPY-FILE
+		  (APPLY MERGED-PATHNAME
+			 ':WILDCARD-MAP #'PRIMITIVE-COPY-FILE
+			 ':MAYBE NIL
+			 MERGED-PATHNAME (PARSE-PATHNAME NEW-NAME NIL MERGED-PATHNAME) OPTIONS)))
+	    (LET ((TRUENAME (SEND PATHNAME-OR-STREAM ':TRUENAME)))
+	      (LIST (APPLY 'PRIMITIVE-COPY-FILE
 			   (FILE-PROPERTIES TRUENAME)
 			   TRUENAME (PARSE-PATHNAME NEW-NAME NIL TRUENAME) OPTIONS))))))
     (IF (EQ (CAAR RESULT) (CADAR RESULT))
@@ -670,23 +651,23 @@ Error objects can appear in the values only if ERROR is NIL."
 		(FOURTH (CAR RESULT))
 		(FIFTH (CAR RESULT))
 		(SIXTH (CAR RESULT)))
-      (VALUES (MAPCAR #'THIRD RESULT)
-	      (MAPCAR #'FOURTH RESULT)
-	      (MAPCAR #'FIFTH RESULT)
-	      (MAPCAR #'SIXTH RESULT)))))
+      (VALUES (MAPCAR 'THIRD RESULT)
+	      (MAPCAR 'FOURTH RESULT)
+	      (MAPCAR 'FIFTH RESULT)
+	      (MAPCAR 'SIXTH RESULT)))))
 
 (DEFCONST *COPY-FILE-KNOWN-TEXT-TYPES* '(:LISP :TEXT :MIDAS :PALX :PATCH-DIRECTORY :C
-					 :INIT :UNFASL :BABYL :XMAIL :MAIL :QWABL :DOC
-					 "LPT" "XGP" "ULOAD")
+					       :INIT :UNFASL :BABYL :XMAIL :MAIL :QWABL :DOC
+					       "LPT" "XGP" "ULOAD")
   "Files whose names have these canonical types are normally copied as characters.")
 (DEFCONST *COPY-FILE-KNOWN-BINARY-TYPES* '(:QFASL :PRESS :WIDTHS :KST
-					   "FASL" "MCR" "QBIN" "EXE" "BIN")
+						  "FASL" "MCR" "QBIN" "EXE" "BIN")
   "Files whose names have these canonical types are normally copied as binary.")
 
 (DEFUN PRIMITIVE-COPY-FILE (INPUT-PLIST-OR-PATHNAME MAPPED-PATHNAME OUTPUT-SPEC
 			    &KEY (ERROR T) (COPY-CREATION-DATE T) (COPY-AUTHOR T)
-			    	 REPORT-STREAM (CREATE-DIRECTORIES :QUERY)
-				 (CHARACTERS :DEFAULT) (BYTE-SIZE :DEFAULT)
+			    REPORT-STREAM (CREATE-DIRECTORIES ':QUERY)
+			    (CHARACTERS ':DEFAULT) (BYTE-SIZE ':DEFAULT)
 			    &AUX INTYPE INPUT-PLIST INPUT-PATHNAME INPUT-TRUENAME)
   (IF (NLISTP INPUT-PLIST-OR-PATHNAME)
       (SETQ INPUT-PATHNAME INPUT-PLIST-OR-PATHNAME
@@ -696,7 +677,7 @@ Error objects can appear in the values only if ERROR is NIL."
   ;; Decide whether to copy as binary file.
   ;; Either do as told, guess from file byte size or type, or ask the user.
   (LET ((CHARACTERS?
-	  (CASE CHARACTERS
+	  (SELECTQ CHARACTERS
 	    ((T) CHARACTERS)
 	    (:ASK (FQUERY NIL "~&Is ~A a text file? " INPUT-PATHNAME))
 	    (OTHERWISE
@@ -705,76 +686,75 @@ Error objects can appear in the values only if ERROR is NIL."
 	     (IF (NULL INPUT-PLIST)
 		 (SETQ INPUT-PLIST (FILE-PROPERTIES INPUT-PATHNAME)
 		       INPUT-PATHNAME (CAR INPUT-PLIST)))
-	     (LET ((BYTE-SIZE (GET INPUT-PLIST :BYTE-SIZE)))
+	     (LET ((BYTE-SIZE (GET INPUT-PLIST ':BYTE-SIZE)))
 	       (COND ((NULL CHARACTERS) NIL)
 		     ((MEMQ BYTE-SIZE '(7 8)) T)
 		     ((EQ BYTE-SIZE 16.) NIL)
-		     ((SI:MEMBER-EQUAL (SETQ INTYPE (SEND INPUT-PATHNAME :CANONICAL-TYPE))
-				       *COPY-FILE-KNOWN-TEXT-TYPES*)
+		     ((MEMBER (SETQ INTYPE (SEND INPUT-PATHNAME ':CANONICAL-TYPE))
+			      *COPY-FILE-KNOWN-TEXT-TYPES*)
 		      T)
-		     ((SI:MEMBER-EQUAL INTYPE *COPY-FILE-KNOWN-BINARY-TYPES*)
-		      NIL)
-		     ((EQ CHARACTERS :DEFAULT) :DEFAULT)
+		     ((MEMBER INTYPE *COPY-FILE-KNOWN-BINARY-TYPES*) NIL)
+		     ((EQ CHARACTERS ':DEFAULT) ':DEFAULT)
 		     (T (FQUERY '(:BEEP T) "~&Is ~A a text file? " INPUT-PATHNAME))))))))
-    (IF (EQ BYTE-SIZE :DEFAULT)
-	(SETQ BYTE-SIZE (OR (GET INPUT-PLIST :BYTE-SIZE) :DEFAULT)))
+    (IF (EQ BYTE-SIZE ':DEFAULT)
+	(SETQ BYTE-SIZE (OR (GET INPUT-PLIST ':BYTE-SIZE) ':DEFAULT)))
     (IF (EQ BYTE-SIZE 36.)
 	(SETQ BYTE-SIZE 12.))
     (CONDITION-CASE-IF (NOT ERROR) (ERROR)
 	(WITH-OPEN-FILE (INSTREAM INPUT-PATHNAME
-				  :DIRECTION :INPUT
-				  :CHARACTERS CHARACTERS?
-				  :BYTE-SIZE BYTE-SIZE)
-	  (SETQ INPUT-TRUENAME (SEND INSTREAM :TRUENAME))
+				  ':DIRECTION ':INPUT
+				  ':CHARACTERS CHARACTERS?
+				  ':BYTE-SIZE BYTE-SIZE)
+	  (SETQ INPUT-TRUENAME (SEND INSTREAM ':TRUENAME))
 	  (LET ((DEFAULTED-NEW-NAME
 		  (LET ((*ALWAYS-MERGE-TYPE-AND-VERSION* T))
 		    (MERGE-PATHNAME-DEFAULTS
-		      (SEND MAPPED-PATHNAME :TRANSLATE-WILD-PATHNAME
+		      (SEND MAPPED-PATHNAME ':TRANSLATE-WILD-PATHNAME
 			    OUTPUT-SPEC INPUT-TRUENAME)
 		      INPUT-TRUENAME))))
 	    (CONDITION-BIND ((DIRECTORY-NOT-FOUND
 			       #'(LAMBDA (ERROR)
-				   (WHEN (IF (EQ CREATE-DIRECTORIES :QUERY)
+				   (WHEN (IF (EQ CREATE-DIRECTORIES ':QUERY)
 					     (PROGN
-					       (SEND *QUERY-IO* :FRESH-LINE)
-					       (SEND ERROR :REPORT *QUERY-IO*)
+					       (SEND *QUERY-IO* ':FRESH-LINE)
+					       (SEND ERROR ':REPORT *QUERY-IO*)
 					       (Y-OR-N-P "Create the directory? "))
 					   CREATE-DIRECTORIES)
-				     (CREATE-DIRECTORY (SEND ERROR :PATHNAME) :RECURSIVE T)
-				     :RETRY-FILE-OPERATION))))
+				     (CREATE-DIRECTORY (SEND ERROR ':PATHNAME) ':RECURSIVE T)
+				     ':RETRY-FILE-OPERATION))))
 	      (WITH-OPEN-FILE (OUTSTREAM DEFAULTED-NEW-NAME
-					 :DIRECTION :OUTPUT
-					 :CHARACTERS CHARACTERS?
-					 :BYTE-SIZE (IF CHARACTERS? :DEFAULT BYTE-SIZE))
+					 ':DIRECTION ':OUTPUT
+					 ':CHARACTERS CHARACTERS?
+					 ':BYTE-SIZE (IF CHARACTERS? ':DEFAULT BYTE-SIZE))
 		(IF COPY-AUTHOR
 		    (IF COPY-CREATION-DATE
-			(SEND OUTSTREAM :CHANGE-PROPERTIES NIL
-			      :CREATION-DATE (SEND INSTREAM :CREATION-DATE)
-			      :AUTHOR (OR (SEND INSTREAM :GET :AUTHOR)
-					   (GET INPUT-PLIST :AUTHOR)))
-		      (SEND OUTSTREAM :CHANGE-PROPERTIES NIL
-			    :AUTHOR (OR (SEND INSTREAM :GET :AUTHOR)
-					 (GET INPUT-PLIST :AUTHOR))))
+			(SEND OUTSTREAM ':CHANGE-PROPERTIES NIL
+			      ':CREATION-DATE (SEND INSTREAM ':CREATION-DATE)
+			      ':AUTHOR (OR (SEND INSTREAM ':GET ':AUTHOR)
+					   (GET INPUT-PLIST ':AUTHOR)))
+		      (SEND OUTSTREAM ':CHANGE-PROPERTIES NIL
+			    ':AUTHOR (OR (SEND INSTREAM ':GET ':AUTHOR)
+					 (GET INPUT-PLIST ':AUTHOR))))
 		  (IF COPY-CREATION-DATE
-		      (SEND OUTSTREAM :CHANGE-PROPERTIES NIL
-			    :CREATION-DATE (SEND INSTREAM :CREATION-DATE))))
+		      (SEND OUTSTREAM ':CHANGE-PROPERTIES NIL
+			    ':CREATION-DATE (SEND INSTREAM ':CREATION-DATE))))
 		(STREAM-COPY-UNTIL-EOF INSTREAM OUTSTREAM)
 		(CLOSE OUTSTREAM)
 		(WHEN REPORT-STREAM
 		  (FORMAT REPORT-STREAM "~&Copied ~A to ~A "
-			  INPUT-TRUENAME (SEND OUTSTREAM :TRUENAME))
+			  INPUT-TRUENAME (SEND OUTSTREAM ':TRUENAME))
 		  (IF CHARACTERS?
 		      (FORMAT REPORT-STREAM "in character mode.~%")
 		    (FORMAT REPORT-STREAM "in byte size ~D.~%"
 			    BYTE-SIZE)))
 		(LIST MAPPED-PATHNAME INPUT-PATHNAME DEFAULTED-NEW-NAME
-		      INPUT-TRUENAME (SEND OUTSTREAM :TRUENAME)
+		      INPUT-TRUENAME (SEND OUTSTREAM ':TRUENAME)
 		      (STREAM-ELEMENT-TYPE INSTREAM))))))
       ((FILE-ERROR SYS:REMOTE-NETWORK-ERROR)
        (LIST MAPPED-PATHNAME INPUT-PATHNAME
 	     (LET ((*ALWAYS-MERGE-TYPE-AND-VERSION* T))
 	       (MERGE-PATHNAME-DEFAULTS
-		 (SEND MAPPED-PATHNAME :TRANSLATE-WILD-PATHNAME
+		 (SEND MAPPED-PATHNAME ':TRANSLATE-WILD-PATHNAME
 		       OUTPUT-SPEC (OR INPUT-TRUENAME INPUT-PATHNAME))
 		 (OR INPUT-TRUENAME INPUT-PATHNAME)))
 	     INPUT-PATHNAME ERROR)))))
@@ -796,7 +776,7 @@ Error objects can appear in the values only if ERROR is NIL."
   (DECLARE (VALUES OLD-NAME OLD-TRUENAME NEW-TRUENAME))
   (RENAMEF STRING-OR-STREAM NEW-NAME ERROR QUERY))
 
-(DEFUN RENAMEF (STRING-OR-STREAM NEW-NAME &OPTIONAL (ERRORP T) QUERY?)
+(DEFUN RENAMEF (STRING-OR-STREAM NEW-NAME &OPTIONAL (ERROR-P T) QUERY?)
   "Rename a file, specified as a pathname, string or I//O stream.
 Wildcards are allowed.
 QUERY?, if true, means ask about each file before renaming it.
@@ -809,42 +789,42 @@ Values returned:
  An outcome is either a truename if the file was renamed,
  an error object if it failed to be renamed,
  or NIL if the user was asked and said no.
-Error objects can appear in the values only if ERRORP is NIL."
+Error objects can appear in the values only if ERROR-P is NIL."
   (DECLARE (VALUES OLD-NAME OLD-TRUENAME NEW-TRUENAME))
   (FILE-RETRY-NEW-PATHNAME-IF (AND (OR (STRINGP STRING-OR-STREAM)
 				       (TYPEP STRING-OR-STREAM 'PATHNAME))
-				   (MEMQ ERRORP '(:RETRY :REPROMPT)))
+				   (MEMQ ERROR-P '(:RETRY :REPROMPT)))
 			      (STRING-OR-STREAM FILE-ERROR)
     (LET* ((FROM-PATHNAME (PATHNAME STRING-OR-STREAM))
 	   (RESULT (WILDCARDED-FILE-OPERATION
 		     STRING-OR-STREAM
 		     #'PRIMITIVE-RENAME-FILE
 		     NIL
-		     (PARSE-PATHNAME NEW-NAME NIL FROM-PATHNAME) ERRORP
+		     (PARSE-PATHNAME NEW-NAME NIL FROM-PATHNAME) ERROR-P
 		     (MAKE-FILE-QUERY-FUNCTION QUERY?))))
       (IF (EQ (CAAR RESULT) (CADAR RESULT))
 	  (VALUES (THIRD (CAR RESULT))
 		  (FOURTH (CAR RESULT))
 		  (FIFTH (CAR RESULT)))
-	(VALUES (MAPCAR #'THIRD RESULT)
-		(MAPCAR #'FOURTH RESULT)
-		(MAPCAR #'FIFTH RESULT))))))
+	(VALUES (MAPCAR 'THIRD RESULT)
+		(MAPCAR 'FOURTH RESULT)
+		(MAPCAR 'FIFTH RESULT))))))
 
-(DEFUN PRIMITIVE-RENAME-FILE (OLD-NAME MAPPED-PATHNAME NEW-NAME &OPTIONAL (ERRORP T) QUERYF)
+(DEFUN PRIMITIVE-RENAME-FILE (OLD-NAME MAPPED-PATHNAME NEW-NAME &OPTIONAL (ERROR-P T) QUERYF)
   (LET ((TRUENAME (IF (EQ OLD-NAME MAPPED-PATHNAME)
-		      (SEND OLD-NAME :TRUENAME ERRORP)
+		      (SEND OLD-NAME ':TRUENAME ERROR-P)
 		    OLD-NAME)))
     (IF (ERRORP TRUENAME)
 	(LIST MAPPED-PATHNAME OLD-NAME NIL OLD-NAME TRUENAME)
       (LET* ((DEFAULTED-NEW-NAME
 	       (LET ((*ALWAYS-MERGE-TYPE-AND-VERSION* T))
 		 (MERGE-PATHNAME-DEFAULTS
-		   (SEND MAPPED-PATHNAME :TRANSLATE-WILD-PATHNAME NEW-NAME TRUENAME)
+		   (SEND MAPPED-PATHNAME ':TRANSLATE-WILD-PATHNAME NEW-NAME TRUENAME)
 		   TRUENAME)))
 	     (RENAMED? (FUNCALL QUERYF "~&Rename ~A to ~A? "
 				TRUENAME DEFAULTED-NEW-NAME))
-	     (RESULT (AND RENAMED? (SEND TRUENAME :RENAME
-					 DEFAULTED-NEW-NAME ERRORP))))
+	     (RESULT (AND RENAMED? (SEND TRUENAME ':RENAME
+					 DEFAULTED-NEW-NAME ERROR-P))))
 	(LIST MAPPED-PATHNAME OLD-NAME DEFAULTED-NEW-NAME TRUENAME RESULT)))))
 
 (DEFUN CREATE-LINK (LINK LINK-TO &KEY (ERROR T))
@@ -852,9 +832,9 @@ Error objects can appear in the values only if ERRORP is NIL."
   (FILE-RETRY-NEW-PATHNAME-IF (MEMQ ERROR '(:RETRY :REPROMPT))
 			      (LINK FILE-ERROR)
     (LET ((PATHNAME (MERGE-PATHNAME-DEFAULTS LINK)))
-      (SEND PATHNAME :CREATE-LINK (LET ((*ALWAYS-MERGE-TYPE-AND-VERSION* T))
+      (SEND PATHNAME ':CREATE-LINK (LET ((*ALWAYS-MERGE-TYPE-AND-VERSION* T))
 				     (MERGE-PATHNAME-DEFAULTS LINK-TO PATHNAME))
-	    	     :ERROR ERROR))))
+	    ':ERROR ERROR))))
 
 (DEFUN DELETE-FILE (STRING-OR-STREAM &KEY (ERROR T) QUERY)
   "Delete a file, specified as a pathname, string or I//O stream.
@@ -869,7 +849,7 @@ ERROR does not affect errors that happen in determining
  what files match a wildcarded pathname."
   (DELETEF STRING-OR-STREAM ERROR QUERY))
 
-(DEFUN DELETEF (STRING-OR-STREAM &OPTIONAL (ERRORP T) QUERY?)
+(DEFUN DELETEF (STRING-OR-STREAM &OPTIONAL (ERROR-P T) QUERY?)
   "Delete a file, specified as a pathname, string or I//O stream.
 Wildcards are allowed.
 QUERY?, if true, means to ask the user before deleting each file.
@@ -877,29 +857,29 @@ The value is a list containing one element for each file we considered;
  the element looks like (TRUENAME OUTCOME), where OUTCOME
  is either an error object, NIL if the user said don't delete this one,
  or another non-NIL object if the file was deleted.
- OUTCOME can be an error object only if ERRORP is NIL.
-ERRORP does not affect errors that happen in determining
+ OUTCOME can be an error object only if ERROR-P is NIL.
+ERROR-P does not affect errors that happen in determining
  what files match a wildcarded pathname."
   (FILE-RETRY-NEW-PATHNAME-IF (AND (OR (STRINGP STRING-OR-STREAM)
 				       (TYPEP STRING-OR-STREAM 'PATHNAME))
-				   (MEMQ ERRORP '(:RETRY :REPROMPT)))
+				   (MEMQ ERROR-P '(:RETRY :REPROMPT)))
 			      (STRING-OR-STREAM FILE-ERROR)
     (WILDCARDED-FILE-OPERATION STRING-OR-STREAM
 			       #'PRIMITIVE-DELETE-FILE NIL
-			       ERRORP
+			       ERROR-P
 			       (MAKE-FILE-QUERY-FUNCTION QUERY?))))
 
-(DEFUN PRIMITIVE-DELETE-FILE (PATHNAME MAPPED-PATHNAME &OPTIONAL (ERRORP T) QUERYF)
+(DEFUN PRIMITIVE-DELETE-FILE (PATHNAME MAPPED-PATHNAME &OPTIONAL (ERROR-P T) QUERYF)
   "QUERYF should be a function that takes a format-string and a pathname
 and returns T or NIL saying whether to delete that file.
 If you don't want any querying, pass FILE-QUERY-TRUE as QUERYF."
   (LET ((TRUENAME (IF (EQ PATHNAME MAPPED-PATHNAME)
-		      (SEND PATHNAME :TRUENAME ERRORP)
+		      (SEND PATHNAME ':TRUENAME ERROR-P)
 		    PATHNAME)))
     (IF (ERRORP TRUENAME)
 	(LIST PATHNAME TRUENAME)
       (LET* ((DELETE? (FUNCALL QUERYF "~&Delete ~A? " TRUENAME))
-	     (RESULT (AND DELETE? (SEND TRUENAME :DELETE ERRORP))))
+	     (RESULT (AND DELETE? (SEND TRUENAME ':DELETE ERROR-P))))
 	(LIST TRUENAME (IF (ERRORP RESULT) RESULT DELETE?))))))
 
 (DEFUN UNDELETE-FILE (STRING-OR-STREAM &KEY (ERROR T) QUERY)
@@ -915,7 +895,7 @@ ERROR does not affect errors that happen in determining
  what files match a wildcarded pathname."
   (UNDELETEF STRING-OR-STREAM ERROR QUERY))
   
-(DEFUN UNDELETEF (STRING-OR-STREAM &OPTIONAL (ERRORP T) QUERY?)
+(DEFUN UNDELETEF (STRING-OR-STREAM &OPTIONAL (ERROR-P T) QUERY?)
   "Undelete a file, specified as a pathname, string or I//O stream.
 Wildcards are allowed.  Not all file servers support undeletion.
 QUERY?, if true, means to ask the user before undeleting each file.
@@ -923,63 +903,63 @@ The value is a list containing one element for each file we considered;
  the element looks like (TRUENAME OUTCOME), where OUTCOME
  is either an error object, NIL if the user said don't undelete this one,
  or another non-NIL object if the file was undeleted.
- OUTCOME can be an error object only if ERRORP is NIL.
-ERRORP does not affect errors that happen in determining
+ OUTCOME can be an error object only if ERROR-P is NIL.
+ERROR-P does not affect errors that happen in determining
  what files match a wildcarded pathname."
   (FILE-RETRY-NEW-PATHNAME-IF (AND (OR (STRINGP STRING-OR-STREAM)
 				       (TYPEP STRING-OR-STREAM 'PATHNAME))
-				   (MEMQ ERRORP '(:RETRY :REPROMPT)))
+				   (MEMQ ERROR-P '(:RETRY :REPROMPT)))
 			      (STRING-OR-STREAM FILE-ERROR)
     (WILDCARDED-FILE-OPERATION STRING-OR-STREAM
 			       #'PRIMITIVE-UNDELETE-FILE '(:DELETED)
-			       ERRORP
+			       ERROR-P
 			       (MAKE-FILE-QUERY-FUNCTION QUERY?))))
 
-(DEFUN PRIMITIVE-UNDELETE-FILE (PATHNAME MAPPED-PATHNAME &OPTIONAL (ERRORP T) QUERYF)
+(DEFUN PRIMITIVE-UNDELETE-FILE (PATHNAME MAPPED-PATHNAME &OPTIONAL (ERROR-P T) QUERYF)
   "QUERYF should be a function that takes a format-string and a pathname
 and returns T or NIL saying whether to delete that file.
 If you don't want any querying, pass FILE-QUERY-TRUE as QUERYF."
   (LET ((TRUENAME (IF (EQ PATHNAME MAPPED-PATHNAME)
-		      (WITH-OPEN-FILE (STREAM PATHNAME :ERROR ERRORP :DELETED T
-					      :DIRECTION NIL)
+		      (WITH-OPEN-FILE (STREAM PATHNAME ':ERROR ERROR-P ':DELETED T
+					      ':DIRECTION NIL)
 			(IF (ERRORP STREAM) STREAM
-			  (SEND STREAM :TRUENAME)))
+			  (SEND STREAM ':TRUENAME)))
 		    PATHNAME)))
     (IF (ERRORP TRUENAME)
 	(LIST PATHNAME TRUENAME)
       (LET* ((UNDELETE? (FUNCALL QUERYF "~&Undelete ~A? " TRUENAME))
-	     (RESULT (AND UNDELETE? (SEND TRUENAME :UNDELETE ERRORP))))
+	     (RESULT (AND UNDELETE? (SEND TRUENAME ':UNDELETE ERROR-P))))
 	(LIST TRUENAME (IF (ERRORP RESULT) RESULT UNDELETE?))))))
 
-(DEFF PROBEF 'PROBE-FILE)
-(DEFUN PROBE-FILE (FILE)
+(DEFF PROBE-FILE 'PROBEF)
+(DEFUN PROBEF (FILE)
   "Non-NIL if FILE exists.
 Return the file's truename if successful, NIL if file-not-found.
 Any other error condition is not handled."
   (IF (STREAMP FILE)
-      (SEND FILE :TRUENAME)
+      (SEND FILE ':TRUENAME)
     (CONDITION-CASE (STREAM)
-	(OPEN FILE :DIRECTION NIL)
+	(OPEN FILE ':DIRECTION NIL)
       (FILE-NOT-FOUND NIL)
-      (:NO-ERROR (PROG1 (SEND STREAM :TRUENAME) (CLOSE STREAM))))))
+      (:NO-ERROR (PROG1 (SEND STREAM ':TRUENAME) (CLOSE STREAM))))))
 
 (DEFUN FILE-WRITE-DATE (FILENAME-OR-STREAM)
   "Return file's creation or last write date.  Specify pathname, namestring or file stream."
   (IF (OR (STRINGP FILENAME-OR-STREAM)
 	  (SYMBOLP FILENAME-OR-STREAM)
 	  (TYPEP FILENAME-OR-STREAM 'PATHNAME))
-      (WITH-OPEN-FILE (STREAM FILENAME-OR-STREAM :DIRECTION NIL)
-	(SEND STREAM :CREATION-DATE))
-    (SEND FILENAME-OR-STREAM :CREATION-DATE)))
+      (WITH-OPEN-FILE (STREAM FILENAME-OR-STREAM ':DIRECTION NIL)
+	(SEND STREAM ':CREATION-DATE))
+    (SEND FILENAME-OR-STREAM ':CREATION-DATE)))
 
 (DEFUN FILE-AUTHOR (FILENAME-OR-STREAM)
   "Return file's author's name (a string).  Specify pathname, namestring or file stream."
   (IF (OR (STRINGP FILENAME-OR-STREAM)
 	  (SYMBOLP FILENAME-OR-STREAM)
 	  (TYPEP FILENAME-OR-STREAM 'PATHNAME))
-      (WITH-OPEN-FILE (STREAM FILENAME-OR-STREAM :DIRECTION NIL)
-	(SEND STREAM :GET :AUTHOR))
-    (SEND FILENAME-OR-STREAM :GET :AUTHOR)))
+      (WITH-OPEN-FILE (STREAM FILENAME-OR-STREAM ':DIRECTION NIL)
+	(SEND STREAM ':GET ':AUTHOR))
+    (SEND FILENAME-OR-STREAM ':GET ':AUTHOR)))
 
 (DEFUN FILE-POSITION (FILE-STREAM &OPTIONAL NEW-POSITION)
   "Return or set the stream pointer of FILE-STREAM.
@@ -988,47 +968,47 @@ With two argumens, try set the stream pointer to NEW-POSITION
  and return T if it was really possible to do so."
   (IF NEW-POSITION
       (UNLESS (AND (NOT (MEMQ NEW-POSITION '(:START 0)))
-		   (SEND FILE-STREAM :CHARACTERS))
-	(SEND FILE-STREAM :SET-POINTER
-	      (CASE NEW-POSITION
+		   (SEND FILE-STREAM ':CHARACTERS))
+	(SEND FILE-STREAM ':SET-POINTER
+	      (SELECTQ NEW-POSITION
 		(:START 0)
-		(:END (SEND FILE-STREAM :LENGTH-IN-BYTES))
+		(:END (SEND FILE-STREAM ':LENGTH-IN-BYTES))
 		(T NEW-POSITION)))
 	T)
-    (LET ((PTR (SEND FILE-STREAM :SEND-IF-HANDLES :READ-POINTER)))
+    (LET ((PTR (SEND FILE-STREAM ':SEND-IF-HANDLES ':READ-POINTER)))
       (UNLESS (AND (NOT (MEMQ PTR '(:START 0)))
-		   (SEND FILE-STREAM :CHARACTERS))
+		   (SEND FILE-STREAM ':CHARACTERS))
 	PTR))))
 
 (DEFUN FILE-LENGTH (FILE-STREAM)
   "Return the length of the file that is open, or NIL if not known.
 NIL is always returned for character files, since the length we know is not correct."
-  (UNLESS (SEND FILE-STREAM :CHARACTERS)
-    (SEND FILE-STREAM :LENGTH)))
+  (UNLESS (SEND FILE-STREAM ':CHARACTERS)
+    (SEND FILE-STREAM ':LENGTH)))
 
 (DEFUN VIEWF (FILE &OPTIONAL (OUTPUT-STREAM *STANDARD-OUTPUT*) LEADER)
   "Print the contents of a file on the output stream.
 LEADER is passed to the :LINE-IN operation."
-  (WITH-OPEN-FILE (FILE-STREAM FILE :ERROR :REPROMPT)
+  (WITH-OPEN-FILE (FILE-STREAM FILE ':ERROR ':REPROMPT)
     (IF (ERRORP FILE-STREAM)
 	FILE-STREAM
-      (SEND OUTPUT-STREAM :FRESH-LINE)
+      (SEND OUTPUT-STREAM ':FRESH-LINE)
       (STREAM-COPY-UNTIL-EOF FILE-STREAM OUTPUT-STREAM LEADER))))
 
 ;;this isn't the right place for this, but its not clear where it should go
 (DEFUN FS:WORKING-DIRECTORY () ;&optional defaults
   (LET ((PATHNAME (FS:DEFAULT-PATHNAME)))
-    (FS:MAKE-PATHNAME :HOST (SEND PATHNAME :HOST) :DIRECTORY (SEND PATHNAME :DIRECTORY))))
+    (FS:MAKE-PATHNAME ':HOST (SEND PATHNAME ':HOST) ':DIRECTORY (SEND PATHNAME ':DIRECTORY))))
 
 (DEFUN LISTF (&OPTIONAL (DIRECTORY (FS:WORKING-DIRECTORY))
 	      (OUTPUT-STREAM *STANDARD-OUTPUT*) LEADER)
   "Print a listing of DIRECTORY on OUTPUT-STREAM.
 LEADER is passed to the :LINE-IN operation."
   (SETQ DIRECTORY (FS:PARSE-PATHNAME DIRECTORY))
-  (OR (SEND DIRECTORY :NAME)
-      (SETQ DIRECTORY (SEND DIRECTORY :NEW-NAME :WILD)))
-  (SETQ DIRECTORY (FS:MERGE-PATHNAME-DEFAULTS DIRECTORY NIL :WILD :WILD))
-  (SEND OUTPUT-STREAM :FRESH-LINE)
+  (OR (SEND DIRECTORY ':NAME)
+      (SETQ DIRECTORY (SEND DIRECTORY ':NEW-NAME ':WILD)))
+  (SETQ DIRECTORY (FS:MERGE-PATHNAME-DEFAULTS DIRECTORY NIL ':WILD ':WILD))
+  (SEND OUTPUT-STREAM ':FRESH-LINE)
   (FILE-RETRY-NEW-PATHNAME (DIRECTORY FS:FILE-ERROR)
     (WITH-OPEN-STREAM (STREAM (ZWEI:DIRECTORY-INPUT-STREAM DIRECTORY))
       (STREAM-COPY-UNTIL-EOF STREAM OUTPUT-STREAM LEADER)))
@@ -1041,9 +1021,9 @@ LEADER is passed to the :LINE-IN operation."
   "The user's full name, last name first.  Obtained from the FS:USER-LOGIN-MACHINE.")
 (DEFVAR USER-PERSONAL-NAME-FIRST-NAME-FIRST ""
   "The user's full name, first name first.  Obtained from the FS:USER-LOGIN-MACHINE.")
-(DEFVAR USER-GROUP-AFFILIATION #/-
+(DEFVAR USER-GROUP-AFFILIATION #/-
   "The user's /"group affiliation/", a character.  Obtained from the FS:USER-LOGIN-MACHINE.")
-(DEFVAR USER-LOGIN-MACHINE SI::ASSOCIATED-MACHINE
+(DEFVAR USER-LOGIN-MACHINE SI:ASSOCIATED-MACHINE
   "The host the user logged in on.")
 
 (DEFF USER-HOMEDIR-PATHNAME 'USER-HOMEDIR)
@@ -1051,31 +1031,31 @@ LEADER is passed to the :LINE-IN operation."
   "Return a pathname describing the home directory for USER on host HOST.
 This is used as a default, sometimes.  RESET-P says make this our login host."
   (SETQ HOST (GET-PATHNAME-HOST HOST))
-  (AND (TYPEP HOST 'LOGICAL-HOST) (SETQ HOST (SEND HOST :PHYSICAL-HOST)))	;Just in case
+  (AND (TYPEP HOST 'LOGICAL-HOST) (SETQ HOST (SEND HOST ':PHYSICAL-HOST)))	;Just in case
   (AND RESET-P (SETQ USER-LOGIN-MACHINE HOST))
   (CONDITION-CASE ()
-      (SEND (SAMPLE-PATHNAME HOST) :HOMEDIR USER)
+      (SEND (SAMPLE-PATHNAME HOST) ':HOMEDIR USER)
     (FILE-ERROR
      (QUIET-USER-HOMEDIR HOST))))
 
 (DEFUN QUIET-USER-HOMEDIR (HOST)
   (OR (CDR (ASSQ HOST USER-HOMEDIRS))
-      (SEND (SAMPLE-PATHNAME HOST) :QUIET-HOMEDIR)))
+      (SEND (SAMPLE-PATHNAME HOST) ':QUIET-HOMEDIR)))
 
-(DEFUN FORCE-USER-TO-LOGIN (&OPTIONAL (HOST SI::ASSOCIATED-MACHINE)
+(DEFUN FORCE-USER-TO-LOGIN (&OPTIONAL (HOST SI:ASSOCIATED-MACHINE)
 			    &AUX INPUT USER DONT-READ-INIT IDX IDX2)
   "Require the user to log in.  HOST is a default for logging in."
   (WHEN (OR (NULL USER-ID) (STRING-EQUAL USER-ID ""))
-    (SEND *QUERY-IO* :BEEP)
+    (SEND *QUERY-IO* ':BEEP)
     (FORMAT *QUERY-IO*
 	    "~&Please log in.  ~
 ~<~%~:;Type username or username@host ~<~%~:;(host defaults to ~A)~>~>
 To avoid loading your init file, ~<~%~:;follow by <space>T : ~>"
 	    HOST)   
-    (SETQ INPUT (STRING-TRIM '(#/SPACE #/TAB) (READLINE *QUERY-IO*)))
-    (AND (SETQ IDX (STRING-SEARCH-CHAR #/@ INPUT))
+    (SETQ INPUT (STRING-TRIM '(#/SPACE #/TAB) (READLINE *QUERY-IO*)))
+    (AND (SETQ IDX (STRING-SEARCH-CHAR #/@ INPUT))
 	 (SETQ USER (SUBSTRING INPUT 0 IDX)))
-    (AND (SETQ IDX2 (STRING-SEARCH-SET '(#/SPACE #/TAB) INPUT (OR IDX 0)))
+    (AND (SETQ IDX2 (STRING-SEARCH-SET '(#/SPACE #/TAB) INPUT (OR IDX 0)))
 	 (SETQ DONT-READ-INIT (READ-FROM-STRING INPUT T IDX2)))
     (IF IDX
 	(SETQ HOST (SUBSTRING INPUT (1+ IDX) IDX2))
@@ -1086,7 +1066,7 @@ To avoid loading your init file, ~<~%~:;follow by <space>T : ~>"
 (DEFVAR USER-UNAMES NIL "Alist mapping host objects into usernames.")
 (DEFUN FILE-HOST-USER-ID (UID HOST)
   "Specify the user-id UID for use on host HOST."
-  (AND (MEMQ (SEND HOST :SYSTEM-TYPE) '(:ITS :LMFILE))
+  (AND (MEMQ (SEND HOST ':SYSTEM-TYPE) '(:ITS :LMFILE))
        ;; All ITS's have the same set of unames, so record as ITS rather than the host.
        (SETQ HOST 'ITS
 	     UID (SUBSTRING UID 0 (MIN (STRING-LENGTH UID) 6))))
@@ -1096,7 +1076,7 @@ To avoid loading your init file, ~<~%~:;follow by <space>T : ~>"
 	   (PUSH (CONS HOST UID) USER-UNAMES))))
 
 (DEFUN UNAME-ON-HOST (HOST)			; Must be a host object
-  (CDR (ASSQ (IF (EQ (SEND HOST :SYSTEM-TYPE) :ITS) 'ITS HOST) USER-UNAMES)))
+  (CDR (ASSQ (IF (EQ (SEND HOST ':SYSTEM-TYPE) ':ITS) 'ITS HOST) USER-UNAMES)))
 
 (ADD-INITIALIZATION "File Host User ID" '(FILE-HOST-USER-ID USER-ID USER-LOGIN-MACHINE)
 		    '(LOGIN))
@@ -1120,22 +1100,23 @@ The three data in each element are all strings.")
   "Given a username and host, ask for either a password or a username and password.
 If DIRECTORY-FLAG is set, we are using directory names, not passwords"
   (DECLARE (VALUES NEW-USER-ID PASSWORD ENABLE-CAPABILITIES))
-  (LET* ((LINE (MAKE-STRING 30. :FILL-POINTER 0))
+  (LET* ((LINE (MAKE-STRING 30 ':FILL-POINTER 0))
 	 ENABLE-CAPABILITIES CHAR UID-P
-	 (HACK (AND (SEND *QUERY-IO* :OPERATION-HANDLED-P :CLEAR-BETWEEN-CURSORPOSES)
-		    (SEND *QUERY-IO* :OPERATION-HANDLED-P :COMPUTE-MOTION)))
+	 (HACK (AND (SEND *QUERY-IO* ':OPERATION-HANDLED-P ':CLEAR-BETWEEN-CURSORPOSES)
+		    (SEND *QUERY-IO* ':OPERATION-HANDLED-P ':COMPUTE-MOTION)))
 	 START-X START-Y)
     (UNLESS DIRECTORY-FLAG
       (SETQ UID (OR (CDR (ASSQ HOST USER-UNAMES)) UID)))
-    (LET ((PW (CADR (SI:ASSOC-EQUALP (LIST UID (SEND HOST :NAME)) USER-HOST-PASSWORD-ALIST))))
+    (LET ((PW (CADR (ASSOC-EQUALP (LIST UID (SEND HOST ':NAME))
+				  USER-HOST-PASSWORD-ALIST))))
       (WHEN PW (RETURN-FROM FILE-GET-PASSWORD UID PW)))
     (TAGBODY
-	(WHEN HACK (SETQ HACK (MAKE-STRING 30. :INITIAL-VALUE #/X :FILL-POINTER 0)))
+	(WHEN HACK (SETQ HACK (MAKE-STRING 30. ':INITIAL-VALUE #/X ':FILL-POINTER 0)))
      RESTART
 	(UNLESS DIRECTORY-FLAG
 	  (SETQ UID (OR (CDR (ASSQ HOST USER-UNAMES)) UID)))
-	(LET ((PW (CADR (SI:ASSOC-EQUALP (LIST UID (SEND HOST :NAME))
-					 USER-HOST-PASSWORD-ALIST))))
+	(LET ((PW (CADR (ASSOC-EQUALP (LIST UID (SEND HOST ':NAME))
+				      USER-HOST-PASSWORD-ALIST))))
 	  (WHEN PW (RETURN-FROM FILE-GET-PASSWORD UID PW)))
 	(FORMAT *QUERY-IO*
 		(IF DIRECTORY-FLAG "~&Type the password for directory ~A on host ~A,
@@ -1143,13 +1124,13 @@ or a directory and password.  /"Directory/" here includes devices as well: "
 		  "~&Current login name is ~A ~<~%~:;for host ~A.~>
 Type either password or ~<~%~:;loginname<space>password: ~>")
 		UID HOST)
-	(WHEN HACK (MULTIPLE-VALUE (START-X START-Y) (SEND *QUERY-IO* :READ-CURSORPOS)))
-     L  (SETQ CHAR (SEND *QUERY-IO* :TYI))
+	(WHEN HACK (MULTIPLE-VALUE (START-X START-Y) (SEND *QUERY-IO* ':READ-CURSORPOS)))
+     L  (SETQ CHAR (SEND *QUERY-IO* ':TYI))
 	(COND ((= CHAR #/C-Q)			;quoting character.
-	       (VECTOR-PUSH-EXTEND (SEND *QUERY-IO* :TYI) LINE)
+	       (VECTOR-PUSH-EXTEND (SEND *QUERY-IO* ':TYI) LINE)
 	       (WHEN HACK
 		 (VECTOR-PUSH-EXTEND #/X HACK)
-		 (SEND *QUERY-IO* :TYO #/X)))
+		 (SEND *QUERY-IO* ':TYO #/X)))
 	      ((= CHAR #/RUBOUT)
 	       (WHEN (ZEROP (FILL-POINTER LINE))
 		 (GO FLUSH))
@@ -1157,11 +1138,11 @@ Type either password or ~<~%~:;loginname<space>password: ~>")
 	       (WHEN HACK
 		 (VECTOR-POP HACK)
 		 (MULTIPLE-VALUE-BIND (X Y)
-		     (SEND *QUERY-IO* :COMPUTE-MOTION HACK 0 NIL
+		     (SEND *QUERY-IO* ':COMPUTE-MOTION HACK 0 NIL
 				      START-X START-Y)
-		   (MULTIPLE-VALUE-BIND (CX CY) (SEND *QUERY-IO* :READ-CURSORPOS)
-		     (SEND *QUERY-IO* :CLEAR-BETWEEN-CURSORPOSES X Y CX CY))
-		   (SEND *QUERY-IO* :SET-CURSORPOS X Y))))
+		   (MULTIPLE-VALUE-BIND (CX CY) (SEND *QUERY-IO* ':READ-CURSORPOS)
+		     (SEND *QUERY-IO* ':CLEAR-BETWEEN-CURSORPOSES X Y CX CY))
+		   (SEND *QUERY-IO* ':SET-CURSORPOS X Y))))
 	      ((= CHAR #/CLEAR-INPUT)
 	       (GO FLUSH))
 	      ((AND (= CHAR #/SPACE)
@@ -1174,25 +1155,25 @@ Type either password or ~<~%~:;loginname<space>password: ~>")
 		 (SETQ ENABLE-CAPABILITIES NIL))
 	       (SETQ UID-P T
 		     UID LINE
-		     LINE (MAKE-STRING 30. :FILL-POINTER 0))
+		     LINE (MAKE-STRING 30. ':FILL-POINTER 0))
 	       (WHEN HACK
-		 (MULTIPLE-VALUE-BIND (CX CY) (SEND *QUERY-IO* :READ-CURSORPOS)
-		   (SEND *QUERY-IO* :CLEAR-BETWEEN-CURSORPOSES START-X START-Y CX CY))
-		 (SEND *QUERY-IO* :SET-CURSORPOS START-X START-Y))
+		 (MULTIPLE-VALUE-BIND (CX CY) (SEND *QUERY-IO* ':READ-CURSORPOS)
+		   (SEND *QUERY-IO* ':CLEAR-BETWEEN-CURSORPOSES START-X START-Y CX CY))
+		 (SEND *QUERY-IO* ':SET-CURSORPOS START-X START-Y))
 	       (FORMAT *QUERY-IO* "~A " UID)
 	       (WHEN HACK (MULTIPLE-VALUE (START-X START-Y)
-			    (SEND *QUERY-IO* :READ-CURSORPOS))))
+			    (SEND *QUERY-IO* ':READ-CURSORPOS))))
 	      ((= CHAR #/RETURN)
 	       (OR DIRECTORY-FLAG (FILE-HOST-USER-ID UID HOST))
 	       (IF RECORD-PASSWORDS-FLAG
-		   (PUSH `((,UID ,(SEND HOST :NAME)) ,LINE) USER-HOST-PASSWORD-ALIST))
+		   (PUSH `((,UID ,(SEND HOST ':NAME)) ,LINE) USER-HOST-PASSWORD-ALIST))
 	       (WHEN HACK
-		 (MULTIPLE-VALUE-BIND (CX CY) (SEND *QUERY-IO* :READ-CURSORPOS)
-		   (SEND *QUERY-IO* :CLEAR-BETWEEN-CURSORPOSES START-X START-Y CX CY))
-		 (SEND *QUERY-IO* :SET-CURSORPOS START-X START-Y)
+		 (MULTIPLE-VALUE-BIND (CX CY) (SEND *QUERY-IO* ':READ-CURSORPOS)
+		   (SEND *QUERY-IO* ':CLEAR-BETWEEN-CURSORPOSES START-X START-Y CX CY))
+		 (SEND *QUERY-IO* ':SET-CURSORPOS START-X START-Y)
 		 (RETURN-ARRAY HACK))
 	       (FRESH-LINE *QUERY-IO*)
-	       (SEND *QUERY-IO* :SEND-IF-HANDLES :MAKE-COMPLETE)
+	       (SEND *QUERY-IO* ':SEND-IF-HANDLES ':MAKE-COMPLETE)
 	       (RETURN-FROM FILE-GET-PASSWORD UID LINE ENABLE-CAPABILITIES))
 	      ((AND (= CHAR #/*)
 		    (= (FILL-POINTER LINE) 0))
@@ -1200,14 +1181,14 @@ Type either password or ~<~%~:;loginname<space>password: ~>")
 	      (( 0 (CHAR-BITS CHAR)) (BEEP))
 	      (T (WHEN HACK
 		   (VECTOR-PUSH-EXTEND #/X HACK)
-		   (SEND *QUERY-IO* :TYO #/X))
+		   (SEND *QUERY-IO* ':TYO #/X))
 		 (VECTOR-PUSH-EXTEND CHAR LINE)))
 	(GO L)
      FLUSH
 	(WHEN HACK
-	  (MULTIPLE-VALUE-BIND (CX CY) (SEND *QUERY-IO* :READ-CURSORPOS)
-	    (SEND *QUERY-IO* :CLEAR-BETWEEN-CURSORPOSES START-X START-Y CX CY))
-	  (SEND *QUERY-IO* :SET-CURSORPOS START-X START-Y)
+	  (MULTIPLE-VALUE-BIND (CX CY) (SEND *QUERY-IO* ':READ-CURSORPOS)
+	    (SEND *QUERY-IO* ':CLEAR-BETWEEN-CURSORPOSES START-X START-Y CX CY))
+	  (SEND *QUERY-IO* ':SET-CURSORPOS START-X START-Y)
 	  (SETF (FILL-POINTER HACK) 0))
 	(WHEN UID-P (RETURN-ARRAY (PROG1 LINE (SETQ LINE UID UID NIL))))
 	(FORMAT *QUERY-IO* "Flushed.~&")
@@ -1221,41 +1202,41 @@ Each element of the value looks like (pathname . properties)."
   (FORCE-USER-TO-LOGIN)
   (DOLIST (FILENAME FILENAMES)
     (SETQ FILENAME (MERGE-PATHNAME-DEFAULTS FILENAME))
-    (DO ((HOST (SEND FILENAME :HOST))
+    (DO ((HOST (SEND FILENAME ':HOST))
 	 (LIST HOST-FILE-LIST (CDR LIST)))
 	((NULL LIST)
 	 (PUSH (NCONS FILENAME) HOST-FILE-LIST))
-      (COND ((EQ HOST (SEND (CAAR HOST-FILE-LIST) :HOST))
+      (COND ((EQ HOST (SEND (CAAR HOST-FILE-LIST) ':HOST))
 	     (PUSH FILENAME (CAR LIST))
 	     (RETURN)))))
   (LOOP FOR LIST IN (NREVERSE HOST-FILE-LIST)
-	NCONC (SEND (CAR LIST) :MULTIPLE-FILE-PLISTS (NREVERSE LIST) OPTIONS)))
+	NCONC (SEND (CAR LIST) ':MULTIPLE-FILE-PLISTS (NREVERSE LIST) OPTIONS)))
 
 ;;; Old name for compatibility
 (DEFUN MULTIPLE-FILE-PROPERTY-LISTS (BINARY-P FILENAMES)
-  (MULTIPLE-FILE-PLISTS FILENAMES :CHARACTERS (NOT BINARY-P)))
+  (MULTIPLE-FILE-PLISTS FILENAMES ':CHARACTERS (NOT BINARY-P)))
 
-(DEFUN CLOSE-ALL-FILES (&OPTIONAL (MODE :ABORT))
+(DEFUN CLOSE-ALL-FILES ()
   "Close all file streams that are open."
-  (NCONC (AND (BOUNDP 'TV::WHO-LINE-FILE-STATE-SHEET)
-	      TV::WHO-LINE-FILE-STATE-SHEET
-	      (DO ((F (SEND TV::WHO-LINE-FILE-STATE-SHEET :OPEN-STREAMS)
+  (NCONC (AND (BOUNDP 'TV:WHO-LINE-FILE-STATE-SHEET)
+	      TV:WHO-LINE-FILE-STATE-SHEET
+	      (DO ((F (SEND TV:WHO-LINE-FILE-STATE-SHEET ':OPEN-STREAMS)
 		      (CDR F))
 		   (THINGS-CLOSED NIL))
 		  ((NULL F)
-		   (SEND TV::WHO-LINE-FILE-STATE-SHEET :DELETE-ALL-STREAMS)
+		   (SEND TV:WHO-LINE-FILE-STATE-SHEET ':DELETE-ALL-STREAMS)
 		   (NREVERSE THINGS-CLOSED))
-		(FORMAT *ERROR-OUTPUT* "~%Closing ~S" (CAR F))
+		(FORMAT ERROR-OUTPUT "~%Closing ~S" (CAR F))
 		(PUSH (CAR F) THINGS-CLOSED)
-		(SEND (CAR F) :CLOSE MODE)))
+		(SEND (CAR F) ':CLOSE ':ABORT)))
 	 (LOOP FOR HOST IN *PATHNAME-HOST-LIST*
-	       NCONC (SEND HOST :CLOSE-ALL-FILES MODE))))
+	       NCONC (SEND HOST ':CLOSE-ALL-FILES))))
 
 (DEFUN ALL-OPEN-FILES ()
   "Return a list of all file streams that are open."
-  (SI:ELIMINATE-DUPLICATES (APPEND (SEND TV:WHO-LINE-FILE-STATE-SHEET :OPEN-STREAMS)
+  (SI:ELIMINATE-DUPLICATES (APPEND (SEND TV:WHO-LINE-FILE-STATE-SHEET ':OPEN-STREAMS)
 				   (LOOP FOR HOST IN *PATHNAME-HOST-LIST*
-					 APPEND (SEND HOST :OPEN-STREAMS)))))
+					 APPEND (SEND HOST ':OPEN-STREAMS)))))
 
 ;;;; Directory stuff
 
@@ -1263,7 +1244,7 @@ Each element of the value looks like (pathname . properties)."
   "Common Lisp function to get the list of files in a directory.
 The value is just a list of truenames.
 You will get much more useful information by using FS:DIRECTORY-LIST."
-  (MAPCAR #'CAR (CDR (DIRECTORY-LIST PATHNAME :NO-EXTRA-INFO))))
+  (MAPCAR 'CAR (CDR (DIRECTORY-LIST PATHNAME :NO-EXTRA-INFO))))
 
 ;;; This is the primary user interface to the directory listing
 ;;; stuff.  It returns a list of lists, one for each file.  The format
@@ -1311,15 +1292,15 @@ The value is an alist of elements (pathname . properties).
 There is an element whose car is NIL.  It describes the directory as a whole.
 One of its properties is :PATHNAME, whose value is the directory's pathname."
   (FORCE-USER-TO-LOGIN)
-  (SETQ FILENAME (MERGE-PATHNAME-DEFAULTS FILENAME NIL :WILD :WILD))
-  (SEND FILENAME :DIRECTORY-LIST OPTIONS))
+  (SETQ FILENAME (MERGE-PATHNAME-DEFAULTS FILENAME NIL ':WILD ':WILD))
+  (SEND FILENAME ':DIRECTORY-LIST OPTIONS))
 
 (DEFUN DIRECTORY-LIST-STREAM (FILENAME &REST OPTIONS)
   "Return a stream which returns elements of a directory-list one by one.
 The stream's operations are :ENTRY, to return the next element, and :CLOSE."
   (FORCE-USER-TO-LOGIN)
-  (SETQ FILENAME (MERGE-PATHNAME-DEFAULTS FILENAME NIL :WILD :WILD))
-  (SEND FILENAME :DIRECTORY-LIST-STREAM OPTIONS))
+  (SETQ FILENAME (MERGE-PATHNAME-DEFAULTS FILENAME NIL ':WILD ':WILD))
+  (SEND FILENAME ':DIRECTORY-LIST-STREAM OPTIONS))
 
 ;;; These are the understood indicators
 ;;; Format is ((PARSER-FROM-STRING PRINTER TYPE-FOR-CHOOSE-VARIABLE-VALUES) . INDICATORS)
@@ -1371,24 +1352,24 @@ where alist's elements look like (propstring propsymbol parser printer cvv-type)
 ;then we append the directory pathname as the :PATHNAME property to this entry.
 (DEFUN READ-DIRECTORY-STREAM-ENTRY (STREAM DEFAULTING-PATHNAME &AUX PATH EOF IND FUN
 				    (DEFAULT-FUN (SEND DEFAULTING-PATHNAME
-						       :DIRECTORY-STREAM-DEFAULT-PARSER)))
+						       ':DIRECTORY-STREAM-DEFAULT-PARSER)))
   (MULTIPLE-VALUE (PATH EOF)
-    (SEND STREAM :LINE-IN))
+    (SEND STREAM ':LINE-IN))
   (IF EOF NIL
     (IF (ZEROP (ARRAY-ACTIVE-LENGTH PATH))
 	(SETQ PATH NIL)
       (MULTIPLE-VALUE-BIND (DEV DIR NAM TYP VER)
-	  (SEND DEFAULTING-PATHNAME :PARSE-NAMESTRING NIL PATH)
+	  (SEND DEFAULTING-PATHNAME ':PARSE-NAMESTRING NIL PATH)
 	(SETQ PATH (MAKE-PATHNAME-INTERNAL
 		     (PATHNAME-HOST DEFAULTING-PATHNAME)
 		     (OR DEV (PATHNAME-DEVICE DEFAULTING-PATHNAME))
 		     (OR DIR (PATHNAME-DIRECTORY DEFAULTING-PATHNAME))
-		     NAM (OR TYP :UNSPECIFIC) VER))))
+		     NAM (OR TYP ':UNSPECIFIC) VER))))
     ;; This is a little hairy to try to avoid page faults when interning.
-    (LOOP AS LINE = (SEND STREAM :LINE-IN)
+    (LOOP AS LINE = (SEND STREAM ':LINE-IN)
 	  AS LEN = (ARRAY-ACTIVE-LENGTH LINE)
 	  UNTIL (ZEROP LEN)
-	  AS I = (%STRING-SEARCH-CHAR #/SPACE LINE 0 LEN)
+	  AS I = (%STRING-SEARCH-CHAR #/SPACE LINE 0 LEN)
 	  DO (LOOP NAMED FOO
 		   FOR X IN (CDR (ASSQ (AREF LINE 0) *TRANSFORMED-DIRECTORY-PROPERTIES*))
 		   WHEN (%STRING-EQUAL LINE 0 (CAR X) 0 I)
@@ -1397,7 +1378,7 @@ where alist's elements look like (propstring propsymbol parser printer cvv-type)
 				 FUN DEFAULT-FUN))
 	  NCONC (LIST* IND (OR (NULL I) (SEND FUN LINE (1+ I))) NIL) INTO PLIST
 	  FINALLY (RETURN (CONS PATH (IF PATH PLIST
-				       (LIST* :PATHNAME DEFAULTING-PATHNAME PLIST)))))))
+				       (LIST* ':PATHNAME DEFAULTING-PATHNAME PLIST)))))))
 
 ;;; Nifty, handy function for adding new ones
 (DEFUN PUSH-DIRECTORY-PROPERTY-ON-TYPE (TYPE PROP)
@@ -1426,12 +1407,12 @@ where alist's elements look like (propstring propsymbol parser printer cvv-type)
   (OR END (SETQ END (ARRAY-ACTIVE-LENGTH STRING)))
   (IF (AND (OR (= END (+ START 8))
 	       (SETQ FLAG (= END (+ START 17.))))
-	   (= (CHAR STRING (+ START 2)) #//)
-	   (= (CHAR STRING (+ START 5)) #//)
+	   (= (AREF STRING (+ START 2)) #//)
+	   (= (AREF STRING (+ START 5)) #//)
 	   (OR (NULL FLAG)
-	       (AND (= (CHAR STRING (+ START 8)) #/SPACE)
-		    (= (CHAR STRING (+ START 11.)) #/:)
-		    (= (CHAR STRING (+ START 14.)) #/:))))
+	       (AND (= (AREF STRING (+ START 8)) #/SPACE)
+		    (= (AREF STRING (+ START 11.)) #/:)
+		    (= (AREF STRING (+ START 14.)) #/:))))
       (LET (DAY MONTH YEAR HOURS MINUTES SECONDS)
 	(SETQ MONTH (PARSE-DIRECTORY-DATE-PROPERTY-1 STRING START)
 	      DAY (PARSE-DIRECTORY-DATE-PROPERTY-1 STRING (+ START 3))
@@ -1445,7 +1426,7 @@ where alist's elements look like (propstring propsymbol parser printer cvv-type)
 	;; DSKDMP, e.g..  Avoid errors later.
 	(AND (PLUSP MONTH)
 	     (TIME:ENCODE-UNIVERSAL-TIME SECONDS MINUTES HOURS DAY MONTH YEAR)))
-    ;;Not in simple format, escape to full parser
+      ;;Not in simple format, escape to full parser
     (CONDITION-CASE ()
 	(TIME:PARSE-UNIVERSAL-TIME STRING START END)
       (ERROR NIL))))
@@ -1463,15 +1444,15 @@ where alist's elements look like (propstring propsymbol parser printer cvv-type)
 
 (DEFUN PARSE-DIRECTORY-BOOLEAN-PROPERTY (STRING START)
   (LET ((TEM (READ-FROM-STRING STRING NIL START)))
-    (IF (EQ TEM :NIL) NIL TEM)))
+    (IF (EQ TEM ':NIL) NIL TEM)))
 
 (DEFUN PARSE-SETTABLE-PROPERTIES (STRING START)
-  (IF (SETQ START (STRING-SEARCH-NOT-CHAR #/SPACE STRING START))
+  (IF (SETQ START (STRING-SEARCH-NOT-CHAR #/SPACE STRING START))
       (DO ((I START (1+ J))
 	   (J)
 	   (LIST NIL))
 	  (NIL)
-	(SETQ J (STRING-SEARCH-CHAR #/SPACE STRING I))
+	(SETQ J (STRING-SEARCH-CHAR #/SPACE STRING I))
 	(PUSH (INTERN (STRING-UPCASE (SUBSTRING STRING I J)) "") LIST)
 	(OR J (RETURN (NREVERSE LIST))))
       T))					;Treat like blank line
@@ -1480,17 +1461,17 @@ where alist's elements look like (propstring propsymbol parser printer cvv-type)
   (AND (LISTP PROPERTIES)
        (DO ((TAIL PROPERTIES (CDR TAIL))) ((NULL TAIL))
 	 (PRINC (CAR TAIL))
-	 (IF (CDR TAIL) (TYO #/SPACE)))))
+	 (IF (CDR TAIL) (TYO #/SPACE)))))
 
 (DEFUN PARSE-DIRECTORY-FREE-SPACE (STRING START &AUX LIST)
   (DO ((I START (1+ I))
        (J)
        (VOL))
       (NIL)
-    (OR (SETQ J (STRING-SEARCH-CHAR #/: STRING I))
+    (OR (SETQ J (STRING-SEARCH-CHAR #/: STRING I))
 	(RETURN))
     (SETQ VOL (SUBSTRING STRING I J))
-    (SETQ I (STRING-SEARCH-CHAR #/, STRING (SETQ J (1+ J))))
+    (SETQ I (STRING-SEARCH-CHAR #/, STRING (SETQ J (1+ J))))
     (PUSH (CONS VOL (ZWEI:PARSE-NUMBER STRING J I)) LIST)
     (OR I (RETURN)))
   (NREVERSE LIST))
@@ -1523,29 +1504,28 @@ where alist's elements look like (propstring propsymbol parser printer cvv-type)
 The argument is either a host, a hostname, or a pathname or namestring
 whose host is used.  The only option is :NOERROR."
   (FORCE-USER-TO-LOGIN)
-  (IF (AND (TYPEP PATHNAME '(OR STRING SI::HOST))
-	   (SETQ TEM (GET-PATHNAME-HOST PATHNAME T)))
-      (SETQ PATHNAME (SEND (SAMPLE-PATHNAME TEM) :NEW-PATHNAME
-			   :DEVICE :WILD :DIRECTORY :WILD))
-    (SETQ PATHNAME (MERGE-PATHNAME-DEFAULTS PATHNAME)))
-  (SEND PATHNAME :ALL-DIRECTORIES OPTIONS))
+  (IF (SETQ TEM (GET-PATHNAME-HOST PATHNAME T))
+      (SETQ PATHNAME (SEND (SAMPLE-PATHNAME TEM) ':NEW-PATHNAME
+			   ':DEVICE ':WILD ':DIRECTORY ':WILD))
+      (SETQ PATHNAME (MERGE-PATHNAME-DEFAULTS PATHNAME)))
+  (SEND PATHNAME ':ALL-DIRECTORIES OPTIONS))
 
 ;;; Default is to complain that it can't be done.
 (DEFMETHOD (PATHNAME :ALL-DIRECTORIES) (OPTIONS)
   (LET ((ERROR (MAKE-CONDITION 'UNKNOWN-OPERATION "Can't list all directories on file system of ~A."
-			       SELF :ALL-DIRECTORIES)))
-    (IF (MEMQ :NOERROR OPTIONS) ERROR (SIGNAL ERROR))))
+			       SELF ':ALL-DIRECTORIES)))
+    (IF (MEMQ ':NOERROR OPTIONS) ERROR (SIGNAL ERROR))))
 
 (DEFMETHOD (MEANINGFUL-ROOT-MIXIN :ALL-DIRECTORIES) (OPTIONS)
   (LOOP FOR FILE IN (CDR (APPLY #'DIRECTORY-LIST
-				(SEND SELF :NEW-PATHNAME
-					   :DIRECTORY :ROOT
-					   :NAME :WILD
-					   :TYPE :WILD
-					   :VERSION :WILD)
+				(SEND SELF ':NEW-PATHNAME
+					   ':DIRECTORY ':ROOT
+					   ':NAME ':WILD
+					   ':TYPE ':WILD
+					   ':VERSION ':WILD)
 				OPTIONS))
-	WHEN (GET FILE :DIRECTORY)
-	COLLECT (NCONS (SEND (CAR FILE) :PATHNAME-AS-DIRECTORY))))
+	WHEN (GET FILE ':DIRECTORY)
+	COLLECT (NCONS (SEND (CAR FILE) ':PATHNAME-AS-DIRECTORY))))
 
 (DEFUN COMPLETE-PATHNAME (DEFAULTS STRING TYPE VERSION &REST OPTIONS &AUX PATHNAME)
   "Attempt to complete the filename STRING, returning the results.
@@ -1561,10 +1541,10 @@ NIL says that no completion was possible."
   (FORCE-USER-TO-LOGIN)
   (MULTIPLE-VALUE-BIND (HOST START END)
       (PARSE-PATHNAME-FIND-COLON STRING)
-    (AND HOST (SETQ START (OR (STRING-SEARCH-NOT-CHAR #/SPACE STRING START END) END)
+    (AND HOST (SETQ START (OR (STRING-SEARCH-NOT-CHAR #/SPACE STRING START END) END)
 		    STRING (SUBSTRING STRING START END)))
     (SETQ PATHNAME (DEFAULT-PATHNAME DEFAULTS HOST TYPE VERSION T)))
-  (SEND PATHNAME :COMPLETE-STRING STRING OPTIONS))
+  (SEND PATHNAME ':COMPLETE-STRING STRING OPTIONS))
 
 (defun pathname-completion-list (defaults string type version &rest options
 				 &AUX pathname whole-directory directory-pathname
@@ -1573,35 +1553,35 @@ NIL says that no completion was possible."
   type version
   (declare (values string success))
   (force-user-to-login)
-  (setq pathname (fs:merge-pathname-defaults string defaults :wild :wild))
+  (setq pathname (fs:merge-pathname-defaults string defaults ':WILD ':WILD))
   ;; now get a pathname with just the first word of the name and a magic
   ;; character that signifies wild card match at end of name.
-  (let ((name (send pathname :name)))
+  (let ((name (send pathname ':NAME)))
     (if (or (null name) (equalp name "")
-	    (eq :WILD name))
+	    (eq ':WILD name))
 	(setq whole-directory T
 	      directory-pathname
-	      (send pathname :new-pathname :name :wild :version :wild))
+	      (send pathname ':NEW-PATHNAME ':NAME ':WILD ':VERSION ':WILD))
       ;; otherwise clip off whatever is necessary from the name
-      (let ((position (string-search-set '(#/space #/. #/-) name)))
+      (let ((position (string-search-set '(#/SPACE #/. #/-) name)))
 	(if position (setq name (substring name 0 position))))
       (setq name (string-append name "*"))
-      (let ((temp-pathname (fs:parse-pathname name (send pathname :host))))
+      (let ((temp-pathname (fs:parse-pathname name (send pathname ':HOST))))
 	(setq directory-pathname (send pathname
-				     :new-pathname
-				     :name (send temp-pathname :name) :version :wild)))))
+				     ':NEW-PATHNAME
+				     ':NAME (send temp-pathname ':NAME) ':VERSION ':WILD)))))
   ;; now get directory-list
-  (setq directory-list (send directory-pathname :DIRECTORY-LIST options))
+  (setq directory-list (send directory-pathname ':DIRECTORY-LIST options))
   (if (errorp directory-list)
       directory-list
     (setq directory-list (cdr directory-list))
     ;; maybe do more completion
     (if (null whole-directory)
 	(multiple-value-bind (NIL matching-subset)
-	    (zwei:complete-string (send pathname :NAME)
+	    (zwei:complete-string (send pathname ':NAME)
 				  (LOOP FOR entry IN directory-list
 					AS pathname = (car entry)
-					AS name = (send pathname :NAME)
+					AS name = (send pathname ':NAME)
 					COLLECT (list name pathname))
 				  '(#/. #/- #/SPACE))
 	  (setq directory-list
@@ -1614,20 +1594,20 @@ NIL says that no completion was possible."
 
 ;;; Alter properties as returned by DIRECTORY-LIST.  PROPERTIES is a
 ;;; PLIST with the same indicators as returned by that.
-(DEFUN CHANGE-FILE-PROPERTIES (PATHNAME ERRORP &REST PROPERTIES)
+(DEFUN CHANGE-FILE-PROPERTIES (PATHNAME ERROR-P &REST PROPERTIES)
   "Change some file properties of a file, specified as pathname or namestring.
 The file properties are those that are returned by FILE-PROPERTIES.
 PROPERTIES are the alternating properties and new values."
   (FORCE-USER-TO-LOGIN)
   (SETQ PATHNAME (MERGE-PATHNAME-DEFAULTS PATHNAME))
-  (FILE-RETRY-NEW-PATHNAME-IF (MEMQ ERRORP '(:RETRY :REPROMPT))
+  (FILE-RETRY-NEW-PATHNAME-IF (MEMQ ERROR-P '(:RETRY :REPROMPT))
 			      (PATHNAME FILE-ERROR)
-    (LEXPR-SEND PATHNAME :CHANGE-PROPERTIES ERRORP PROPERTIES)))
+    (LEXPR-SEND PATHNAME ':CHANGE-PROPERTIES ERROR-P PROPERTIES)))
 (DEFF CHANGE-PATHNAME-PROPERTIES 'CHANGE-FILE-PROPERTIES)	;Obsolete old name
 
 ;;; Find the properties, like those returned by DIRECTORY-LIST, of a single file.
 ;;; Returns a plist whose car is the truename and whose cdr is the properties.
-(DEFUN FILE-PROPERTIES (PATHNAME &OPTIONAL (ERRORP T))
+(DEFUN FILE-PROPERTIES (PATHNAME &OPTIONAL (ERROR-P T))
   "Return the property list of a file, specified as a pathname or namestring.
 These properties are the same ones that appear in a directory-list.
 The car of the value is the truename.
@@ -1636,99 +1616,93 @@ The second value is a list of properties whose values can be changed."
   (FORCE-USER-TO-LOGIN)
   (SETQ PATHNAME (MERGE-PATHNAME-DEFAULTS PATHNAME))
   (MULTIPLE-VALUE-BIND (PLIST SETTABLE-PROPERTIES)
-      (FILE-RETRY-NEW-PATHNAME-IF (MEMQ ERRORP '(:RETRY :REPROMPT))
+      (FILE-RETRY-NEW-PATHNAME-IF (MEMQ ERROR-P '(:RETRY :REPROMPT))
 				  (PATHNAME FILE-ERROR)
-        (SEND PATHNAME :PROPERTIES ERRORP))
+        (SEND PATHNAME ':PROPERTIES ERROR-P))
     (OR SETTABLE-PROPERTIES
-	(IF (SEND PATHNAME :OPERATION-HANDLED-P :PROPERTY-SETTABLE-P)
+	(IF (SEND PATHNAME ':OPERATION-HANDLED-P ':PROPERTY-SETTABLE-P)
 	    (SETQ SETTABLE-PROPERTIES
-		  (UNION (SEND PATHNAME :DEFAULT-SETTABLE-PROPERTIES)
+		  (UNION (SEND PATHNAME ':DEFAULT-SETTABLE-PROPERTIES)
 			 (LOOP FOR IND IN (CDR PLIST) BY 'CDDR
-			       WHEN (SEND PATHNAME :PROPERTY-SETTABLE-P IND)
+			       WHEN (SEND PATHNAME ':PROPERTY-SETTABLE-P IND)
 			          COLLECT IND)))))
     (VALUES PLIST SETTABLE-PROPERTIES)))
 
 (DEFUN EXPUNGE-DIRECTORY (PATHNAME &REST OPTIONS &KEY (ERROR T))
+  ERROR
   "Expunge all deleted files in the directory specified in PATHNAME.
 PATHNAME can be a pathname or a namestring."
-  (DECLARE (VALUES BLOCKS-FREED))
   (FORCE-USER-TO-LOGIN)
-  ;; avoid merge-pathname-defaults braindeath
-  (OR (SEND (SETQ PATHNAME (FS:PARSE-PATHNAME PATHNAME)) :NAME)
-      (SETQ PATHNAME (SEND PATHNAME :NEW-NAME :WILD)))
-  (SETQ PATHNAME (FS:MERGE-PATHNAME-DEFAULTS PATHNAME NIL :WILD :WILD))
   (FILE-RETRY-NEW-PATHNAME-IF (MEMQ ERROR '(:RETRY :REPROMPT))
 			      (PATHNAME FILE-ERROR)
-    (LEXPR-SEND PATHNAME :EXPUNGE OPTIONS)))
+    (LEXPR-SEND (MERGE-PATHNAME-DEFAULTS PATHNAME NIL ':WILD ':WILD) ':EXPUNGE OPTIONS)))
 
 (DEFMETHOD (PATHNAME :EXPUNGE) (&REST ARGS)
-  (LET ((ERROR (MAKE-CONDITION 'UNKNOWN-OPERATION
-			       "Can't expunge or undelete on file system of ~A."
-			       SELF :EXPUNGE))
+  (LET ((ERROR (MAKE-CONDITION 'UNKNOWN-OPERATION "Can't expunge or undelete on file system of ~A."
+			       SELF ':EXPUNGE))
 	(ERRORP (COND ((NULL ARGS) T)
 		      ((NULL (CDR ARGS))
 		       (CAR ARGS))
-		      (T (GETF ARGS ':ERROR)))))
+		      (T (GET (LOCF ARGS) ':ERROR)))))
     (IF ERRORP (SIGNAL ERROR) ERROR)))
 
 (DEFUN REMOTE-CONNECT (PATHNAME &REST OPTIONS &KEY (ERROR T) ACCESS)
   "Tell file servers to connect or access to a directory.
 PATHNAME, either a pathname or a namestring, specifies both the host
 and the device and directory to connect or access to."
-  (DECLARE (IGNORE ERROR ACCESS))
+  ERROR ACCESS
   (FORCE-USER-TO-LOGIN)
   (FILE-RETRY-NEW-PATHNAME-IF (MEMQ ERROR '(:RETRY :REPROMPT))
 			      (PATHNAME FILE-ERROR)
-    (LEXPR-SEND (MERGE-PATHNAME-DEFAULTS PATHNAME NIL) :REMOTE-CONNECT OPTIONS)))
+    (LEXPR-SEND (MERGE-PATHNAME-DEFAULTS PATHNAME NIL) ':REMOTE-CONNECT OPTIONS)))
 
 (DEFMETHOD (PATHNAME :REMOTE-CONNECT) (&KEY ERROR ACCESS)
-  (DECLARE (IGNORE ACCESS))
+  ACCESS
   (LET ((CONDITION
-	  (MAKE-CONDITION 'UNKNOWN-OPERATION
-			  "Can't do remote connect or access on file system of ~A."
-			  SELF :REMOTE-CONNECT)))
+	  (MAKE-CONDITION 'UNKNOWN-OPERATION "Can't do remote connect or access on file system of ~A."
+			  SELF ':REMOTE-CONNECT)))
     (IF ERROR (SIGNAL CONDITION) CONDITION)))
 
 (DEFUN ENABLE-CAPABILITIES (HOST &REST CAPABILITIES)
   "Tell file servers on HOST to enable some capabilities.
 Defaults are according to operating system."
-  (DECLARE (VALUES CAPABILITIES-ALIST UNKNOWN-CAPABILITIES))
   (FORCE-USER-TO-LOGIN)
-  (LEXPR-SEND (GET-PATHNAME-HOST HOST) :ENABLE-CAPABILITIES CAPABILITIES))
+  (LEXPR-SEND (GET-PATHNAME-HOST HOST) ':ENABLE-CAPABILITIES CAPABILITIES))
 
 (DEFUN DISABLE-CAPABILITIES (HOST &REST CAPABILITIES)
   "Tell file servers on HOST to disable some capabilities.
 Defaults are according to operating system."
-  (DECLARE (VALUES CAPABILITIES-ALIST UNKNOWN-CAPABILITIES))
   (FORCE-USER-TO-LOGIN)
-  (LEXPR-SEND (GET-PATHNAME-HOST HOST) :DISABLE-CAPABILITIES CAPABILITIES))
+  (LEXPR-SEND (GET-PATHNAME-HOST HOST) ':DISABLE-CAPABILITIES CAPABILITIES))
 
 (DEFUN CREATE-DIRECTORY (PATHNAME &KEY (ERROR T) RECURSIVE)
   "Create a directory specified in PATHNAME, either a pathname or a namestring.
 RECURSIVE non-NIL says if this directory is supposed to be a subdirectory
 of another directory which also fails to exist, create that one too, etc."
+  ERROR
   (FORCE-USER-TO-LOGIN)
   (LET ((PN (MERGE-PATHNAME-DEFAULTS PATHNAME NIL)))
-    (CONDITION-CASE-IF RECURSIVE (ERROR)
+    (CONDITION-CASE-IF RECURSIVE
+		       (ERROR)
 	(FILE-RETRY-NEW-PATHNAME-IF (MEMQ ERROR '(:RETRY :REPROMPT))
 				    (PATHNAME FILE-ERROR)
-	  (SEND PN :CREATE-DIRECTORY :ERROR ERROR))
+	  (SEND PN ':CREATE-DIRECTORY ':ERROR ERROR))
       (DIRECTORY-NOT-FOUND
-       (CREATE-DIRECTORY (SEND PN :DIRECTORY-PATHNAME-AS-FILE) :RECURSIVE T)
-       (CREATE-DIRECTORY PN :ERROR ERROR)))))
+       (CREATE-DIRECTORY (SEND PN ':DIRECTORY-PATHNAME-AS-FILE) ':RECURSIVE T)
+       (CREATE-DIRECTORY PN ':ERROR ERROR)))))
 
 (DEFMETHOD (PATHNAME :CREATE-LINK) (LINK-TO &KEY (ERROR T))
-  (DECLARE (IGNORE LINK-TO))
-  (LET ((CONDITION (MAKE-CONDITION 'UNKNOWN-OPERATION
-				   "Can't create links on file system of ~A."
-				   SELF :CREATE-LINK)))
+  LINK-TO
+  (LET ((CONDITION
+	  (MAKE-CONDITION 'UNKNOWN-OPERATION "Can't create links on file system of ~A."
+			  SELF ':CREATE-LINK)))
     (IF ERROR (SIGNAL CONDITION) CONDITION)))
 
 
 (DEFMETHOD (PATHNAME :CREATE-DIRECTORY) (&KEY (ERROR T))
-  (LET ((CONDITION (MAKE-CONDITION 'UNKNOWN-OPERATION
-				   "Can't create directory on file system of ~A."
-				   SELF :CREATE-DIRECTORY)))
+  (LET ((CONDITION
+	  (MAKE-CONDITION 'UNKNOWN-OPERATION "Can't create directory on file system of ~A."
+			  SELF ':CREATE-DIRECTORY)))
     (IF ERROR (SIGNAL CONDITION) CONDITION)))
 
 
@@ -1768,61 +1742,62 @@ PATHNAME should be the generic pathname that was opened."
   ;; First remove any properties that we put on the last time we parsed
   ;; this file's plist, so that we update correctly if some property has been deleted.
   (AND PATHNAME
-       (LET ((OLD-PLIST (SEND PATHNAME :GET 'LAST-FILE-PLIST)))
+       (LET ((OLD-PLIST (SEND PATHNAME ':GET 'LAST-FILE-PLIST)))
 	 (DO ((L OLD-PLIST (CDDR L))) ((NULL L))
-	   (SEND PATHNAME :REMPROP (CAR L)))))
+	   (SEND PATHNAME ':REMPROP (CAR L)))))
   ;; Now put on the properties desired this time.
   (AND PATHNAME
        (DO ((L PLIST (CDDR L)))
 	   ((NULL L))
-	 (SEND PATHNAME :PUTPROP (SECOND L) (FIRST L))))
+	 (SEND PATHNAME ':PUTPROP (SECOND L) (FIRST L))))
   ;; Record the entire plist, so we can update properly next time.
   (AND PATHNAME
-       (SEND PATHNAME :PUTPROP PLIST 'LAST-FILE-PLIST))
+       (SEND PATHNAME ':PUTPROP PLIST 'LAST-FILE-PLIST))
   PLIST)
 
-;;; Return the property list from a stream, but don't alter any pathname's plist.
+;Return the property list from a stream, but don't alter any pathname's plist.
 (DEFF FILE-EXTRACT-PROPERTY-LIST 'EXTRACT-ATTRIBUTE-LIST)
 (DEFF EXTRACT-PROPERTY-LIST 'EXTRACT-ATTRIBUTE-LIST)
 (DEFF FILE-EXTRACT-ATTRIBUTE-LIST 'EXTRACT-ATTRIBUTE-LIST)
 (DEFUN EXTRACT-ATTRIBUTE-LIST (STREAM &AUX WO PLIST PATH MODE ERROR)
   "Return the attribute list read from STREAM.
 STREAM can be reading either a text file or a QFASL file."
-  (SETQ WO (SEND STREAM :WHICH-OPERATIONS))
-  (COND ((MEMQ :SYNTAX-PLIST WO)
-	 (SETQ PLIST (SEND STREAM :SYNTAX-PLIST)))
-	((NOT (SEND STREAM :CHARACTERS))
-	 (SETQ PLIST (SI::QFASL-STREAM-PROPERTY-LIST STREAM)))
+  (SETQ WO (SEND STREAM ':WHICH-OPERATIONS))
+  (COND ((MEMQ ':SYNTAX-PLIST WO)
+	 (SETQ PLIST (SEND STREAM ':SYNTAX-PLIST)))
+	((NOT (SEND STREAM ':CHARACTERS))
+	 (SETQ PLIST (SI:QFASL-STREAM-PROPERTY-LIST STREAM)))
 	;; If the file supports :READ-INPUT-BUFFER, check for absence of a plist
 	;; without risk that :LINE-IN will read the whole file
 	;; if the file contains no Return characters.
-	((AND (MEMQ :READ-INPUT-BUFFER WO)
+	((AND (MEMQ ':READ-INPUT-BUFFER WO)
 	      (MULTIPLE-VALUE-BIND (BUFFER START END)
-		  (SEND STREAM :READ-INPUT-BUFFER)
+		  (SEND STREAM ':READ-INPUT-BUFFER)
 		(AND BUFFER
 		     (NOT (STRING-SEARCH "-*-" BUFFER START END)))))
 	 NIL)
 	;; If stream does not support :SET-POINTER, there is no hope
 	;; of parsing a plist, so give up on it.
-	((NOT (MEMQ :SET-POINTER WO))
+	((NOT (MEMQ ':SET-POINTER WO))
 	 NIL)
 	(T (DO ((LINE) (EOF)) (NIL)
-	     (MULTIPLE-VALUE (LINE EOF) (SEND STREAM :LINE-IN NIL))
+	     (MULTIPLE-VALUE (LINE EOF) (SEND STREAM ':LINE-IN NIL))
 	     (COND ((NULL LINE)
-		    (SEND STREAM :SET-POINTER 0)
+		    (SEND STREAM ':SET-POINTER 0)
 		    (RETURN NIL))
 		   ((STRING-SEARCH "-*-" LINE)
 		    (SETQ LINE (FILE-GRAB-WHOLE-PROPERTY-LIST LINE STREAM))
-		    (SEND STREAM :SET-POINTER 0)
+		    (SEND STREAM ':SET-POINTER 0)
 		    (SETF (VALUES PLIST ERROR) (FILE-PARSE-PROPERTY-LIST LINE))
 		    (RETURN NIL))
-		   ((OR EOF (STRING-SEARCH-NOT-SET '(#/SPACE #/TAB) LINE))
-		    (SEND STREAM :SET-POINTER 0)
+		   ((OR EOF (STRING-SEARCH-NOT-SET '(#/SPACE #/TAB) LINE))
+		    (SEND STREAM ':SET-POINTER 0)
 		    (RETURN NIL))))))
   (AND (NOT (GETF PLIST ':MODE))
-       (SETQ PATH (SEND STREAM :SEND-IF-HANDLES :PATHNAME))
-       (SETQ MODE (CDR (SI:ASSOC-EQUAL (SEND PATH :TYPE) *FILE-TYPE-MODE-ALIST*)))
-       (SETF (GETF PLIST ':MODE) MODE))
+       (MEMQ ':PATHNAME WO)
+       (SETQ PATH (SEND STREAM ':PATHNAME))
+       (SETQ MODE (CDR (ASSOC (SEND PATH ':TYPE) *FILE-TYPE-MODE-ALIST*)))
+       (PUTPROP (LOCF PLIST) MODE ':MODE))
   (VALUES PLIST ERROR))
 
 ;Given a line on which a file's property list starts,
@@ -1831,14 +1806,14 @@ STREAM can be reading either a text file or a QFASL file."
 ;So we return a string that contains the whole thing.
 (DEFUN FILE-GRAB-WHOLE-PROPERTY-LIST (STARTING-LINE STREAM)
   (DO ((START (+ 3 (STRING-SEARCH "-*-" STARTING-LINE)) 0)
-       (STRING STARTING-LINE (SEND STREAM :LINE-IN))
+       (STRING STARTING-LINE (SEND STREAM ':LINE-IN))
        (COUNT 0 (1+ COUNT))
-       (ACCUM (MAKE-ARRAY 0 :TYPE ART-STRING :FILL-POINTER 0)))
+       (ACCUM (MAKE-ARRAY 0 ':TYPE ART-STRING ':FILL-POINTER 0)))
       ((= COUNT 100.)
        (FORMAT *QUERY-IO* "~&The file ~A has an unterminated property list line."
-	       (SEND STREAM :PATHNAME))
+	       (SEND STREAM ':PATHNAME))
        "")
-    (SETQ ACCUM (STRING-NCONC ACCUM #/RETURN STRING))
+    (SETQ ACCUM (STRING-NCONC ACCUM #/RETURN STRING))
     (IF (STRING-SEARCH "-*-" STRING START)
 	(RETURN ACCUM))))
        
@@ -1857,33 +1832,33 @@ STREAM can be reading either a text file or a QFASL file."
        (SETQ START (STRING-SEARCH "-*-" STRING START END))
        (SETQ END (STRING-SEARCH "-*-" STRING (SETQ START (+ START 3)) END))
        ;; Now parse it.
-       (IF (NOT (%STRING-SEARCH-CHAR #/: STRING START END))
-	   (SETQ PLIST (LIST :MODE (READ-FROM-SUBSTRING STRING START END)))
+       (IF (NOT (%STRING-SEARCH-CHAR #/: STRING START END))
+	   (SETQ PLIST (LIST ':MODE (READ-FROM-SUBSTRING STRING START END)))
 	 (DO ((S START (1+ SEMI-IDX))
 	      (COLON-IDX) (SEMI-IDX) (SYM) (ELEMENT NIL NIL) (DONE)
 	      (WIN-THIS-TIME NIL NIL))
 	     (NIL)
-	   (OR (SETQ SEMI-IDX (%STRING-SEARCH-CHAR #/; STRING S END))
+	   (OR (SETQ SEMI-IDX (%STRING-SEARCH-CHAR #/; STRING S END))
 	       (SETQ DONE T SEMI-IDX END))
-	   (OR (SETQ COLON-IDX (%STRING-SEARCH-CHAR #/: STRING S SEMI-IDX))
+	   (OR (SETQ COLON-IDX (%STRING-SEARCH-CHAR #/: STRING S SEMI-IDX))
 	       (RETURN NIL))
 	   (IGNORE-ERRORS
 	     (OR (SETQ SYM (READ-FROM-SUBSTRING STRING S COLON-IDX))
 		 (RETURN NIL))
 	     (IGNORE-ERRORS
-	       (IF (%STRING-SEARCH-CHAR #/, STRING (SETQ S (1+ COLON-IDX)) SEMI-IDX)
+	       (IF (%STRING-SEARCH-CHAR #/, STRING (SETQ S (1+ COLON-IDX)) SEMI-IDX)
 		   (DO ((COMMA-IDX) (ELEMENT-DONE))
 		       (NIL)
-		     (OR (SETQ COMMA-IDX (%STRING-SEARCH-CHAR #/, STRING S SEMI-IDX))
+		     (OR (SETQ COMMA-IDX (%STRING-SEARCH-CHAR #/, STRING S SEMI-IDX))
 			 (SETQ ELEMENT-DONE T COMMA-IDX SEMI-IDX))
 		     (SETQ ELEMENT
 			   (NCONC ELEMENT
 				  (NCONS (LET ((TEM (READ-FROM-SUBSTRING STRING S COMMA-IDX)))
-					   (IF (EQ TEM :NIL) NIL TEM)))))
+					   (IF (EQ TEM ':NIL) NIL TEM)))))
 		     (AND ELEMENT-DONE (RETURN NIL))
 		     (SETQ S (1+ COMMA-IDX)))
 		 (SETQ ELEMENT (LET ((TEM (READ-FROM-SUBSTRING STRING S SEMI-IDX)))
-				 (IF (EQ TEM :NIL) NIL TEM))))
+				 (IF (EQ TEM ':NIL) NIL TEM))))
 	       (SETQ WIN-THIS-TIME T))
 	     (SETQ PLIST (NCONC PLIST (LIST* SYM ELEMENT NIL))))	;Nicer CDR-CODEs
 	   (UNLESS WIN-THIS-TIME
@@ -1901,7 +1876,7 @@ READ-ATTRIBUTE-LIST should have been done previously on that pathname.
 Returns two values, a list of special variables and a list of values to bind them to.
 Use the two values in a PROGV if you READ expressions from the file."
   (ATTRIBUTE-BINDINGS-FROM-LIST
-    (IF (LOCATIVEP PATHNAME) (CAR PATHNAME) (SEND PATHNAME :PLIST))
+    (IF (LOCATIVEP PATHNAME) (CAR PATHNAME) (SEND PATHNAME ':PLIST))
     PATHNAME))
 
 (DEFUN ATTRIBUTE-BINDINGS-FROM-LIST (ATTLIST PATHNAME)
@@ -1910,7 +1885,8 @@ Use the two values in a PROGV if you READ expressions from the file."
        (VALS NIL)
        (BINDING-FUNCTION))
       ((NULL ATTLIST)
-       (VALUES VARS VALS))
+       (VALUES (LIST* 'INTERPRETER-ENVIRONMENT 'INTERPRETER-FUNCTION-ENVIRONMENT VARS)
+	       (LIST* NIL NIL VALS)))
     (AND (SETQ BINDING-FUNCTION (GET (CAR ATTLIST) 'FILE-ATTRIBUTE-BINDINGS))
 	 (MULTIPLE-VALUE-BIND (VARS1 VALS1)
 	     (FUNCALL BINDING-FUNCTION PATHNAME (CAR ATTLIST) (CADR ATTLIST))
@@ -1922,7 +1898,7 @@ Use the two values in a PROGV if you READ expressions from the file."
 Useful for arguments to the PROGV special form."
   (ATTRIBUTE-BINDINGS-FROM-LIST
     (EXTRACT-ATTRIBUTE-LIST STREAM)
-    (OR (SEND STREAM :SEND-IF-HANDLES :TRUENAME) :NO-PATHNAME))) ; Best one can do
+    (OR (SEND STREAM ':SEND-IF-HANDLES ':TRUENAME) ':NO-PATHNAME))) ; Best one can do
 
 (DEFUN (:PACKAGE FILE-ATTRIBUTE-BINDINGS) (IGNORE IGNORE PKG)
   (VALUES (NCONS '*PACKAGE*) (NCONS (PKG-FIND-PACKAGE PKG :ERROR))))
@@ -1930,11 +1906,11 @@ Useful for arguments to the PROGV special form."
 (DEFUN (:BASE FILE-ATTRIBUTE-BINDINGS) (FILE IGNORE BSE)
   (UNLESS (TYPEP BSE '(INTEGER 1 36.))
     (FERROR 'INVALID-FILE-ATTRIBUTE "File ~A has an illegal -*- BASE:~*~S -*-"
-	    FILE :BASE BSE))
+	    FILE ':BASE BSE))
   (VALUES (LIST* '*READ-BASE* '*PRINT-BASE* NIL) (LIST* BSE BSE NIL)))
 
 (DEFUN (:COLD-LOAD FILE-ATTRIBUTE-BINDINGS) (IGNORE IGNORE FLAG)
-  (VALUES (NCONS 'SI::FILE-IN-COLD-LOAD) (NCONS FLAG)))
+  (VALUES (NCONS 'SI:FILE-IN-COLD-LOAD) (NCONS FLAG)))
 
 ;;; So that functions can tell if they are being loaded out of, or compiled in, a patch file
 (DEFVAR THIS-IS-A-PATCH-FILE NIL
@@ -1942,14 +1918,20 @@ Useful for arguments to the PROGV special form."
 (DEFUN (:PATCH-FILE FILE-ATTRIBUTE-BINDINGS) (IGNORE IGNORE VAL)
   (VALUES (NCONS 'THIS-IS-A-PATCH-FILE) (NCONS VAL)))
 
+;(DEFUN (:COMMON-LISP FILE-ATTRIBUTE-BINDINGS) (IGNORE IGNORE VAL)
+;  (VALUES (LIST* '*READTABLE* 'SI:*READER-SYMBOL-SUBSTITUTIONS*
+;		 'SI:INTERPRETER-FUNCTION-ENVIRONMENT '*NOPOINT
+;		 NIL)
+;	  (LIST* (IF VAL SI:COMMON-LISP-READTABLE SI:STANDARD-READTABLE)
+;		 (IF VAL SI:*COMMON-LISP-SYMBOL-SUBSTITUTIONS* NIL)
+;		 NIL T
+;		 NIL)))
+
 (DEFUN (:READTABLE FILE-ATTRIBUTE-BINDINGS) (IGNORE IGNORE VAL)
-  (VALUES (NCONS '*READTABLE*) (NCONS (SI:FIND-READTABLE-NAMED VAL :ERROR))))
-;; for nil and brand s
-(DEFUN (:SYNTAX FILE-ATTRIBUTE-BINDINGS) (IGNORE IGNORE VAL)
   (VALUES (NCONS '*READTABLE*) (NCONS (SI:FIND-READTABLE-NAMED VAL :ERROR))))
 
 (DEFUN (:FONTS FILE-ATTRIBUTE-BINDINGS) (IGNORE IGNORE IGNORE)
-  (VALUES (NCONS 'SI::READ-DISCARD-FONT-CHANGES) (NCONS T)))
+  (VALUES (NCONS 'SI:READ-DISCARD-FONT-CHANGES) (NCONS T)))
 
 ;;; This returns the -*- properties for a ascii file, the qfasl properties for a qfasl file
 (DEFF PATHNAME-SYNTAX-PLIST 'FILE-ATTRIBUTE-LIST)
@@ -1957,12 +1939,12 @@ Useful for arguments to the PROGV special form."
 (DEFF FILE-PROPERTY-LIST 'FILE-ATTRIBUTE-LIST)
 (DEFUN FILE-ATTRIBUTE-LIST (PATHNAME)
   "Return the attribute list for the file specified by PATHNAME, a pathname or namestring."
-  (WITH-OPEN-FILE (STREAM PATHNAME :CHARACTERS :DEFAULT)
-    (COND ((SEND STREAM :SEND-IF-HANDLES :FILE-PLIST))
-	  ((SEND STREAM :CHARACTERS)
+  (WITH-OPEN-FILE (STREAM PATHNAME ':CHARACTERS ':DEFAULT)
+    (COND ((SEND STREAM ':SEND-IF-HANDLES ':FILE-PLIST))
+	  ((SEND STREAM ':CHARACTERS)
 	   (EXTRACT-ATTRIBUTE-LIST STREAM))
 	  (T
-	   (SI::QFASL-STREAM-PROPERTY-LIST STREAM)))))
+	   (SI:QFASL-STREAM-PROPERTY-LIST STREAM)))))
 
 (DEFVAR LOAD-PATHNAME-DEFAULTS :UNBOUND
   "Now the same as *default-pathname-defaults*
@@ -1977,9 +1959,11 @@ Can be overridden by the :VERBOSE keyword when LOAD is called.")
   "Non-NIL means LOAD sets the default pathname to the name of the file loaded.
 Can be overridden by the :SET-DEFAULT-PATHNAME keyword when LOAD is called.")
 
+(PROCLAIM '(SPECIAL SI:PRINT-LOADED-FORMS))	;in sys; qfasl
+
 (DEFUN LOAD (FILE &REST KEY-OR-POSITIONAL-ARGS)
   "Load the specified text file or QFASL file or input stream.
-If the specified filename has no type field, we try QFASL and then LISP.
+If the specified filename has no type field, we try LISP and then QFASL.
 Regardless of the filename type, we can tell QFASL files from text files.
 PACKAGE specifies the package to load into; if missing or NIL,
  the package specified by the file's attribute list is used.
@@ -1987,65 +1971,64 @@ VERBOSE non-NIL says it's ok to print a message saying what is being loaded.
  Default comes from *LOAD-VERBOSE*, normally T.
 SET-DEFAULT-PATHNAME non-NIL says set the default pathname for LOAD
  to the name of this file.  Default from *LOAD-SET-DEFAULT-PATHNAME*, normally T.
-PRINT non-NIL says print all forms loaded."
 IF-DOES-NOT-EXIST NIL says just return NIL for file-not-found.  Default T.
  In all other cases the value is the truename of the loaded file, or T.
+PRINT non-NIL says print all forms loaded."
   (DECLARE (ARGLIST FILE &KEY PACKAGE
 		    	      (VERBOSE *LOAD-VERBOSE*)
 			      (SET-DEFAULT-PATHNAME *LOAD-SET-DEFAULT-PATHNAME*)
-			      PRINT
-			      (IF-DOES-NOT-EXIST T))
-	   (SPECIAL SI::PRINT-LOADED-FORMS))	;defined in sys; qfasl
+			      (IF-DOES-NOT-EXIST T)
+			      PRINT))
   (IF (AND (CAR KEY-OR-POSITIONAL-ARGS)
 	   (MEMQ (CAR KEY-OR-POSITIONAL-ARGS)
 		 '(:PACKAGE :PRINT :IF-DOES-NOT-EXIST :SET-DEFAULT-PATHNAME :VERBOSE)))
-      (LET ((SI::PRINT-LOADED-FORMS (GETF KEY-OR-POSITIONAL-ARGS ':PRINT)))
+      (LET ((SI:PRINT-LOADED-FORMS (GET (LOCF KEY-OR-POSITIONAL-ARGS) ':PRINT)))
 	(LOAD-1 FILE
-		(GETF KEY-OR-POSITIONAL-ARGS ':PACKAGE)
+		(GET (LOCF KEY-OR-POSITIONAL-ARGS) ':PACKAGE)
 		(NOT (GETF KEY-OR-POSITIONAL-ARGS ':IF-DOES-NOT-EXIST T))
 		(NOT (GETF KEY-OR-POSITIONAL-ARGS ':SET-DEFAULT-PATHNAME
 			   *LOAD-SET-DEFAULT-PATHNAME*))
 		(NOT (GETF KEY-OR-POSITIONAL-ARGS ':VERBOSE *LOAD-VERBOSE*))))
-    (APPLY #'LOAD-1 FILE KEY-OR-POSITIONAL-ARGS)))
+    (APPLY 'LOAD-1 FILE KEY-OR-POSITIONAL-ARGS)))
 
 (DEFUN LOAD-1 (FILE &OPTIONAL PKG NONEXISTENT-OK-FLAG DONT-SET-DEFAULT-P NO-MSG-P)
   (IF (STREAMP FILE)
       (PROGN
 	;; Set the defaults from the pathname we finally opened
 	(OR DONT-SET-DEFAULT-P
-	    (SET-DEFAULT-PATHNAME (SEND FILE :PATHNAME) LOAD-PATHNAME-DEFAULTS))
-	(CATCH-ERROR-RESTART (ERROR "Give up on loading ~A." (SEND FILE :PATHNAME))
+	    (SET-DEFAULT-PATHNAME (SEND FILE ':PATHNAME) LOAD-PATHNAME-DEFAULTS))
+	(CATCH-ERROR-RESTART (ERROR "Give up on loading ~A." (SEND FILE ':PATHNAME))
 	  ;; If the file was a character file, read it, else try to fasload it.
-	  (FUNCALL (IF (SEND FILE :CHARACTERS)
-		       #'SI::READFILE-INTERNAL #'SI::FASLOAD-INTERNAL)
+	  (FUNCALL (IF (FUNCALL FILE ':CHARACTERS)
+		       'SI:READFILE-INTERNAL 'SI:FASLOAD-INTERNAL)
 		   FILE PKG NO-MSG-P)
-	  (OR (SEND FILE :SEND-IF-HANDLES :TRUENAME) T)))
+	  (OR (SEND FILE ':SEND-IF-HANDLES ':TRUENAME) T)))
     (LET ((PATHNAME (PARSE-PATHNAME FILE)))
       (CATCH-ERROR-RESTART (ERROR "Give up on loading ~A." FILE)
 	(CONDITION-CASE-IF NONEXISTENT-OK-FLAG ()
 	    (WITH-OPEN-FILE-SEARCH (STREAM ('LOAD LOAD-PATHNAME-DEFAULTS
 					    (NOT NONEXISTENT-OK-FLAG))
 					   (VALUES
-					     (LIST (SI::PATHNAME-DEFAULT-BINARY-FILE-TYPE
+					     (LIST (SI:PATHNAME-DEFAULT-BINARY-FILE-TYPE
 						     PATHNAME)
-						   :LISP)
+						   ':LISP)
 					     PATHNAME)
-					   :CHARACTERS :DEFAULT)
+					   ':CHARACTERS ':DEFAULT)
 	      ;; Set the defaults from the pathname we finally opened
 	      (OR DONT-SET-DEFAULT-P
-		  (SET-DEFAULT-PATHNAME (SEND STREAM :PATHNAME) LOAD-PATHNAME-DEFAULTS))
+		  (SET-DEFAULT-PATHNAME (SEND STREAM ':PATHNAME) LOAD-PATHNAME-DEFAULTS))
 	      ;; If the file was a character file, read it, else try to fasload it.
-	      (FUNCALL (IF (SEND STREAM :CHARACTERS)
-			   #'SI::READFILE-INTERNAL #'SI::FASLOAD-INTERNAL)
+	      (FUNCALL (IF (FUNCALL STREAM ':CHARACTERS)
+			   'SI:READFILE-INTERNAL 'SI:FASLOAD-INTERNAL)
 		       STREAM PKG NO-MSG-P)
-	      (SEND STREAM :TRUENAME))
+	      (SEND STREAM ':TRUENAME))
 	  (MULTIPLE-FILE-NOT-FOUND
 	   NIL))))))
 
 ;; Avoid lossage in LOAD-1 before this function is loaded from MAKSYS.
-(OR (FBOUNDP 'SI::PATHNAME-DEFAULT-BINARY-FILE-TYPE)
-    (FSET 'SI::PATHNAME-DEFAULT-BINARY-FILE-TYPE
-	  '(LAMBDA (IGNORE) :QFASL)))
+(IF (NOT (FBOUNDP 'SI:PATHNAME-DEFAULT-BINARY-FILE-TYPE))
+    (FSET 'SI:PATHNAME-DEFAULT-BINARY-FILE-TYPE
+	  '(LAMBDA (IGNORE) ':QFASL)))
 
 (DEFUN READFILE (FILE-NAME &OPTIONAL PKG NO-MSG-P)
   "Read and evaluate the expressions from a text file.
@@ -2054,9 +2037,54 @@ PKG specifies the package to read in; if it is NIL,
 NO-MSG-P suppresses the message saying that a file is being loaded."
   (WITH-OPEN-STREAM (STREAM (SEND (MERGE-PATHNAME-DEFAULTS
 				    FILE-NAME LOAD-PATHNAME-DEFAULTS NIL)
-				  :OPEN-CANONICAL-DEFAULT-TYPE :LISP
-				  :ERROR :REPROMPT))
-    (SET-DEFAULT-PATHNAME (SEND STREAM :PATHNAME) LOAD-PATHNAME-DEFAULTS)
-    (SI::READFILE-INTERNAL STREAM PKG NO-MSG-P)))
+				  ':OPEN-CANONICAL-DEFAULT-TYPE ':LISP
+				  ':ERROR ':REPROMPT))
+    (SET-DEFAULT-PATHNAME (SEND STREAM ':PATHNAME) LOAD-PATHNAME-DEFAULTS)
+    (SI:READFILE-INTERNAL STREAM PKG NO-MSG-P)))
 
-;;; reading-from-stream, reading-from-file, reading-from-file-case moved to sys2; lmmac
+(DEFUN READING-FROM-STREAM-EXPANDER (FORM STREAM STREAM-CONSTRUCTION-FORM BODY)
+  (LET ((^EOF (GENSYM)) (^AVARS (GENSYM)) (^AVALS (GENSYM)))
+    `(WITH-OPEN-STREAM (,STREAM ,STREAM-CONSTRUCTION-FORM)
+       (MULTIPLE-VALUE-BIND (,^AVARS ,^AVALS)
+	   (FS:EXTRACT-ATTRIBUTE-BINDINGS ,STREAM)
+	 (LET ((,^EOF (NCONS (GENSYM))))
+	   (PROGV ,^AVARS ,^AVALS
+	     (DO ((,FORM (READ ,STREAM ,^EOF) (READ ,STREAM ,^EOF)))
+		 ((EQ ,FORM ,^EOF))
+	       ,@BODY)))))))
+
+(DEFMACRO READING-FROM-STREAM ((FORM STREAM-CONSTRUCTION-FORM) &BODY BODY)
+  "Read one FORM at a file from FILE, reading till executing BODY each time.
+Reads until end of STREAM."
+  (READING-FROM-STREAM-EXPANDER FORM (GENSYM) STREAM-CONSTRUCTION-FORM BODY))
+
+(DEFMACRO READING-FROM-FILE ((FORM FILE) &BODY BODY)
+  "Read one FORM at a time from FILE, executing BODY each time."
+  `(READING-FROM-STREAM (,FORM (OPEN ,FILE ':DIRECTION ':INPUT ':ERROR ':REPROMPT))
+     ,@BODY))
+
+(DEFMACRO READING-FROM-FILE-CASE ((FORM FILE ERROR) &BODY CLAUSES)
+  "Like READING-FROM-FILE, but ERROR is bound to the error instance if
+an error happens.  CLAUSES are are like those in WITH-OPEN-FILE-CASE;
+:NO-ERROR must appear in one of them."
+  ;; The implementation has to search for the clause containing :NO-ERROR
+  ;; and wrap a READING-FROM-STREAM around its consequent body.
+  ;; ERROR actually is the STREAM in the WITH-OPEN-FILE-CASE, though this
+  ;; may change in the future.
+  (LET ((NO-ERROR-CLAUSE ()) (FIRST-PART ()))
+    (DOLIST (CLAUSE CLAUSES)
+      (SETQ FIRST-PART (FIRST CLAUSE))
+      (COND ((NULL FIRST-PART) ; Is this really the right thing ?
+	     ())
+	    ((EQ FIRST-PART ':NO-ERROR)
+	     (RETURN (SETQ NO-ERROR-CLAUSE CLAUSE)))
+	    ((AND (LISTP FIRST-PART) (MEMQ ':NO-ERROR FIRST-PART))
+	     (RETURN (SETQ NO-ERROR-CLAUSE CLAUSE)))
+	    (T ())))
+    (IF (NOT NO-ERROR-CLAUSE) ; A little misleading, I must admit
+	(FERROR () "No :NO-ERROR to be found in clauses.")
+      (SETQ CLAUSES (DELQ NO-ERROR-CLAUSE (COPYLIST CLAUSES))) ; Remove :NO-ERROR, 
+      `(CONDITION-CASE (,ERROR) (OPEN ,FILE ':DIRECTION ':INPUT ':ERROR ())
+	 ,@CLAUSES
+	 (,FIRST-PART
+	  ,(READING-FROM-STREAM-EXPANDER FORM (GENSYM) ERROR (CDR NO-ERROR-CLAUSE)))))))
