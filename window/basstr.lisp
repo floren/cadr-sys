@@ -1,4 +1,4 @@
-;;; -*- Mode:LISP; Package:TV; Base:8; Readtable:T -*-
+;;; -*- Mode:LISP; Package:TV; Base:8 -*-
 ;;;	** (c) Copyright 1980 Massachusetts Institute of Technology **
 
 ;;; This file contains:  IO buffers, keyboard process
@@ -29,8 +29,9 @@
   "Create a new IO buffer of specified size.
 The actual size is 2 greater, since that 2 elements must always be empty."
   (SETQ BUFFER (MAKE-ARRAY (+ 2 SIZE)
-			   :LEADER-LENGTH IO-BUFFER-LEADER-SIZE
-			   :NAMED-STRUCTURE-SYMBOL 'IO-BUFFER))
+			   ':LEADER-LENGTH IO-BUFFER-LEADER-SIZE
+			   ':NAMED-STRUCTURE-SYMBOL T))
+  (STORE-ARRAY-LEADER 'IO-BUFFER BUFFER 1)
   (SETF (IO-BUFFER-FILL-POINTER BUFFER) 0)
   (SETF (IO-BUFFER-SIZE BUFFER) SIZE)
   (SETF (IO-BUFFER-INPUT-POINTER BUFFER) 0)
@@ -40,7 +41,7 @@ The actual size is 2 greater, since that 2 elements must always be empty."
   (SETF (IO-BUFFER-STATE BUFFER) STATE)
   (SETF (IO-BUFFER-PLIST BUFFER) PLIST)
   (SETF (IO-BUFFER-RECORD BUFFER) (MAKE-ARRAY IO-BUFFER-RECORD-LENGTH
-					      :LEADER-LIST `(,IO-BUFFER-RECORD-LENGTH 0)))
+					      ':LEADER-LIST `(,IO-BUFFER-RECORD-LENGTH 0)))
   BUFFER)
 
 (DEFUN MAKE-DEFAULT-IO-BUFFER ()
@@ -60,7 +61,7 @@ The actual size is 2 greater, since that 2 elements must always be empty."
 		  ;; Since this function may change the state of the buffer either directly
 		  ;; or indirectly, loop in order to check the state.  Set the function to
 		  ;; NIL, though, so it won't be run again
-		  (MULTIPLE-VALUE-SETQ (ELT IGNORE-P)
+		  (MULTIPLE-VALUE (ELT IGNORE-P)
 		    (FUNCALL IN-FUN BUFFER ELT))
 		  (AND IGNORE-P (RETURN T))
 		  (SETQ IN-FUN NIL))
@@ -184,12 +185,12 @@ except that if the value is NIL, the element is simply deleted."
 (DEFVAR KBD-IO-BUFFER (MAKE-IO-BUFFER #o1000))	;Intermediate buffer so char is read out of
 						; hardware immediatly
 (DEFVAR KBD-ESC-HAPPENED NIL)			;An escape was typed
-(DEFVAR KBD-ESC-TIME NIL
-  "If non-NIL, this is the time we started processing an escape (Terminal or System) key
-which is still in process.
-We try not to look at the keyboard while one is still in process to provide more predictable
-behaviour with typeahead.  However, we don't wait forever so that if the process hangs
-forever the system doesn't /"die/"")
+(DEFVAR KBD-ESC-TIME NIL)	;If non-NIL, this is the time we started processing
+				;an escape (Terminal or System) which is still in process.
+				;We try not to look at the keyboard while one is still
+				;in process to provide more predictable behavior with
+				;typeahead.  However, we don't wait forever so that if
+				;the process hangs forever the system doesn't "die".
 (DEFVAR COLD-LOAD-STREAM-OWNS-KEYBOARD NIL
   "Non-NIL means something reading from cold load stream, so turn off KBD-PROCESS.")
 
@@ -219,7 +220,6 @@ from the hardware, and performing any immediate processing associated with the c
 ;;; Note that KBD-CONVERT-TO-SOFTWARE-CHAR must be called in order,
 ;;; since for the new keyboards it does shifts and keeps state.
 
-;character lossage
 (DEFCONST KBD-STANDARD-ASYNCHRONOUS-CHARACTERS
 	  '((#/C-ABORT KBD-ASYNCHRONOUS-INTERCEPT-CHARACTER
 	     (:NAME "Abort" :PRIORITY 50.)
@@ -235,11 +235,10 @@ from the hardware, and performing any immediate processing associated with the c
 	     KBD-INTERCEPT-ERROR-BREAK))
   "Default alist of asynchronous characters for a window's keyboard input.")
 
-;character lossage
 (DEFCONST KBD-GLOBAL-ASYNCHRONOUS-CHARACTERS
 	  '((#/TERMINAL KBD-ESC)
 	    (#/SYSTEM KBD-SYS)
-	    (#/CONTROL-CLEAR-INPUT KBD-ESC-CLEAR))
+	    (#/CONTROL-META-CLEAR-INPUT KBD-ESC-CLEAR))
   "Default alist of keys handled like Terminal and System.")
 
 (DEFUN KBD-PROCESS-MAIN-LOOP-INTERNAL (&AUX BUFFER PLIST RAW-P ASYNCH-CHARS TEM
@@ -248,13 +247,14 @@ from the hardware, and performing any immediate processing associated with the c
     (SETQ BUFFER (KBD-GET-IO-BUFFER))
     (IF (NULL BUFFER)
 	(SETQ ASYNCH-CHARS KBD-STANDARD-ASYNCHRONOUS-CHARACTERS)
-      (SETQ PLIST (LOCF (IO-BUFFER-PLIST BUFFER))
-	    ASYNCH-CHARS (IF (GET PLIST ':SUPER-IMAGE)
-			     NIL
-			   (GET PLIST ':ASYNCHRONOUS-CHARACTERS
-				      KBD-STANDARD-ASYNCHRONOUS-CHARACTERS))
-	    LOWERCASE-CONTROL-CHARS (GET PLIST ':DONT-UPCASE-CONTROL-CHARACTERS)
-	    RAW-P (GET PLIST ':RAW)))
+      (SETQ PLIST (LOCF (IO-BUFFER-PLIST BUFFER)))
+      (SETQ ASYNCH-CHARS
+	    (IF (GET PLIST ':SUPER-IMAGE)
+		NIL
+	      (GET PLIST ':ASYNCHRONOUS-CHARACTERS KBD-STANDARD-ASYNCHRONOUS-CHARACTERS)))
+      (SETQ LOWERCASE-CONTROL-CHARS
+	    (GET PLIST ':DONT-UPCASE-CONTROL-CHARACTERS))
+      (SETQ RAW-P (GET PLIST ':RAW)))
     (DO ()
 	((OR KBD-ESC-HAPPENED
 	     (NOT (KBD-HARDWARE-CHAR-AVAILABLE))))
@@ -266,14 +266,14 @@ from the hardware, and performing any immediate processing associated with the c
 	      (KBD-CONVERT-TO-SOFTWARE-CHAR CHAR (NOT LOWERCASE-CONTROL-CHARS)))
 	(IF (NULL SOFT-CHAR)
 	    NIL					;unreal character
-	  (SETQ CHAR (CHAR-CODE SOFT-CHAR))	;No bucky bits
+	  (SETQ CHAR (LDB %%KBD-CHAR SOFT-CHAR));No bucky bits
 	  ;; Don't count the Terminal key as keyboard activity.
-	  (OR (= SOFT-CHAR (CHAR-CODE #/TERMINAL))
+	  (OR (= SOFT-CHAR #/TERMINAL)
 	      (SETQ KBD-LAST-ACTIVITY-TIME (TIME)
-		    SI::WHO-LINE-JUST-COLD-BOOTED-P NIL))
+		    SI:WHO-LINE-JUST-COLD-BOOTED-P NIL))
 	  (COND ((SETQ KBD-ESC-HAPPENED (ASSQ SOFT-CHAR KBD-GLOBAL-ASYNCHRONOUS-CHARACTERS)))
 		((SETQ TEM (ASSQ SOFT-CHAR ASYNCH-CHARS))
-		 (APPLY (CADR TEM) (CAR TEM) SELECTED-WINDOW (CDDR TEM)))
+		 (APPLY (CADR TEM) (CAR TEM) TV:SELECTED-WINDOW (CDDR TEM)))
 		((NOT (IO-BUFFER-FULL-P KBD-IO-BUFFER))
 		 (IO-BUFFER-PUT KBD-IO-BUFFER SOFT-CHAR))))))))
 
@@ -340,7 +340,7 @@ WHOSTATE appears in the who line while we wait."
 The keyboard is checked for input only if this buffer is the selected one.
 WHOSTATE appears in the who line while we are waiting."
   (PROCESS-WAIT WHOSTATE #'(LAMBDA (BUFFER WINDOW)
-			     (OR (NOT (SEND WINDOW :EXPOSED-P))
+			     (OR (NOT (SEND WINDOW ':EXPOSED-P))
 				 (NOT (IO-BUFFER-EMPTY-P BUFFER))
 				 (AND (EQ BUFFER (KBD-GET-IO-BUFFER))
 				      (NOT (IO-BUFFER-EMPTY-P KBD-IO-BUFFER)))))
@@ -363,7 +363,6 @@ The keyboard is checked for input only if this buffer is the selected one."
 	     (AND ELT (IO-BUFFER-PUT BUFFER ELT T)))))))
 
 (DEFVAR KBD-TYI-HOOK NIL)  ;This is a crock, but I suppose someone might want to...
-;character lossage
 (DEFCONST KBD-STANDARD-INTERCEPTED-CHARACTERS
 	  '((#/ABORT KBD-INTERCEPT-ABORT)
 	    (#/M-ABORT KBD-INTERCEPT-ABORT-ALL)
@@ -394,26 +393,28 @@ Must be called with INHIBIT-SCHEDULING-FLAG bound to T, and this may SETQ it to 
 (DEFUN KBD-INTERCEPT-ABORT (CHAR &REST IGNORE)
   "Perform the action normally associated with the Abort character.
 This function is intended to be called from IO-BUFFER output functions."
-  (DECLARE (IGNORE CHAR))
+  CHAR
   (SETQ INHIBIT-SCHEDULING-FLAG NIL)		;It was T in the IO-BUFFER-OUTPUT-FUNCTION
-  (UNLESS (OR (AND (TYPEP *TERMINAL-IO* 'SHEET)	;Kludge to avoid being unable to abort
-		   (SHEET-OUTPUT-HELD-P *TERMINAL-IO*))
-	      (SEND *TERMINAL-IO* :SEND-IF-HANDLES :INHIBIT-OUTPUT-FOR-ABORT-P))
-    (SEND *TERMINAL-IO* :CLEAR-EOL)
-    (SEND *TERMINAL-IO* :STRING-OUT "[Abort]"))
+  (OR (AND (TYPEP *TERMINAL-IO* 'SHEET)		;Kludge to avoid being unable to abort
+	   (SHEET-OUTPUT-HELD-P *TERMINAL-IO*))
+      (SEND *TERMINAL-IO* ':SEND-IF-HANDLES ':INHIBIT-OUTPUT-FOR-ABORT-P)
+      (PROGN
+	(SEND *TERMINAL-IO* ':CLEAR-EOL)
+	(SEND *TERMINAL-IO* ':STRING-OUT "[Abort]")))
   (SIGNAL-CONDITION EH:ABORT-OBJECT))
 
 (DEFUN KBD-INTERCEPT-ABORT-ALL (CHAR &REST IGNORE)
   "Perform the action normally associated with the Meta-Abort character.
 This function is intended to be called from IO-BUFFER output functions."
-  (DECLARE (IGNORE CHAR))
+  CHAR
   (SETQ INHIBIT-SCHEDULING-FLAG NIL)		;It was T in the IO-BUFFER-OUTPUT-FUNCTION
-  (UNLESS (OR (AND (TYPEP *TERMINAL-IO* 'SHEET)	;Kludge to avoid being unable to abort
-		   (SHEET-OUTPUT-HELD-P *TERMINAL-IO*))
-	      (SEND *TERMINAL-IO* :SEND-IF-HANDLES :INHIBIT-OUTPUT-FOR-ABORT-P))
-    (SEND *TERMINAL-IO* :CLEAR-EOL)
-    (SEND *TERMINAL-IO* :STRING-OUT "[Abort all]"))
-  (SEND CURRENT-PROCESS :RESET :ALWAYS))
+  (OR (AND (TYPEP *TERMINAL-IO* 'SHEET)		;Kludge to avoid being unable to abort
+	   (SHEET-OUTPUT-HELD-P *TERMINAL-IO*))
+      (SEND *TERMINAL-IO* ':SEND-IF-HANDLES ':INHIBIT-OUTPUT-FOR-ABORT-P)
+      (PROGN
+	(SEND *TERMINAL-IO* ':CLEAR-EOL)
+	(SEND *TERMINAL-IO* ':STRING-OUT "[Abort all]")))
+  (SEND CURRENT-PROCESS ':RESET ':ALWAYS))
 
 (DEFUN KBD-INTERCEPT-BREAK (CHAR &REST IGNORE)
   "Perform the action normally associated with the Break character.
@@ -427,12 +428,15 @@ This function is intended to be called from IO-BUFFER output functions."
   "Perform the action normally associated with the Meta-Break character.
 This function is intended to be called from IO-BUFFER output functions."
   (SETQ INHIBIT-SCHEDULING-FLAG NIL)		;It was T in the IO-BUFFER-OUTPUT-FUNCTION
+;  (LET ((EH:CONDITION-PROCEED-TYPES '(:NO-ACTION)))
   (MULTIPLE-VALUE-BIND (BUFFER POSITION)
-      (SEND *STANDARD-INPUT* :SEND-IF-HANDLES :SAVE-RUBOUT-HANDLER-BUFFER)
+      (SEND *STANDARD-INPUT* ':SEND-IF-HANDLES ':SAVE-RUBOUT-HANDLER-BUFFER)
+;   (LET ((EH:ERROR-DEPTH (1+ EH:ERROR-DEPTH)))
+;     (EH:INVOKE-DEBUGGER '(BREAK)))
     (UNWIND-PROTECT
 	(SIGNAL-CONDITION (MAKE-CONDITION 'BREAK) '(:NO-ACTION) T)
-      (UNLESS (EQ *DEBUG-IO* COLD-LOAD-STREAM)
-	(IF BUFFER (SEND *STANDARD-INPUT* :RESTORE-RUBOUT-HANDLER-BUFFER BUFFER POSITION)))))
+      (unless (eq *debug-io* cold-load-stream)
+	(IF BUFFER (SEND *STANDARD-INPUT* ':RESTORE-RUBOUT-HANDLER-BUFFER BUFFER POSITION)))))
   (VALUES CHAR T))
 
 ;;; This function is called, possibly in the keyboard process, when one of the
@@ -446,27 +450,28 @@ This function is intended to be called from IO-BUFFER output functions."
   (IF (EQ FUNCTION 'KBD-ASYNCHRONOUS-INTERCEPT-CHARACTER)
       (SETQ FUNCTION NIL))
   (AND WINDOW			;Find process to be hacked
-       (SETQ P (SEND WINDOW :PROCESS))
-       (IF FUNCTION (PROCESS-RUN-FUNCTION PROCESS-RUN-OPTIONS P
-					  :INTERRUPT FUNCTION CHAR WINDOW)
-	 (CASE CHAR
+       (SETQ P (SEND WINDOW ':PROCESS))
+       (IF FUNCTION (PROCESS-RUN-FUNCTION PROCESS-RUN-OPTIONS
+					  P ':INTERRUPT FUNCTION CHAR WINDOW)
+	 (SELECTQ CHAR
 	   ((#/C-ABORT #/C-M-ABORT)
-	    (PROCESS-RUN-FUNCTION '(:NAME "Abort" :PRIORITY 50.) P
-				  :INTERRUPT (CASE CHAR
-					       (#/C-ABORT #'KBD-INTERCEPT-ABORT)
-					       (#/C-M-ABORT #'KBD-INTERCEPT-ABORT-ALL))
+	    (PROCESS-RUN-FUNCTION '(:NAME "Abort" :PRIORITY 50.) P ':INTERRUPT
+				  (SELECTQ CHAR
+				    (#/C-ABORT #'KBD-INTERCEPT-ABORT)
+				    (#/C-M-ABORT #'KBD-INTERCEPT-ABORT-ALL))
 				  (DPB 0 %%KBD-CONTROL CHAR)))
 	   (#/C-BREAK
-	    (PROCESS-RUN-FUNCTION '(:NAME "Break" :PRIORITY 40.) P :INTERRUPT 'BREAK 'BREAK))
+	    (PROCESS-RUN-FUNCTION '(:NAME "Break" :PRIORITY 40.) P ':INTERRUPT 'BREAK 'BREAK))
 	   (#/C-M-BREAK
-	    (PROCESS-RUN-FUNCTION '(:NAME "Break" :PRIORITY 40.) P
-				  :INTERRUPT %ERROR-HANDLER-STACK-GROUP '(:BREAK)))))))
+	    (PROCESS-RUN-FUNCTION '(:NAME "Break" :PRIORITY 40.)
+				  P ':INTERRUPT %ERROR-HANDLER-STACK-GROUP
+				  '(:BREAK)))))))
 
 (DEFUN KBD-GET-SOFTWARE-CHAR (&OPTIONAL (WHOSTATE "Keyboard"))
   "Returns the next char from the hardware converted to software codes.  This
 is meant to be used only by things that run in the keyboard process, and not by
 any user code."
-  (DO ((CH)) (())
+  (DO ((CH)) (NIL)
     (PROCESS-WAIT WHOSTATE #'KBD-HARDWARE-CHAR-AVAILABLE)
     (AND (SETQ CH (KBD-CONVERT-TO-SOFTWARE-CHAR (KBD-GET-HARDWARE-CHAR)))
 	 (RETURN CH))))
@@ -499,27 +504,28 @@ If there is no selected window, or the window has no buffer, returns NIL."
 	 ;; This shouldn't be necessary, but try not to lose too big
 	 (KBD-CLEAR-SELECTED-IO-BUFFER))
 	(SELECTED-IO-BUFFER SELECTED-IO-BUFFER)
-	(T (PROG1 (SETQ SELECTED-IO-BUFFER (SEND SELECTED-WINDOW :IO-BUFFER))
+	(T (PROG1 (SETQ SELECTED-IO-BUFFER (SEND SELECTED-WINDOW ':IO-BUFFER))
 		  (WHO-LINE-RUN-STATE-UPDATE)))))	;May have just switched processes
 
-;; no longer used
 (DEFUN KBD-CALL (BUFFER)
-  (DECLARE (IGNORE BUFFER))
+  "Handle the CALL character."
+  BUFFER					;Not used
   (IO-BUFFER-CLEAR KBD-IO-BUFFER)		;Forget chars typed before "call"
   (PROCESS-RUN-FUNCTION "Call" #'(LAMBDA (WINDOW)
-				   (IF WINDOW (SEND WINDOW :CALL)
+				   (IF WINDOW
+				       (SEND WINDOW ':CALL)
 				     (SETQ WINDOW (KBD-DEFAULT-CALL-WINDOW))
-				     (SEND WINDOW :MOUSE-SELECT)))
+				     (SEND WINDOW ':MOUSE-SELECT)))
 			SELECTED-WINDOW))
 
 (DEFUN KBD-DEFAULT-CALL-WINDOW (&OPTIONAL (SCREEN DEFAULT-SCREEN) &AUX PREVIOUS-WINDOW)
   "Return a suitable window for the CALL character to select."
   (IF (AND (SETQ PREVIOUS-WINDOW (AREF PREVIOUSLY-SELECTED-WINDOWS 0))
-	   (EQ (SEND PREVIOUS-WINDOW :LISP-LISTENER-P) :IDLE))
+	   (EQ (SEND PREVIOUS-WINDOW ':LISP-LISTENER-P) ':IDLE))
       ;; CALL should always get a Lisp Listener, but try to be smart about
       ;; the one that it really gets
       PREVIOUS-WINDOW
-    (SEND SCREEN :IDLE-LISP-LISTENER)))
+    (SEND SCREEN ':IDLE-LISP-LISTENER)))
 
 (DEFUN KEY-STATE (KEY &AUX TEM)
   "T if the specified key is now depressed.
@@ -531,33 +537,30 @@ and four other names that do not allow LEFT- or RIGHT- :
 :SHIFT is T if either shift key is depressed;
  :LEFT-SHIFT and :RIGHT-SHIFT test one individual shift key."
   (KBD-PROCESS-MAIN-LOOP-INTERNAL)
-  (COND ((NUMBERP KEY) (NOT (ZEROP (AREF SI::KBD-KEY-STATE-ARRAY KEY))))
-	((SETQ TEM (ASSQ KEY '#o((:SHIFT 100) (:LEFT-SHIFT 0) (:RIGHT-SHIFT 40)
-				 (:GREEK 101) (:LEFT-GREEK 1) (:RIGHT-GREEK 41)
-				 (:TOP 102) (:LEFT-TOP 2) (:RIGHT-TOP 42)
-				 (:CONTROL 104) (:LEFT-CONTROL 4) (:RIGHT-CONTROL 44)
-				 (:META 105) (:LEFT-META 5) (:RIGHT-META 45)
-				 (:SUPER 106) (:LEFT-SUPER 6) (:RIGHT-SUPER 46)
-				 (:HYPER 107) (:LEFT-HYPER 7) (:RIGHT-HYPER 47)
-				 (:CAPS-LOCK 3) (:ALT-LOCK 10) (:MODE-LOCK 11)
-				 (:REPEAT 12))))
-	 (BIT-TEST (LSH 1 (LOGAND (SETQ TEM (CADR TEM)) #o37))
-		   (COND ((< TEM #o40) SI::KBD-LEFT-SHIFTS)
-			 ((< TEM #o100) SI::KBD-RIGHT-SHIFTS)
-			 (T (LOGIOR SI::KBD-LEFT-SHIFTS SI::KBD-RIGHT-SHIFTS)))))
+  (COND ((NUMBERP KEY) (NOT (ZEROP (AREF SI:KBD-KEY-STATE-ARRAY KEY))))
+	((SETQ TEM (ASSQ KEY '((:SHIFT 100) (:LEFT-SHIFT 0) (:RIGHT-SHIFT 40)
+			       (:GREEK 101) (:LEFT-GREEK 1) (:RIGHT-GREEK 41)
+			       (:TOP 102) (:LEFT-TOP 2) (:RIGHT-TOP 42)
+			       (:CONTROL 104) (:LEFT-CONTROL 4) (:RIGHT-CONTROL 44)
+			       (:META 105) (:LEFT-META 5) (:RIGHT-META 45)
+			       (:SUPER 106) (:LEFT-SUPER 6) (:RIGHT-SUPER 46)
+			       (:HYPER 107) (:LEFT-HYPER 7) (:RIGHT-HYPER 47)
+			       (:CAPS-LOCK 3) (:ALT-LOCK 10) (:MODE-LOCK 11)
+			       (:REPEAT 12))))
+	 (BIT-TEST (LSH 1 (LOGAND (SETQ TEM (CADR TEM)) 37))
+		   (COND ((< TEM 40) SI:KBD-LEFT-SHIFTS)
+			 ((< TEM 100) SI:KBD-RIGHT-SHIFTS)
+			 (T (LOGIOR SI:KBD-LEFT-SHIFTS SI:KBD-RIGHT-SHIFTS)))))
 	(T (FERROR NIL "~S illegal key; must be character or symbol for shift key" KEY))))
 
-;;;; "Escape key" (ie #\terminal)
+;;;; "Escape key" (ie #/terminal)
 
 ;;; Unknown or misspelled keywords are ignored.
-;character lossage
 (DEFVAR *ESCAPE-KEYS*
-     '((#/CLEAR-INPUT KBD-ESC-CLEAR
-	"Discard type-ahead" :KEYBOARD-PROCESS)
+     '((#/CLEAR KBD-ESC-CLEAR "Discard type-ahead" :KEYBOARD-PROCESS)
        (#/RESUME (KBD-ESC-RESUME) 
 	"Allow deexposed typeout in window that Terminal-0-S would select.")
-       (#/ SYSTEM-MENU-SET-MOUSE-SCREEN
-	"Set Mouse screen")
+       (#/ SYSTEM-MENU-SET-MOUSE-SCREEN "Set Mouse screen")
        (#/FORM (KBD-SCREEN-REDISPLAY)
 	"Clear and redisplay all windows (Page = Clear Screen)")
        (#/A KBD-ESC-ARREST
@@ -572,7 +575,8 @@ and four other names that do not allow LEFT- or RIGHT- :
 ;      (#/E (SI:CALL-ELEVATOR) (AND (OR (SI:TECH-SQUARE-FLOOR-P 8)
 ;					(SI:TECH-SQUARE-FLOOR-P 9))
 ;				    "Call the elevator"))
-       (#/F KBD-FINGER (FINGER-ARG-PROMPT) :TYPEAHEAD)
+       (#/F KBD-FINGER (FINGER-ARG-PROMPT)
+	:TYPEAHEAD)
        (#/G (KBD-GC-STATUS) "Show the current state of all garbage collection.")
        (#/H (KBD-HOSTAT) "Show status of CHAOSnet hosts" :TYPEAHEAD)
        (#/I KBD-ESC-I
@@ -583,13 +587,15 @@ and four other names that do not allow LEFT- or RIGHT- :
 	"Terminal 1 N  print all notifications (even old ones)"
 	"Terminal 2 N  defer notifications, reset who-line"
 	:TYPEAHEAD)
-       (#/O KBD-OTHER-EXPOSED-WINDOW
-	"Select another exposed window" :TYPEAHEAD)
+       (#/O KBD-OTHER-EXPOSED-WINDOW "Select another exposed window" :TYPEAHEAD)
        (#/Q KBD-ESC-Q
 	(LET ((PRINTER (OR SI:*DEFAULT-BIT-ARRAY-PRINTER* SI:*DEFAULT-PRINTER*)))
-	  (AND (GET (IF (CONSP PRINTER) (CAR PRINTER) PRINTER) 'SI:PRINT-BIT-ARRAY)
+	  (AND (GET (IF (CONSP PRINTER) (CAR PRINTER) PRINTER)
+		    'SI:PRINT-BIT-ARRAY)
 	       (FORMAT NIL "Hardcopy the screen on the ~A"
-		       (IF (CONSP PRINTER) (CAR PRINTER) PRINTER)))))
+		       (IF (CONSP PRINTER)
+			   (CAR PRINTER)
+			 PRINTER)))))
        (#/S KBD-SWITCH-WINDOWS
 	'("Select the most recently selected window.  With an argument, select the nth"
 	  "previously selected window and rotate the top n windows.  (Default arg is 2)."
@@ -599,28 +605,21 @@ and four other names that do not allow LEFT- or RIGHT- :
 	:TYPEAHEAD)
        (#/T KBD-ESC-T
 	"Selected window deexposed typeout action.  0 - wait, 1 - notify, 2 - permit.")
-       (#/V KBD-VIEW-MAIL
-	"View new mail. Terminal 1 V - view any file." :TYPEAHEAD)
+       (#/V KBD-VIEW-MAIL "View new mail. Terminal 1 V - view any file."
+	:TYPEAHEAD)
        (#/W KBD-ESC-W
 	'("Switch which process the wholine looks at.  Default is just to refresh it"
 	  " 1 means selected-window's process, 2 means freeze on this process,"
 	  " 3 means rotate among all processes, 4 means rotate other direction,"
 	  " 0 gives a menu of all processes"))
-       (#/HOLD-OUTPUT KBD-ESC-OUTPUT-HOLD
-	"Expose window on which we have /"Output Hold/"")
-       (#/? KBD-ESC-HELP
-	NIL :TYPEAHEAD)
-       (#/HELP KBD-ESC-HELP
-	NIL :TYPEAHEAD)
+       (#/HOLD-OUTPUT KBD-ESC-OUTPUT-HOLD "Expose window on which we have /"Output Hold/"")
+       (#/? KBD-ESC-HELP NIL :TYPEAHEAD)
+       (#/HELP KBD-ESC-HELP NIL :TYPEAHEAD)
        (NIL) ;Ones after here are "for wizards"
-       (#/CALL (KBD-USE-COLD-LOAD-STREAM)
-	"Get to cold-load stream" :TYPEAHEAD)
-       (#/C-T KBD-CLEAR-TEMPORARY-WINDOWS
-	"Flush temporary windows")
-       (#/C-CLEAR KBD-CLEAR-LOCKS
-	"Clear window-system locks")
-       (#/C-A KBD-ESC-ARREST-ALL
-	"Arrest nearly all processes" :KEYBOARD-PROCESS))
+       (#/CALL (KBD-USE-COLD-LOAD-STREAM) "Get to cold-load stream" :TYPEAHEAD)
+       (#/C-T KBD-CLEAR-TEMPORARY-WINDOWS "Flush temporary windows")
+       (#/C-CLEAR KBD-CLEAR-LOCKS "Clear window-system locks")
+       (#/C-A KBD-ESC-ARREST-ALL "Arrest nearly all processes" :KEYBOARD-PROCESS))
   "Determines what to do with characters typed after the Terminal character.
 A list of elements (CHAR FUNCTION DOCUMENTATION . OPTIONS).
 CHAR is what character this element applies to.
@@ -643,7 +642,6 @@ OPTIONS are keywords (with no values).  Defined options are:
 
 (DEFUN REMOVE-ESCAPE-KEY (CHAR &REST IGNORE)
   "Remove the character CHAR from the list of terminal- keys."
-;character lossage
   (SETQ *ESCAPE-KEYS* (DELQ (ASSQ (CHAR-UPCASE CHAR) *ESCAPE-KEYS*) *ESCAPE-KEYS*)))
 
 
@@ -651,15 +649,16 @@ OPTIONS are keywords (with no values).  Defined options are:
   "List of escape keys that the user has added, so the user won't lose his definitions.")
 
 (DEFUN ADD-ESCAPE-KEY (CHAR FUNCTION &OPTIONAL DOCUMENTATION &REST OPTIONS
-		       &AUX C ENTRY BEFORE DURING AFTER (STATE :BEFORE))
+		       &AUX C ENTRY BEFORE DURING AFTER (STATE ':BEFORE))
   "Add CHAR to the list of actions to be performed and are prefaced by typing TERMINAL.
 FUNCTION should be the function to be called when that key is depressed, 
 DOCUMENTATION is what to show up when the user types Terminal Help.	
 OPTIONS can include either :TYPEAHEAD or :KEYBOARD-PROCESS,
  or :SYSTEM meaning this is a redefinition of system code
  rather than a user overriding the system code."
-  (CHECK-TYPE DOCUMENTATION STRING "a valid documentation string")
-  (SETQ CHAR (CHAR-UPCASE (GLOBAL:CHARACTER CHAR)))
+  (CHECK-ARG-TYPE CHAR (OR CHARACTER FIXNUM) "a character")
+  (CHECK-ARG-TYPE DOCUMENTATION STRING "a valid documentation string")
+  (SETQ CHAR (CHAR-UPCASE CHAR))
   (SETQ ENTRY (LIST* CHAR FUNCTION DOCUMENTATION (COPY-LIST OPTIONS)))	;what to store
   (UNLESS (MEMQ ':SYSTEM OPTIONS)
     (PUSH ENTRY *USER-DEFINED-ESCAPE-KEYS*))
@@ -674,7 +673,7 @@ OPTIONS can include either :TYPEAHEAD or :KEYBOARD-PROCESS,
 	 (SETQ STATE ':AFTER))
     (AND (EQ STATE ':BEFORE) (NOT (NULL C)) (ALPHA-CHAR-P C)
 	 (SETQ STATE ':DURING))
-    (CASE STATE
+    (SELECTQ STATE
       (:AFTER
        (PUSH ITEM AFTER))
       (:DURING
@@ -684,7 +683,7 @@ OPTIONS can include either :TYPEAHEAD or :KEYBOARD-PROCESS,
   ;; We're all done; now where does that key go?
   (IF (ALPHA-CHAR-P CHAR)
       (PUSH ENTRY DURING)
-      (PUSH ENTRY BEFORE))
+    (PUSH ENTRY BEFORE))
   (SETQ *ESCAPE-KEYS*				;alphabatize
 	(APPEND AFTER (SORTCAR DURING #'ALPHALESSP) BEFORE))
   NIL)
@@ -700,23 +699,25 @@ OPTIONS can include either :TYPEAHEAD or :KEYBOARD-PROCESS,
 (DEFUN KBD-ESC-RESUME ()
   "Handle a terminal-resume typed on the keyboard by allowing interesting window to type out."
   (LET ((W (FIND-INTERESTING-WINDOW)))
-    (IF W (SEND W :SET-DEEXPOSED-TYPEOUT-ACTION :PERMIT) (BEEP))))
+    (IF W
+	(SEND W ':SET-DEEXPOSED-TYPEOUT-ACTION ':PERMIT)
+      (BEEP))))
 
 (DEFVAR *SAVED-COLD-BOOTED-P* NIL
   "Used to tell if we should consider ourselves to be cold booted.")
 
-(DEFVAR *SAVED-LAST-ACTIVITY-TIME* 0.		;a very long time ago indeed
+(DEFVAR *SAVED-LAST-ACTIVITY-TIME* 0. ;;a very long time ago indeed
   "Used to record how long we were idle at some point back in time.")
   
 (DEFUN SAVE-IDLE-INFO ()
   "Save away the idle info that is currently valid."
-  (SETQ *SAVED-COLD-BOOTED-P* SI::WHO-LINE-JUST-COLD-BOOTED-P
+  (SETQ *SAVED-COLD-BOOTED-P* SI:WHO-LINE-JUST-COLD-BOOTED-P
 	*SAVED-LAST-ACTIVITY-TIME* TV:KBD-LAST-ACTIVITY-TIME))
 
 (DEFUN RESTORE-IDLE-INFO ()
   "Restore the idle info that was saved away earlier."
   (AND (> *SAVED-LAST-ACTIVITY-TIME* 0) ;;this means we never called save-idle-info
-       (SETQ *SAVED-COLD-BOOTED-P* SI::WHO-LINE-JUST-COLD-BOOTED-P
+       (SETQ *SAVED-COLD-BOOTED-P* SI:WHO-LINE-JUST-COLD-BOOTED-P
 	     *SAVED-LAST-ACTIVITY-TIME* TV:KBD-LAST-ACTIVITY-TIME)))
 
 
@@ -742,10 +743,10 @@ OPTIONS can include either :TYPEAHEAD or :KEYBOARD-PROCESS,
   (AND MINUS (SETQ ARG (MINUS (OR ARG 1))))
   (COND ((SETQ ENT (ASSQ CH *ESCAPE-KEYS*))
 	 (WITHOUT-INTERRUPTS
-	   (WHEN (MEMQ ':TYPEAHEAD (CDDDR ENT))
-	     (KBD-GET-IO-BUFFER)
-	     (KBD-SNARF-INPUT SELECTED-IO-BUFFER T)
-	     (SETQ KBD-ESC-TIME (TIME))))
+	   (COND ((MEMQ ':TYPEAHEAD (CDDDR ENT))
+		  (KBD-GET-IO-BUFFER)
+		  (KBD-SNARF-INPUT SELECTED-IO-BUFFER T)
+		  (SETQ KBD-ESC-TIME (TIME)))))
 	 (SETQ FCN (SECOND ENT))
 	 (IF (CONSP FCN) (SETQ ARG FCN FCN #'EVAL))
 	 (COND ((MEMQ ':KEYBOARD-PROCESS (CDDDR ENT))
@@ -761,8 +762,9 @@ OPTIONS can include either :TYPEAHEAD or :KEYBOARD-PROCESS,
 					FCN ARG))))
 	;; quote asynchronous characters
 	((OR (AND (SETQ TEM (KBD-GET-IO-BUFFER))
-		  (ASSQ CH (GETF (IO-BUFFER-PLIST TEM) :ASYNCHRONOUS-CHARACTERS
-						       KBD-STANDARD-ASYNCHRONOUS-CHARACTERS)))
+		  (ASSQ CH (GET (LOCF (IO-BUFFER-PLIST TEM))
+				':ASYNCHRONOUS-CHARACTERS
+				KBD-STANDARD-ASYNCHRONOUS-CHARACTERS)))
 	     (ASSQ CH KBD-GLOBAL-ASYNCHRONOUS-CHARACTERS))
 	 (UNLESS (IO-BUFFER-FULL-P KBD-IO-BUFFER)
 	   (IO-BUFFER-PUT KBD-IO-BUFFER CH)))
@@ -775,14 +777,14 @@ OPTIONS can include either :TYPEAHEAD or :KEYBOARD-PROCESS,
 
 (DEFUN KBD-COMPLEMENT (ARG)			;terminal C
   (IF ARG
-      (SEND WHO-LINE-DOCUMENTATION-WINDOW :SET-REVERSE-VIDEO-P
-	    (NOT (SEND WHO-LINE-DOCUMENTATION-WINDOW :REVERSE-VIDEO-P)))
+      (SEND WHO-LINE-DOCUMENTATION-WINDOW ':SET-REVERSE-VIDEO-P
+	    (NOT (SEND WHO-LINE-DOCUMENTATION-WINDOW ':REVERSE-VIDEO-P)))
     (COMPLEMENT-BOW-MODE)))
 
 (DEFUN KBD-ESC-MORE (ARG)			;terminal M
   (COND (SELECTED-WINDOW
-	 (SEND SELECTED-WINDOW :SET-MORE-P
-		  (COND ((NULL ARG) (NOT (SEND SELECTED-WINDOW :MORE-P)))
+	 (SEND SELECTED-WINDOW ':SET-MORE-P
+		  (COND ((NULL ARG) (NOT (SEND SELECTED-WINDOW ':MORE-P)))
 			((< ARG 1) NIL)		;terminal 0 M, terminal - M: more proc off
 			(T T))))))		;terminal 1 M: 		     more proc on
 
@@ -794,9 +796,9 @@ OPTIONS can include either :TYPEAHEAD or :KEYBOARD-PROCESS,
 (DEFUN KBD-ESC-ARREST (ARG &AUX P)
   (COND ((NULL (SETQ P LAST-WHO-LINE-PROCESS)) (BEEP))
 	((AND ARG (MINUSP ARG))
-	 (DOLIST (R (SEND P :ARREST-REASONS))
-	   (SEND P :REVOKE-ARREST-REASON R)))
-	(T (SEND P :ARREST-REASON :USER))))
+	 (DOLIST (R (SEND P ':ARREST-REASONS))
+	   (SEND P ':REVOKE-ARREST-REASON R)))
+	(T (SEND P ':ARREST-REASON ':USER))))
 
 (DEFUN KBD-ESC-ARREST-ALL (ARG)
   (DOLIST (P ALL-PROCESSES)
@@ -805,12 +807,15 @@ OPTIONS can include either :TYPEAHEAD or :KEYBOARD-PROCESS,
 	(EQ P MOUSE-PROCESS)
 	(EQ P SCREEN-MANAGER-BACKGROUND-PROCESS)
 	(EQ P LAST-WHO-LINE-PROCESS)
-	(SEND P (IF (AND ARG (MINUSP ARG)) :REVOKE-ARREST-REASON :ARREST-REASON) :USER))))
+	(SEND P
+	      (IF (AND ARG (MINUSP ARG))
+		  ':REVOKE-ARREST-REASON ':ARREST-REASON)
+	      ':USER))))
 
 (DEFUN KBD-BURY (ARG)				;terminal B
-  (DECLARE (IGNORE ARG))			;unused for now
+  ARG ;unused for now
   (IF SELECTED-WINDOW
-      (SEND (SEND SELECTED-WINDOW :ALIAS-FOR-SELECTED-WINDOWS) :BURY))
+      (SEND (SEND SELECTED-WINDOW ':ALIAS-FOR-SELECTED-WINDOWS) ':BURY))
   (SETQ KBD-ESC-TIME NIL))
 
 (DEFUN KBD-OTHER-EXPOSED-WINDOW (IGNORE)	;terminal O
@@ -822,11 +827,11 @@ OPTIONS can include either :TYPEAHEAD or :KEYBOARD-PROCESS,
        (TEM)
        (WINDOW NIL))
       (( I N)
-       (IF WINDOW (SEND WINDOW :MOUSE-SELECT)
+       (IF WINDOW (SEND WINDOW ':MOUSE-SELECT)
 	   (BEEP)))
     (AND (SETQ TEM (AREF PREVIOUSLY-SELECTED-WINDOWS I))
-	 (EQ (SEND TEM :STATUS) ':EXPOSED)
-	 (NOT (NULL (SEND TEM :NAME-FOR-SELECTION)))
+	 (EQ (SEND TEM ':STATUS) ':EXPOSED)
+	 (NOT (NULL (SEND TEM ':NAME-FOR-SELECTION)))
 	 (SETQ WINDOW TEM))))
 
 (DEFUN KBD-SWITCH-WINDOWS (ARG &AUX TEM)	;terminal S
@@ -839,47 +844,47 @@ OPTIONS can include either :TYPEAHEAD or :KEYBOARD-PROCESS,
   (COND ((= ARG 0) (SELECT-INTERESTING-WINDOW))
 	(T (DELAYING-SCREEN-MANAGEMENT		;Inhibit auto-selection
 	     (COND ((SETQ TEM SELECTED-WINDOW)	;Put current window on front of array
-		    (SEND TEM :DESELECT NIL)
-		    (AND (SETQ TEM (SEND TEM :IO-BUFFER))
+		    (SEND TEM ':DESELECT NIL)
+		    (AND (SETQ TEM (SEND TEM ':IO-BUFFER))
 			 (KBD-SNARF-INPUT TEM T))))
 	     (WITHOUT-INTERRUPTS		;Get rid of any non-mouse-selectable ones
 	       (DOTIMES (I (ARRAY-LENGTH PREVIOUSLY-SELECTED-WINDOWS))
 		 (OR (SETQ TEM (AREF PREVIOUSLY-SELECTED-WINDOWS I)) (RETURN))
-		 (COND ((NOT (SEND TEM :NAME-FOR-SELECTION))
+		 (COND ((NOT (SEND TEM ':NAME-FOR-SELECTION))
 			(REMOVE-FROM-PREVIOUSLY-SELECTED-WINDOWS TEM)
 			(SETQ I (1- I)))))
 	       (ROTATE-TOP-OF-ARRAY PREVIOUSLY-SELECTED-WINDOWS ARG))
 	     (AND (SETQ TEM (AREF PREVIOUSLY-SELECTED-WINDOWS 0))
-		  (SEND TEM :MOUSE-SELECT))))))
+		  (SEND TEM ':MOUSE-SELECT))))))
 
 #|
 (DEFUN KBD-STATUS (IGNORE &AUX W TEM)
   "Display what the effects of typing terminal-N-s would be."
   (USING-RESOURCE (WINDOW POP-UP-FINGER-WINDOW)
     (SETF (SHEET-TRUNCATE-LINE-OUT-FLAG WINDOW) 1)
-    (SEND WINDOW :SET-LABEL "Information on recently selected windows.")
-    (SEND WINDOW :SET-PROCESS CURRENT-PROCESS)
+    (SEND WINDOW ':SET-LABEL "Information on recently selected windows.")
+    (SEND WINDOW ':SET-PROCESS CURRENT-PROCESS)
     (WINDOW-CALL (WINDOW :DEACTIVATE)
       (LET ((*TERMINAL-IO* WINDOW))
 	(SETQ KBD-ESC-TIME NIL)
-	(FORMAT WINDOW "To select one of the windows below, type ~C <number> S~&" #/TERMINAL)
+	(FORMAT WINDOW "To select one of the windows below, type  <number> S~&")
 	(DO ((I 1 (1+ I)))
 	    ((= I (ARRAY-LENGTH PREVIOUSLY-SELECTED-WINDOWS)))
 	  (OR (SETQ W (AREF PREVIOUSLY-SELECTED-WINDOWS I)) (RETURN))
-	  (IF (SETQ TEM (SEND W :NAME-FOR-SELECTION))
+	  (IF (SETQ TEM (SEND W ':NAME-FOR-SELECTION))
 	      (FORMAT WINDOW "~2D: ~A~&" (1+ I) TEM)
 	    (REMOVE-FROM-PREVIOUSLY-SELECTED-WINDOWS W)
 	    (SETQ I (1- I))))
 	(IF (NULL (SETQ W (FIND-INTERESTING-WINDOW)))
 	    (FORMAT WINDOW "~%[There is currently no /"interesting/" window]~&")
 	  (FORMAT WINDOW
-		  "~%~A is an /"interesting/" window~%   Type ~C-0-S to select it.~&"
-		  (SEND W :NAME-FOR-SELECTION) #/TERMINAL)
+		  "~%~A is an /"interesting/" window~%   Type -0-S to select it.~&"
+		  (SEND W ':NAME-FOR-SELECTION))
 	  (LET (WW)
 	    (DOLIST (P ACTIVE-PROCESSES)
 	      (WHEN (AND (SETQ P (CAR P))
 			 (TYPEP (PROCESS-STACK-GROUP P) 'STACK-GROUP)
-			 (NEQ (SETQ WW (SI::PROCESS-IS-IN-ERROR-P P)) W))
+			 (NEQ (SETQ WW (SI:PROCESS-IS-IN-ERROR-P P)) W))
 		(FORMAT WINDOW
 			"Process ~A is in error,
      and is awaiting selection of window ~A for typeout" (PROCESS-NAME P) WW))))
@@ -890,13 +895,13 @@ OPTIONS can include either :TYPEAHEAD or :KEYBOARD-PROCESS,
 	(IF (NULL W)
 	    (FORMAT WINDOW "~2&There is currently no window selected.")
 	  (FORMAT WINDOW "~2&The currently selected window is ~:[~S~;~:*~A~]"
-		  (SEND W :NAME-FOR-SELECTION) W))
+		  (SEND W ':NAME-FOR-SELECTION) W))
 	(FORMAT WINDOW "~2%Type a space to flush: ")
 	(PROCESS-WAIT "Keyboard" #'(LAMBDA (WINDOW)
 				     (NEQ SELECTED-WINDOW WINDOW)
-				     (SEND WINDOW :LISTEN))
+				     (SEND WINDOW ':LISTEN))
 		      WINDOW)
-	(IF (EQ WINDOW SELECTED-WINDOW) (SEND WINDOW :TYI-NO-HANG))))))
+	(IF (EQ WINDOW SELECTED-WINDOW) (SEND WINDOW ':TYI-NO-HANG))))))
 |#
 
 ;;;This is like ZWEI:ROTATE-TOP-OF-LIST but for a NIL-padded array
@@ -930,11 +935,11 @@ OPTIONS can include either :TYPEAHEAD or :KEYBOARD-PROCESS,
 (DEFUN KBD-SCREEN-REDISPLAY ()
   "Like SCREEN-REDISPLAY, but goes over windows by hand, and never waits for a lock."
   (DOLIST (SCREEN ALL-THE-SCREENS)
-    (WHEN (SHEET-EXPOSED-P SCREEN)
-      (DOLIST (I (SHEET-EXPOSED-INFERIORS SCREEN))
-	(AND (SHEET-CAN-GET-LOCK I)
-	     (SEND I :REFRESH)))
-      (SEND SCREEN :SCREEN-MANAGE)))
+    (COND ((SHEET-EXPOSED-P SCREEN)
+	   (DOLIST (I (SHEET-EXPOSED-INFERIORS SCREEN))
+	     (AND (SHEET-CAN-GET-LOCK I)
+		  (SEND I ':REFRESH)))
+	   (SEND SCREEN ':SCREEN-MANAGE))))
   (WHO-LINE-CLOBBERED))
 
 (DEFUN KBD-CLEAR-LOCKS (IGNORE)			;terminal c-clear
@@ -946,28 +951,27 @@ OPTIONS can include either :TYPEAHEAD or :KEYBOARD-PROCESS,
 		       (AND (SHEET-TEMPORARY-P SHEET)
 			    (SHEET-EXPOSED-P SHEET)
 			    (SHEET-CAN-GET-LOCK SHEET)
-			    (CATCH-ERROR (SEND SHEET :DEEXPOSE) NIL)))))
+			    (CATCH-ERROR (SEND SHEET ':DEEXPOSE) NIL)))))
 
 (DEFUN KBD-USE-COLD-LOAD-STREAM ()
   (LET-GLOBALLY ((COLD-LOAD-STREAM-OWNS-KEYBOARD T))
     (BLOCK TOP
-      (EH::SAVE-SCREEN-FOR-COLD-LOAD-STREAM)
+      (EH:SAVE-SCREEN-FOR-COLD-LOAD-STREAM)
       (DOLIST (W LOCKED-ERROR-WINDOWS)
 	(LET ((*QUERY-IO* COLD-LOAD-STREAM))
 	  (WHEN (FQUERY NIL "Handle error in ~S in cold load stream?" W)
 	    ;; Deleting the window from the list wakes up the process that
 	    ;; is waiting for an unlocked window.
-	    (EH::RESTORE-SCREEN-FOR-COLD-LOAD-STREAM T)
+	    (EH:RESTORE-SCREEN-FOR-COLD-LOAD-STREAM T)
 	    (RETURN-FROM TOP (SETQ LOCKED-ERROR-WINDOWS (DELQ W LOCKED-ERROR-WINDOWS)))
 	    )))
       (UNWIND-PROTECT
-	  (CATCH-ERROR-RESTART ((SYS:ABORT ERROR)
-				"Exit from the cold-load-stream breakpoint.")
+	  (CATCH-ERROR-RESTART ((SYS:ABORT ERROR) "Exit from the cold-load-stream breakpoint.")
 	    (LET ((INHIBIT-SCHEDULING-FLAG NIL)	;NIL or BREAK would complain
 		  (*TERMINAL-IO* COLD-LOAD-STREAM))
-	      (FORMAT *TERMINAL-IO* "~&Package ~A." (PACKAGE-NAME *PACKAGE*))
+	      (FORMAT *TERMINAL-IO* "~&Package ~A." (SI:PKG-NAME PACKAGE))
 	      (BREAK "using cold load stream.")))
-	(EH::RESTORE-SCREEN-FOR-COLD-LOAD-STREAM)))))
+	(EH:RESTORE-SCREEN-FOR-COLD-LOAD-STREAM)))))
 
 (DEFUN KBD-ESC-OUTPUT-HOLD (IGNORE)
   (PROG (P W LOCKED ANS)
@@ -989,7 +993,7 @@ OPTIONS can include either :TYPEAHEAD or :KEYBOARD-PROCESS,
 				 THEREIS (AND (SHEET-OVERLAPS-SHEET-P W I)
 					      (NOT (SHEET-CAN-GET-LOCK (SETQ LOCKED I)))))))
 		  (LET-GLOBALLY ((COLD-LOAD-STREAM-OWNS-KEYBOARD T))
-		    (EH::SAVE-SCREEN-FOR-COLD-LOAD-STREAM)
+		    (EH:SAVE-SCREEN-FOR-COLD-LOAD-STREAM)
 		    (LET ((*QUERY-IO* COLD-LOAD-STREAM))
 		      (FORMAT *QUERY-IO* "Cannot expose ~S because~@
 					~:[~S~;~*it~] is locked by ~S."
@@ -998,28 +1002,28 @@ OPTIONS can include either :TYPEAHEAD or :KEYBOARD-PROCESS,
 				 (NOT (SHEET-EXPOSED-P W))
 				 (FQUERY NIL "Attempt to expose, pretending to be ~S? "
 					 (SHEET-LOCK LOCKED)))
-			(EH::RESTORE-SCREEN-FOR-COLD-LOAD-STREAM T)
+			(EH:RESTORE-SCREEN-FOR-COLD-LOAD-STREAM T)
 			(LET ((RESULT (EXPOSE-LOCKED-WINDOW W (SHEET-LOCK LOCKED))))
 			  (IF (EQ RESULT T) (RETURN NIL))
-			  (EH::SAVE-SCREEN-FOR-COLD-LOAD-STREAM T)
+			  (EH:SAVE-SCREEN-FOR-COLD-LOAD-STREAM T)
 			  (IF RESULT
 			      (FORMAT *QUERY-IO* "~&That got an error:~%~A" RESULT)
-			      (FORMAT *QUERY-IO* "~&That did not finish in 10 seconds."))))
-		      (SETQ ANS (FQUERY '(:CHOICES (((T "Yes.") #/Y #/SPACE #/T)
-						    ((NIL "No.") #/N #/RUBOUT)
-						    ((EH "To debugger.") #/D #/E))
+			    (FORMAT *QUERY-IO* "~&That did not finish in 10 seconds."))))
+		      (SETQ ANS (FQUERY '(:CHOICES (((T "Yes.") #/Y #/SP #/T)
+						    ((NIL "No.") #/N #/RUBOUT)
+						    ((EH "To debugger.") #/D #/E))
 					  :BEEP T)
 					"Forcibly unlock all window-system locks? "))
-		      (EH::RESTORE-SCREEN-FOR-COLD-LOAD-STREAM T)))
+		      (EH:RESTORE-SCREEN-FOR-COLD-LOAD-STREAM T)))
 		  (COND ((EQ ANS 'EH)
 			 (SETQ *DEBUG-IO* COLD-LOAD-STREAM)
-			 (SEND P :INTERRUPT %ERROR-HANDLER-STACK-GROUP '(:BREAK))
+			 (SEND P ':INTERRUPT %ERROR-HANDLER-STACK-GROUP '(:BREAK))
 			 (RETURN NIL))	;Don't try to expose
 			(ANS (SHEET-CLEAR-LOCKS))))
 		 ((AND (SHEET-EXPOSED-P W)	;This can happen, I don't know how
 		       (NOT (SHEET-LOCK W))
 		       (SHEET-OUTPUT-HELD-P W))
-		  (EH::SAVE-SCREEN-FOR-COLD-LOAD-STREAM)
+		  (EH:SAVE-SCREEN-FOR-COLD-LOAD-STREAM)
 		  (IF (LET ((*QUERY-IO* COLD-LOAD-STREAM))
 			(FQUERY '(:BEEP T)
 				"~S is output-held for no apparent reason.~@
@@ -1028,21 +1032,22 @@ OPTIONS can include either :TYPEAHEAD or :KEYBOARD-PROCESS,
 				 Do you want to forcibly clear output-hold? "
 				W))
 		      (SETF (SHEET-OUTPUT-HOLD-FLAG W) 0))
-		  (EH::RESTORE-SCREEN-FOR-COLD-LOAD-STREAM T)))
-	   (SEND W :EXPOSE))
+		  (EH:RESTORE-SCREEN-FOR-COLD-LOAD-STREAM T)))
+	   (SEND W ':EXPOSE))
 	  ((BEEP)))))
 
 (DEFUN EXPOSE-LOCKED-WINDOW (WINDOW LOCKING-PROCESS)
   (LET* ((RESULT (LIST NIL))
-	 (PROCESS (PROCESS-RUN-FUNCTION "Expose locked window"
-					#'(LAMBDA (WINDOW CURRENT-PROCESS RESULT)
-					    (CONDITION-CASE (ERROR)
-						(SEND WINDOW :EXPOSE)
-					      (ERROR (SETF (CAR RESULT) ERROR))
-					      (:NO-ERROR (SETF (CAR RESULT) T))))
-					WINDOW LOCKING-PROCESS RESULT)))
+	 (PROCESS
+	   (PROCESS-RUN-FUNCTION "Expose locked window"
+				 #'(LAMBDA (WINDOW CURRENT-PROCESS RESULT)
+				     (CONDITION-CASE (ERROR)
+					 (SEND WINDOW ':EXPOSE)
+				       (ERROR (SETF (CAR RESULT) ERROR))
+				       (:NO-ERROR (SETF (CAR RESULT) T))))
+				 WINDOW LOCKING-PROCESS RESULT)))
     (PROCESS-WAIT-WITH-TIMEOUT "Expose Window" 600. 'CAR RESULT)
-    (UNLESS (CAR RESULT) (SEND PROCESS :RESET))
+    (UNLESS (CAR RESULT) (SEND PROCESS ':RESET))
     (CAR RESULT)))
 
 (DEFINE-SITE-VARIABLE *FINGER-ARG-ALIST* :ESC-F-ARG-ALIST)
@@ -1072,28 +1077,28 @@ OPTIONS can include either :TYPEAHEAD or :KEYBOARD-PROCESS,
 (DEFUN NEW-FINGER-ARG-PROMPT (&OPTIONAL PROMPT-ARG &AUX FINGER-ARGLIST) ;nil=all, else number
   "Return a string that represents the current state of what host terminal-n-f would finger"
   (FORMAT:OUTPUT NIL
-    (COND ((NULL PROMPT-ARG)			
-	   (FORMAT T "Finger (")
-	   (SETQ FINGER-ARGLIST *FINGER-ARG-ALIST*))
-	  (T
-	   (FORMAT T "Who's on ")
-	   (SETQ FINGER-ARGLIST (LIST (NTH (1+ PROMPT-ARG) *FINGER-ARG-ALIST*)))))
+  (COND ((NULL PROMPT-ARG)			
+	 (FORMAT T "Finger (")
+	 (SETQ FINGER-ARGLIST *FINGER-ARG-ALIST*))
+	(T
+	 (FORMAT T "Who's on ")
+	 (SETQ FINGER-ARGLIST (LIST (NTH (1+ PROMPT-ARG) *FINGER-ARG-ALIST*)))))
     (LOOP FOR (ARG . VAL) IN FINGER-ARGLIST
 	  WITH ARG-PRINTED = NIL AND COMMA-P = NIL
 	  WITH WIDTH = 40.
 	  DO (IF COMMA-P
-		 (IF (> (SEND *STANDARD-OUTPUT* :READ-CURSORPOS :CHARACTER) WIDTH)
+		 (IF (> (SEND *STANDARD-OUTPUT* ':READ-CURSORPOS ':CHARACTER) WIDTH)
 		     (FORMAT T ",~%  ")
 		   (PRINC ", " *STANDARD-OUTPUT*))
 	       (SETQ COMMA-P T))
 	  WHEN ARG
 	  DO (COND ((NOT ARG-PRINTED)
 		    (IF (NULL PROMPT-ARG)
-			(SEND *STANDARD-OUTPUT* :STRING-OUT "or arg="))
+			(SEND *STANDARD-OUTPUT* ':STRING-OUT "or arg="))
 		    (SETQ ARG-PRINTED T)))
 	  (FORMAT T "~D " ARG)
 	  DO (IF (SYMBOLP VAL)
-		 (SEND *STANDARD-OUTPUT* :STRING-OUT
+		 (SEND *STANDARD-OUTPUT* ':STRING-OUT
 		       (CASE VAL
 			 (:LOGIN
 			  ;; Temporary until LISP-REINITIALIZE clears this on cold boot.
@@ -1115,10 +1120,10 @@ OPTIONS can include either :TYPEAHEAD or :KEYBOARD-PROCESS,
 			  (FORMAT T "~S (invalid host descriptor)" VAL))))
 	       (LOOP FOR HOST IN VAL
 		     WITH PLUS-P = NIL
-		     DO (IF PLUS-P (SEND *STANDARD-OUTPUT* :TYO #/+) (SETQ PLUS-P T))
+		     DO (IF PLUS-P (SEND *STANDARD-OUTPUT* ':TYO #/+) (SETQ PLUS-P T))
 		     (CONDITION-CASE ()
 			 (LET ((HOST-NAME (SI:PARSE-HOST HOST T T)))
-			   (FORMAT T "~A" (SEND HOST-NAME :SHORT-NAME)))
+			   (FORMAT T "~A" (SEND HOST-NAME ':SHORT-NAME)))
 		       (ERROR (FORMAT NIL "~S (invalid host descriptor)" HOST))))))
     (IF (NULL PROMPT-ARG)
 	(FORMAT T ")"))))
@@ -1135,9 +1140,9 @@ OPTIONS can include either :TYPEAHEAD or :KEYBOARD-PROCESS,
 
 ;;; this used to be a macro, but foo.
 (DEFUN AWAIT-USER-TYPEAHEAD (WINDOW)
-  (SEND WINDOW :CLEAR-INPUT)			;I prefer to lose this way.
+  (SEND WINDOW ':CLEAR-INPUT)			;I prefer to lose this way.
   (FORMAT WINDOW "~&~%Type a space to flush: ") ;well any character, anyway
-  (SEND WINDOW :TYI))
+  (SEND WINDOW ':TYI))
 
 (DEFUN KBD-FINGER (ARG &AUX MODE HOSTS LISPMS-P ALL-LISPMS-P)
   "This function fingers various hosts and displays them on a temporary window.
@@ -1147,7 +1152,7 @@ It is called when the user types terminal-f"
     (SETQ MODE (OR (CDR (ASSQ ARG *FINGER-ARG-ALIST*))
 		   (CDR (ASSQ 'T *FINGER-ARG-ALIST*))
 		   ':LOGIN))
-    (CASE MODE
+    (SELECTQ MODE
       (:LOGIN
        (SETQ HOSTS (LIST (OR FS:USER-LOGIN-MACHINE SI:ASSOCIATED-MACHINE))))
       (:ASSOCIATED
@@ -1164,18 +1169,18 @@ It is called when the user types terminal-f"
        (SETQ HOSTS MODE)))
     (IF (CONSP HOSTS)
 	(SETQ HOSTS (MAPCAR #'(LAMBDA (X) (STRING (SI:PARSE-HOST X T T))) HOSTS)))
-    (SEND WINDOW :SET-LABEL (IF (EQ MODE ':READ) "Finger"
-			      (WITH-OUTPUT-TO-STRING (STREAM)
-				(SEND STREAM :STRING-OUT "Who's on ")
-				(IF LISPMS-P
-				    (FORMAT STREAM "~@[Local ~]Lisp Machines"
-					    (NOT ALL-LISPMS-P))
-				  (LOOP FOR HOST IN HOSTS
-					WITH AND-P = NIL
-					DO (IF AND-P (SEND STREAM :STRING-OUT " and ")
-					     (SETQ AND-P T))
-					DO (SEND STREAM :STRING-OUT HOST))))))
-    (SEND WINDOW :SET-PROCESS CURRENT-PROCESS)
+    (SEND WINDOW ':SET-LABEL
+	  (IF (EQ MODE ':READ) "Finger"
+	    (WITH-OUTPUT-TO-STRING (STREAM)
+	      (SEND STREAM ':STRING-OUT "Who's on ")
+	      (IF LISPMS-P
+		  (FORMAT STREAM "~@[Local ~]Lisp Machines" (NOT ALL-LISPMS-P))
+		(LOOP FOR HOST IN HOSTS
+		      WITH AND-P = NIL
+		      DO (IF AND-P (SEND STREAM ':STRING-OUT " and ")
+			   (SETQ AND-P T))
+		      DO (SEND STREAM ':STRING-OUT HOST))))))
+    (SEND WINDOW ':SET-PROCESS CURRENT-PROCESS)
     (WINDOW-CALL (WINDOW :DEACTIVATE)
       (LET ((*TERMINAL-IO* WINDOW))		;In case of [Abort] printout and the like
 	(SETQ KBD-ESC-TIME NIL)			;Window configuration stable now;
@@ -1185,7 +1190,7 @@ It is called when the user types terminal-f"
 	      ((NOT (NULL LISPMS-P))
 	       (CHAOS:FINGER-LOCAL-LISPMS WINDOW))
 	      ((EQ MODE ':READ)
-	       (SEND WINDOW :CLEAR-INPUT)	;don't lose!
+	       (SEND WINDOW ':CLEAR-INPUT)  ;don't lose!
 	       (FORMAT WINDOW
 		       "~&Finger (type NAME@HOST or just @HOST, followed by Return):~%")
 	       (CHAOS-FINGER (READLINE WINDOW) WINDOW))
@@ -1195,9 +1200,9 @@ It is called when the user types terminal-f"
 	       (LOOP FOR HOST IN HOSTS
 		     WHEN HOST
 		     DO 
-;;done by finger itself now
-;		     (FORMAT WINDOW "~%[~A]" (SEND (SI:PARSE-HOST HOST T T) :NAME))
-		     (CHAOS-FINGER (STRING-APPEND #/@ HOST) WINDOW T))))
+    ;;done by finger itself now
+;		     (FORMAT WINDOW "~%[~A]" (send (SI:PARSE-HOST HOST T T) ':NAME))
+		     (CHAOS-FINGER (STRING-APPEND #/@ HOST) WINDOW T))))
 	(AWAIT-USER-TYPEAHEAD WINDOW)))))
 
 ;;; Perhaps KBD-FINGER can be made net-independent if we set a variable to the right
@@ -1207,8 +1212,8 @@ It is called when the user types terminal-f"
 (DEFUN CHAOS-FINGER (SPEC WINDOW &OPTIONAL HACK-BRACKETS-P &AUX RESULT)
   (WHEN (AND (ERRORP (SETQ RESULT (CHAOS:FINGER SPEC WINDOW HACK-BRACKETS-P)))
 	     (CONDITION-TYPEP RESULT 'SYS:NETWORK-ERROR))
-    (SEND WINDOW :FRESH-LINE)
-    (SEND RESULT :REPORT WINDOW)))
+    (SEND WINDOW ':FRESH-LINE)
+    (SEND RESULT ':REPORT WINDOW)))
 
 (DEFUN KBD-ESC-NOTIFICATIONS (ARG &AUX NN TEM)	;terminal n
   "Display notifications in a pop-up window.
@@ -1218,12 +1223,12 @@ With an argument of T, pending notifications only are printed.
 With an argument of 1, displays all notifications.
 With an argument of 2, prints nothing, but marks pending
  notifications as no longer pending."
-  ;; do this before selecting new window -- don't get screwed by the wait-to-notify process
+  ;;do this before selecting new window -- don't get screwed by the wait-to-notify process
   (WITHOUT-INTERRUPTS
     (SETQ NN (APPEND PENDING-NOTIFICATIONS DEFERRED-NOTIFICATIONS)
 	  DEFERRED-NOTIFICATIONS NIL
 	  PENDING-NOTIFICATIONS NIL))
-  (IF (CASE ARG
+  (IF (SELECTQ ARG
 	((NIL) T)
 	((T) NN)
 	(1 T)
@@ -1231,14 +1236,14 @@ With an argument of 2, prints nothing, but marks pending
 	   NIL))
       (USING-RESOURCE (WINDOW POP-UP-FINGER-WINDOW)
 	(SETF (SHEET-TRUNCATE-LINE-OUT-FLAG WINDOW) 0)
-	(SEND WINDOW :SET-LABEL "Notifications -- most recent first")
+	(SEND WINDOW ':SET-LABEL "Notifications -- most recent first")
 	(WINDOW-CALL (WINDOW :DEACTIVATE)
 	  (SETQ KBD-ESC-TIME NIL)
-	  ;; kludge to let us catch more notifications while this window is exposed
+	  ;;kludge to let us catch more notifications while this window is exposed
 	  (DO-FOREVER
 	    (WITHOUT-INTERRUPTS
  	      (SETQ NN (NCONC PENDING-NOTIFICATIONS NN) PENDING-NOTIFICATIONS NIL))
-	    (SEND WINDOW :CLEAR-SCREEN)
+	    (SEND WINDOW ':CLEAR-SCREEN)
 	    (FORMAT WINDOW "~:[[There are no pending notifications]~;New notifications:~]~%"
 		    NN)
 	    (SETQ TEM NOTIFICATION-HISTORY)
@@ -1256,46 +1261,44 @@ With an argument of 2, prints nothing, but marks pending
 	    (PROCESS-WAIT "Keyboard" #'(LAMBDA (WINDOW)
 					 (OR PENDING-NOTIFICATIONS
 					     (NEQ SELECTED-WINDOW WINDOW)
-					     (SEND WINDOW :LISTEN)))
+					     (SEND WINDOW ':LISTEN)))
 			  WINDOW)
 	    (OR PENDING-NOTIFICATIONS
 		(NEQ SELECTED-WINDOW WINDOW)
-		(SEND WINDOW :TYI-NO-HANG))
+		(SEND WINDOW ':TYI-NO-HANG))
 	    (OR PENDING-NOTIFICATIONS (RETURN T)))))))
 
 ;;; nil -- view own mail. 0 -- view random person's mail. 1 -- view random file
 (DEFUN KBD-VIEW-MAIL (ARG &AUX (LUSER USER-ID) (HOST FS:USER-LOGIN-MACHINE) DIR FILE ERROR)
-  "View a file (probably mail) in a termporary window.
-ARG is NIL, view own's new mail, 0 view other person's mail, 1 view a different file."
   (USING-RESOURCE (WINDOW TV:POP-UP-FINGER-WINDOW)
     (SETF (TV:SHEET-TRUNCATE-LINE-OUT-FLAG WINDOW) 1)
-    (SEND WINDOW :SET-LABEL (IF (EQ ARG 1) "View file" "View mail"))
-    (SEND WINDOW :SET-PROCESS CURRENT-PROCESS)
+    (SEND WINDOW ':SET-LABEL (IF (EQ ARG 1) "View file" "View mail"))
+    (SEND WINDOW ':SET-PROCESS CURRENT-PROCESS)
     (TV:WINDOW-CALL (WINDOW :DEACTIVATE)
       (LET ((*TERMINAL-IO* WINDOW) (*QUERY-IO* WINDOW))
 	(SETQ TV:KBD-ESC-TIME NIL)		;Window configuration stable.
-	(CASE ARG
-	  (0 (MULTIPLE-VALUE-SETQ (LUSER HOST)
+	(SELECTQ ARG
+	  (0 (MULTIPLE-VALUE (LUSER HOST)
 	       (SI:PARSE-USER-NAME (READ-LINE T NIL NIL NIL '((:PROMPT "View whose mail: ")))
 				   :DEFAULT-HOST FS:USER-LOGIN-MACHINE))
 	     (COND ((ERRORP HOST)
-		    (SEND WINDOW :TYO #/NEWLINE)
+		    (SEND WINDOW :TYO #\Newline)
 		    (SEND HOST :REPORT WINDOW)	
-		    (SEND WINDOW :TYO #/NEWLINE)
+		    (SEND WINDOW :TYO #\Newline)
 		    (SETQ ERROR T))
 		   ((NOT (FS:GET-PATHNAME-HOST HOST T))
 		    (FORMAT T "~%~A is not a file server host; one can't read mail from it.~%"
 			    HOST)
 		    (SETQ ERROR T))))
-	  (1 (SETQ FILE (PROMPT-AND-READ :PATHNAME "View File: "))
-	     (SEND WINDOW :SET-LABEL (FORMAT NIL "Viewing ~A" FILE))))
+	  (1 (SETQ FILE (PROMPT-AND-READ ':PATHNAME "View File: "))
+	     (SEND WINDOW ':SET-LABEL (FORMAT NIL "Viewing ~A" FILE))))
 	(IF ERROR
 	    (AWAIT-USER-TYPEAHEAD WINDOW)
 	  (UNLESS (EQ ARG 1)
-	    (SEND WINDOW :SET-LABEL (FORMAT NIL "Viewing ~A's new mail on ~A" LUSER HOST))
+	    (SEND WINDOW ':SET-LABEL (FORMAT NIL "Viewing ~A's new mail on ~A" LUSER HOST))
 	    (SETQ DIR (FS:USER-HOMEDIR HOST NIL LUSER))	;this still isn't right, but...
-	    (SETQ FILE (SEND DIR :NEW-MAIL-PATHNAME)))
-	  (WITH-OPEN-FILE (S FILE :ERROR NIL :CHARACTERS T)
+	    (SETQ FILE (SEND DIR ':NEW-MAIL-PATHNAME)))
+	  (WITH-OPEN-FILE (S FILE ':ERROR NIL ':CHARACTERS T)
 	    (COND ((ERRORP S)
 		   (IF (EQ ARG 1)
 		       (FORMAT WINDOW "~&Error opening ~A: ~A" FILE S)
@@ -1305,23 +1308,23 @@ ARG is NIL, view own's new mail, 0 view other person's mail, 1 view a different 
 		   (AWAIT-USER-TYPEAHEAD WINDOW))
 		  (T
 		   (STREAM-COPY-UNTIL-EOF S WINDOW)
-		   (SEND WINDOW :CLEAR-INPUT)	;just to be safe
+		   (SEND WINDOW ':CLEAR-INPUT)	;just to be safe
 		   (FORMAT WINDOW
-			   "~3&Type ~@[~C~* to delete ~A's mail, or ~]a space to flush: "
-			   (NEQ ARG 1) #/DELETE LUSER)
-		   (LET ((RESPONSE (SEND WINDOW :TYI)))
-		     (WHEN (AND (CHAR= RESPONSE #/DELETE)
+			   "~3&Type ~@[~C to delete ~A's mail, or ~]a space to flush: "
+			   (NEQ ARG 1) #/DELETE LUSER)
+		   (LET ((RESPONSE (SEND WINDOW ':TYI)))
+		     (WHEN (AND (EQ RESPONSE #/DELETE)
 				(NEQ ARG 1)
 				(YES-OR-NO-P "Do you REALLY want to delete this mail ? "))
-		       (SEND S :DELETE))))))))))
+		       (SEND S ':DELETE))))))))))
   NIL)
 	    
 (DEFUN KBD-GC-STATUS ()				;terminal g
   "Show the user the state of the garbage collector."
   (USING-RESOURCE (WINDOW POP-UP-FINGER-WINDOW)
     (SETF (SHEET-TRUNCATE-LINE-OUT-FLAG WINDOW) 1)
-    (SEND WINDOW :SET-LABEL "GC Status")
-    (SEND WINDOW :SET-PROCESS CURRENT-PROCESS)
+    (SEND WINDOW ':SET-LABEL "GC Status")
+    (SEND WINDOW ':SET-PROCESS CURRENT-PROCESS)
     (WINDOW-CALL (WINDOW :DEACTIVATE)
       (LET ((*TERMINAL-IO* WINDOW))
 	(SETQ KBD-ESC-TIME NIL)
@@ -1333,8 +1336,8 @@ ARG is NIL, view own's new mail, 0 view other person's mail, 1 view a different 
   "In a temporary window, show the user the status of various chaosnet hosts."
   (USING-RESOURCE (WINDOW POP-UP-FINGER-WINDOW)
     (SETF (SHEET-TRUNCATE-LINE-OUT-FLAG WINDOW) 1)
-    (SEND WINDOW :SET-LABEL "Hostat")
-    (SEND WINDOW :SET-PROCESS CURRENT-PROCESS)
+    (SEND WINDOW ':SET-LABEL "Hostat")
+    (SEND WINDOW ':SET-PROCESS CURRENT-PROCESS)
     (WINDOW-CALL (WINDOW :DEACTIVATE)
       (LET ((*TERMINAL-IO* WINDOW))
 	(SETQ KBD-ESC-TIME NIL)			;Window configuration stable.
@@ -1348,35 +1351,38 @@ ARG is NIL, view own's new mail, 0 view other person's mail, 1 view a different 
 	 (BEEP))
 	((NULL SELECTED-WINDOW) (BEEP))
 	(T
-	 (LET ((CURRENT-ACTION (SEND SELECTED-WINDOW :DEEXPOSED-TYPEIN-ACTION)))
-	   (CASE ARG
+	 (LET ((CURRENT-ACTION (SEND SELECTED-WINDOW ':DEEXPOSED-TYPEIN-ACTION)))
+	   (SELECTQ ARG
 	     ((NIL)
-	      (SEND SELECTED-WINDOW :SET-DEEXPOSED-TYPEIN-ACTION
-				    (IF (EQ CURRENT-ACTION :NOTIFY) :NORMAL :NOTIFY)))
-	     (0 (SEND SELECTED-WINDOW :SET-DEEXPOSED-TYPEIN-ACTION :NORMAL))
-	     (1 (SEND SELECTED-WINDOW :SET-DEEXPOSED-TYPEIN-ACTION :NOTIFY)))))))
+	      (SEND SELECTED-WINDOW ':SET-DEEXPOSED-TYPEIN-ACTION
+		    (IF (EQ CURRENT-ACTION ':NOTIFY)
+			':NORMAL ':NOTIFY)))
+	     (0 (SEND SELECTED-WINDOW ':SET-DEEXPOSED-TYPEIN-ACTION ':NORMAL))
+	     (1 (SEND SELECTED-WINDOW ':SET-DEEXPOSED-TYPEIN-ACTION ':NOTIFY)))))))
 
 (DEFUN KBD-ESC-T (ARG)				;terminal t
   "Control the selected window's deexposed typeout action.
 0 => wait, 1 => notify, 2 => permit."
-  (COND ((NOT (MEMQ ARG '(NIL 0 1 2)))
+  (COND ((NOT (OR (NULL ARG) ( 0 ARG 2)))
 	 (BEEP))
 	((NULL SELECTED-WINDOW) (BEEP))
 	(T
-	 (LET ((CURRENT-ACTION (SEND SELECTED-WINDOW :DEEXPOSED-TYPEOUT-ACTION)))
+	 (LET ((CURRENT-ACTION (SEND SELECTED-WINDOW ':DEEXPOSED-TYPEOUT-ACTION)))
 	   (IF (NOT (MEMQ CURRENT-ACTION '(:NOTIFY :NORMAL :PERMIT)))
 	       (BEEP)   ;If it's something funny, don't change it!
-	     (CASE ARG
-	       ((NIL) (SEND SELECTED-WINDOW :SET-DEEXPOSED-TYPEOUT-ACTION
-					    (IF (EQ CURRENT-ACTION :NOTIFY) :NORMAL :NOTIFY)))
-	       (0 (SEND SELECTED-WINDOW :SET-DEEXPOSED-TYPEOUT-ACTION :NORMAL))
-	       (1 (SEND SELECTED-WINDOW :SET-DEEXPOSED-TYPEOUT-ACTION :NOTIFY))
-	       (2 (SEND SELECTED-WINDOW :SET-DEEXPOSED-TYPEOUT-ACTION :PERMIT))))))))
+	     (SELECTQ ARG
+	       ((NIL)
+		(SEND SELECTED-WINDOW ':SET-DEEXPOSED-TYPEOUT-ACTION
+		      (IF (EQ CURRENT-ACTION ':NOTIFY)
+			  ':NORMAL ':NOTIFY)))
+	       (0 (SEND SELECTED-WINDOW ':SET-DEEXPOSED-TYPEOUT-ACTION ':NORMAL))
+	       (1 (SEND SELECTED-WINDOW ':SET-DEEXPOSED-TYPEOUT-ACTION ':NOTIFY))
+	       (2 (SEND SELECTED-WINDOW ':SET-DEEXPOSED-TYPEOUT-ACTION ':PERMIT))))))))
 
 (DEFUN KBD-ESC-W (ARG &AUX PROC)		;terminal w
   (SETQ PROC LAST-WHO-LINE-PROCESS)
-  (CASE ARG
-    ((NIL) (SEND WHO-LINE-SCREEN :REFRESH))
+  (SELECTQ ARG
+    (NIL (SEND WHO-LINE-SCREEN ':REFRESH))
     (0 (SETQ WHO-LINE-PROCESS
 	     (LET ((ALIST (MAPCAR #'(LAMBDA (P) (CONS (PROCESS-NAME P) P)) ALL-PROCESSES)))
 	       (MENU-CHOOSE ALIST "Who-line process:" '(:MOUSE) (RASSOC PROC ALIST)))))
@@ -1397,22 +1403,23 @@ ARG is NIL, view own's new mail, 0 view other person's mail, 1 view a different 
 
 (DEFRESOURCE HARDCOPY-BIT-ARRAY-RESOURCE ()
   :CONSTRUCTOR (MAKE-PIXEL-ARRAY MAIN-SCREEN-WIDTH
-				 (+ MAIN-SCREEN-HEIGHT #o100) 	;Big enough for
-				 :TYPE ART-1B)			; for (SET-TV-SPEED 60.)
-  :INITIAL-COPIES 0)				
+				 (+ MAIN-SCREEN-HEIGHT 100) 	;Big enough for
+				 ':TYPE 'ART-1B)
+;  :CONSTRUCTOR (MAKE-PIXEL-ARRAY 1400 1730 ':TYPE 'ART-1B)	;Big enough for
+  :INITIAL-COPIES 0)				; for (SET-TV-SPEED 60.)
 
 ;;; terminal 0 Q copies without wholine, terminal 1 Q copies just selected window.
 (DEFUN KBD-ESC-Q (ARG &AUX (PRINTER (OR SI:*DEFAULT-BIT-ARRAY-PRINTER* SI:*DEFAULT-PRINTER*)))
   (IF (GET (IF (CONSP PRINTER) (CAR PRINTER) PRINTER) 'SI:PRINT-BIT-ARRAY)
       (USING-RESOURCE (ARRAY HARDCOPY-BIT-ARRAY-RESOURCE)
 	(MULTIPLE-VALUE-BIND (NIL WIDTH HEIGHT)
-	    (SNAPSHOT-SCREEN (CASE ARG
+	    (SNAPSHOT-SCREEN (SELECTQ ARG
 			       (1 SELECTED-WINDOW)
 			       (0 DEFAULT-SCREEN)
 			       (OTHERWISE (MAIN-SCREEN-AND-WHO-LINE)))
 			     ARRAY)
 	  (BEEP)
-	  (HARDCOPY-BIT-ARRAY ARRAY 0 0 WIDTH HEIGHT :PRINTER PRINTER)))
+	  (HARDCOPY-BIT-ARRAY ARRAY 0 0 WIDTH HEIGHT ':PRINTER PRINTER)))
     (TV:NOTIFY NIL "I don't know a printer that can hardcopy the screen")))
 
 (DEFUN SNAPSHOT-SCREEN (FROM-ARRAY TO-ARRAY &OPTIONAL WIDTH HEIGHT)
@@ -1434,14 +1441,14 @@ ARG is NIL, view own's new mail, 0 view other person's mail, 1 view a different 
 (DEFUN KBD-ESC-HELP (IGNORE &AUX DOC (INDENT 15.))	;terminal help
   (USING-RESOURCE (WINDOW POP-UP-FINGER-WINDOW)
     (SETF (SHEET-TRUNCATE-LINE-OUT-FLAG WINDOW) 0)
-    (SEND WINDOW :SET-LABEL "Keyboard documentation")
+    (SEND WINDOW ':SET-LABEL "Keyboard documentation")
     (WINDOW-MOUSE-CALL (WINDOW :DEACTIVATE)
       (SETQ KBD-ESC-TIME NIL)
       (FORMAT WINDOW "~25TType ~:C followed by:
 
 ~:C~VTDo nothing. (Use this if you typed ~:C by accident and want to cancel it.)
 0-9, -~VTNumeric argument to following command~%"
-	      #/TERMINAL #/RUBOUT INDENT #/TERMINAL INDENT)
+	      #/TERMINAL #/RUBOUT INDENT #/TERMINAL INDENT)
       (DOLIST (X *ESCAPE-KEYS*)
 	(COND ((NULL (CAR X))
 	       (SETQ INDENT 20.)
@@ -1472,19 +1479,18 @@ Clear-Screen	Refresh screen			Return		Carriage return
 Hold-Output	(not used)			Line		Next line and indent (Zmacs)
 ")
       (FORMAT WINDOW "~%Type a space to flush: ")
-      (SEND WINDOW :TYI))))
+      (SEND WINDOW ':TYI))))
 
 (DEFUN PRINT-STRING-WITH-INDENTATION (STREAM STRING INDENT &AUX POS)
   "Print STRING on STREAM, indenting each line in STRING by INDENT."
   (DO ((START 0) (END (STRING-LENGTH STRING)))
       (( START END))
     (FORMAT STREAM "~VT" INDENT)
-    (SETQ POS (STRING-SEARCH-CHAR #/NEWLINE STRING START))
+    (SETQ POS (STRING-SEARCH-CHAR #/RETURN STRING START))
     (PRINC (NSUBSTRING STRING START POS) STREAM)
     (TERPRI STREAM)
     (SETQ START (IF POS (1+ POS) END))))
 
-;character lossage
 (DEFVAR *SYSTEM-KEYS*
 	'((#/C ZWEI:CONVERSE-FRAME "Converse" T)
 	  (#/E ZWEI:ZMACS-FRAME "Editor" T)
@@ -1492,7 +1498,7 @@ Hold-Output	(not used)			Line		Next line and indent (Zmacs)
 	  (#/I INSPECT-FRAME "Inspector" T)
 	  (#/L LISTENER-MIXIN "Lisp" LISP-LISTENER)
 	  (#/P PEEK-FRAME "Peek" T)
-	  ;(#/R EH::ERROR-HANDLER-FRAME "Window error-handler" NIL)  ;not a program!
+	  ;(#/R EH:ERROR-HANDLER-FRAME "Window error-handler" NIL)  ;not a program!
 	  (#/S (PROGN SUPDUP:SUPDUP-FLAVOR) "Supdup" T)
 	  (#/T SUPDUP:TELNET "Telnet" T))
   "Defines keys you can type after the System key.
@@ -1510,7 +1516,7 @@ CREATE-FLAVOR can be NIL meaning do not create windows ever,
   "Remove any definition for CHAR typed after the System key."
   (SETQ *SYSTEM-KEYS*
 	(DELETE-IF #'(LAMBDA (ELT) (CHAR-EQUAL (CAR ELT) CHAR))
-		   *SYSTEM-KEYS* :COUNT 1)))
+		   *SYSTEM-KEYS* ':COUNT 1)))
 
 (DEFUN ADD-SYSTEM-KEY (CHAR WINDOW-OR-FLAVOR DOCUMENTATION &OPTIONAL (CREATE T))
   "Make typing the System key followed by CHAR select the window WINDOW-OR-FLAVOR.
@@ -1525,7 +1531,7 @@ CREATE says whether and how to create a new window if Control-char is pressed.
   a list to evaluate for effect, to create and select a window.
 If CHAR is already defined to select a flavor window, then the old version is
   remembered. To restore the former definition, use (TV:REMOVE-SYSTEM-KEY CHAR)"
-  (PUSH (LIST (CHAR-UPCASE (GLOBAL:CHARACTER CHAR)) WINDOW-OR-FLAVOR DOCUMENTATION CREATE)
+  (PUSH (LIST (CHAR-UPCASE CHAR) WINDOW-OR-FLAVOR DOCUMENTATION CREATE)
 	*SYSTEM-KEYS*)
   (SETQ *SYSTEM-KEYS* (STABLE-SORTCAR *SYSTEM-KEYS* #'ALPHALESSP)))
 
@@ -1545,24 +1551,24 @@ If CHAR is already defined to select a flavor window, then the old version is
 (DEFUN KBD-SYS-1 (CH &AUX E W SW MAKENEW FLAVOR-OR-WINDOW SW-ALIAS)
   (SETQ MAKENEW (CHAR-BIT CH :CONTROL)
 	CH (CHAR-CODE CH))
-  (COND ((OR (CHAR= CH #/HELP) (CHAR= CH #/?))
+  (COND ((OR (= CH #/?) (= CH #/HELP))
 	 (USING-RESOURCE (WINDOW POP-UP-FINGER-WINDOW)
 	   (SETF (SHEET-TRUNCATE-LINE-OUT-FLAG WINDOW) 0)
-	   (SEND WINDOW :SET-LABEL "Keyboard system commands")
+	   (SEND WINDOW ':SET-LABEL "Keyboard system commands")
 	   (WINDOW-CALL (WINDOW :DEACTIVATE)
 	     (FORMAT WINDOW
 		     "Type ~:@C followed by one of these characters to select the ~
-                      corresponding program:~2%" #/SYSTEM)
-	     (LET ((LIST (SORTCAR (COPY-LIST *SYSTEM-KEYS*) #'ALPHALESSP)) (TEM #/?))
+                      corresponding program:~2%" #/SYSTEM)
+	     (LET ((LIST (SORTCAR (COPY-LIST *SYSTEM-KEYS*) #'ALPHALESSP)) (TEM #/?))
 	       (DOLIST (X LIST)
 		 (OR (CHAR-EQUAL TEM (SETQ TEM (CAR X)))
 		     (FORMAT WINDOW "~&~C~8T~A" TEM (CADDR X)))))		 
 	     (FORMAT WINDOW
 	       "~2&Type ~:@C control-<character> to create a new window of a particular type.~@
                 Type ~:@C after ~:@C to do nothing (if you typed ~:@C by accident).~%~@
-		Type a space to flush: " #/SYSTEM #/RUBOUT #/SYSTEM #/SYSTEM)
+		Type a space to flush: " #/SYSTEM #/RUBOUT #/SYSTEM #/SYSTEM)
 	     (SETQ KBD-ESC-TIME NIL)		;Let kbd process proceed before we TYI.
-	     (SEND WINDOW :TYI))))
+	     (SEND WINDOW ':TYI))))
 	((SETQ E (ASSQ CH *SYSTEM-KEYS*))
 	 ;; Find the most recently selected window of the desired type.
 	 ;; If it is the same type as the selected window, make that the
@@ -1578,17 +1584,19 @@ If CHAR is already defined to select a flavor window, then the old version is
 		 (SECOND E)))
 	 (DELAYING-SCREEN-MANAGEMENT	;Inhibit auto selection
 	   (SETQ SW SELECTED-WINDOW)
-	   (WHEN SW (SETQ SW-ALIAS (SEND SW :ALIAS-FOR-SELECTED-WINDOWS)))
+	   (WHEN SW (SETQ SW-ALIAS (SEND SW ':ALIAS-FOR-SELECTED-WINDOWS)))
 	   (COND ((TYPEP FLAVOR-OR-WINDOW 'ESSENTIAL-WINDOW)
 		  ;; If the *SYSTEM-KEYS* list has a specific window indicated, use that.
-		  (AND SW (SEND SW :DESELECT NIL))
-		  (SEND FLAVOR-OR-WINDOW :MOUSE-SELECT))
+		  (AND SW (SEND SW ':DESELECT NIL))
+		  (SEND FLAVOR-OR-WINDOW ':MOUSE-SELECT))
 		 ((NULL FLAVOR-OR-WINDOW) NIL)  ;NIL means he already did whatever he wanted.
 		 ((AND (NOT MAKENEW)
 		       (SETQ W (FIND-WINDOW-OF-FLAVOR FLAVOR-OR-WINDOW)))
 		  ;; Cycle through other windows of this flavor.
-		  (WHEN SW (SEND SW :DESELECT (IF (TYPEP SW-ALIAS FLAVOR-OR-WINDOW) :END)))
-		  (SEND W :MOUSE-SELECT))
+		  (WHEN SW
+		    (SEND SW ':DESELECT
+			     (IF (TYPEP SW-ALIAS FLAVOR-OR-WINDOW) ':END)))
+		  (SEND W ':MOUSE-SELECT))
 		 ((AND (NOT MAKENEW) SW
 		       (TYPEP SW-ALIAS FLAVOR-OR-WINDOW))
 		  ;; There is only one window of this flavor, and this is it.
@@ -1597,19 +1605,20 @@ If CHAR is already defined to select a flavor window, then the old version is
 		 ((ATOM (FOURTH E))
 		  ;; Create a new window of this flavor.
 		  ;; We create on the default screen.
-		  (AND SW (SEND SW :DESELECT (IF (TYPEP SW-ALIAS FLAVOR-OR-WINDOW) :END)))
-		  (SEND (MAKE-INSTANCE (IF (EQ (FOURTH E) T) FLAVOR-OR-WINDOW (FOURTH E))
-				       :SUPERIOR DEFAULT-SCREEN)
-			:MOUSE-SELECT))
+		  (AND SW (SEND SW ':DESELECT
+				   (IF (TYPEP SW-ALIAS FLAVOR-OR-WINDOW) ':END)))
+		  (SEND (MAKE-WINDOW (IF (EQ (FOURTH E) T) FLAVOR-OR-WINDOW (FOURTH E))
+				     ':SUPERIOR DEFAULT-SCREEN)
+			':MOUSE-SELECT))
 		 (T (EVAL (FOURTH E))))))
-	((CHAR CH #/RUBOUT) (BEEP)))
+	(( CH #/RUBOUT) (BEEP)))
   (SETQ KBD-ESC-TIME NIL))
 
 (DEFUN FIND-WINDOW-OF-FLAVOR (FLAVOR)
   "Find a previously selected window whose flavor includes FLAVOR."
   (DOTIMES (I (ARRAY-LENGTH PREVIOUSLY-SELECTED-WINDOWS))
     (LET ((W (AREF PREVIOUSLY-SELECTED-WINDOWS I)))
-      (AND W (TYPEP W FLAVOR) (SEND W :NAME-FOR-SELECTION)
+      (AND W (TYPEP W FLAVOR) (SEND W ':NAME-FOR-SELECTION)
 	   (RETURN W)))))
 
 ;;;; Notifications (call side)
@@ -1653,13 +1662,13 @@ in printing the notification, returns T."
 	(OR (ASSQ WINDOW-OF-INTEREST BACKGROUND-INTERESTING-WINDOWS)
 	    (PUSH (CONS WINDOW-OF-INTEREST NIL) BACKGROUND-INTERESTING-WINDOWS)))
       (IF (SHEET-CAN-GET-LOCK WINDOW-OF-INTEREST)	;Try to make available to sys menu
-	  (SEND WINDOW-OF-INTEREST :ACTIVATE)))		;but don't bother if locked
+	  (SEND WINDOW-OF-INTEREST ':ACTIVATE)))	;but don't bother if locked
     ;; Get a selected-window to which to send the :print-notification message
     (IF (NOT CAREFUL-P)
 	(IF WAIT-FOR-NOTIFICATIONS-FLAG
 	    ;; It's going to wait anyway, so don't lock anything!
 	    (DO ((SW SELECTED-WINDOW SELECTED-WINDOW))
-		(SW (SEND SW :PRINT-NOTIFICATION TIME MESSAGE WINDOW-OF-INTEREST)
+		(SW (SEND SW ':PRINT-NOTIFICATION TIME MESSAGE WINDOW-OF-INTEREST)
 		    T)
 	      (PROCESS-WAIT "A selected window" 'SYMEVAL 'SELECTED-WINDOW))
 	  ;; What this piece of hair is all about is that we don't want to pick a window
@@ -1673,7 +1682,7 @@ in printing the notification, returns T."
 			  (SHEET-CAN-GET-LOCK SW))
 		RETURN (LOCK-SHEET (SW)
 			 (SETQ INHIBIT-SCHEDULING-FLAG NIL)
-			 (SEND SW :PRINT-NOTIFICATION TIME MESSAGE WINDOW-OF-INTEREST))
+			 (SEND SW ':PRINT-NOTIFICATION TIME MESSAGE WINDOW-OF-INTEREST))
 		DO (SETQ INHIBIT-SCHEDULING-FLAG NIL)
 		(PROCESS-WAIT "A selected window"
 			      #'(LAMBDA (SW) (OR (NEQ SELECTED-WINDOW SW)
@@ -1692,7 +1701,7 @@ in printing the notification, returns T."
 		 (LOCK-SHEET (SW)
 		    (LET ((INHIBIT-SCHEDULING-FLAG NIL)
 			  (WAIT-FOR-NOTIFICATIONS-FLAG NIL))
-		      (SEND SW :PRINT-NOTIFICATION TIME MESSAGE WINDOW-OF-INTEREST)))
+		      (SEND SW ':PRINT-NOTIFICATION TIME MESSAGE WINDOW-OF-INTEREST)))
 		 T)))))))
 
 ;;;; Background stream
@@ -1702,11 +1711,11 @@ in printing the notification, returns T."
 (DEFVAR BACKGROUND-INTERESTING-WINDOWS NIL)
 
 (DEFFLAVOR BACKGROUND-LISP-INTERACTOR () (LISP-INTERACTOR)
-  (:DEFAULT-INIT-PLIST :DEEXPOSED-TYPEOUT-ACTION :NOTIFY
-		       :DEEXPOSED-TYPEIN-ACTION :NOTIFY))
+  (:DEFAULT-INIT-PLIST :DEEXPOSED-TYPEOUT-ACTION ':NOTIFY
+		       :DEEXPOSED-TYPEIN-ACTION ':NOTIFY))
 
 (DEFMETHOD (BACKGROUND-LISP-INTERACTOR :BEFORE :INIT) (PLIST)
-  (PUTPROP PLIST T :SAVE-BITS))
+  (PUTPROP PLIST T ':SAVE-BITS))
 
 (DEFMETHOD (BACKGROUND-LISP-INTERACTOR :SET-PROCESS) (NP)
   (SETF (IO-BUFFER-LAST-OUTPUT-PROCESS IO-BUFFER) NP)
@@ -1744,26 +1753,27 @@ the process wants the terminal."
       ;; Window system not fully turned on yet.
       (LEXPR-SEND COLD-LOAD-STREAM OP ARGS)
     (IF (EQ *TERMINAL-IO* DEFAULT-BACKGROUND-STREAM)
-	(CASE OP
+	(SELECTQ OP
 	  (:WHICH-OPERATIONS 
 	    ;; Get the which-operations once, but after the flavor has been compiled
 	    (OR (BOUNDP 'BACKGROUND-STREAM-WHICH-OPERATIONS)
 		(USING-RESOURCE (WINDOW BACKGROUND-LISP-INTERACTORS)
 		  (SETQ BACKGROUND-STREAM-WHICH-OPERATIONS
-			(SEND WINDOW :WHICH-OPERATIONS))
+			(SEND WINDOW ':WHICH-OPERATIONS))
 		  (PUSHNEW ':BEEP BACKGROUND-STREAM-WHICH-OPERATIONS)
-		  (PUSHNEW ':INHIBIT-OUTPUT-FOR-ABORT-P BACKGROUND-STREAM-WHICH-OPERATIONS)))
+		  (PUSHNEW ':INHIBIT-OUTPUT-FOR-ABORT-P
+			   BACKGROUND-STREAM-WHICH-OPERATIONS)))
 	    BACKGROUND-STREAM-WHICH-OPERATIONS)
 	  ;; If the stream hasn't changed since the process was started, do default action
 	  (:SEND-IF-HANDLES
-	   (IF (MEMQ (CAR ARGS) (BACKGROUND-STREAM :WHICH-OPERATIONS))
+	   (IF (MEMQ (CAR ARGS) (BACKGROUND-STREAM ':WHICH-OPERATIONS))
 	       (APPLY #'BACKGROUND-STREAM ARGS)))
 	  (:BEEP
 	   (LET ((W (WITHOUT-INTERRUPTS
 		      (IF SELECTED-WINDOW
 			  (SHEET-GET-SCREEN SELECTED-WINDOW)
 			  DEFAULT-SCREEN))))
-	     (LEXPR-SEND W :BEEP ARGS)))
+	     (LEXPR-SEND W ':BEEP ARGS)))
 	  (:LISTEN NIL)
 	  (:INHIBIT-OUTPUT-FOR-ABORT-P T)
 	  (:AWAIT-EXPOSURE NIL)
@@ -1772,11 +1782,11 @@ the process wants the terminal."
 		(FERROR NIL "Attempt to create a background window while in the scheduler."))
 	    (SETQ *TERMINAL-IO* (ALLOCATE-RESOURCE 'BACKGROUND-LISP-INTERACTORS))
 	    (SHEET-FORCE-ACCESS (*TERMINAL-IO* :NO-PREPARE)
-	      (SEND *TERMINAL-IO* :SET-LABEL (STRING-APPEND (PROCESS-NAME CURRENT-PROCESS)
-							    " Background Stream"))
-	      (SEND *TERMINAL-IO* :SET-PROCESS CURRENT-PROCESS)
-	      (SEND *TERMINAL-IO* :CLEAR-SCREEN))
-	    (SEND *TERMINAL-IO* :ACTIVATE)
+	      (SEND *TERMINAL-IO* ':SET-LABEL (STRING-APPEND (PROCESS-NAME CURRENT-PROCESS)
+							     " Background Stream"))
+	      (SEND *TERMINAL-IO* ':SET-PROCESS CURRENT-PROCESS)
+	      (SEND *TERMINAL-IO* ':CLEAR-SCREEN))
+	    (SEND *TERMINAL-IO* ':ACTIVATE)
 	    (LEXPR-SEND *TERMINAL-IO* OP ARGS)))
       (SETQ *TERMINAL-IO* DEFAULT-BACKGROUND-STREAM)
       (LEXPR-SEND *TERMINAL-IO* OP ARGS))))
@@ -1813,10 +1823,10 @@ The value is a process, or NIL."
   (COND ((SETQ INTERESTING (FIND-INTERESTING-WINDOW))
 	 (SETQ NOTIFICATION-WINDOW (CDR (ASSQ INTERESTING BACKGROUND-INTERESTING-WINDOWS)))
 	 (AND NOTIFICATION-WINDOW
-	      (EQ (SEND NOTIFICATION-WINDOW :WINDOW-OF-INTEREST) INTERESTING)
-	      (SEND NOTIFICATION-WINDOW :EXPOSED-P)
-	      (SEND NOTIFICATION-WINDOW :DEEXPOSE))
-	 (SEND INTERESTING :MOUSE-SELECT)
+	      (EQ (SEND NOTIFICATION-WINDOW ':WINDOW-OF-INTEREST) INTERESTING)
+	      (SEND NOTIFICATION-WINDOW ':EXPOSED-P)
+	      (SEND NOTIFICATION-WINDOW ':DEEXPOSE))
+	 (SEND INTERESTING ':MOUSE-SELECT)
 	 (SETQ BACKGROUND-INTERESTING-WINDOWS
 	       (DELQ (ASSQ INTERESTING BACKGROUND-INTERESTING-WINDOWS)
 		     BACKGROUND-INTERESTING-WINDOWS)))))
@@ -1829,16 +1839,17 @@ The value is a process, or NIL."
 ;;; More or less innocuous functions from the old window system that are called all over the
 ;;; place.
 (DEFUN KBD-TYI (&REST IGNORE)
-  "The same thing as (SEND *TERMINAL-IO* :TYI)."
-  (SEND *TERMINAL-IO* :TYI))
+  "The same thing as (SEND *TERMINAL-IO* ':TYI)."
+  (SEND *TERMINAL-IO* ':TYI))
 
 (DEFUN KBD-TYI-NO-HANG (&REST IGNORE) 
-  "The same thing as (SEND *TERMINAL-IO* :TYI-NO-HANG)."
-  (SEND *TERMINAL-IO* :TYI-NO-HANG))
+  "The same thing as (SEND *TERMINAL-IO* ':TYI-NO-HANG)."
+  (SEND *TERMINAL-IO* ':TYI-NO-HANG))
 
 (DEFUN KBD-CHAR-AVAILABLE (&REST IGNORE)
-  "The same thing as (SEND *TERMINAL-IO* :LISTEN)."
-  (SEND *TERMINAL-IO* :LISTEN))
+  "The same thing as (SEND *TERMINAL-IO* ':LISTEN)."
+  (SEND *TERMINAL-IO* ':LISTEN))
+
 (compiler:make-obsolete kbd-tyi "send *TERMINAL-IO* a :TYI message
 or use READ-CHAR or READ-BYTE")
 (compiler:make-obsolete kbd-tyi-no-hang "send *TERMINAL-IO* a :TYI-NO-HANG message
