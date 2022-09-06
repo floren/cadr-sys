@@ -1,4 +1,4 @@
-;;; -*- Mode:LISP; Package:TV; Base:8; Readtable:T -*-
+;;; -*- Mode:LISP; Package:TV; Base:8 -*-
 ;;;	** (c) Copyright 1980 Massachusetts Institute of Technology **
 
 ;;; Lisp Machine Mouse Handler - revised to use microcode tracking
@@ -84,8 +84,8 @@ buttons-newly-pushed, buttons-newly-raised, and the relevant mouse X and Y
     (INCF MOUSE-LAST-X DELTA-X)
     (INCF MOUSE-LAST-Y DELTA-Y)
     ;; Compute change in button status
-    (MULTIPLE-VALUE-SETQ
-      (NEW-BUTTONS MOUSE-LAST-BUTTONS-TIME MOUSE-LAST-BUTTONS-X MOUSE-LAST-BUTTONS-Y)
+    (MULTIPLE-VALUE (NEW-BUTTONS MOUSE-LAST-BUTTONS-TIME
+		     MOUSE-LAST-BUTTONS-X MOUSE-LAST-BUTTONS-Y)
       (MOUSE-BUTTONS))
     (SETQ CHANGED-BUTTONS (LOGXOR NEW-BUTTONS MOUSE-LAST-BUTTONS)
 	  MOUSE-LAST-BUTTONS NEW-BUTTONS)
@@ -114,7 +114,7 @@ buttons-newly-pushed, buttons-newly-raised, and the relevant mouse X and Y
     (VALUES DELTA-X
 	    DELTA-Y
 	    (LOGAND NEW-BUTTONS CHANGED-BUTTONS)
-	    (BOOLE 2 NEW-BUTTONS CHANGED-BUTTONS)	;Boole 2 is ANDCA
+	    (BOOLE 2 NEW-BUTTONS CHANGED-BUTTONS) ;BOOLE 2 is ANDCA
 	    (IF (ZEROP CHANGED-BUTTONS) MOUSE-LAST-X MOUSE-LAST-BUTTONS-X)
 	    (IF (ZEROP CHANGED-BUTTONS) MOUSE-LAST-Y MOUSE-LAST-BUTTONS-Y))))
 
@@ -131,13 +131,13 @@ PEEK means to look at the state without pulling anything out of the buffer
 		   MOUSE-LAST-BUTTONS-TIME MOUSE-LAST-BUTTONS-X MOUSE-LAST-BUTTONS-Y))
 	  ((= TEM MOUSE-BUTTONS-BUFFER-IN-INDEX)
 	   (VALUES (LOGIOR (IF USE-KBD-BUTTONS KBD-BUTTONS 0)
-			   (SELECT PROCESSOR-TYPE-CODE
-			     (SI:CADR-TYPE-CODE (LDB #O1403 (%UNIBUS-READ MOUSE-REG1)))
-			     (SI:LAMBDA-TYPE-CODE MOUSE-LAST-BUTTONS-FROM-BUFFER)))
+			   (select processor-type-code
+			     (si:cadr-type-code (LDB #o1403 (%UNIBUS-READ MOUSE-REG1)))
+			     (si:lambda-type-code mouse-last-buttons-from-buffer)))
 		   (TIME:FIXNUM-MICROSECOND-TIME) MOUSE-X MOUSE-Y))
 	  (T (OR PEEK (SETQ MOUSE-BUTTONS-BUFFER-OUT-INDEX (\ (+ TEM 4) 32.)))
 	     (VALUES (LOGIOR (IF USE-KBD-BUTTONS KBD-BUTTONS 0)
-			     (SETQ MOUSE-LAST-BUTTONS-FROM-BUFFER
+			     (setq mouse-last-buttons-from-buffer
 				   (AREF MOUSE-BUTTONS-BUFFER (+ TEM 3))))
 		     (AREF MOUSE-BUTTONS-BUFFER TEM)
 		     (AREF MOUSE-BUTTONS-BUFFER (+ TEM 1))
@@ -155,7 +155,7 @@ BU is a mask of buttons that went up, and BD a mask of those that went down."
   (IF (OR (NOT (ZEROP BU)) (NOT (ZEROP BD)))
       (SETQ MOUSE-BUTTONS-IN-PROGRESS MOUSE-LAST-BUTTONS
 	    MOUSE-LAST-BUTTONS (LOGIOR BU
-				       (BOOLE 2 BD	;Boole 2 is ANDCA
+				       (BOOLE 2 BD	;BOOLE 2 is ANDCA
 					      MOUSE-LAST-BUTTONS)))))
 
 (DEFCONST *MOUSE-INCREMENTING-KEYSTATES* '(:SHIFT)
@@ -178,46 +178,48 @@ it presumably came from MOUSE-INPUT.
 The value is NIL if no button is pushed (BD is 0),
 or #o2000 + 8 N + B, where B is the bit number in the button word,
 and N is one less than the number of clicks."
-  (WHEN ( (SETQ BUTTON (1- (HAULONG BD))) 0)	;Pick a button that was just pushed
-    (SETQ MASK (LSH 1 BUTTON)
-	  CH (MERGE-SHIFT-KEYS (MAKE-MOUSE-CHAR BUTTON 0))
-	  TIME MOUSE-LAST-BUTTONS-TIME)
-    ;; Each incrementing key that is held down
-    ;; counts as an extra click in the number of clicks.
-    (DOLIST (KEY *MOUSE-INCREMENTING-KEYSTATES*)
-      (IF (KEY-STATE KEY)
-	  (INCF CH 8)))
-    (PROG1
-      (LOOP					;Do forever (until guy's finger wears out)
-	UNLESS MOUSE-DOUBLE-CLICK-TIME RETURN CH
-	DOING
-	  ;; Ignore any clicking during the bounce delay
-	  (LOOP DOING (MULTIPLE-VALUE-SETQ (NEW-BUTTONS NEW-TIME) (MOUSE-BUTTONS))
-		UNTIL (> (TIME-DIFFERENCE NEW-TIME TIME) MOUSE-BOUNCE-TIME)
-		FINALLY (SETQ TIME NEW-TIME))
-	  ;; Look for button to be lifted, or for double-click timeout
-	  (LOOP WHILE (BIT-TEST MASK NEW-BUTTONS)
-		DO (MULTIPLE-VALUE-SETQ (NEW-BUTTONS NEW-TIME) (MOUSE-BUTTONS))
-		WHEN (> (TIME-DIFFERENCE NEW-TIME TIME) MOUSE-DOUBLE-CLICK-TIME)
-		;; Timed-out with button still down
-		DO (RETURN-FROM MOUSE-BUTTON-ENCODE CH)
-		FINALLY (SETQ TIME NEW-TIME))
-	  ;; Button was lifted, do another bounce delay
-	  (LOOP DOING (MULTIPLE-VALUE-SETQ (NEW-BUTTONS NEW-TIME) (MOUSE-BUTTONS))
-		UNTIL (> (TIME-DIFFERENCE NEW-TIME TIME) MOUSE-BOUNCE-TIME)
-		FINALLY (SETQ TIME NEW-TIME))
-	  ;; Now watch for button to be pushed again
-	  (LOOP UNTIL (BIT-TEST MASK NEW-BUTTONS)
-		DO (MULTIPLE-VALUE-SETQ (NEW-BUTTONS NEW-TIME) (MOUSE-BUTTONS))
-		WHEN (> (TIME-DIFFERENCE NEW-TIME TIME) MOUSE-DOUBLE-CLICK-TIME)
-		;; Timed-out with button still up
-		DO (RETURN-FROM MOUSE-BUTTON-ENCODE CH)
-		FINALLY (SETQ CH (+ CH 8)	;Count multiplicity of clicks
-			      TIME NEW-TIME))
-	  ;; Continue scanning (for triple click)
-	  )
-      (SETQ MOUSE-LAST-BUTTONS NEW-BUTTONS
-	    MOUSE-LAST-BUTTONS-TIME NEW-TIME))))
+  (COND (( (SETQ BUTTON (1- (HAULONG BD))) 0)  ;Pick a button that was just pushed
+	 (SETQ MASK (LSH 1 BUTTON)
+	       CH (TV:MAKE-MOUSE-CHAR BUTTON 0)
+	       TIME MOUSE-LAST-BUTTONS-TIME)
+	 ;; Each incrementing key that is held down
+	 ;; counts as an extra click in the number of clicks.
+	 (DOLIST (KEY *MOUSE-INCREMENTING-KEYSTATES*)
+	   (IF (KEY-STATE KEY)
+	       (INCF CH 8)))
+;	 )
+	 (PROG1
+	   (LOOP NAMED MOUSE-BUTTON-ENCODE	;Do forever (until guy's finger wears out)
+	     UNLESS MOUSE-DOUBLE-CLICK-TIME
+	      RETURN CH
+	     DOING
+	     ;; Ignore any clicking during the bounce delay
+	     (LOOP DOING (MULTIPLE-VALUE (NEW-BUTTONS NEW-TIME) (MOUSE-BUTTONS))
+		   UNTIL (> (TIME-DIFFERENCE NEW-TIME TIME) MOUSE-BOUNCE-TIME)
+		   FINALLY (SETQ TIME NEW-TIME))
+	     ;; Look for button to be lifted, or for double-click timeout
+	     (LOOP WHILE (BIT-TEST MASK NEW-BUTTONS)
+		   DO (MULTIPLE-VALUE (NEW-BUTTONS NEW-TIME) (MOUSE-BUTTONS))
+		   WHEN (> (TIME-DIFFERENCE NEW-TIME TIME) MOUSE-DOUBLE-CLICK-TIME)
+		     ;; Timed-out with button still down
+		     DO (RETURN-FROM MOUSE-BUTTON-ENCODE CH)
+		   FINALLY (SETQ TIME NEW-TIME))
+	     ;; Button was lifted, do another bounce delay
+	     (LOOP DOING (MULTIPLE-VALUE (NEW-BUTTONS NEW-TIME) (MOUSE-BUTTONS))
+		   UNTIL (> (TIME-DIFFERENCE NEW-TIME TIME) MOUSE-BOUNCE-TIME)
+		   FINALLY (SETQ TIME NEW-TIME))
+	     ;; Now watch for button to be pushed again
+	     (LOOP UNTIL (BIT-TEST MASK NEW-BUTTONS)
+		   DO (MULTIPLE-VALUE (NEW-BUTTONS NEW-TIME) (MOUSE-BUTTONS))
+		   WHEN (> (TIME-DIFFERENCE NEW-TIME TIME) MOUSE-DOUBLE-CLICK-TIME)
+		     ;; Timed-out with button still up
+		     DO (RETURN-FROM MOUSE-BUTTON-ENCODE CH)
+		   FINALLY (SETQ CH (+ CH 8)	;Count multiplicity of clicks
+				 TIME NEW-TIME))
+	     ;; Continue scanning (for triple click)
+	     )
+	   (SETQ MOUSE-LAST-BUTTONS NEW-BUTTONS
+		 MOUSE-LAST-BUTTONS-TIME NEW-TIME)))))
 
 (DEFVAR *DEFAULT-MOUSE-SPEEDS-FOR-HACK* '(.5 80. 1 120. 1.5 180. 2.5 320. 4)
   "The system default values supplied to MOUSE-SPEED-HACK")
@@ -255,16 +257,16 @@ These apply to both X and Y."
   "Set the mouse blinker to the standard kind (with a north-west arrow.)"
   (AND (SYMBOLP WINDOW)
        (SETQ WINDOW MOUSE-SHEET))
-  (SEND WINDOW :MOUSE-STANDARD-BLINKER))
+  (SEND WINDOW ':MOUSE-STANDARD-BLINKER))
 
 (DEFMETHOD (SHEET :MOUSE-STANDARD-BLINKER) ()
-  (SEND SUPERIOR :MOUSE-STANDARD-BLINKER))
+  (SEND SUPERIOR ':MOUSE-STANDARD-BLINKER))
 
 (DEFMETHOD (SCREEN :MOUSE-STANDARD-BLINKER) ()
-  (MOUSE-SET-BLINKER-DEFINITION :CHARACTER 0 0 :ON
-				:SET-CHARACTER 6 'FONTS:MOUSE))	;standard NW arrow
+  (MOUSE-SET-BLINKER-DEFINITION ':CHARACTER 0 0 ':ON
+				':SET-CHARACTER 6 'FONTS:MOUSE))
 
-(DEFMETHOD (SCREEN :MOUSE-FONT) () (SEND SELF :PARSE-FONT-DESCRIPTOR 'FONTS:MOUSE))
+(DEFMETHOD (SCREEN :MOUSE-FONT) () (SEND SELF ':PARSE-FONT-DESCRIPTOR 'FONTS:MOUSE))
 
 (DEFMETHOD (MOUSE-BLINKER-MIXIN :OFFSETS) ()
   (VALUES X-OFFSET Y-OFFSET))
@@ -300,17 +302,17 @@ These apply to both X and Y."
 
 (DEFMETHOD (MOUSE-BLINKER-FAST-TRACKING-MIXIN :TRACK-MOUSE) ()
   (WITHOUT-INTERRUPTS
-    (SEND SELF :SET-VISIBILITY NIL)		;We are not in charge of drawing anything
+    (SEND SELF ':SET-VISIBILITY NIL)		;We are not in charge of drawing anything
     (%OPEN-MOUSE-CURSOR)			;Get rid of old microcode cursor
     (SETQ MOUSE-BLINKER SELF
 	  MOUSE-CURSOR-CLOSED-STATE 2
 	  MOUSE-CURSOR-X-OFFSET X-OFFSET
 	  MOUSE-CURSOR-Y-OFFSET Y-OFFSET)
-    (MULTIPLE-VALUE-SETQ (MOUSE-CURSOR-WIDTH MOUSE-CURSOR-HEIGHT) (SEND SELF :SIZE))
+    (MULTIPLE-VALUE (MOUSE-CURSOR-WIDTH MOUSE-CURSOR-HEIGHT) (SEND SELF ':SIZE))
     (SETQ MOUSE-CURSOR-WIDTH (* MOUSE-CURSOR-WIDTH (SHEET-BITS-PER-PIXEL SHEET)))
     (COND ((OR (> MOUSE-CURSOR-WIDTH 32.) (> MOUSE-CURSOR-HEIGHT 32.))
 	   (SETQ MOUSE-CURSOR-CLOSED-STATE 1)	;Oops, too big to use microcode tracking
-	   (SEND SELF :SET-VISIBILITY T))
+	   (SEND SELF ':SET-VISIBILITY T))
 	  (T ;; Draw self into microcode cursor
 	     (BITBLT 0 32. 32. MOUSE-CURSOR-PATTERN 0 0 MOUSE-CURSOR-PATTERN 0 0)
 	     (LET-GLOBALLY ((X-POS 0)
@@ -319,7 +321,7 @@ These apply to both X and Y."
 	       (BIND (LOCF (SHEET-LOCATIONS-PER-LINE SHEET)) 1)
 	       ;; Cause recalculation of sheet parameters, because SCREEN-ARRAY changed
 	       (SETQ SYS:%CURRENT-SHEET NIL)
-	       (SEND SELF :BLINK)
+	       (SEND SELF ':BLINK)
 	       ;; SCREEN-ARRAY will change back when unbinding gets done
 	       (SETQ SYS:%CURRENT-SHEET NIL)
 	       (SETQ PREPARED-SHEET NIL)
@@ -349,11 +351,11 @@ These apply to both X and Y."
 TYPE is a keyword on MOUSE-BLINKER-TYPES."
   (LET ((BE (ASSQ TYPE MOUSE-BLINKER-TYPES)))
     (OR BE (FERROR NIL "~A is unknown mouse blinker type" TYPE))
-    (LET ((BL (CDR (ASSQ TYPE (SETQ BLINKERS (SEND SCREEN :MOUSE-BLINKERS))))))
+    (LET ((BL (CDR (ASSQ TYPE (SETQ BLINKERS (SEND SCREEN ':MOUSE-BLINKERS))))))
       (WHEN (NULL BL)
 	(SETQ BL (SEND (CDR BE) SCREEN))
 	(PUSH (CONS TYPE BL) BLINKERS)
-	(SEND SCREEN :SET-MOUSE-BLINKERS BLINKERS))
+	(SEND SCREEN ':SET-MOUSE-BLINKERS BLINKERS))
       (BLINKER-SET-SHEET BL SHEET)
       BL)))
 
@@ -365,11 +367,11 @@ X-OFFSET and Y-OFFSET are offsets which we subtract from the mouse position
 to get the position to display the blinker.
 VISIBILITY is the visibility for the blinker (usually T)."
   (LET ((BL (MOUSE-GET-BLINKER TYPE)))
-    (AND MOUSE-BLINKER (NEQ BL MOUSE-BLINKER) (SEND MOUSE-BLINKER :SET-VISIBILITY NIL))
+    (AND MOUSE-BLINKER (NEQ BL MOUSE-BLINKER) (SEND MOUSE-BLINKER ':SET-VISIBILITY NIL))
     (WHEN OPERATION (LEXPR-SEND BL OPERATION OPERATION-ARGS))
-    (WHEN X-OFFSET (SEND BL :SET-OFFSETS X-OFFSET Y-OFFSET))
-    (SEND BL :SET-VISIBILITY (IF (EQ VISIBILITY :ON) T VISIBILITY))
-    (SEND BL :TRACK-MOUSE)
+    (WHEN X-OFFSET (SEND BL ':SET-OFFSETS X-OFFSET Y-OFFSET))
+    (SEND BL ':SET-VISIBILITY (IF (EQ VISIBILITY ':ON) T VISIBILITY))
+    (SEND BL ':TRACK-MOUSE)
     BL))
 
 (DEFUN MOUSE-SET-BLINKER (TYPE-OR-BLINKER &OPTIONAL X-OFFSET Y-OFFSET)
@@ -380,45 +382,45 @@ to get the position to display the blinker."
     (IF (TYPEP TYPE-OR-BLINKER 'INSTANCE)
 	(SETQ BL TYPE-OR-BLINKER)
       (SETQ BL (MOUSE-GET-BLINKER TYPE-OR-BLINKER))
-      (WHEN X-OFFSET (SEND BL :SET-OFFSETS X-OFFSET Y-OFFSET)))
-    (AND (NEQ BL MOUSE-BLINKER) (SEND MOUSE-BLINKER :SET-VISIBILITY NIL))
-    (SEND BL :SET-VISIBILITY T)
-    (SEND BL :TRACK-MOUSE)
+      (WHEN X-OFFSET (SEND BL ':SET-OFFSETS X-OFFSET Y-OFFSET)))
+    (AND (NEQ BL MOUSE-BLINKER) (SEND MOUSE-BLINKER ':SET-VISIBILITY NIL))
+    (SEND BL ':SET-VISIBILITY T)
+    (SEND BL ':TRACK-MOUSE)
     BL))
 
-(MOUSE-DEFINE-BLINKER-TYPE :CHARACTER-BLINKER
+(MOUSE-DEFINE-BLINKER-TYPE ':CHARACTER-BLINKER
 			   #'(LAMBDA (SCREEN)
 			       (DEFINE-BLINKER SCREEN 'MOUSE-CHARACTER-BLINKER
-				 		      :VISIBILITY T
-						      :FONT (SEND SCREEN :MOUSE-FONT)
-						      :CHAR 6)))
+				 		      ':VISIBILITY T
+						      ':FONT (SEND SCREEN ':MOUSE-FONT)
+						      ':CHAR 6)))
 
 ;;; Old name, same as :CHARACTER-BLINKER.
-(MOUSE-DEFINE-BLINKER-TYPE :CHARACTER
+(MOUSE-DEFINE-BLINKER-TYPE ':CHARACTER
 			   #'(LAMBDA (SCREEN)
 			       (DEFINE-BLINKER SCREEN 'MOUSE-CHARACTER-BLINKER
-				 		      :VISIBILITY T
-						      :FONT (SEND SCREEN :MOUSE-FONT)
-						      :CHAR 6)))
+				 		      ':VISIBILITY T
+						      ':FONT (SEND SCREEN ':MOUSE-FONT)
+						      ':CHAR 6)))
 
 ;;; Until system 93, this was called :RECTANGLE-BLINKER!  What a crock.
-(MOUSE-DEFINE-BLINKER-TYPE :RECTANGLE-CORNER-BLINKER
+(MOUSE-DEFINE-BLINKER-TYPE ':RECTANGLE-CORNER-BLINKER
 			   #'(LAMBDA (SCREEN)
 			       (DEFINE-BLINKER SCREEN 'MOUSE-CHARACTER-BLINKER
-				 		      :VISIBILITY NIL
-						      :FONT (SEND SCREEN :MOUSE-FONT)
-						      :CHAR 21)))
+				 		      ':VISIBILITY NIL
+						      ':FONT (SEND SCREEN ':MOUSE-FONT)
+						      ':CHAR 21)))
 				 
-(MOUSE-DEFINE-BLINKER-TYPE :RECTANGLE-BLINKER
+(MOUSE-DEFINE-BLINKER-TYPE ':RECTANGLE-BLINKER
 			   #'(LAMBDA (SCREEN)
 			       (DEFINE-BLINKER SCREEN 'MOUSE-RECTANGULAR-BLINKER
-				 		      :VISIBILITY NIL
-						      :HEIGHT 8 :WIDTH 8)))
+				 		      ':VISIBILITY NIL
+						      ':HEIGHT 8 ':WIDTH 8)))
 
 (DEFUN MOUSE-SET-BLINKER-CURSORPOS (&REST IGNORE)
   "Move the mouse blinker to the current mouse position."
   (MULTIPLE-VALUE-BIND (X-OFF Y-OFF)
-      (SEND MOUSE-BLINKER :OFFSETS)
+      (SEND MOUSE-BLINKER ':OFFSETS)
     (BLINKER-SET-CURSORPOS MOUSE-BLINKER
 			   (- MOUSE-X X-OFF (SHEET-INSIDE-LEFT MOUSE-SHEET))
 			   (- MOUSE-Y Y-OFF (SHEET-INSIDE-TOP MOUSE-SHEET)))))
@@ -427,15 +429,15 @@ to get the position to display the blinker."
   (PROCESS-RUN-FUNCTION '(:NAME "System Menu" :PRIORITY 10.)
 			#'(LAMBDA (SUP)
 			    (USING-RESOURCE (MENU SYSTEM-MENU SUP)
-			      (SEND MENU :CHOOSE)))
+			      (SEND MENU ':CHOOSE)))
 			SUP))
 
 ;;; This function as a warm initialization
 ;;; to initialize the mouse process and associated variable.
 (DEFUN MOUSE-INITIALIZE (&OPTIONAL (SHEET DEFAULT-SCREEN))
   (OR (BOUNDP 'MOUSE-PROCESS)			;If first time loaded, initialize everything
-      (SETQ MOUSE-PROCESS (MAKE-PROCESS "Mouse" :SPECIAL-PDL-SIZE 2000. :PRIORITY 30.
-						:WARM-BOOT-ACTION NIL)))
+      (SETQ MOUSE-PROCESS (MAKE-PROCESS "Mouse" ':SPECIAL-PDL-SIZE 2000. ':PRIORITY 30.
+						':WARM-BOOT-ACTION NIL)))
 		;Above warm-boot-action prevents the process from starting up
 		;until after these initializations have been completed.
   (SETQ MOUSE-WINDOW NIL
@@ -451,9 +453,9 @@ to get the position to display the blinker."
   ;; Set scaling and speed dependence.
   (MOUSE-SPEED-HACK)
   ;; Make sure at least one blinker of each type exists
-  (MOUSE-GET-BLINKER :CHARACTER)
-  (MOUSE-GET-BLINKER :RECTANGLE-CORNER-BLINKER)
-  (MOUSE-GET-BLINKER :RECTANGLE-BLINKER)
+  (MOUSE-GET-BLINKER ':CHARACTER)
+  (MOUSE-GET-BLINKER ':RECTANGLE-CORNER-BLINKER)
+  (MOUSE-GET-BLINKER ':RECTANGLE-BLINKER)
   (MOUSE-GET-BLINKER 'FLASHY-CHARACTER)
   (AND MOUSE-BLINKER (BLINKER-SET-VISIBILITY MOUSE-BLINKER NIL))
   (MOUSE-STANDARD-BLINKER)
@@ -464,8 +466,8 @@ to get the position to display the blinker."
   (MOUSE-INPUT NIL)
   (SETQ MOUSE-X-SPEED 0 MOUSE-Y-SPEED 0)
   ;; Start up the mouse process
-  (SEND MOUSE-PROCESS :PRESET 'MOUSE-OVERSEER)
-  (SEND MOUSE-PROCESS :RUN-REASON))
+  (SEND MOUSE-PROCESS ':PRESET 'MOUSE-OVERSEER)
+  (SEND MOUSE-PROCESS ':RUN-REASON))
 
 (DEFUN MOUSE-SET-SHEET (NEW-SHEET)
   "Specify the sheet for the mouse to track on.  Sets MOUSE-SHEET."
@@ -478,7 +480,7 @@ to get the position to display the blinker."
     (%SET-MOUSE-SCREEN NEW-SHEET)
     (MOUSE-DISCARD-CLICKAHEAD)			;Since the coordinate system has changed
     (MOUSE-STANDARD-BLINKER)
-    (MULTIPLE-VALUE-BIND (X Y) (SEND MOUSE-BLINKER :READ-CURSORPOS)
+    (MULTIPLE-VALUE-BIND (X Y) (SEND MOUSE-BLINKER ':READ-CURSORPOS)
       (SETQ MOUSE-X (+ X (SHEET-INSIDE-LEFT MOUSE-SHEET))
 	    MOUSE-Y (+ Y (SHEET-INSIDE-TOP MOUSE-SHEET))))))
 
@@ -498,7 +500,7 @@ to get the position to display the blinker."
     (SETQ MOUSE-WAKEUP T)))			;Make sure the mouse tracker process notices
 
 ;;; This returns the lowest window under the mouse prepared to handle the given operation.
-(DEFUN WINDOW-UNDER-MOUSE (&OPTIONAL METHOD (ACTIVE-CONDITION :ACTIVE) X Y)
+(DEFUN WINDOW-UNDER-MOUSE (&OPTIONAL METHOD (ACTIVE-CONDITION ':ACTIVE) X Y)
   (LOWEST-SHEET-UNDER-POINT MOUSE-SHEET (OR X MOUSE-X) (OR Y MOUSE-Y)
 			    METHOD ACTIVE-CONDITION))
 
@@ -508,7 +510,7 @@ to get the position to display the blinker."
 If X and Y are specified, then return the WINDOW that would
 be handling the mouse if it were at that position." 
   (OR WINDOW-OWNING-MOUSE
-      (WINDOW-UNDER-MOUSE :HANDLE-MOUSE :EXPOSED X Y)))
+      (WINDOW-UNDER-MOUSE ':HANDLE-MOUSE ':EXPOSED X Y)))
 
 (DEFUN WINDOW-OWNS-MOUSE-P (WINDOW &OPTIONAL X Y)
   "T if WINDOW is the window that is allowed to handle the mouse now.
@@ -565,7 +567,7 @@ Set WINDOW-OWNING-MOUSE to NIL to let other windows have a chance again."
 			   #'(LAMBDA () (OR MOUSE-RECONSIDER	;This can happen randomly 
 					    (NEQ WINDOW-OWNING-MOUSE 'STOP)))))
 	    ((NOT (SYMBOLP MOUSE-WINDOW))
-	     (SEND MOUSE-WINDOW :HANDLE-MOUSE))
+	     (SEND MOUSE-WINDOW ':HANDLE-MOUSE))
 	    (T
 	     ;; Standardize the blinker if no one else will
 	     (OR MOUSE-WINDOW (MOUSE-STANDARD-BLINKER MOUSE-SHEET))
@@ -596,21 +598,21 @@ Set WINDOW-OWNING-MOUSE to NIL to let other windows have a chance again."
 				     &AUX
 				     (WINDOW-X-OFFSET 0) (WINDOW-Y-OFFSET 0)
 				     WINDOW-X WINDOW-Y
-				     (MOVE-METHOD (IF (EQ SCROLL-BAR-FLAG :IN)
-						      :MOUSE-MOVES-SCROLL
-						      :MOUSE-MOVES))
-				     (BUTTONS-METHOD (IF (EQ SCROLL-BAR-FLAG :IN)
-							 :MOUSE-BUTTONS-SCROLL
-						         :MOUSE-BUTTONS)))
+				     (MOVE-METHOD (COND ((EQ SCROLL-BAR-FLAG ':IN)
+							 ':MOUSE-MOVES-SCROLL)
+							(T ':MOUSE-MOVES)))
+				     (BUTTONS-METHOD (COND ((EQ SCROLL-BAR-FLAG ':IN)
+							    ':MOUSE-BUTTONS-SCROLL)
+							   (T ':MOUSE-BUTTONS))))
   (OR (SYMBOLP WINDOW)
-      (MULTIPLE-VALUE-SETQ (WINDOW-X-OFFSET WINDOW-Y-OFFSET)
+      (MULTIPLE-VALUE (WINDOW-X-OFFSET WINDOW-Y-OFFSET)
 	(SHEET-CALCULATE-OFFSETS SELF MOUSE-SHEET)))
   (DO ((DX) (DY) (BU) (BD) (HAND) (X) (Y)
        (OLD-OWNER WINDOW-OWNING-MOUSE WINDOW-OWNING-MOUSE)
        (X-OFFSET 0)
        (WAIT-FLAG NIL T))
       (MOUSE-RECONSIDER)
-    (MULTIPLE-VALUE-SETQ (DX DY BD BU X Y) (MOUSE-INPUT WAIT-FLAG))
+    (MULTIPLE-VALUE (DX DY BD BU X Y) (MOUSE-INPUT WAIT-FLAG))
     ;; If asked to reconsider, do so immediately.
     ;; Don't bother updating blinker since it is likely to change soon, and
     ;; in any case we are going to be called back shortly.
@@ -633,15 +635,15 @@ Set WINDOW-OWNING-MOUSE to NIL to let other windows have a chance again."
 		(XBOTTOM (MIN (+ MOUSE-Y MOUSE-FAST-MOTION-CROSS-SIZE 20) MAX-Y))
 		(XLEFT (MAX (- MOUSE-X MOUSE-FAST-MOTION-CROSS-SIZE) MIN-X))
 		(XRIGHT (MIN (+ MOUSE-X MOUSE-FAST-MOTION-CROSS-SIZE 20) MAX-X))
-		(XX (MAX MIN-X (MIN MOUSE-X (- MAX-X #o20))))
-		(YY (MAX MIN-Y (MIN MOUSE-Y (- MAX-Y #o20)))))
+		(XX (MAX MIN-X (MIN MOUSE-X (- MAX-X 20))))
+		(YY (MAX MIN-Y (MIN MOUSE-Y (- MAX-Y 20)))))
 	    (SHEET-IS-PREPARED (MOUSE-SHEET)
 	      (WITHOUT-INTERRUPTS
 		(%DRAW-RECTANGLE 16. (MAX (- XBOTTOM XTOP) 0) XX XTOP ALU-XOR MOUSE-SHEET)
-		(%DRAW-RECTANGLE (MAX (- XRIGHT XLEFT) 0) #o20 XLEFT YY ALU-XOR MOUSE-SHEET)
+		(%DRAW-RECTANGLE (MAX (- XRIGHT XLEFT) 0) 20 XLEFT YY ALU-XOR MOUSE-SHEET)
 		(DOTIMES (I MOUSE-FAST-MOTION-CROSS-TIME) )
 		(%DRAW-RECTANGLE 16. (MAX (- XBOTTOM XTOP) 0) XX XTOP ALU-XOR MOUSE-SHEET)
-		(%DRAW-RECTANGLE (MAX (- XRIGHT XLEFT) 0) #o20 XLEFT YY ALU-XOR MOUSE-SHEET)
+		(%DRAW-RECTANGLE (MAX (- XRIGHT XLEFT) 0) 20 XLEFT YY ALU-XOR MOUSE-SHEET)
 		)))))
     ;; X-OFFSET is how far out the left side of the window the mouse has moved,
     ;; or 0 if the mouse is inside the window.
@@ -666,7 +668,7 @@ Set WINDOW-OWNING-MOUSE to NIL to let other windows have a chance again."
     ;; what's happening.
     (COND ((OR OLD-OWNER WINDOW-OWNING-MOUSE))	;These disable scroll bar
 	  ((AND (EQ SCROLL-BAR-FLAG 'T) (PLUSP X-OFFSET))
-	   (COND ((NOT (SEND WINDOW :SEND-IF-HANDLES :SCROLL-BAR))
+	   (COND ((NOT (SEND WINDOW ':SEND-IF-HANDLES ':SCROLL-BAR))
 		  ;; Window doesn't really have a scroll bar.
 		  (RETURN NIL))
 		 ((AND SCROLL-BAR-MAX-SPEED
@@ -674,11 +676,11 @@ Set WINDOW-OWNING-MOUSE to NIL to let other windows have a chance again."
 		  (RETURN NIL))	 ;Too fast, pass right through
 		 ((> X-OFFSET SCROLL-BAR-RELUCTANCE)
 		  (FUNCALL (IF (SYMBOLP WINDOW)
-			       #'MOUSE-SET-BLINKER-CURSORPOS WINDOW)
+			       'MOUSE-SET-BLINKER-CURSORPOS WINDOW)
 			   MOVE-METHOD WINDOW-X WINDOW-Y)
-		  (RETURN (SEND WINDOW :HANDLE-MOUSE-SCROLL)))
+		  (RETURN (SEND WINDOW ':HANDLE-MOUSE-SCROLL)))
 		 (T (SETQ WINDOW-X 0))))	;Don't escape the window yet
-	  ((EQ SCROLL-BAR-FLAG :IN)
+	  ((EQ SCROLL-BAR-FLAG ':IN)
 	   ;; We are in the scroll bar.  Moving the mouse faster than the exit
 	   ;; speed, or moving it to the right by more than the scroll bar width,
 	   ;; will escape.  You cannot escape to the left.  This is different from
@@ -705,7 +707,7 @@ Set WINDOW-OWNING-MOUSE to NIL to let other windows have a chance again."
     ;; mouse cursor follows MOUSE-X and MOUSE-Y, which may be different.    
     (SETQ MOUSE-WARP NIL)
     (FUNCALL (IF (SYMBOLP WINDOW)
-		 #'MOUSE-SET-BLINKER-CURSORPOS WINDOW)
+		 'MOUSE-SET-BLINKER-CURSORPOS WINDOW)
 	     MOVE-METHOD WINDOW-X WINDOW-Y)
     ;; Check for all the ways of losing control of the mouse.
     (IF (COND ;; The move handler may have decided to warp the mouse so that it will not
@@ -733,7 +735,7 @@ Set WINDOW-OWNING-MOUSE to NIL to let other windows have a chance again."
 	       WAIT-FLAG)
 	      ;; Check for moving into an inferior of the current window
 	      ((NEQ (LOWEST-SHEET-UNDER-POINT WINDOW WINDOW-X WINDOW-Y
-					      :HANDLE-MOUSE :EXPOSED)
+					      ':HANDLE-MOUSE ':EXPOSED)
 		    WINDOW)
 	       T))
 	;; Return to overseer, saving any pending button click.
@@ -744,9 +746,9 @@ Set WINDOW-OWNING-MOUSE to NIL to let other windows have a chance again."
 	  (WINDOW (SEND WINDOW BUTTONS-METHOD BD WINDOW-X WINDOW-Y))
 	  ;; Default action for left button is to select what mouse is pointing at
 	  ((BIT-TEST 1 BD)
-	   (AND (SETQ HAND (WINDOW-UNDER-MOUSE :MOUSE-SELECT :ACTIVE X Y))
+	   (AND (SETQ HAND (WINDOW-UNDER-MOUSE ':MOUSE-SELECT ':ACTIVE X Y))
 		;; Next line temporarily papers over a bug with :MOUSE-SELECT
-		(GET-HANDLER-FOR HAND :SELECT)
+		(GET-HANDLER-FOR HAND ':SELECT)
 		(MOUSE-SELECT HAND)))
 	  ;; Default action for middle button is to switch to the main screen
 	  ((BIT-TEST 2 BD)
@@ -778,14 +780,14 @@ WHOSTATE is displayed in the who line while we wait."
 
 (DEFMETHOD (ESSENTIAL-MOUSE :HANDLE-MOUSE) ()
   (MOUSE-STANDARD-BLINKER SELF)
-  (MOUSE-DEFAULT-HANDLER SELF (SEND SELF :ENABLE-SCROLLING-P)))
+  (MOUSE-DEFAULT-HANDLER SELF (SEND SELF ':ENABLE-SCROLLING-P)))
 
 (DEFMETHOD (ESSENTIAL-MOUSE :SET-MOUSE-CURSORPOS) (X Y)
-  (SEND SELF :SET-MOUSE-POSITION (+ (SHEET-INSIDE-LEFT) X) (+ (SHEET-INSIDE-TOP) Y)))
+  (SEND SELF ':SET-MOUSE-POSITION (+ (SHEET-INSIDE-LEFT) X) (+ (SHEET-INSIDE-TOP) Y)))
 
 (DEFMETHOD (ESSENTIAL-MOUSE :SET-MOUSE-POSITION) (X Y &AUX X-OFF Y-OFF)
   (COND ((SHEET-ME-OR-MY-KID-P SELF MOUSE-SHEET)
-	 (MULTIPLE-VALUE-SETQ (X-OFF Y-OFF)
+	 (MULTIPLE-VALUE (X-OFF Y-OFF)
 	   (SHEET-CALCULATE-OFFSETS SELF MOUSE-SHEET))
 	 (SETQ X (IF X
 		     (+ X X-OFF)
@@ -804,18 +806,19 @@ WHOSTATE is displayed in the who line while we wait."
   (LET ((BUTTONS (MOUSE-BUTTON-ENCODE BD)))
     (IF (= BUTTONS #/MOUSE-3-2)
 	(MOUSE-CALL-SYSTEM-MENU)
-      (SEND SELF :MOUSE-CLICK BUTTONS X Y))))
+	(SEND SELF ':MOUSE-CLICK BUTTONS X Y))))
 
 (DEFMETHOD (ESSENTIAL-MOUSE :MOUSE-CLICK) (BUTTONS X Y)
-; (SETQ BUTTONS (MERGE-SHIFT-KEYS BUTTONS))
+  X Y ;not used
+  (SETQ BUTTONS (MERGE-SHIFT-KEYS BUTTONS))
   (COND ((AND (= BUTTONS #/MOUSE-1-1)
-	      (NOT (SEND (SEND SELF :ALIAS-FOR-SELECTED-WINDOWS)
-			 :SELF-OR-SUBSTITUTE-SELECTED-P))
-	      (GET-HANDLER-FOR SELF :SELECT))	;paper over a bug
+	      (NOT (SEND (SEND SELF ':ALIAS-FOR-SELECTED-WINDOWS)
+			 ':SELF-OR-SUBSTITUTE-SELECTED-P))
+	      (GET-HANDLER-FOR SELF ':SELECT));paper over a bug
 	 (MOUSE-SELECT SELF)
 	 T)
 	(T
-	 (OR (SEND SELF :SEND-IF-HANDLES :FORCE-KBD-INPUT
+	 (OR (SEND SELF ':SEND-IF-HANDLES ':FORCE-KBD-INPUT
 		   	`(:MOUSE-BUTTON ,BUTTONS ,SELF ,X ,Y))
 	     (AND (= BUTTONS #/MOUSE-3-1)
 		  (MOUSE-CALL-SYSTEM-MENU)
@@ -826,24 +829,24 @@ WHOSTATE is displayed in the who line while we wait."
   "Return CHAR with the bits for various shift keys updated.
 For example, the %%KBD-HYPER bit of the result will be 1
 if a Hyper key is depressed right now."
-  (%LOGDPB (IF (KEY-STATE :HYPER) 1 0)
+  (%LOGDPB (IF (KEY-STATE ':HYPER) 1 0)
 	   %%KBD-HYPER
-	   (DPB (IF (KEY-STATE :SUPER) 1 0)
+	   (DPB (IF (KEY-STATE ':SUPER) 1 0)
 		%%KBD-SUPER
-		(DPB (IF (KEY-STATE :META) 1 0)
+		(DPB (IF (KEY-STATE ':META) 1 0)
 		     %%KBD-META
-		     (DPB (IF (KEY-STATE :CONTROL) 1 0)
+		     (DPB (IF (KEY-STATE ':CONTROL) 1 0)
 			  %%KBD-CONTROL
 			  CHAR)))))
 
 (DEFUN MOUSE-SELECT (WINDOW)
   (IF (EQ CURRENT-PROCESS MOUSE-PROCESS)
       (PROCESS-RUN-FUNCTION '(:NAME "Mouse Select" :PRIORITY 20.) 'MOUSE-SELECT WINDOW)
-    (SEND WINDOW :MOUSE-SELECT NIL)))
+    (SEND WINDOW ':MOUSE-SELECT NIL)))
 
 ;;; New name.
 (DEFMETHOD (ESSENTIAL-MOUSE :ENABLE-SCROLLING-P) ()
-  (SEND SELF :SCROLL-BAR-P))
+  (SEND SELF ':SCROLL-BAR-P))
 
 ;;; Old name.
 (DEFMETHOD (ESSENTIAL-MOUSE :SCROLL-BAR-P) () NIL)
@@ -860,10 +863,10 @@ via :FORCE-KDB-INPUT, %%KBD-MOUSE-BUTTON is button clicked on, %%KBD-MOUSE-N-CLI
 the number of click."))
 
 (DEFMETHOD (KBD-MOUSE-BUTTONS-MIXIN :MOUSE-CLICK) (BUTTON X Y)
-  (DECLARE (IGNORE X Y))
+  X Y
   (AND (= BUTTON #/MOUSE-1-1) (NEQ SELF SELECTED-WINDOW)
        (MOUSE-SELECT SELF))
-  (SEND SELF :FORCE-KBD-INPUT BUTTON)		;(MERGE-SHIFT-KEYS BUTTON)
+  (SEND SELF ':FORCE-KBD-INPUT (MERGE-SHIFT-KEYS BUTTON))
   T)
 
 (DEFFLAVOR LIST-MOUSE-BUTTONS-MIXIN () ())
@@ -878,7 +881,7 @@ area within the :handle-mouse method still retain control."))
 (DEFMETHOD (HYSTERETIC-WINDOW-MIXIN :HANDLE-MOUSE) ()
   (LET (LEFT-LIM TOP-LIM
 	RIGHT-LIM BOTTOM-LIM)
-    (MULTIPLE-VALUE-SETQ (LEFT-LIM TOP-LIM)
+    (MULTIPLE-VALUE (LEFT-LIM TOP-LIM)
       (SHEET-CALCULATE-OFFSETS SELF MOUSE-SHEET))
     (SETQ RIGHT-LIM (+ LEFT-LIM WIDTH HYSTERESIS)
 	  BOTTOM-LIM (+ TOP-LIM HEIGHT HYSTERESIS)
@@ -889,7 +892,7 @@ area within the :handle-mouse method still retain control."))
       (AND (OR MOUSE-RECONSIDER
 	       ;; Also leave if mouse fell into inferior
 	       (AND (NEQ SELF (SETQ W (LOWEST-SHEET-UNDER-POINT MOUSE-SHEET MOUSE-X MOUSE-Y
-								NIL :EXPOSED)))
+								NIL ':EXPOSED)))
 		    (SHEET-ME-OR-MY-KID-P W SELF))
 	       (< MOUSE-X LEFT-LIM)
 	       (> MOUSE-X RIGHT-LIM)
@@ -897,7 +900,7 @@ area within the :handle-mouse method still retain control."))
 	       (> MOUSE-Y BOTTOM-LIM))
 	 (RETURN T))
       (MOUSE-STANDARD-BLINKER SELF)
-      (MOUSE-DEFAULT-HANDLER SELF (SEND SELF :ENABLE-SCROLLING-P)))))
+      (MOUSE-DEFAULT-HANDLER SELF (SEND SELF ':ENABLE-SCROLLING-P)))))
 
 ;;;; The Scroll-Bar
 
@@ -953,11 +956,11 @@ area within the :handle-mouse method still retain control."))
 			     BAR-HEIGHT N-ITEMS BAR-TOP BAR-BOTTOM BAR-WIDTH)
   (DECLARE (:SELF-FLAVOR BASIC-SCROLL-BAR))
   (WHEN SCROLL-BAR
-    (MULTIPLE-VALUE-SETQ (TOP-ITEM-NUM TOTAL-ITEMS ITEM-HEIGHT N-ITEMS)
-      (SEND SELF :SCROLL-POSITION))
+    (MULTIPLE-VALUE (TOP-ITEM-NUM TOTAL-ITEMS ITEM-HEIGHT N-ITEMS)
+      (SEND SELF ':SCROLL-POSITION))
     (SETQ TOTAL-ITEMS (MAX TOP-ITEM-NUM TOTAL-ITEMS))	;In case we get a bad number, don't
 						    	; blow the whole mouse process away
-    (MULTIPLE-VALUE-SETQ (LEFT TOP RIGHT BOTTOM)
+    (MULTIPLE-VALUE (LEFT TOP RIGHT BOTTOM)
       (DECODE-SCROLL-BAR SCROLL-BAR))
     (SETQ BAR-HEIGHT (MAX 0 (- BOTTOM TOP 5)))
     (OR N-ITEMS (SETQ N-ITEMS (TRUNCATE (SHEET-INSIDE-HEIGHT) ITEM-HEIGHT)))
@@ -979,22 +982,22 @@ area within the :handle-mouse method still retain control."))
 (DEFUN SCROLL-BAR-ERASE (&AUX LEFT TOP RIGHT BOTTOM)
   (DECLARE (:SELF-FLAVOR BASIC-SCROLL-BAR))
   (WHEN SCROLL-BAR
-    (MULTIPLE-VALUE-SETQ (LEFT TOP RIGHT BOTTOM)
+    (MULTIPLE-VALUE (LEFT TOP RIGHT BOTTOM)
       (DECODE-SCROLL-BAR SCROLL-BAR))
     (PREPARE-SHEET (SELF)
       (%DRAW-RECTANGLE (- RIGHT LEFT) (- BOTTOM TOP) LEFT TOP ERASE-ALUF SELF))))
 
 (DEFMETHOD (BASIC-SCROLL-BAR :SET-SCROLL-BAR) (NEW-SCROLL-BAR)
   ;; Just make sure SCROLL-BAR's value is valid and canonicalized.
-  (SEND SELF :SET-SCROLL-BAR-SPEC NEW-SCROLL-BAR 0 0 0 0)
-  (SEND SELF :REDEFINE-MARGINS))
+  (SEND SELF ':SET-SCROLL-BAR-SPEC NEW-SCROLL-BAR 0 0 0 0)
+  (SEND SELF ':REDEFINE-MARGINS))
 
 (DEFMETHOD (BASIC-SCROLL-BAR :AFTER :REFRESH-MARGINS) ()
   (AND (OR (EQ SCROLL-BAR-IN T) SCROLL-BAR-ALWAYS-DISPLAYED)
        (SCROLL-BAR-DRAW)))
 
 (DEFMETHOD (BASIC-SCROLL-BAR :COMPUTE-MARGINS) (LM TM RM BM)
-  (SEND SELF :SET-SCROLL-BAR-SPEC SCROLL-BAR LM TM RM BM))
+  (SEND SELF ':SET-SCROLL-BAR-SPEC SCROLL-BAR LM TM RM BM))
 
 (DEFMETHOD (BASIC-SCROLL-BAR :SET-SCROLL-BAR-SPEC) (SPEC LM TM RM BM &AUX BAR-WIDTH)
   (WHEN SPEC
@@ -1013,11 +1016,11 @@ area within the :handle-mouse method still retain control."))
 
 ;;; Next two methods are defaults, some flavors do these more efficiently
 (DEFMETHOD (BASIC-SCROLL-BAR :SCROLL-MORE-ABOVE) ()
-  (PLUSP (SEND SELF :SCROLL-POSITION)))
+  (PLUSP (SEND SELF ':SCROLL-POSITION)))
 
 (DEFMETHOD (BASIC-SCROLL-BAR :SCROLL-MORE-BELOW) ()
   (MULTIPLE-VALUE-BIND (TOP-LINE N-LINES LN-HEIGHT N-SCREEN-LINES)
-      (SEND SELF :SCROLL-POSITION)
+      (SEND SELF ':SCROLL-POSITION)
     ;; Some bag-chompers forget to return this value
     (OR N-SCREEN-LINES
 	(SETQ N-SCREEN-LINES (TRUNCATE (SHEET-INSIDE-HEIGHT) LN-HEIGHT)))
@@ -1033,22 +1036,23 @@ area within the :handle-mouse method still retain control."))
   "Called when the mouse enters the scroll bar"
   (SETQ SCROLL-BAR-IN T)
   ;; Give feedback by changing mouse cursor before calling SCROLL-BAR-DRAW, which pages a lot
-  (SEND SELF :SET-MOUSE-POSITION (TRUNCATE SCROLL-BAR-WIDTH 2) NIL)
-  (MOUSE-SET-BLINKER-DEFINITION :CHARACTER 0 7 :ON
-				:SET-CHARACTER 12.)	;fat up-down arrow
+  (SEND SELF ':SET-MOUSE-POSITION (TRUNCATE SCROLL-BAR-WIDTH 2) NIL)
+  (MOUSE-SET-BLINKER-DEFINITION ':CHARACTER 0 7 ':ON
+				':SET-CHARACTER 12.)
   (WITHOUT-INTERRUPTS
     (IF (SHEET-CAN-GET-LOCK SELF)
 	(SCROLL-BAR-DRAW)
-      (PROCESS-RUN-FUNCTION "Draw Scroll Bar"
-			    #'(LAMBDA (SELF)
-				(SHEET-FORCE-ACCESS (SELF)
-				  ;; It is possible that the mouse moved out while we were
-				  ;; waiting.  If this is the case, punt drawing.
-				  (WHEN SCROLL-BAR-IN (SCROLL-BAR-DRAW))))
-			    SELF)))
+	(PROCESS-RUN-FUNCTION "Draw Scroll Bar"
+			      #'(LAMBDA (SELF)
+				  (SHEET-FORCE-ACCESS (SELF)
+				    ;; It is possible that the mouse moved out while we were
+				    ;; waiting.  If this is the case, punt drawing.
+				    (WHEN SCROLL-BAR-IN (SCROLL-BAR-DRAW))))
+			      SELF)))
   (DO-FOREVER
-    (MOUSE-DEFAULT-HANDLER SELF :IN)
-    (SETQ Y-OFF (NTH-VALUE 1 (SHEET-CALCULATE-OFFSETS SELF MOUSE-SHEET)))
+    (MOUSE-DEFAULT-HANDLER SELF ':IN)
+    (MULTIPLE-VALUE (NIL Y-OFF)
+      (SHEET-CALCULATE-OFFSETS SELF MOUSE-SHEET))
     (COND ((< MOUSE-Y Y-OFF)
 	   (MOUSE-WARP MOUSE-X Y-OFF))
 	  (( MOUSE-Y (SETQ BOTTOM (+ Y-OFF HEIGHT)))
@@ -1077,31 +1081,29 @@ area within the :handle-mouse method still retain control."))
 
 (DEFMETHOD (BASIC-SCROLL-BAR :MOUSE-BUTTONS-SCROLL) (BD IGNORE Y &AUX CHAR TOP BOTTOM SHEIGHT)
   (SETQ CHAR (MOUSE-BUTTON-ENCODE BD))
-; character lossage
-  (IF (CHARACTERP CHAR) (SETQ CHAR (CHAR-INT CHAR)))
-  (MULTIPLE-VALUE-SETQ (NIL TOP NIL BOTTOM)
+  (MULTIPLE-VALUE (NIL TOP NIL BOTTOM)
     (DECODE-SCROLL-BAR SCROLL-BAR))
   (SETQ SHEIGHT (- BOTTOM TOP))
   (SELECTQ CHAR
     (#/MOUSE-1-1
       ;; Left: Here to top
-      (SEND SELF :SCROLL-RELATIVE Y :TOP))
+      (SEND SELF ':SCROLL-RELATIVE Y ':TOP))
     (#/MOUSE-3-1
       ;; Right: Top to here
-      (SEND SELF :SCROLL-RELATIVE :TOP Y))
+      (SEND SELF ':SCROLL-RELATIVE ':TOP Y))
     (#/MOUSE-1-2
       ;; Double Left: Here to bottom
-      (SEND SELF :SCROLL-RELATIVE Y :BOTTOM))
+      (SEND SELF ':SCROLL-RELATIVE Y ':BOTTOM))
     (#/MOUSE-3-2
       ;; Double right: Bottom to here
-      (SEND SELF :SCROLL-RELATIVE :BOTTOM Y))
+      (SEND SELF ':SCROLL-RELATIVE ':BOTTOM Y))
     (#/MOUSE-2-1
       ;; Middle: Jump to a proportional place in the "buffer"
       ;; If we are n% of the window down, we want the point
       ;; n% through the buffer to appear at the top of the window.
       (MULTIPLE-VALUE-BIND (IGNORE TOTAL-ITEMS)
-	  (SEND SELF :SCROLL-POSITION)
-	(SEND SELF :SCROLL-ABSOLUTE
+	  (SEND SELF ':SCROLL-POSITION)
+	(SEND SELF ':SCROLL-ABSOLUTE
 	      (FIX (+ .5s0 (// (* TOTAL-ITEMS (- Y TOP)) (SMALL-FLOAT SHEIGHT)))))))
     (OTHERWISE (BEEP))))
 
@@ -1111,28 +1113,28 @@ high, and that there is a :SCROLL-TO message which accepts a line number to scro
 or a relative number of lines to scroll by.
 Each argument is :TOP, :BOTTOM or a number of pixels from the top of the window."
   (MULTIPLE-VALUE-BIND (IGNORE IGNORE ITEM-HEIGHT)
-      (SEND SELF :SCROLL-POSITION)
-    (SETQ FROM (COND ((EQ FROM :TOP) 0)
-		     ((EQ FROM :BOTTOM) (TRUNCATE (- (SHEET-INSIDE-HEIGHT) (1- ITEM-HEIGHT))
-						  ITEM-HEIGHT))
+      (SEND SELF ':SCROLL-POSITION)
+    (SETQ FROM (COND ((EQ FROM ':TOP) 0)
+		     ((EQ FROM ':BOTTOM) (TRUNCATE (- (SHEET-INSIDE-HEIGHT) (1- ITEM-HEIGHT))
+					     ITEM-HEIGHT))
 		     ((NUMBERP FROM) (TRUNCATE (- FROM TOP-MARGIN-SIZE) ITEM-HEIGHT))
 		     (T (FERROR NIL "~A illegal arg to :SCROLL-RELATIVE" FROM)))
-	  TO  (COND ((EQ TO :TOP) 0)
-		    ((EQ TO :BOTTOM) (TRUNCATE (- (SHEET-INSIDE-HEIGHT) (1- ITEM-HEIGHT))
-					       ITEM-HEIGHT))
+	  TO  (COND ((EQ TO ':TOP) 0)
+		    ((EQ TO ':BOTTOM) (TRUNCATE (- (SHEET-INSIDE-HEIGHT) (1- ITEM-HEIGHT))
+					  ITEM-HEIGHT))
 		    ((NUMBERP TO) (TRUNCATE (- TO TOP-MARGIN-SIZE) ITEM-HEIGHT))
 		    (T (FERROR NIL "~A illegal arg to :SCROLL-RELATIVE" TO))))
     ;; We now know what item we are scrolling from, and what item we are scrolling to.
     ;; Scroll that relative amount.
-    (SEND SELF :SCROLL-TO (- FROM TO) :RELATIVE)))
+    (SEND SELF ':SCROLL-TO (- FROM TO) ':RELATIVE)))
 
 (DEFMETHOD (BASIC-SCROLL-BAR :SCROLL-ABSOLUTE) (TO)
   "Scroll to the specified item"
-  (SEND SELF :SCROLL-TO TO :ABSOLUTE))
+  (SEND SELF ':SCROLL-TO TO ':ABSOLUTE))
 
 (DEFMETHOD (BASIC-SCROLL-BAR :MOUSE-MOVES-SCROLL) (&REST IGNORE)
   (MULTIPLE-VALUE-BIND (X-OFF Y-OFF)
-      (SEND MOUSE-BLINKER :OFFSETS)
+      (SEND MOUSE-BLINKER ':OFFSETS)
     (BLINKER-SET-CURSORPOS MOUSE-BLINKER
 			   (- MOUSE-X X-OFF (SHEET-INSIDE-LEFT MOUSE-SHEET))
 			   (- MOUSE-Y Y-OFF (SHEET-INSIDE-TOP MOUSE-SHEET)))))
@@ -1163,13 +1165,13 @@ and it will scroll up or down by a single line and the mouse will be moved back.
 (MOUSE-DEFINE-BLINKER-TYPE 'FLASHY-CHARACTER
 			   #'(LAMBDA (SCREEN)
 			       (DEFINE-BLINKER SCREEN 'MOUSE-CHARACTER-BLINKER
-				 		      :VISIBILITY NIL
-						      :FONT (SEND SCREEN :MOUSE-FONT)
-						      :CHAR 8.)))
+				 		      ':VISIBILITY NIL
+						      ':FONT (SEND SCREEN ':MOUSE-FONT)
+						      ':CHAR 8.)))
 
 (DEFMETHOD (FLASHY-SCROLLING-MIXIN :OVERRIDE :WHO-LINE-DOCUMENTATION-STRING) ()
   (WHEN FLASHY-SCROLLING-BLINKER
-    (IF (= (SEND MOUSE-BLINKER :CHARACTER) 8.)
+    (IF (= (SEND MOUSE-BLINKER ':CHARACTER) 8.)
 	;; Character 8 is upward pointing arrow for top of window
 	"Bump blinker against top of window to scroll down by one line."
 	"Bump blinker against bottom of window to scroll up by one line.")))
@@ -1181,21 +1183,21 @@ and it will scroll up or down by a single line and the mouse will be moved back.
 		     (FIRST FLASHY-SCROLLING-REGION)
 		   (SECOND FLASHY-SCROLLING-REGION)))
     ;; Make sure is within the appropriate region
-    (COND ((AND (SEND SELF :ENABLE-SCROLLING-P)
+    (COND ((AND (SEND SELF ':ENABLE-SCROLLING-P)
 		(IF TOP-P
 		    (< Y (FIRST REGION))
 		  (> Y (- HEIGHT (FIRST REGION))))
 		(> X (FLASHY-SCROLLING-PARSE-X-SPEC (SECOND REGION)))
 		( X (FLASHY-SCROLLING-PARSE-X-SPEC (THIRD REGION)))
-		(SEND SELF (IF TOP-P :SCROLL-MORE-ABOVE :SCROLL-MORE-BELOW)))
+		(SEND SELF (IF TOP-P ':SCROLL-MORE-ABOVE ':SCROLL-MORE-BELOW)))
 	   (OR FLASHY-SCROLLING-BLINKER
 	       (SETQ FLASHY-SCROLLING-BLINKER MOUSE-BLINKER))
 	   (COND (TOP-P
-		  (MOUSE-SET-BLINKER-DEFINITION 'FLASHY-CHARACTER 6 0 :ON
-						:SET-CHARACTER 8.))
+		  (MOUSE-SET-BLINKER-DEFINITION 'FLASHY-CHARACTER 6 0 ':ON
+						':SET-CHARACTER 8.))
 		 (T
-		  (MOUSE-SET-BLINKER-DEFINITION 'FLASHY-CHARACTER 6 13. :ON
-						:SET-CHARACTER 10.)))
+		  (MOUSE-SET-BLINKER-DEFINITION 'FLASHY-CHARACTER 6 13. ':ON
+						':SET-CHARACTER 10.)))
 	   (AND ;; If mouse is moving slowly enough
 	     (OR (NULL FLASHY-SCROLLING-MAX-SPEED)
 		 (< MOUSE-SPEED FLASHY-SCROLLING-MAX-SPEED))
@@ -1206,7 +1208,7 @@ and it will scroll up or down by a single line and the mouse will be moved back.
 		 (SHEET-CALCULATE-OFFSETS W MOUSE-SHEET)
 	       (MOUSE-WARP MOUSE-X (+ (IF TOP-P 10. (- HEIGHT 10.)) WINDOW-Y-OFFSET))
 	       ;; Express scrolling 1 line up or down by relations of lines 0 and 1
-	       (SEND SELF :SCROLL-TO (IF TOP-P -1 +1) :RELATIVE)
+	       (SEND SELF ':SCROLL-TO (IF TOP-P -1 +1) ':RELATIVE)
 	       T)))
 	  (FLASHY-SCROLLING-BLINKER
 	   (MOUSE-SET-BLINKER FLASHY-SCROLLING-BLINKER)
@@ -1217,8 +1219,8 @@ and it will scroll up or down by a single line and the mouse will be moved back.
   (DECLARE (:SELF-FLAVOR FLASHY-SCROLLING-MIXIN))
   (COND ((FLOATP SPEC) (FIX (* SPEC WIDTH)))
 	((FIXNUMP SPEC) SPEC)
-	((EQ SPEC :RIGHT) WIDTH)
-	((EQ SPEC :LEFT) 0)
+	((EQ SPEC ':RIGHT) WIDTH)
+	((EQ SPEC ':LEFT) 0)
 	(T (FERROR NIL "~A is illegal X position specification for flashy scrolling" SPEC))))
 
 ;;; Arguments are window-relative position of the mouse
