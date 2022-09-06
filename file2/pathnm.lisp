@@ -705,9 +705,9 @@
 			      (setq i (1+ i))
 			      (setq last-nonspace i)
 			      (cond ((= i len)
-				     (pathname-error (1- i) pathstring
-					     "Pathstring ends with quote character ~C"
-					     #/))))
+				     (pathname-error (1- i)
+					     "Pathstring ends with quote character: ~A"
+					     pathstring))))
 			     ((memq ch pathstring-special-chars)
 			      (return (setq name-end-index i)))
 			     ((= ch #/ ))
