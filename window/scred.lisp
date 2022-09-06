@@ -1,4 +1,4 @@
-;;; -*- Mode:LISP; Package:TV; Base:8; Readtable:T -*-
+;;; -*- Mode:LISP; Package:TV; Base:8 -*-
 ;;;	** (c) Copyright 1980 Massachusetts Institute of Technology **
 ;;; The screen editor
 
@@ -132,12 +132,12 @@ The adjusted X and Y are kept inside the margins of SHEET."
 	       Y (MIN (MAX Y2 (SHEET-INSIDE-TOP SHEET)) (SHEET-INSIDE-BOTTOM SHEET)))))
   (VALUES X Y))
 
-;;; 32. is about 4 character-widths
+;;; 32. is 4 character-widths
 (DEFUN SUITABLY-CLOSE (DELTA)
-  (< 0 DELTA DELTA 32.))
+  (AND (PLUSP DELTA) (< DELTA 32.)))
 
 ;;; Put a window someplace using the mouse
-(DEFUN MOUSE-SET-WINDOW-SIZE (WINDOW &OPTIONAL (MOVE-P T) &AUX LEFT TOP RIGHT BOTTOM ERROR)
+(DEFUN MOUSE-SET-WINDOW-SIZE (WINDOW &OPTIONAL (MOVE-P T) &AUX LEFT TOP RIGHT BOTTOM)
   "Ask user for new edges for WINDOW, return them, and usually set edges of WINDOW.
 WINDOW's edges are set unless MOVE-P is NIL.
 The values are the new edges, or NIL if the user aborted."
@@ -154,11 +154,9 @@ The values are the new edges, or NIL if the user aborted."
 	   (SETQ MOVE-P NIL)
 	   (MULTIPLE-VALUE (LEFT TOP RIGHT BOTTOM) (SEND WINDOW :EDGES))
 	   (RETURN))
-	  ((NOT (MULTIPLE-VALUE-SETQ (NIL ERROR)
-		  (SEND WINDOW :SET-EDGES LEFT TOP RIGHT BOTTOM :VERIFY)))
-	   ;; Edges no good, try again
+	  ((NOT (NTH-VALUE 1 (SEND WINDOW :SET-EDGES LEFT TOP RIGHT BOTTOM :VERIFY)))
 	   (BEEP)
-	   (POP-UP-FORMAT "Illegal edges for ~S:~%~A" WINDOW ERROR))
+	   (POP-UP-FORMAT "Illegal edges for ~S" WINDOW))	;Edges no good, try again
 	  (T (RETURN))))			;Good
   (AND MOVE-P (SEND WINDOW :SET-EDGES LEFT TOP RIGHT BOTTOM))
   (VALUES LEFT TOP RIGHT BOTTOM))
@@ -681,11 +679,10 @@ and is used as the basis for undoing."
 	     (RETURN NIL)))))
 
 (DEFUN SCREEN-EDITOR-FIND-SCREEN-TO-EDIT (BOTTOM-WINDOW &AUX LIST)
-  (DO ((SHEET BOTTOM-WINDOW (SHEET-SUPERIOR SHEET)))
-      ((NULL SHEET))
-    (IF (SHEET-EXPOSED-P SHEET)
-	(IF (TYPEP SHEET 'BASIC-FRAME) (PUSH SHEET LIST))
-      (SETQ LIST NIL)))
+  (DO SHEET BOTTOM-WINDOW (SHEET-SUPERIOR SHEET) (NULL SHEET)
+      (IF (SHEET-EXPOSED-P SHEET)
+	  (IF (TYPEP SHEET 'BASIC-FRAME) (PUSH SHEET LIST))
+	  (SETQ LIST NIL)))
   ;; LIST is now all the frames under the mouse that are VISIBLE!
   (IF (NULL LIST) MOUSE-SHEET
       (OR (MEMQ MOUSE-SHEET LIST) (PUSH MOUSE-SHEET LIST))
@@ -697,7 +694,6 @@ and is used as the basis for undoing."
 	"Edit inferiors of which screen or frame:")))
 
 ;;; This is like SUBST but uses EQ rather than EQUAL and only copies what it has to.
-;;; ie cli:subst :test #'eq
 (DEFUN SUBSTQ (NEW OLD SEXP)
   (COND ((EQ OLD SEXP) NEW)
 	((ATOM SEXP) SEXP)
@@ -909,7 +905,7 @@ X and Y are relative to SUPERIOR.  Returns NIL if there is no such exposed infer
 			:ASSOC
 			,(LOOP FOR FONT BEING THE ARRAY-ELEMENTS OF (SEND WINDOW :FONT-MAP)
 			       WHEN (AND (NOT (NULL FONT))
-					 (NOT (SYS:MEMBER-EQUAL FONT FONT-LIST)))
+					 (NOT (MEMBER FONT FONT-LIST)))
 			       COLLECT (CONS (FONT-NAME FONT) FONT) INTO ANSWER
 			       AND COLLECT FONT INTO FONT-LIST
 			       FINALLY (RETURN ANSWER)))
@@ -1463,7 +1459,7 @@ X and Y are relative to SUPERIOR.  Returns NIL if there is no such exposed infer
 	  RIGHT (FIFTH (FIRST WINDOW-AND-MOVING-EDGES))
 	  BOTTOM (SIXTH (FIRST WINDOW-AND-MOVING-EDGES)))
     ;; If there is just one corner, light it up as a corner
-    (IF (SYS:MEMBER-EQUAL (CDR WINDOW-AND-MOVING-EDGES)
+    (IF (MEMBER (CDR WINDOW-AND-MOVING-EDGES)
 		'((T T NIL NIL) (NIL T T NIL) (NIL NIL T T) (T NIL NIL T)))
 	(SETQ LIST (ADD-CORNER LIST
 			       (SECOND WINDOW-AND-MOVING-EDGES)
