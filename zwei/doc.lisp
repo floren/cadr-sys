@@ -1,64 +1,18 @@
-;;; Self-Documentation. -*- Mode:LISP; Package:ZWEI; Base:8; Readtable:T -*-
+;;; Self-Documentation. -*- Mode:LISP; Package:ZWEI; Base:8 -*-
 ;;; ** (c) Copyright 1980 Massachusetts Institute of Technology **
 
 ;;; Worry about whether DOCUMENTATION-FUNCTION stuff will get called
 ;;; with the right streams set up.  
 
-;;; A command (a COM- symbol) either has "smart" or "normal" handling of
-;;; documentation.  All commands should have a COMMAND-NAME property, whose
-;;; value is the nice-looking string form of the command's name.
-;;; It should also have a DOCUMENTATION property, whose value is the
-;;; string which is the full documentation.  If short documentation
-;;; (the one-line kind produced by List Commands) is needed, it is just
-;;; the first line of the full documentation.
-
-;;; A command with "smart" handling is detected by the presence of
-;;; a DOCUMENTATION-FUNCTION property.  The value of this property
-;;; should be a function, which is called with three arguments:
-;;;    First, the command symbol itself.
-;;;    Secondly, the character typed to get this command, or NIL.  If the second
-;;;       argument is NIL, that means that the caller does not have any particular
-;;;       character in mind (e.g. in List Commands).  The documentation-function
-;;;       should be prepared to deal with this case.
-;;;    Thirdly, an operation which tells the function what to do.  They are:
-;;;       :NAME  Return your name as a string, (e.g. "Self Insert")
-;;;       :FULL  Type out full documentation to *standard-output*.
-;;;       :SHORT Type out short documentation to *standard-output*.
-
-;;; The symbols on the *COMMAND-HOOK* may also want to document
-;;; themselves when the user asks for self-documentation.  Any hook
-;;; which does should have an HOOK-DOCUMENTATION-FUNCTION property,
-;;; whose value is a function of two arguments, the command which the
-;;; hook is preceeding, and the character typed.  (The second argument
-;;; will never be NIL.) This function will only be called on the user's
-;;; request for FULL (not SHORT) documentation. The function should print
-;;; out stuff to *standard-output*.  It may assume the cursor is at the left
-;;; edge, and it should leave the cursor there.
-
-(DEFMACRO DEFINE-COMMAND-DOCUMENTATION (COMMAND &BODY BODY)
-  "Define a documentation function for a ZWEI command.
-There are three arguments provided for you:
-    COM, the command symbol itself.
-    CHAR, the character typed to get this command, or NIL.  If the second
-       argument is NIL, that means that the caller does not have any particular
-       character in mind (e.g. in List Commands).  The documentation-function
-       should be prepared to deal with this case.
-    OP, an operation which tells the function what to do.  They are:
-       :NAME  Return your name as a string, (e.g. /"Self Insert/")
-       :FULL  Type out full documentation to *STANDARD-OUTPUT*.
-       :SHORT Type out short documentation to *STANDARD-OUTPUT*."
-  `(DEFUN (:PROPERTY ,COMMAND DOCUMENTATION-FUNCTION) (COM CHAR OP)
-     ,@BODY))
-     
 (DEFCONST *COM-DOCUMENTATION-ALIST*
-	  '((#/C COM-SELF-DOCUMENT)
-	    (#/D COM-DESCRIBE-COMMAND)
-	    (#/L COM-WHAT-LOSSAGE
-	     (SEND *STANDARD-INPUT* :OPERATION-HANDLED-P :PLAYBACK))
-	    (#/A COM-APROPOS)
-	    (#/U COM-UNDO)
-	    (#/V COM-VARIABLE-APROPOS)
-	    (#/W COM-WHERE-IS))
+	  '((#/C COM-SELF-DOCUMENT)
+	    (#/D COM-DESCRIBE-COMMAND)
+	    (#/L COM-WHAT-LOSSAGE
+	     (MEMQ ':PLAYBACK (FUNCALL STANDARD-INPUT ':WHICH-OPERATIONS)))
+	    (#/A COM-APROPOS)
+	    (#/U COM-UNDO)
+	    (#/V COM-VARIABLE-APROPOS)
+	    (#/W COM-WHERE-IS))
   "Alist defining Help options.
 Each element is (CHARACTER COMMAND COND-FORM).
 The option is available only if COND-FORM evals non-NIL
@@ -79,44 +33,40 @@ More advanced options:
        (*REPEAT-DOC-P* NIL))
       (NIL)
     ;; Print a list of available options.
-    (FORMAT *QUERY-IO* "~&Help.  Options are ")
+    (FORMAT QUERY-IO "~&Help.  Options are ")
     (DOLIST (ELT *COM-DOCUMENTATION-ALIST*)
       (IF (OR (NULL (THIRD ELT))
 	      (EVAL (THIRD ELT)))
-	  (FORMAT *QUERY-IO* "~C," (CAR ELT))))
-    (FORMAT *QUERY-IO* "~\LOZENGED-CHARACTER\,~\LOZENGED-CHARACTER\: " #/SPACE #/HELP)
+	  (FORMAT QUERY-IO "~C," (CAR ELT))))
+    (FORMAT QUERY-IO "<Space>,<Help>: ")
     ;; Read input chars till we get a valid one.
     (TYPEIN-LINE-ACTIVATE
-      (SETQ CHAR (DO ((CHAR (CHAR-UPCASE (READ-CHAR *STANDARD-INPUT*))
-			    (CHAR-UPCASE (READ-CHAR *STANDARD-INPUT*))))
-		     ((OR (ASSQ CHAR *COM-DOCUMENTATION-ALIST*)
-;character lossage
-			  (ASSQ (CHAR-INT CHAR) *COM-DOCUMENTATION-ALIST*)
-			  (MEMQ CHAR '(#/SP #/HELP)))
+      (SETQ CHAR (DO ((CHAR (CHAR-UPCASE (FUNCALL STANDARD-INPUT ':TYI))
+			    (CHAR-UPCASE (FUNCALL STANDARD-INPUT ':TYI))))
+		     ((OR (MEMQ CHAR '(#/SP #/HELP))
+			  (ASSQ CHAR *COM-DOCUMENTATION-ALIST*))
 		      CHAR)
-		   (WHEN (MEMQ CHAR '(#/C-G #/RUBOUT))
-		     (SEND *QUERY-IO* :MAKE-COMPLETE)
-		     (BARF))
+		   (COND ((MEMQ CHAR '(#/C-G #/RUBOUT))
+			  (FUNCALL QUERY-IO ':MAKE-COMPLETE)
+			  (BARF)))
 		   (BEEP))))
-    (SEND *QUERY-IO* :MAKE-COMPLETE)
+    (FUNCALL QUERY-IO ':MAKE-COMPLETE)
     ;; Execute the character we got.
-    (COND ((EQL CHAR #/SPACE)
+    (COND ((= CHAR #/SP)
 	   (SETQ *REPEAT-DOC-P* T)
 	   (SETQ CHAR *COM-DOC-LAST-CHAR*))
 	  (T (SETQ *COM-DOC-LAST-CHAR* CHAR)))
-    (IF (MEMQ CHAR '(#/? #/HELP))
+    (IF (MEMQ CHAR '(#/? #/HELP))
 	(PROGN (FORMAT T "You have entered the Documentation command.~%")
-	       (PRINT-DOC :FULL 'COM-DOCUMENTATION *LAST-COMMAND-CHAR*))
-      (LET ((FUNCTION (CADR (OR (ASSQ CHAR *COM-DOCUMENTATION-ALIST*)
-;character lossage
-				(ASSQ (CHAR-INT CHAR) *COM-DOCUMENTATION-ALIST*)))))
+	       (PRINT-DOC ':FULL 'COM-DOCUMENTATION *LAST-COMMAND-CHAR*))
+      (LET ((FUNCTION (SECOND (ASSQ CHAR *COM-DOCUMENTATION-ALIST*))))
 	(AND FUNCTION (RETURN (FUNCALL FUNCTION)))))))
 
-(DEFINE-COMMAND-DOCUMENTATION COM-DOCUMENTATION ()
-  (IF (NEQ OP :FULL)
-      (IF (EQ OP :NAME)
+(DEFUN (COM-DOCUMENTATION DOCUMENTATION-FUNCTION) (COMMAND CHAR OP)
+  (IF (NEQ OP ':FULL)
+      (IF (EQ OP ':NAME)
 	  "Documentation"
-	(PRINT-DOC OP COM CHAR T))
+	(PRINT-DOC OP COMMAND CHAR T))
     (FORMAT T "This prints various sorts of editor documentation.
 You type an option -- one character -- saying what kind of documentation you want.
 For some options, you then type more; for example, which command to document.
@@ -126,9 +76,8 @@ Here are the options available now:~%")
       (IF (OR (NULL (THIRD ELT)) (EVAL (THIRD ELT)))
 	  (PROGN
 	    (FORMAT T "~C -- " (CAR ELT))
-	    (PRINT-DOC :SHORT (CADR ELT)))))
-    (FORMAT T "~%In addition, ~\lozenged-character\ repeats the previous Help request."
-	    #/SPACE)))
+	    (PRINT-DOC ':SHORT (CADR ELT)))))
+    (FORMAT T "~%In addition, <Space> repeats the previous Help request.")))
 
 (DEFCOM COM-DOCUMENT-CONTAINING-COMMAND "Print documentation on the command that you
 are in the middle of." ()
@@ -136,31 +85,80 @@ are in the middle of." ()
 Type Control-Meta-Y to go back to editing the previous mini-buffer ~A.
 
 ~@[The command in progress is ~A:~]~%"
-	  (IF (CDR *OUTER-LEVEL-MINI-BUFFER-COMMAND*) "argument of this command" "command")
+	  (IF (CDR *OUTER-LEVEL-MINI-BUFFER-COMMAND*)
+	      "argument of this command"
+	    "command")
 	  (COMMAND-NAME *MINI-BUFFER-COMMAND-IN-PROGRESS* T))
-  (PRINT-DOC :FULL *MINI-BUFFER-COMMAND-IN-PROGRESS*)
-  (SEND *STANDARD-OUTPUT* :FRESH-LINE)
-  (WHEN *MINI-BUFFER-ARG-DOCUMENTER*
-    (FUNCALL *MINI-BUFFER-ARG-DOCUMENTER*))
+  (PRINT-DOC ':FULL *MINI-BUFFER-COMMAND-IN-PROGRESS*)
+  (FUNCALL STANDARD-OUTPUT ':FRESH-LINE)
+  (COND (*MINI-BUFFER-ARG-DOCUMENTER*
+	 (FUNCALL *MINI-BUFFER-ARG-DOCUMENTER*)))
   DIS-NONE)
 
+;;; A command (a COM- symbol) either has "smart" or "normal" handling of
+;;; documentation.  All commands should have a COMMAND-NAME property, whose
+;;; value is the nice-looking string form of the command's name.
+;;; It should also have a DOCUMENTATION property, whose value is the
+;;; string which is the full documentation.  If short documentation
+;;; (the one-line kind produced by List Commands) is needed, it is just
+;;; the first line of the full documentation.
+
+;;; A command with "smart" handling is detected by the presence of
+;;; a DOCUMENTATION-FUNCTION property.  The value of this property
+;;; should be a function, which is called with three arguments:
+;;;    First, the command symbol itself.
+;;;    Secondly, the character typed to get this command, or NIL.  If the second
+;;;       argument is NIL, that means that the caller does not have any particular
+;;;       character in mind (e.g. in List Commands).  The documentation-function
+;;;       should be prepared to deal with this case.
+;;;    Thirdly, an operation which tells the function what to do.  They are:
+;;;       :NAME  Return your name as a string, (e.g. "Self Insert")
+;;;       :FULL  Type out full documentation to standard-output.
+;;;       :SHORT Type out short documentation to standard-output.
+
+;;; The symbols on the *COMMAND-HOOK* may also want to document
+;;; themselves when the user asks for self-documentation.  Any hook
+;;; which does should have an HOOK-DOCUMENTATION-FUNCTION property,
+;;; whose value is a function of two arguments, the command which the
+;;; hook is preceeding, and the character typed.  (The second argument
+;;; will never be NIL.) This function will only be called on the user's
+;;; request for FULL (not SHORT) documentation. The function should print
+;;; out stuff to standard-output.  It may assume the cursor is at the left
+;;; edge, and it should leave the cursor there.
+
+(DEFMACRO DEFINE-COMMAND-DOCUMENTATION (COMMAND &BODY BODY)
+  "Define a documentation function for a ZWEI command.
+There are three arguments provided for you:
+    COM, the command symbol itself.
+    CHAR, the character typed to get this command, or NIL.  If the second
+       argument is NIL, that means that the caller does not have any particular
+       character in mind (e.g. in List Commands).  The documentation-function
+       should be prepared to deal with this case.
+    OP, an operation which tells the function what to do.  They are:
+       :NAME  Return your name as a string, (e.g. /"Self Insert/")
+       :FULL  Type out full documentation to standard-output.
+       :SHORT Type out short documentation to standard-output."
+  `(DEFUN (:PROPERTY ,COMMAND DOCUMENTATION-FUNCTION) (COM CHAR OP)
+     ,@BODY))
+     
 (DEFCOM COM-SELF-DOCUMENT "Print out documentation for the command on a given key." (KM)
   (LET (CHAR)
-    (FORMAT *QUERY-IO* "~&Document command: ")
+    (FORMAT QUERY-IO "~&Document command: ")
     (TYPEIN-LINE-ACTIVATE
       (WITHOUT-IO-BUFFER-OUTPUT-FUNCTION
-	(SETQ CHAR (SEND *QUERY-IO* :ANY-TYI))))
+	(SETQ CHAR (FUNCALL QUERY-IO ':ANY-TYI))))
     (DO-FOREVER
-      (IF (EQ (CAR-SAFE CHAR) :MOUSE-BUTTON)
-	  (SETQ CHAR (CADR CHAR)))
+      (AND (CONSP CHAR)
+	   (EQ (CAR CHAR) ':MOUSE-BUTTON)
+	   (SETQ CHAR (THIRD CHAR)))
       (COND ((ATOM CHAR)
-	     (FORMAT *QUERY-IO* "~:@C" CHAR)
-	     (SEND *MODE-LINE-WINDOW* :DONE-WITH-MODE-LINE-WINDOW)
+	     (FORMAT QUERY-IO "~:@C" CHAR)
+	     (FUNCALL *MODE-LINE-WINDOW* ':DONE-WITH-MODE-LINE-WINDOW)
 	     (DOCUMENT-KEY CHAR *COMTAB*)
 	     (RETURN))
 	    ((EQ (CAR CHAR) 'SCROLL)
-	     (FORMAT *QUERY-IO* "Mouse-Scroll")
-	     (SEND *MODE-LINE-WINDOW* :DONE-WITH-MODE-LINE-WINDOW)
+	     (FORMAT QUERY-IO "Mouse-Scroll")
+	     (FUNCALL *MODE-LINE-WINDOW* ':DONE-WITH-MODE-LINE-WINDOW)
 	     (FORMAT T
 		     "Mouse Scrolling:
   When the mouse cursor is an up-and-down arrow, near the left edge,
@@ -183,12 +181,13 @@ buffer is currently on the screen.")
   DIS-NONE)
 
 (DEFUN DOCUMENT-KEY (CHAR COMTAB)
-  "Print full documentation of character CHAR's definition in COMTAB, on *STANDARD-OUTPUT*."
+  "Print full documentation of character CHAR's definition in COMTAB, on STANDARD-OUTPUT."
   (IF (OR (ATOM CHAR)
-	  (AND (EQ (CAR-SAFE CHAR) :MOUSE-BUTTON)
-	       (SETQ CHAR (CADR CHAR))))
+	  (AND (CONSP CHAR)
+	       (EQ (CAR CHAR) ':MOUSE-BUTTON)
+	       (SETQ CHAR (THIRD CHAR))))
       (FORMAT T "~&~:@C" CHAR)
-      (FORMAT T "~&~S" CHAR))
+    (FORMAT T "~&~S" CHAR))
   (PROG (TEM PREFIX)
      L  (SETQ TEM (COMMAND-LOOKUP CHAR COMTAB T))
 	(COND ((NULL TEM)
@@ -197,13 +196,13 @@ buffer is currently on the screen.")
 	       (IF (NOT (GET TEM 'COMMAND-NAME))
 		   (FORMAT T " is ~A, which is not implemented.~%" TEM)
 		   (FORMAT T " is ~A, implemented by " (COMMAND-NAME TEM))
-		   (SEND *STANDARD-OUTPUT* :ITEM 'FUNCTION-NAME TEM)
+		   (FUNCALL STANDARD-OUTPUT ':ITEM 'FUNCTION-NAME TEM)
 		   (FORMAT T ":~%")
 		   (DO L *COMMAND-HOOK* (CDR L) (NULL L)
 		       (LET ((DOCFN (GET (CAR L) 'HOOK-DOCUMENTATION-FUNCTION)))
 			 (AND DOCFN
 			      (FUNCALL DOCFN TEM CHAR))))
-		   (PRINT-DOC :FULL TEM CHAR)))
+		   (PRINT-DOC ':FULL TEM CHAR)))
 	      ((CONSP TEM)
 	       (FORMAT T " is an alias for ~@[~:@C ~]~:@C.~%~@[~:@C ~]~:@C"
 		       PREFIX
@@ -222,9 +221,9 @@ It reads a character (subcommand) and dispatches on it.
 Type a subcommand to document (or * for all):~%")
 	       (SETQ PREFIX CHAR
 		     CHAR (WITHOUT-IO-BUFFER-OUTPUT-FUNCTION
-			    (READ-CHAR *STANDARD-INPUT*)))
+			      (FUNCALL STANDARD-INPUT ':TYI)))
 	       (FORMAT T "~%~:@C" PREFIX)
-	       (COND ((CHAR= CHAR #/*)
+	       (COND ((= CHAR #/*)
 		      (FORMAT T " has these subcommands:~%")
 		      (DOCUMENT-PREFIX-CHAR-TABLE (GET-PREFIX-COMMAND-COMTAB TEM)))
 		     (T
@@ -236,7 +235,6 @@ Type a subcommand to document (or * for all):~%")
 	       (DO ((L (GET-MENU-COMMAND-COMMANDS TEM) (CDR L))
 		    (FLAG T NIL))
 		   ((NULL L) (TERPRI))
-;>> should makes these items
 		 (FORMAT T "~:[, ~]~A" FLAG (CAAR L))))
 	      (T (FORMAT T " is garbage!?~%")))))
 
@@ -245,7 +243,7 @@ Type a subcommand to document (or * for all):~%")
 	  ((NULL CT) T)
 	(IF (ARRAYP (SETQ KBD (COMTAB-KEYBOARD-ARRAY CT)))
 	    (RETURN NIL))
-	(SETQ CHARS (SI:UNION-EQ CHARS (MAPCAR #'CAR KBD))))
+	(SETQ CHARS (UNION CHARS (MAPCAR 'CAR KBD))))
       ;; Every level of comtab we indirect to is a sparse one.
       (DOLIST (CHAR CHARS)
 	(PRINT-SHORT-DOC-FOR-TABLE CHAR COMTAB 3))
@@ -269,14 +267,15 @@ and it gets as arguments COMMAND, CHAR and OP."
 		     (GET COMMAND 'DOCUMENTATION-FUNCTION))
 		(FUNCALL (GET COMMAND 'DOCUMENTATION-FUNCTION)
 			 COMMAND CHAR OP)
-		(FRESH-LINE))
+		(FORMAT T "~&")
+		)
 	       ((SETQ DOC (GET COMMAND 'DOCUMENTATION))
 		(FORMAT T "~A~&"
-			(CASE OP
+			(SELECTQ OP
 			  (:FULL DOC)
 			  (:SHORT
 			   (IF DOC
-			       (LET ((FIRST-CR (STRING-SEARCH-CHAR #/NEWLINE DOC)))
+			       (LET ((FIRST-CR (STRING-SEARCH-CHAR #/CR DOC)))
 				 (IF FIRST-CR
 				     (NSUBSTRING DOC 0 FIRST-CR)
 				     DOC))
@@ -290,18 +289,18 @@ and it gets as arguments COMMAND, CHAR and OP."
 NO-ERROR-P means return NIL if data is not present (no DEFCOM was done)."
   (CHECK-ARG COMMAND SYMBOLP "a symbol")
   (COND ((SETQ FN (GET COMMAND 'DOCUMENTATION-FUNCTION))
-	 (FUNCALL FN COMMAND NIL :NAME))
+	 (FUNCALL FN COMMAND NIL ':NAME))
 	((GET COMMAND 'COMMAND-NAME))
 	(NO-ERROR-P NIL)
 	(T (FERROR NIL "~S does not have a name" COMMAND))))
 
 (DEFCOM COM-LIST-COMMANDS "List all extended commands." ()
   (FORMAT T "~%   Extended commands:~2%")
-  (DO ((L (EXTENDED-COMMAND-ALIST *COMTAB*) (CDR L))) ((NULL L))
-    (WHEN (CONSP L)
-      (FORMAT T "~30,5,2A" (CAAR L))
-      (PRINT-DOC :SHORT (CDAR L))
-      (FRESH-LINE)))
+  (DO L (EXTENDED-COMMAND-ALIST *COMTAB*) (CDR L) (NULL L)
+    (COND ((CONSP L)
+	   (FORMAT T "~30,5,2A" (CAAR L))
+	   (PRINT-DOC ':SHORT (CDAR L))
+	   (FORMAT T "~&"))))
   (FORMAT T "~%Done.~%")
   DIS-NONE)
 
@@ -315,43 +314,31 @@ Used by APROPOS")
 Tell on which key(s) each command can be found.
 Leading and trailing spaces in the substring are NOT ignored - they
 must be matched by spaces in the command name." ()
-  (APROPOS-INTERNAL T "Command Apropos. (Substring:)"))
-
-(DEFCOM COM-CURRENT-MODE-APROPOS
-  "List currently accessible commands whose names contain a given string." ()
-  (APROPOS-INTERNAL NIL "Accessible commands Apropos. (Substring:)"))
-
-(DEFUN APROPOS-INTERNAL (USE-ANY-EXTENDED-COMMAND-P PROMPT)
   (MULTIPLE-VALUE-BIND (FUNCTION KEY)
-      (GET-EXTENDED-SEARCH-STRINGS PROMPT)
+      (GET-EXTENDED-SEARCH-STRINGS "Apropos. (Substring:)")
     (LET ((EXTENDED-CMD (KEY-FOR-COMMAND *EXTENDED-COMMAND-COMMAND*))
-	  (ANY-EXTENDED-CMD (KEY-FOR-COMMAND *ANY-EXTENDED-COMMAND-COMMAND*)))
+	  ANY-EXTENDED-CMD)
       (DOLIST (X *COMMAND-ALIST*)
-	(LET* ((CMD (CDR X))
-	       (NAME (COMMAND-NAME CMD))
-	       (TYPE 'ANY-EXTENDED))
-	  (FLET ((DOCUMENT-COMMAND ()
-		   (FORMAT T "~&~30,5,2A" NAME)
-		   (PRINT-DOC :SHORT CMD)
-		   (SEND *TERMINAL-IO* :FRESH-LINE)))
-	    (WHEN (FUNCALL FUNCTION KEY NAME)
-	      (AND (KEY-FOR-COMMAND CMD) ; just use for predicate here...
-		   (SETQ TYPE 'KEY))
-	      (AND (EXTENDED-COMMAND-P CMD)
-		   (SETQ TYPE 'EXTENDED))
-	      (CASE TYPE
-		(KEY
-		 (DOCUMENT-COMMAND)
-		 (WHEN (> (FIND-COMMAND-ON-KEYS CMD 4 "  which can be invoked via: ") 0)
-		   (TERPRI)))
-		(EXTENDED
-		 (DOCUMENT-COMMAND)
-		 (FORMAT T "  which can be invoked via: ~A ~A~%" EXTENDED-CMD NAME))
-		(ANY-EXTENDED
-		 (WHEN USE-ANY-EXTENDED-COMMAND-P
-		   (DOCUMENT-COMMAND)
-		   (FORMAT T "  which can be invoked via: ~A ~A~%" ANY-EXTENDED-CMD NAME))))))))))
-  (FORMAT T "~%Done.~%")
+	(LET ((NAME (COMMAND-NAME (CDR X))))
+	  (COND ((FUNCALL FUNCTION KEY NAME)
+		 (FORMAT T "~&~30,5,2A" NAME)
+		 (PRINT-DOC ':SHORT (CDR X))
+		 (FORMAT T "~&")
+		 (COND ((> (FIND-COMMAND-ON-KEYS (CDR X) 4 "  which can be invoked via: ") 0)
+			(TERPRI))
+		       ((AND EXTENDED-CMD
+			     (EXTENDED-COMMAND-P (CDR X)))
+			(FORMAT T "  which can be invoked via: ~A ~A~%"
+				EXTENDED-CMD
+				NAME))
+		       (T
+			(FORMAT T "  which can be invoked via: ~A ~A~%"
+				(OR ANY-EXTENDED-CMD
+				    (SETQ ANY-EXTENDED-CMD
+					  (KEY-FOR-COMMAND *ANY-EXTENDED-COMMAND-COMMAND*)))
+				NAME)))
+		 )))))
+    (FORMAT T "~%Done.~%"))
   DIS-NONE)
 
 (DEFCOM COM-WHERE-IS "List all characters that invoke a given command.
@@ -437,7 +424,7 @@ need only type enough to be unique." ()
 	     "You are typing the name of a command, which will be described."
 	     )))
     (IF (EQUAL X "") (BARF)
-      (PRINT-DOC :FULL (CDR X))))
+      (PRINT-DOC ':FULL (CDR X))))
   DIS-NONE)
 
 ;;; This command goes on keys which are normally self-inserting.
@@ -447,23 +434,21 @@ need only type enough to be unique." ()
 
 ;;; This is the documentation function for *STANDARD-COMMAND*.
 (DEFUN DOCUMENT-STANDARD-COMMAND (COMMAND CHAR OP)
-  (CASE OP
-    (:FULL
-     (FORMAT T "Ordinarily a self-inserting character.  Currently, these characters do: ")
-     (PRINT-DOC :FULL  *STANDARD-COMMAND* CHAR))
-    (:SHORT
-     (PRINC "Ordinarily self-inserting character.  Currently: ")
-     (PRINT-DOC :SHORT *STANDARD-COMMAND* CHAR))
-    (:NAME
-     "Ordinarily Self Insert")
-    (OTHERWISE
-     (FERROR NIL "Unknown operation ~A; ~S ~S" OP COMMAND CHAR))))
+  (SELECTQ OP
+    (:FULL  (FORMAT
+	      T "Ordinarily a self-inserting character.  Currently, these characters do: ")
+	    (PRINT-DOC ':FULL  *STANDARD-COMMAND* CHAR))
+    (:SHORT (PRINC "Ordinarily self-inserting character.  Currently: ")
+	    (PRINT-DOC ':SHORT *STANDARD-COMMAND* CHAR))
+    (:NAME "Ordinarily Self Insert")
+    (OTHERWISE (FERROR NIL "Unknown operation ~A; ~S ~S" OP COMMAND
+		       CHAR))))
 
 (DEFUN PRINT-SHORT-DOC-FOR-TABLE (CHAR COMTAB INDENTATION)
   "Document what CHAR does in COMTAB, for subcommands of prefix characters.
 It prints one or two lines of stuff, with the given INDENTATION."
   (LET ((X (COMMAND-LOOKUP CHAR COMTAB T)))
-    (COND ((MEMQ X '(NIL :UNDEFINED)))		;undefined
+    (COND ((NULL X))			;undefined
 	  ((CONSP X))			;alias
 	  ((MACRO-COMMAND-P X)
 	   (FORMAT T "~&~V@T~:C is a user defined macro.~%" INDENTATION CHAR))
@@ -472,23 +457,22 @@ It prints one or two lines of stuff, with the given INDENTATION."
 		   INDENTATION CHAR))
 	  ((NOT (SYMBOLP X)))		;??
 	  (T
-	   (FORMAT T "~&~V@T~:C is ~A:~%~@T"
-		   INDENTATION CHAR (COMMAND-NAME X) (+ 5 INDENTATION))
-	   (PRINT-DOC :SHORT X CHAR)))))
+	   (FORMAT T "~&~V@T~:C is ~A:~%~@T" INDENTATION CHAR (COMMAND-NAME X) (+ 5 INDENTATION))
+	   (PRINT-DOC ':SHORT X CHAR)))))
 
 (DEFCOM COM-DOCUMENT-CONTAINING-PREFIX-COMMAND "Document this command" ()
-  (DECLARE (SPECIAL COMTAB))
-  (DOCUMENT-PREFIX-CHAR-TABLE COMTAB)
+  (LOCAL-DECLARE ((SPECIAL COMTAB))
+    (DOCUMENT-PREFIX-CHAR-TABLE COMTAB))
   DIS-NONE)
 
 
 ;;;; Generate a ZMACS Wall chart.
 
-(DEFUN WALLCHART (&OPTIONAL (*STANDARD-OUTPUT* *STANDARD-OUTPUT*) &OPTIONAL COMTAB)
+(DEFUN WALLCHART (&OPTIONAL (STANDARD-OUTPUT STANDARD-OUTPUT) &OPTIONAL COMTAB)
   (IF COMTAB
       (WALLCHART-COMTAB COMTAB)
     (LET ((COMMANDS (MAPCAR #'CDR *COMMAND-ALIST*)))
-      (DOLIST (COMTAB ALL-COMTABS)
+      (DOLIST (COMTAB ZWEI:ALL-COMTABS)
 	(SETQ COMMANDS (WALLCHART-COMTAB COMTAB COMMANDS))
 	(TERPRI))
       (FORMAT T "~|~%Not on any key: ~%~%")
@@ -502,7 +486,8 @@ It prints one or two lines of stuff, with the given INDENTATION."
     (FORMAT T "~|~%Command chart of ~A:~%~%" (MAKE-COMMAND-NAME COMTAB))
     (DO ((LETTER 0 (1+ LETTER)))
 	((= LETTER #o237))
-      (unless (lower-case-p letter)		;Lowercase letters are just aliased.
+      (IF (OR (< LETTER #/a)			;Lowercase letters are just aliased.
+	      (> LETTER #/z))
 	  (DO ((BUCKY 0 (1+ BUCKY)))
 	      ((= BUCKY 16.))
 	    (LET* ((KEY (%LOGDPB BUCKY %%KBD-CONTROL-META LETTER))
@@ -513,7 +498,7 @@ It prints one or two lines of stuff, with the given INDENTATION."
 			 (NEQ COMMAND 'COM-ORDINARILY-SELF-INSERT)
 			 (NEQ COMMAND 'COM-NEGATE-NUMERIC-ARG))
 		(TERPRI)
-		(SEND *STANDARD-OUTPUT* :STRING-OUT	;So ~T works on all streams.
+		(send *STANDARD-OUTPUT* ':STRING-OUT	;So ~T works on all streams.
 		      (FORMAT NIL "~:C~32,1T~A" KEY (IF (SYMBOLP COMMAND)
 							(MAKE-COMMAND-NAME COMMAND)
 						      "Extended command")))
@@ -521,9 +506,11 @@ It prints one or two lines of stuff, with the given INDENTATION."
     (TERPRI)
     COMMANDS))
 
+
 (DEFUN GENERATE-WALLCHART (&OPTIONAL (FILENAME "ZWEI-COMMANDS.TABLE") COMTAB)
   (WITH-OPEN-FILE (FILE FILENAME :DIRECTION :OUTPUT :CHARACTERS T)
     (WALLCHART FILE COMTAB)))
+
 
 (DEFCOM COM-GENERATE-WALLCHART "Generates a Wallchart a la emacs for one or all comtabs.
 The comtabs and the destination file are read from the minbuffer
@@ -531,12 +518,12 @@ Organised into keyboard and extended (i.e. not on a key) commands. Mouse
 commands are ignored because they are not generally useful. Numeric and
 self-inserting commands are not mentioned because they are obvious." ()
   (LET ((COMPLETION-ARRAY (MAKE-ARRAY (1+ (LENGTH ALL-COMTABS))
-				      :TYPE :ART-Q-LIST
-				      :LEADER-LENGTH 2)))
-    (DOTIMES (ELT (1- (LENGTH COMPLETION-ARRAY)))
+				      ':TYPE ':ART-Q-LIST
+				      ':LEADER-LENGTH 2)))
+    (DOTIMES (ELT (1- (ARRAY-LENGTH COMPLETION-ARRAY)))
       (ASET (LET ((NAME (NTH ELT ALL-COMTABS)))
 	      (CONS (MAKE-COMMAND-NAME NAME) NAME)) COMPLETION-ARRAY ELT))
-    (ASET (NCONS "All") COMPLETION-ARRAY (1- (LENGTH COMPLETION-ARRAY)))
+    (ASET (NCONS "All") COMPLETION-ARRAY (1- (ARRAY-LENGTH COMPLETION-ARRAY)))
     (SORT-COMPLETION-AARRAY COMPLETION-ARRAY)
     (LET ((COMTAB (COMPLETING-READ-FROM-MINI-BUFFER "Wallchart of:" COMPLETION-ARRAY
 						    NIL NIL "You are typing the name of a comtab, from which a wallchart will be generated. 
