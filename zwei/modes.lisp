@@ -1,4 +1,4 @@
-;;; -*- Mode:LISP; Package:ZWEI; Base:8; Readtable:T -*-
+;;; -*- Mode:LISP; Package:ZWEI; Common-lisp:NIL; Base:8 -*-
 ;;; ** (c) Copyright 1980 Massachusetts Institute of Technology **
 
 ;;; Functions to implement major and minor modes.
@@ -90,7 +90,7 @@ Does nothing if the mode is already on."
 	 (DOLIST (MINOR *INITIAL-MINOR-MODES*)
 	   (TURN-ON-MODE MINOR))))
   (LET ((HOOK (GET MODE-SYMBOL 'MODE-HOOK-SYMBOL)))
-    (AND HOOK (BOUNDP HOOK) (FUNCALL (SYMBOL-VALUE HOOK))))
+    (AND HOOK (BOUNDP HOOK) (FUNCALL (SYMEVAL HOOK))))
   (SORT *MODE-NAME-LIST* #'(LAMBDA (X Y) (< (GET X 'MODE-LINE-POSITION)
 					    (GET Y 'MODE-LINE-POSITION)))))
 
@@ -127,7 +127,7 @@ Does nothing if the mode is already on."
 		 RESULT)
 	   (COMMAND-HOOK THING (THIRD FORM))))
 	(SET-CHAR-SYNTAX
-	 (LET ((SYNTAX-TABLE (SYMBOL-VALUE (THIRD FORM)))
+	 (LET ((SYNTAX-TABLE (SYMEVAL (THIRD FORM)))
 	       (CHAR (FOURTH FORM)))
 	   (PUSH `(SET-CHAR-SYNTAX ,(CHAR-SYNTAX CHAR SYNTAX-TABLE) ',SYNTAX-TABLE ,CHAR)
 		 RESULT))
@@ -136,8 +136,8 @@ Does nothing if the mode is already on."
 	 (PUSH `(SET-MODE-LINE-LIST ',*MODE-LINE-LIST*) RESULT)
 	 (EVAL FORM))
 	(SET-SYNTAX-TABLE-INDIRECTION
-	 (LET ((OF (SYMBOL-VALUE (SECOND FORM)))
-	       (TO (SYMBOL-VALUE (THIRD FORM))))
+	 (LET ((OF (SYMEVAL (SECOND FORM)))
+	       (TO (SYMEVAL (THIRD FORM))))
 	   (PUSH `(RPLACA ',OF ',(CAR OF)) RESULT)
 	   (RPLACA OF TO)))
 	(PROGN
@@ -154,7 +154,7 @@ Does nothing if the mode is already on."
     (EH:DELETE-BINDING-FROM-CLOSURE *EDITOR* V))
   (DOLIST (V *LOCAL-VARIABLES*)
     (UNLESS (MEMQ V *LOCAL-BOUND-VARIABLES*)
-      (SET V (SYMEVAL-GLOBALLY V))))
+      (SET V (SI:SYMEVAL-GLOBALLY V))))
   (DOLIST (L *MODE-LIST*)
     (MAPC #'EVAL (SECOND L)))
   (SETQ *MODE-NAME-LIST* NIL
@@ -213,7 +213,7 @@ If XVCELL is NIL, then if VALUE was specified, that becomes the
 	(PUSH AELT (BUFFER-SAVED-LOCAL-VARIABLES *INTERVAL*)))
       (IF (MEMQ VARIABLE *LOCAL-BOUND-VARIABLES*)
 	  (SETF (CDR AELT) (%P-CONTENTS-AS-LOCATIVE (VALUE-CELL-LOCATION VARIABLE)))
-	(SETF (CDR AELT) (LIST (SYMBOL-VALUE VARIABLE)))))))
+	(SETF (CDR AELT) (LIST (SYMEVAL VARIABLE)))))))
 
 (DEFUN KILL-LOCAL-VARIABLE (VARIABLE)
   "Make VARIABLE no longer be bound locally in the editor that is running.
@@ -240,7 +240,7 @@ Its value reverts to the global value."
 	 (AND (SETQ MODE (INTERN-SOFT (STRING-APPEND (GET-PNAME MODE-PROP) "-MODE")
 				      (SYMBOL-PACKAGE 'FOO)))
 	      (BOUNDP MODE)
-	      (STRING-EQUAL (SYMBOL-VALUE MODE) (SYMBOL-NAME MODE-PROP))
+	      (STRING-EQUAL (SYMEVAL MODE) (SYMBOL-NAME MODE-PROP))
 	      MODE))))
 
 (DEFUN STICKY-MODE-LIST ()
@@ -270,22 +270,22 @@ Sticky means not turned off by changing major mode."
 (DEFPROP *LIST-SYNTAX-TABLE* T MODE-SETTABLE-P)
 
 (DEFMAJOR COM-LISP-MODE LISP-MODE "LISP"
-  "Sets things up for editing Lisp code.
+          "Sets things up for editing Lisp code.
 Puts Indent-For-Lisp on Tab." ()
   (SETQ *SPACE-INDENT-FLAG* T)
   (SETQ *PARAGRAPH-DELIMITER-LIST* NIL)
   (SETQ *COMMENT-START* 'LISP-FIND-COMMENT-START-AND-END)
-  (SET-COMTAB *MODE-COMTAB* '(#/TAB COM-INDENT-FOR-LISP
-			      #/RUBOUT COM-TAB-HACKING-RUBOUT
-			      #/C-RUBOUT COM-RUBOUT
-			      #/M-Z COM-COMPILE-AND-EXIT
-			      #/C-M-Z COM-EVALUATE-AND-EXIT
-			      #/C-\ COM-JUST-ONE-SPACE)
+  (SET-COMTAB *MODE-COMTAB* '(#/TAB COM-INDENT-FOR-LISP
+			      #/RUBOUT COM-TAB-HACKING-RUBOUT
+			      #/C-RUBOUT COM-RUBOUT
+			      #/M-Z COM-COMPILE-AND-EXIT
+			      #/C-M-Z COM-EVALUATE-AND-EXIT
+			      #/C-\ COM-JUST-ONE-SPACE)
 	      '(("Set Common Lisp" . COM-SET-COMMON-LISP)
-		("Set Readtable" . COM-SET-READTABLE)
-		;("Set syntax" . com-set-syntax)
-		))
-  (SETQ *READTABLE* (COMPUTE-BUFFER-READTABLE *INTERVAL*))
+		("Set Readtable" . COM-SET-READTABLE)))
+  (SETQ *READTABLE* (OR (SI:FIND-READTABLE-NAMED (SEND *INTERVAL* :GET-ATTRIBUTE :READTABLE)
+						 :FIND)
+			*READTABLE* SI:STANDARD-READTABE))
   (SET-CHAR-SYNTAX (IF (= (SI:PTTBL-SLASH *READTABLE*) #//)
 		       LIST-SLASH LIST-ALPHABETIC) *MODE-LIST-SYNTAX-TABLE* #//)
   (SET-CHAR-SYNTAX (IF (= (SI:PTTBL-SLASH *READTABLE*) #/\)
@@ -296,24 +296,24 @@ Puts Indent-For-Lisp on Tab." ()
 (DEFPROP LISP-MODE :LISP EDITING-TYPE)
 
 (DEFMAJOR COM-MIDAS-MODE MIDAS-MODE "MIDAS"
-  "Sets things up for editing assembly language code." ()
+          "Sets things up for editing assembly language code." ()
   (SETQ *COMMENT-COLUMN* 256.)
   (SETQ *COMMENT-START* ";")
   (SETQ *PARAGRAPH-DELIMITER-LIST* NIL)
-  (SET-CHAR-SYNTAX WORD-ALPHABETIC *MODE-WORD-SYNTAX-TABLE* #/.)
-  (SET-COMTAB *MODE-COMTAB* '(#/TAB COM-INSERT-TAB
-			      #/C-M-A COM-GO-TO-AC-FIELD
-			      #/C-M-E COM-GO-TO-ADDRESS-FIELD
-			      #/C-M-D COM-KILL-TERMINATED-WORD
-			      #/C-M-N COM-GO-TO-NEXT-LABEL
-			      #/C-M-P COM-GO-TO-PREVIOUS-LABEL)))
+  (SET-CHAR-SYNTAX WORD-ALPHABETIC *MODE-WORD-SYNTAX-TABLE* #/.)
+  (SET-COMTAB *MODE-COMTAB* '(#/TAB COM-INSERT-TAB
+			      #/C-M-A COM-GO-TO-AC-FIELD
+			      #/C-M-E COM-GO-TO-ADDRESS-FIELD
+			      #/C-M-D COM-KILL-TERMINATED-WORD
+			      #/C-M-N COM-GO-TO-NEXT-LABEL
+			      #/C-M-P COM-GO-TO-PREVIOUS-LABEL)))
 
 (DEFPROP MIDAS-MODE T ALL-UPPERCASE)
 
 (DEFCOM COM-KILL-TERMINATED-WORD "Kill a word and the following character.
 If the word is followed by a CRLF, the CRLF is not killed." ()
   (LET ((BP (OR (FORWARD-WORD (POINT)) (BARF))))
-    (OR (CHAR= (BP-CH-CHARACTER BP) #/NEWLINE) (SETQ BP (FORWARD-CHAR BP 1 T)))
+    (OR (= (BP-CH-CHAR BP) #/CR) (SETQ BP (FORWARD-CHAR BP 1 T)))
     (KILL-INTERVAL-ARG (POINT) BP 1))
   (SETQ *CURRENT-COMMAND-TYPE* 'KILL)
   DIS-TEXT)
@@ -332,17 +332,17 @@ With an argument, moves after the argth label." (KM)
 	 (BP (BEG-LINE POINT)))
 	(NIL)
       (DO NIL (NIL)
-	(OR (MEMQ (BP-CH-CHARACTER BP) '(#/* #/SP #/TAB #/NEWLINE))
+	(OR (MEMQ (BP-CH-CHAR BP) '(#/* #/SP #/TAB #/CR))
 	    (STRING-EQUAL (BP-LINE BP) *COMMENT-START* 0 0 (STRING-LENGTH *COMMENT-START*))
 	    (RETURN NIL))
 	(OR (SETQ BP (BEG-LINE BP SIGN)) (BARF)))
-      (WHEN ( I ARG)
-	(LET ((LINE (BP-LINE BP)))
-	  (MOVE-BP BP LINE
-		   (OR (STRING-SEARCH-SET *BLANKS* LINE) (LINE-LENGTH LINE))))
-	(WHEN (IF (MINUSP SIGN) (BP-< BP POINT) (BP-< POINT BP))
-	  (MOVE-BP POINT BP)
-	  (RETURN NIL)))))
+      (COND (( I ARG)
+	     (LET ((LINE (BP-LINE BP)))
+	       (MOVE-BP BP LINE
+			(OR (STRING-SEARCH-SET *BLANKS* LINE) (LINE-LENGTH LINE))))
+	     (COND ((IF (MINUSP SIGN) (BP-< BP POINT) (BP-< POINT BP))
+		    (MOVE-BP POINT BP)
+		    (RETURN NIL)))))))
   DIS-BPS)
 
 (DEFCOM COM-GO-TO-ADDRESS-FIELD "Put point before the address field." (KM)
@@ -354,20 +354,18 @@ With an argument, moves after the argth label." (KM)
 (DEFUN GO-TO-ADDRESS-OR-AC-FIELD-INTERNAL (ADDRESS-P &AUX LINE BP)
   (SETQ LINE (BP-LINE (POINT))
 	BP (OR (FORWARD-WORD (BEG-LINE (POINT))) (BARF)))
-  (OR (MEMQ (BP-CH-CHARACTER BP) '(#/: #/= #/_))
+  (OR (MEMQ (BP-CH-CHAR BP) '(#/: #/= #/_))
       (SETQ BP (BEG-LINE BP)))
   (SETQ BP (OR (FORWARD-TO-WORD BP) (BARF)))
   (MOVE-BP BP LINE (OR (STRING-SEARCH-SET *BLANKS* LINE (BP-INDEX BP))
 		       (LINE-LENGTH LINE)))
   (LET ((BP1 (FORWARD-OVER *BLANKS* BP)))
-    (OR (CHAR= (BP-CH-CHARACTER BP1) #/;)
+    (OR (= (BP-CH-CHAR BP1) #/;)
 	(SETQ BP BP1)))
-;character lossage
-  (COND ((MEMQ (CHAR-CODE (BP-CHARACTER-BEFORE BP)) *BLANKS*)
+  (COND ((MEMQ (CHAR-CODE (BP-CHAR-BEFORE BP)) *BLANKS*)
 	 (AND ADDRESS-P
-	      (LET ((I (STRING-SEARCH-SET '(#/SPACE #/, #/; #//) LINE (BP-INDEX BP))))
-		(AND I
-		     (CHAR-EQUAL (CHAR LINE I) #/,)
+	      (LET ((I (STRING-SEARCH-SET '(#/SP #/, #/; #//) LINE (BP-INDEX BP))))
+		(AND I (CHAR-EQUAL (AREF LINE I) #/,)
 		     (MOVE-BP BP LINE (1+ I)))))
 	 (MOVE-BP (POINT) BP)
 	 DIS-BPS)
@@ -376,36 +374,36 @@ With an argument, moves after the argth label." (KM)
 	 DIS-TEXT)))
 
 (DEFMAJOR COM-TEXT-MODE TEXT-MODE "Text"
-  "Sets things up for editing English text.
+          "Sets things up for editing English text.
 Puts Tab-To-Tab-Stop on Tab." ()
-  (SET-CHAR-SYNTAX WORD-ALPHABETIC *MODE-WORD-SYNTAX-TABLE* #/_)
-  (SET-CHAR-SYNTAX WORD-ALPHABETIC *MODE-WORD-SYNTAX-TABLE* #/')
-  (SET-COMTAB *MODE-COMTAB* '(#/TAB COM-TAB-TO-TAB-STOP)))
+  (SET-CHAR-SYNTAX WORD-ALPHABETIC *MODE-WORD-SYNTAX-TABLE* #/_)
+  (SET-CHAR-SYNTAX WORD-ALPHABETIC *MODE-WORD-SYNTAX-TABLE* #/')
+  (SET-COMTAB *MODE-COMTAB* '(#/TAB COM-TAB-TO-TAB-STOP)))
 
 (DEFPROP TEXT-MODE :TEXT EDITING-TYPE)
 
 (DEFMAJOR COM-BOLIO-MODE BOLIO-MODE "Bolio"
-  "Sets things up for editing Bolio source files.
+          "Sets things up for editing Bolio source files.
 Like Text mode, but also makes c-m-digit and c-m-: and c-m-* do font stuff,
 and makes word-abbrevs for znil and zt." ()
-  (SET-CHAR-SYNTAX WORD-ALPHABETIC *MODE-WORD-SYNTAX-TABLE* #/_)
-  (SET-CHAR-SYNTAX WORD-ALPHABETIC *MODE-WORD-SYNTAX-TABLE* #/')
-  (SET-COMTAB *MODE-COMTAB* '(#/TAB COM-TAB-TO-TAB-STOP
+  (SET-CHAR-SYNTAX WORD-ALPHABETIC *MODE-WORD-SYNTAX-TABLE* #/_)
+  (SET-CHAR-SYNTAX WORD-ALPHABETIC *MODE-WORD-SYNTAX-TABLE* #/')
+  (SET-COMTAB *MODE-COMTAB* '(#/TAB COM-TAB-TO-TAB-STOP
 			      ;;Next line gets an error, so do it manually
-			      ;;(#/C-M-0 10.) COM-BOLIO-INTO-FONT
-			      #/C-M-0 COM-BOLIO-INTO-FONT
-			      #/C-M-1 COM-BOLIO-INTO-FONT
-			      #/C-M-2 COM-BOLIO-INTO-FONT
-			      #/C-M-3 COM-BOLIO-INTO-FONT
-			      #/C-M-4 COM-BOLIO-INTO-FONT
-			      #/C-M-5 COM-BOLIO-INTO-FONT
-			      #/C-M-6 COM-BOLIO-INTO-FONT
-			      #/C-M-7 COM-BOLIO-INTO-FONT
-			      #/C-M-8 COM-BOLIO-INTO-FONT
-			      #/C-M-9 COM-BOLIO-INTO-FONT
-			      #/C-M-/: COM-BOLIO-OUTOF-FONT
-			      #/C-M-* COM-BOLIO-OUTOF-FONT
-			      #/C-M-SP COM-EXPAND-ONLY))
+			      ;;(#/C-M-0 10.) COM-BOLIO-INTO-FONT
+			      #/C-M-0 COM-BOLIO-INTO-FONT
+			      #/C-M-1 COM-BOLIO-INTO-FONT
+			      #/C-M-2 COM-BOLIO-INTO-FONT
+			      #/C-M-3 COM-BOLIO-INTO-FONT
+			      #/C-M-4 COM-BOLIO-INTO-FONT
+			      #/C-M-5 COM-BOLIO-INTO-FONT
+			      #/C-M-6 COM-BOLIO-INTO-FONT
+			      #/C-M-7 COM-BOLIO-INTO-FONT
+			      #/C-M-8 COM-BOLIO-INTO-FONT
+			      #/C-M-9 COM-BOLIO-INTO-FONT
+			      #/C-M-/: COM-BOLIO-OUTOF-FONT
+			      #/C-M-* COM-BOLIO-OUTOF-FONT
+			      #/C-M-SP COM-EXPAND-ONLY))
   (SETQ *COMMENT-START* ".c ")
   (SETQ *COMMENT-BEGIN* ".c ")
   (SETQ *COMMENT-COLUMN* 0)
@@ -425,30 +423,30 @@ and makes word-abbrevs for znil and zt." ()
   (LET ((CHAR (CHAR-CODE *LAST-COMMAND-CHAR*))
 	(POINT (POINT)))
     (LET ((LINE (BP-LINE POINT)) (INDEX (BP-INDEX POINT)))
-      (INSERT-MOVING POINT #/)
+      (INSERT-MOVING POINT #/)
       (INSERT-MOVING POINT CHAR)
       (VALUES DIS-LINE LINE INDEX))))
 
 (DEFCOM COM-BOLIO-OUTOF-FONT "Insert font-change sequence" (NM)
   (LET ((POINT (POINT)))
     (LET ((LINE (BP-LINE POINT)) (INDEX (BP-INDEX POINT)))
-      (INSERT-MOVING POINT #/)
-      (INSERT-MOVING POINT #/*)
+      (INSERT-MOVING POINT #/)
+      (INSERT-MOVING POINT #/*)
       (VALUES DIS-LINE LINE INDEX))))
 
 (DEFMAJOR COM-FUNDAMENTAL-MODE FUNDAMENTAL-MODE "Fundamental"
   "Return to ZWEI's fundamental mode." ())
 
 (DEFMAJOR COM-PL1-MODE PL1-MODE "PL1"
-  "Set things up for editing PL1 programs.
+          "Set things up for editing PL1 programs.
 Makes comment delimiters //* and *//, Tab is Indent-For-PL1,
 Control-Meta-H is Roll-Back-PL1-Indentation, and Control- (Top-D)
 is PL1dcl.  Underscore is made alphabetic for word commands." ()
-  (SET-CHAR-SYNTAX WORD-ALPHABETIC *MODE-WORD-SYNTAX-TABLE* #/_)
+  (SET-CHAR-SYNTAX WORD-ALPHABETIC *MODE-WORD-SYNTAX-TABLE* #/_)
   (SET-COMTAB *MODE-COMTAB*
-	      '(#/TAB COM-INDENT-FOR-PL1
-		#/C-M-H COM-ROLL-BACK-PL1-INDENTATION
-		#/C-/ COM-PL1DCL
+	      '(#/TAB COM-INDENT-FOR-PL1
+		#/C-M-H COM-ROLL-BACK-PL1-INDENTATION
+		#/C-/ COM-PL1DCL
 		))
   (SETQ *SPACE-INDENT-FLAG* T)
   (SETQ *PARAGRAPH-DELIMITER-LIST* NIL)
@@ -465,17 +463,17 @@ Control-Meta-H is Roll-Back-PL1-Indentation, and Control- (Top-D)
 is PL1dcl.  Underscore is made alphabetic for word commands.
 In addition, ; is PL1-Electric-Semicolon, : is PL1-Electric-Colon,
 # is Rubout, @ is Clear, \ is Quoted Insert." ()
-  (SET-CHAR-SYNTAX WORD-ALPHABETIC *MODE-WORD-SYNTAX-TABLE* #/_)
+  (SET-CHAR-SYNTAX WORD-ALPHABETIC *MODE-WORD-SYNTAX-TABLE* #/_)
   (PROGN (OR (BOUNDP 'PL1DCL) (READ-PL1DCL)))
   (SET-COMTAB *MODE-COMTAB*
-	      '(#/TAB COM-INDENT-FOR-PL1
-		#/C-M-H COM-ROLL-BACK-PL1-INDENTATION
-		#/C-/ COM-PL1DCL
-		#/; COM-PL1-ELECTRIC-SEMICOLON
-		#/: COM-PL1-ELECTRIC-COLON
-		#/# COM-RUBOUT
-		#/@ COM-CLEAR
-		#/\ COM-VARIOUS-QUANTITIES
+	      '(#/TAB COM-INDENT-FOR-PL1
+		#/C-M-H COM-ROLL-BACK-PL1-INDENTATION
+		#/C-/ COM-PL1DCL
+		#/; COM-PL1-ELECTRIC-SEMICOLON
+		#/: COM-PL1-ELECTRIC-COLON
+		#/# COM-RUBOUT
+		#/@ COM-CLEAR
+		#/\ COM-VARIOUS-QUANTITIES
 		))
   (SETQ *SPACE-INDENT-FLAG* T)
   (SETQ *PARAGRAPH-DELIMITER-LIST* NIL)
@@ -489,9 +487,9 @@ In addition, ; is PL1-Electric-Semicolon, : is PL1-Electric-Colon,
 Makes comment delimiters be !* and !. Tab is Indent-Nested,
 Meta-' is Forward-Teco-Conditional, and Meta-/" is Backward-Teco-Conditional." ()
   (SET-COMTAB *MODE-COMTAB*
-	      '(#/TAB COM-INDENT-NESTED
-		#/M-/' COM-FORWARD-TECO-CONDITIONAL
-		#/M-/" COM-BACKWARD-TECO-CONDITIONAL
+	      '(#/TAB COM-INDENT-NESTED
+		#/M-/' COM-FORWARD-TECO-CONDITIONAL
+		#/M-/" COM-BACKWARD-TECO-CONDITIONAL
 		))
   (SETQ *SPACE-INDENT-FLAG* T)
   (SETQ *PARAGRAPH-DELIMITER-LIST* NIL)
@@ -507,7 +505,7 @@ Meta-' is Forward-Teco-Conditional, and Meta-/" is Backward-Teco-Conditional." (
 Modifies the delimiter dispatch tables appropriately for Macsyma syntax,
 makes comment delimiters //* and *//.  Tab is Indent Nested." ()
   (SET-COMTAB *MODE-COMTAB*
-	      '(#/TAB COM-INDENT-NESTED))
+	      '(#/TAB COM-INDENT-NESTED))
   ;; Tab hacking rubout.
   (SETQ *SPACE-INDENT-FLAG* T)
   (SETQ *PARAGRAPH-DELIMITER-LIST* NIL)
@@ -519,7 +517,7 @@ makes comment delimiters //* and *//.  Tab is Indent Nested." ()
     (OR (BOUNDP '*MACSYMA-LIST-SYNTAX-TABLE*)
 	(SETQ *MACSYMA-LIST-SYNTAX-TABLE* (MAKE-SYNTAX-TABLE *MACSYMA-LIST-SYNTAX-LIST*))))
   (SETQ *LIST-SYNTAX-TABLE* *MACSYMA-LIST-SYNTAX-TABLE*)
-  (SET-CHAR-SYNTAX WORD-ALPHABETIC *MODE-WORD-SYNTAX-TABLE* #/?)
+  (SET-CHAR-SYNTAX WORD-ALPHABETIC *MODE-WORD-SYNTAX-TABLE* #/?)
   ;; Also does something like make right bracket point at right paren?
   )
 
@@ -584,21 +582,21 @@ makes comment delimiters //* and *//.  Tab is Indent Nested." ()
 (DEFMAJOR COM-TEX-MODE TEX-MODE "TeX"
   "Set up things for editing TeX files
 Gives paren syntax to {[]}, makes \ escape, % comment, tab like text." ()
-  (SET-CHAR-SYNTAX LIST-COMMENT    *MODE-LIST-SYNTAX-TABLE* #/%)
-  (SET-CHAR-SYNTAX LIST-DELIMITER  *MODE-LIST-SYNTAX-TABLE* #//)
-  (SET-CHAR-SYNTAX LIST-DELIMITER  *MODE-LIST-SYNTAX-TABLE* #/;)
-  (SET-CHAR-SYNTAX LIST-OPEN       *MODE-LIST-SYNTAX-TABLE* #/[)
-  (SET-CHAR-SYNTAX LIST-SLASH      *MODE-LIST-SYNTAX-TABLE* #/\)
-  (SET-CHAR-SYNTAX WORD-DELIMITER  *MODE-WORD-SYNTAX-TABLE* #/\)
-  (SET-CHAR-SYNTAX LIST-CLOSE      *MODE-LIST-SYNTAX-TABLE* #/])
-  (SET-CHAR-SYNTAX LIST-OPEN       *MODE-LIST-SYNTAX-TABLE* #/{)
-  (SET-CHAR-SYNTAX WORD-DELIMITER  *MODE-WORD-SYNTAX-TABLE* #/{)
-  (SET-CHAR-SYNTAX LIST-DELIMITER  *MODE-LIST-SYNTAX-TABLE* #/|)
-  (SET-CHAR-SYNTAX LIST-CLOSE      *MODE-LIST-SYNTAX-TABLE* #/})
-  (SET-CHAR-SYNTAX WORD-DELIMITER  *MODE-WORD-SYNTAX-TABLE* #/})
-  (SET-CHAR-SYNTAX WORD-ALPHABETIC *MODE-WORD-SYNTAX-TABLE* #/_)
-  (SET-CHAR-SYNTAX WORD-ALPHABETIC *MODE-WORD-SYNTAX-TABLE* #/')
-  (SET-COMTAB *MODE-COMTAB* '(#/TAB COM-STUPID-TAB))
+  (SET-CHAR-SYNTAX LIST-COMMENT    *MODE-LIST-SYNTAX-TABLE* #/%)
+  (SET-CHAR-SYNTAX LIST-DELIMITER  *MODE-LIST-SYNTAX-TABLE* #//)
+  (SET-CHAR-SYNTAX LIST-DELIMITER  *MODE-LIST-SYNTAX-TABLE* #/;)
+  (SET-CHAR-SYNTAX LIST-OPEN       *MODE-LIST-SYNTAX-TABLE* #/[)
+  (SET-CHAR-SYNTAX LIST-SLASH      *MODE-LIST-SYNTAX-TABLE* #/\)
+  (SET-CHAR-SYNTAX WORD-DELIMITER  *MODE-WORD-SYNTAX-TABLE* #/\)
+  (SET-CHAR-SYNTAX LIST-CLOSE      *MODE-LIST-SYNTAX-TABLE* #/])
+  (SET-CHAR-SYNTAX LIST-OPEN       *MODE-LIST-SYNTAX-TABLE* #/{)
+  (SET-CHAR-SYNTAX WORD-DELIMITER  *MODE-WORD-SYNTAX-TABLE* #/{)
+  (SET-CHAR-SYNTAX LIST-DELIMITER  *MODE-LIST-SYNTAX-TABLE* #/|)
+  (SET-CHAR-SYNTAX LIST-CLOSE      *MODE-LIST-SYNTAX-TABLE* #/})
+  (SET-CHAR-SYNTAX WORD-DELIMITER  *MODE-WORD-SYNTAX-TABLE* #/})
+  (SET-CHAR-SYNTAX WORD-ALPHABETIC *MODE-WORD-SYNTAX-TABLE* #/_)
+  (SET-CHAR-SYNTAX WORD-ALPHABETIC *MODE-WORD-SYNTAX-TABLE* #/')
+  (SET-COMTAB *MODE-COMTAB* '(#/TAB COM-STUPID-TAB))
   (SETQ *COMMENT-START* "%")
   (SETQ *COMMENT-BEGIN* "% ")
   (SETQ *COMMENT-END* ""))
@@ -610,15 +608,17 @@ Gives paren syntax to {[]}, makes \ escape, % comment, tab like text." ()
 (DEFMINOR COM-RETURN-INDENTS-MODE RETURN-INDENTS-MODE "Return indents" 1
   "Minor mode in which Return indents and Line does not.
 A positive argument turns the mode on, zero turns it off;
-no argument toggles." ()
+no argument toggles."
+	  ()
   (SETQ *INDENT-NEW-LINE-NEW-LINE-FUNCTION* 'COM-INSERT-CRS)
-  (SET-COMTAB *MODE-COMTAB* '(#/RETURN COM-INDENT-NEW-LINE
-			      #/LINE COM-INSERT-CRS)))
+  (SET-COMTAB *MODE-COMTAB* '(#/RETURN COM-INDENT-NEW-LINE
+			      #/LINE COM-INSERT-CRS)))
 
 (DEFMINOR COM-ATOM-WORD-MODE ATOM-WORD-MODE "" 1
   "Minor mode in which all word commands act on Lisp atoms.
 A positive argument turns the mode on, zero turns it off;
-no argument toggles." ()
+no argument toggles."
+	  ()
   (SET-SYNTAX-TABLE-INDIRECTION *MODE-WORD-SYNTAX-TABLE* *ATOM-WORD-SYNTAX-TABLE*))
 
 (DEFMINOR COM-EMACS-MODE EMACS-MODE "Emacs" 1
@@ -627,13 +627,14 @@ This is for people who have used EMACS from non-TV keyboards for a long
 time and are not yet adjusted to the more winning commands.  It puts
 bit prefix commands on Altmode, Control-^ and Control-C.
 A positive argument turns the mode on, zero turns it off;
-no argument toggles." ()
-  (SET-COMTAB *MODE-COMTAB* '(#/C-/^ COM-PREFIX-CONTROL
-			      #/ COM-PREFIX-META
-			      #/C-C COM-PREFIX-CONTROL-META
-			      #/C-I (0 #/TAB)
-			      #/C-H (0 #/BS)
-			      #/C-/] (0 #/ABORT))))
+no argument toggles."
+	  ()
+  (SET-COMTAB *MODE-COMTAB* '(#/C-/^ COM-PREFIX-CONTROL
+			      #/ COM-PREFIX-META
+			      #/C-C COM-PREFIX-CONTROL-META
+			      #/C-I (0 #/TAB)
+			      #/C-H (0 #/BS)
+			      #/C-/] (0 #/ABORT))))
 
 ;;; Gets a single character from the user.  If HIGHBITSP is true, does not
 ;;; strip the control and meta bis.
@@ -648,12 +649,12 @@ no argument toggles." ()
   (PROCESS-PREFIX-COMMAND-CHAR (DPB 1 %%KBD-CONTROL (GET-ECHO-CHAR "Control-" NIL))))
 
 (DEFCOM COM-PREFIX-META DOCUMENT-PREFIX-CHAR ()
-  (PROCESS-PREFIX-COMMAND-CHAR
-    (SET-CHAR-BIT (GET-ECHO-CHAR "Meta-" (EQ *LAST-COMMAND-CHAR* #/)) :META T)))
+  (PROCESS-PREFIX-COMMAND-CHAR (LOGIOR (DPB 1 %%KBD-META 0)
+				       (GET-ECHO-CHAR "Meta-" (EQ *LAST-COMMAND-CHAR* #/)))))
 
 (DEFCOM COM-PREFIX-CONTROL-META DOCUMENT-PREFIX-CHAR ()
   (PROCESS-PREFIX-COMMAND-CHAR
-    (SET-CHAR-BIT (SET-CHAR-BIT (GET-ECHO-CHAR "Control-Meta-" NIL) :CONTROL T) :META T)))
+    (DPB 1 %%KBD-CONTROL (DPB 1 %%KBD-META (GET-ECHO-CHAR "Control-Meta-" NIL)))))
 
 (DEFUN PROCESS-PREFIX-COMMAND-CHAR (KEY &AUX VALUE)
   (SETQ VALUE (PROCESS-COMMAND-CHAR KEY))
@@ -663,7 +664,7 @@ no argument toggles." ()
   (SETQ COLNUM (CDR (ASSQ COMMAND '((COM-PREFIX-CONTROL . 1)
 				    (COM-PREFIX-META . 2)
 				    (COM-PREFIX-CONTROL-META . 3)))))
-  (CASE OP
+  (SELECTQ OP
     (:NAME (GET COMMAND 'COMMAND-NAME))
     (:SHORT (FORMAT T "Set the ~[Control~;Meta~;Control-Meta~] prefix." (1- COLNUM)))
     (:FULL (FORMAT T "Set the ~[Control~;Meta~;Control-Meta~] prefix.
@@ -673,11 +674,10 @@ support all of the wonderful keys that we cleverly provide on these marvelous ke
 Type a subcommand to document (or /"*/" for all): " (1- COLNUM) (1- COLNUM))
 	   (LET ((CHAR (SEND STANDARD-INPUT :TYI)))
 	     (COND ((= CHAR #/*)
-		    (FORMAT T "~2%The following ~[Control~;Meta~;Control-Meta~]-~
-			       commands are availible:~%" (1- COLNUM))
+		    (FORMAT T "~2%The following ~[Control~;Meta~;Control-Meta~]- commands are availible:~%" (1- COLNUM))
 		    (LET ((N (%LOGDPB COLNUM %%KBD-CONTROL-META 0)))
 		      (DO ((I N (1+ I))
-			   (LIM (+ N #o220)))
+			   (LIM (+ N 220)))
 			  (( I LIM))
 			(PRINT-SHORT-DOC-FOR-TABLE I *COMTAB* 3))))
 		   (T (SETQ CHAR (%LOGDPB COLNUM %%KBD-CONTROL-META CHAR))
@@ -704,7 +704,7 @@ Not followed by digits, multiplies the argument by four." ()
 		 *NUMERIC-ARG-P* :SIGN))
 	  (( #/0 CHAR #/9)
 	   (COND (DIGITP (SETQ NUM (+ (- CHAR #/0) (* NUM 10.))))
-		 (T (SETQ NUM (- CHAR #/0)
+		 (T (SETQ NUM (- CHAR 60)
 			  *NUMERIC-ARG-P* :DIGITS
 			  DIGITP T))))
 	  (T
@@ -719,7 +719,8 @@ Not followed by digits, multiplies the argument by four." ()
   "Minor mode in which List commands treat [{}] like parens.
 This makes them easier to balance, etc.
 A positive argument turns the mode on, zero turns it off;
-no argument toggles." ()
+no argument toggles."
+  ()
   (SET-CHAR-SYNTAX LIST-OPEN  *MODE-LIST-SYNTAX-TABLE* #/[)
   (SET-CHAR-SYNTAX LIST-OPEN  *MODE-LIST-SYNTAX-TABLE* #/{)
   (SET-CHAR-SYNTAX LIST-CLOSE *MODE-LIST-SYNTAX-TABLE* #/})
@@ -728,12 +729,13 @@ no argument toggles." ()
 (DEFMINOR COM-AUTO-FILL-MODE AUTO-FILL-MODE "Fill" 2
   "Minor mode in which insertion fills text.
 A positive argument turns the mode on, zero turns it off;
-no argument toggles." ()
+no argument toggles."
+	  ()
   (COMMAND-HOOK 'AUTO-FILL-HOOK *POST-COMMAND-HOOK*))
 
-(DEFPROP AUTO-FILL-HOOK 16. COMMAND-HOOK-PRIORITY)
+(DEFPROP AUTO-FILL-HOOK 20 COMMAND-HOOK-PRIORITY)
 (DEFUN AUTO-FILL-HOOK (CHAR &AUX BP)
-  (IF (CHARACTERP CHAR) (SETQ CHAR (CHAR-INT CHAR)))
+  (SETQ CHAR (CHAR-INT CHAR))
   (AND (MEMQ CHAR *AUTO-FILL-ACTIVATION-CHARACTERS*)
        (NOT *NUMERIC-ARG-P*)
        (NEQ *INTERVAL* (WINDOW-INTERVAL *MINI-BUFFER-WINDOW*))
@@ -743,12 +745,12 @@ no argument toggles." ()
 ;	 (AND (PLUSP (STRING-LENGTH *FILL-PREFIX*))
 ;	      (SETQ FILL-COLUMN (- FILL-COLUMN (STRING-WIDTH *FILL-PREFIX*))))
 	 (SETQ BP (DO ((SHEET (WINDOW-SHEET *WINDOW*))		     
-		       (LEN (1+ (OR (STRING-REVERSE-SEARCH-NOT-CHAR #/SPACE LINE) -1)))
+		       (LEN (1+ (OR (STRING-REVERSE-SEARCH-NOT-CHAR #/SP LINE) -1)))
 		       (POS 0)
 		       (CHAR-POS 0 CP)
 		       (CP))
 		      ((= CHAR-POS LEN) NIL)
-		    (SETQ CP (OR (STRING-SEARCH-CHAR #/SP LINE (1+ CHAR-POS)) LEN)
+		    (SETQ CP (OR (STRING-SEARCH-CHAR #/SP LINE (1+ CHAR-POS)) LEN)
 			  POS (TV:SHEET-STRING-LENGTH SHEET LINE CHAR-POS CP NIL NIL POS))
 		    (AND (> POS FILL-COLUMN) (> CHAR-POS 0)
 			 (RETURN (CREATE-BP LINE CHAR-POS))))))
@@ -797,13 +799,13 @@ no argument toggles." ()
 				       (NOT (STRING-EQUAL LINE LINE2
 							  COMMENT-START LINE2-COMMENT-START
 							  COMMENT-END LINE2-COMMENT-END)))
-			       (INSERT (CREATE-BP LINE2 0) #/NEWLINE)
+			       (INSERT (CREATE-BP LINE2 0) #/CR)
 			       (SETQ LINE2 (LINE-PREVIOUS LINE2)))))
 			  ((IF (LINE-BLANK-P LINE2)
 			       (NOT (OR (EQ LINE2 (BP-LINE (INTERVAL-LAST-BP *INTERVAL*)))
 					(LINE-BLANK-OR-DIAGRAM-P (LINE-NEXT LINE2))))
 			     (BP-AT-PARAGRAPH-TERMINATOR (CREATE-BP LINE2 0)))
-			   (INSERT (CREATE-BP LINE2 0) #/NEWLINE)
+			   (INSERT (CREATE-BP LINE2 0) #/CR)
 			   (SETQ LINE2 (LINE-PREVIOUS LINE2))))
 		    ;; Don't include leading blanks in the stuff to move to the next line.
 		    (MOVE-BP BP (FORWARD-OVER *BLANKS* BP))
@@ -863,7 +865,8 @@ no argument toggles." ()
 (DEFMINOR COM-OVERWRITE-MODE OVERWRITE-MODE "Overwrite" 4
   "Minor mode in which normal typing replaces existing text.
 A positive argument turns the mode on, zero turns it off;
-no argument toggles." ()
+no argument toggles."
+  ()
   (SETQ *STANDARD-COMMAND* 'COM-SELF-OVERWRITE))
 
 (DEFCOM COM-SELF-OVERWRITE "Replace the character at point with the character typed.
@@ -923,7 +926,7 @@ If given an argument, beep unless expanded." ()
 		(MOVE-BP *LAST-EXPANSION-BP* BP))
 	       (T
 		(SETQ *LAST-EXPANSION-BP* (COPY-BP BP :NORMAL))))
-	 (COND ((AND (CHAR-EQUAL (BP-CHARACTER-BEFORE BP) #/-)
+	 (COND ((AND (CHAR-EQUAL (BP-CHAR-BEFORE BP) #/-)
 		     (BP-= (MOVE-BP BP (FORWARD-CHAR BP -1))
 			   *WORD-ABBREV-PREFIX-MARK*))
 		(SETQ STRING (STRING-APPEND "-" STRING))
@@ -957,11 +960,11 @@ If given an argument, beep unless expanded." ()
 (DEFMINOR COM-WORD-ABBREV-MODE WORD-ABBREV-MODE "Abbrev" 3
   "Mode for expanding word abbrevs.
 No arg or non-zero arg sets the mode, 0 arg clears it." ()
-; (SET-COMTAB *MODE-COMTAB* '(#/C-M-SP COM-EXPAND-ONLY))
+; (SET-COMTAB *MODE-COMTAB* '(#/C-M-SP COM-EXPAND-ONLY))
   (SET-COMTAB *STANDARD-CONTROL-X-COMTAB*
-	      '(#/U COM-UNEXPAND-LAST-WORD
-		#/C-A COM-ADD-MODE-WORD-ABBREV
-		#/+ COM-ADD-GLOBAL-WORD-ABBREV))
+	      '(#/U COM-UNEXPAND-LAST-WORD
+		#/C-A COM-ADD-MODE-WORD-ABBREV
+		#/+ COM-ADD-GLOBAL-WORD-ABBREV))
   (COMMAND-HOOK 'EXPAND-ABBREV-HOOK *COMMAND-HOOK*)
   (SETQ *LAST-EXPANSION-BP* NIL)
   (SETQ *LAST-EXPANDED* NIL)
@@ -1127,12 +1130,12 @@ If there is a region, it is used instead." ()
        (SYM)
        (TEM))
       (())
-    (OR (SETQ BP2 (ZWEI-SEARCH BP1 #/:)) (RETURN NIL))
+    (OR (SETQ BP2 (SEARCH BP1 #/:)) (RETURN NIL))
     (SETQ TEM (STRING-UPCASE (STRING-INTERVAL BP1 (FORWARD-CHAR BP2 -1))))
     (SETQ SYM (INTERN TEM *UTILITY-PACKAGE*))
     (SETQ BP2 (FORWARD-OVER *BLANKS* (FORWARD-CHAR BP2)))
-    (COND ((CHAR-EQUAL (BP-CHARACTER BP2) #/()
-	   (OR (SETQ BP1 (ZWEI-SEARCH (SETQ BP2 (FORWARD-CHAR BP2)) #/)))
+    (COND ((CHAR-EQUAL (BP-CHAR BP2) #/()
+	   (OR (SETQ BP1 (SEARCH (SETQ BP2 (FORWARD-CHAR BP2)) #/)))
 	       (BARF "Unmatched paren ~A" (BP-LINE BP2)))
 	   (SETQ MODE (STRING-INTERVAL BP2 (FORWARD-CHAR BP1 -1)))
 	   (SETQ BP2 (PROG1 (FORWARD-OVER *BLANKS* (FORWARD-CHAR BP1))
@@ -1142,9 +1145,9 @@ If there is a region, it is used instead." ()
     (AND (= TEM (BP-INDEX BP2)) (BARF "No usage count ~A" (BP-LINE BP2)))
     (SETF (BP-INDEX BP2) TEM)
     (SETQ BP2 (FORWARD-OVER *BLANKS* BP2))
-    (OR (CHAR-EQUAL (BP-CHARACTER BP2) #/")
+    (OR (CHAR-EQUAL (BP-CHAR BP2) #/")
 	(BARF "No expansion ~A" (BP-LINE BP2)))
-    (OR (SETQ BP1 (ZWEI-SEARCH (SETQ BP2 (FORWARD-CHAR BP2)) #/"))
+    (OR (SETQ BP1 (SEARCH (SETQ BP2 (FORWARD-CHAR BP2)) #/"))
 	(BARF "Unmatched quote ~A" (BP-LINE BP2)))
     (PUTPROP SYM (STRING-APPEND (STRING-INTERVAL BP2 (FORWARD-CHAR BP1 -1)))
 	     (GET-ABBREV-MODE-NAME MODE))
@@ -1234,26 +1237,26 @@ If there is a region, it is used instead." ()
     (MULTIPLE-VALUE (STR EOFP)
       (SEND STREAM :LINE-IN T))
     (AND EOFP (RETURN NIL))
-    (OR (SETQ TEM (STRING-SEARCH-CHAR #/SP STR))
+    (OR (SETQ TEM (STRING-SEARCH-CHAR #/SP STR))
 	(BARF "No abbrev ~S" STR))
     (SETQ TEM (1+ TEM))
-    (OR (SETQ TEM1 (STRING-SEARCH-CHAR #/SP STR TEM))
+    (OR (SETQ TEM1 (STRING-SEARCH-CHAR #/SP STR TEM))
 	(BARF "No mode ~S" STR))
     (SETQ SYM (STRING-UPCASE (NSUBSTRING STR TEM TEM1))
 	  TEM1 (1+ TEM1))
-    (OR (SETQ TEM (STRING-SEARCH-CHAR #/SP STR TEM1))
+    (OR (SETQ TEM (STRING-SEARCH-CHAR #/SP STR TEM1))
 	(BARF "No end of mode ~S" STR))
     (SETQ MODE (NSUBSTRING STR TEM1 TEM)
 	  TEM (1+ TEM))
     (SETQ MODE (GET-ABBREV-MODE-NAME MODE))
-    (OR (SETQ TEM1 (STRING-SEARCH-CHAR #/ STR TEM))
+    (OR (SETQ TEM1 (STRING-SEARCH-CHAR #/ STR TEM))
 	(BARF "No expansion ~S" STR))
     (SETQ STR (NSUBSTRING STR (1+ TEM1)))
     (SETQ STR (DO ((EXPANSION "" (STRING-APPEND EXPANSION STR))
 		   (STR STR (SEND STREAM :LINE-IN))
 		   (POS))
 		  (())
-		(COND ((SETQ POS (STRING-SEARCH-CHAR #/ STR))
+		(COND ((SETQ POS (STRING-SEARCH-CHAR #/ STR))
 		       (SETQ USAGE (PARSE-NUMBER STR (1+ POS) NIL 10.))
 		       (SETQ STR (NSUBSTRING STR 0 POS))
 		       (RETURN (STRING-APPEND EXPANSION STR))))))
@@ -1323,7 +1326,7 @@ If there is a region, it is used instead." ()
 	 T)))
 
 (DEFUN COM-WRITE-WORD-ABBREV-FILE-INTERNAL (&OPTIONAL (FN *WORD-ABBREV-FILE-NAME*))
-  (WITH-OPEN-FILE (STREAM FN :DIRECTION :OUTPUT :CHARACTERS T)
+  (WITH-OPEN-FILE (STREAM FN '(WRITE))
     (WRITE-QWABL STREAM)
     (CLOSE STREAM)
     (FORMAT *QUERY-IO* "~&Written: ~A" (SEND STREAM :TRUENAME)))
@@ -1335,19 +1338,21 @@ If there is a region, it is used instead." ()
 (DEFMINOR COM-ELECTRIC-SHIFT-LOCK-MODE ELECTRIC-SHIFT-LOCK-MODE "Electric Shift-lock" 5
   "Minor mode upcasing all but comments and strings.
 A positive argument turns the mode on, zero turns it off;
-no argument toggles." ()
+no argument toggles."
+  ()
   (COMMAND-HOOK 'SHIFT-LOCK-HOOK *COMMAND-HOOK*))
 
 (DEFMINOR COM-ELECTRIC-FONT-LOCK-MODE ELECTRIC-FONT-LOCK-MODE "Electric Font-lock" 5
-  "Minor mode to put comments in font B.
+	  "Minor mode to put comments in font B.
 A positive argument turns the mode on, zero turns it off;
-no argument toggles." ()
+no argument toggles."
+  ()
   (COMMAND-HOOK 'FONT-LOCK-HOOK *COMMAND-HOOK*))
 
 (DEFVAR *SHIFT-LOCK-HOOK-LAST-LINE* NIL)
 (DEFVAR *SHIFT-LOCK-HOOK-DEFUN-BEGINNING* NIL)
 
-(DEFPROP SHIFT-LOCK-HOOK 8. COMMAND-HOOK-PRIORITY)
+(DEFPROP SHIFT-LOCK-HOOK 10 COMMAND-HOOK-PRIORITY)
 (DEFUN SHIFT-LOCK-HOOK (CHAR &AUX STRING SLASH COMMENT
 				  (POINT (POINT)) (*LISP-PARSE-PREPARSED-FLAG* T))
   (WHEN (AND (OR (AND ( CHAR #/A) ( CHAR #/Z))
@@ -1363,7 +1368,7 @@ no argument toggles." ()
     (OR STRING SLASH COMMENT
 	(SETQ *LAST-COMMAND-CHAR* (IF *ELECTRIC-SHIFT-LOCK-XORS*
 				      (LOGXOR CHAR #o40)
-				      (BOOLE 4 CHAR #o40))))))
+				    (BOOLE 4 CHAR #o40))))))
 
 (DEFPROP FONT-LOCK-HOOK 10 COMMAND-HOOK-PRIORITY)
 (DEFUN FONT-LOCK-HOOK (IGNORE &AUX COMMENT (POINT (POINT)) (*LISP-PARSE-PREPARSED-FLAG* T))
