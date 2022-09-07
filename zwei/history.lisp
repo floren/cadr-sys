@@ -1,4 +1,4 @@
-;-*- Mode:LISP; Package:ZWEI; Readtable:T; Base:10 -*-
+;-*-Mode: Lisp; Package: ZWEI; Base: 8-*-
 
 ;In DEFS now.
 ;(DEFSTRUCT (HISTORY :NAMED-ARRAY (:CONC-NAME HISTORY-) (:CONSTRUCTOR MAKE-HISTORY-INTERNAL))
@@ -54,7 +54,7 @@ Also sets HISTORY's yank-pointer to the front."
   "Add ELEMENT to the front of HISTORY, removing it if it appears later on.
 Also sets HISTORY's yank-pointer to the front."
   (SETF (HISTORY-LIST HISTORY)
-	(CONS ELEMENT (DELQ ELEMENT (HISTORY-LIST HISTORY))))
+	(CONS ELEMENT (REMQ ELEMENT (HISTORY-LIST HISTORY))))
   (SETF (HISTORY-LENGTH HISTORY) (LENGTH (HISTORY-LIST HISTORY)))
   (SETF (HISTORY-YANK-POINTER HISTORY) 1)
   ELEMENT)
@@ -63,7 +63,7 @@ Also sets HISTORY's yank-pointer to the front."
   "Append ELEMENT to the end of HISTORY, removing it if it appears earlier.
 Does not affect HISTORY's yank-pointer."
   (SETF (HISTORY-LIST HISTORY)
-	(NCONC (DELQ ELEMENT (HISTORY-LIST HISTORY)) (NCONS ELEMENT)))
+	(APPEND (REMQ ELEMENT (HISTORY-LIST HISTORY)) (LIST ELEMENT)))
   (SETF (HISTORY-LENGTH HISTORY) (LENGTH (HISTORY-LIST HISTORY)))
   ELEMENT)
 
@@ -118,14 +118,17 @@ This does everything you need for a yank command in the editor."
     (BARF "There is no history of arguments of the kind you are being asked for."))
   (HISTORY-YANK *MINI-BUFFER-VALUE-HISTORY*))
 
-(DEFUN LIST-HISTORY-CONTENTS (HISTORY &OPTIONAL (STREAM *STANDARD-OUTPUT*)
+(DEFUN LIST-HISTORY-CONTENTS (HISTORY &OPTIONAL (STREAM STANDARD-OUTPUT)
 			      (START 0) (END *HISTORY-MENU-LENGTH*))
   "Print a summary of the elements of history list HISTORY, on STREAM.
 Each element is preceded by its index, and the element at the current
 yanking pointer is identified with an arrow in front of it.
 START and END can be used to limit the description to just a portion of the list.
 END defaults to *HISTORY-MENU-LENGTH*."
-  (FORMAT STREAM "~&~:[~%Rest of~;Contents of ~]~A:~2%" (HISTORY-NAME HISTORY) (ZEROP START))
+  (FORMAT STREAM
+	  (IF (ZEROP START) "~&Contents of ~A:~2%"
+	    "~%Rest of ~A:~2%")
+	  (HISTORY-NAME HISTORY))
   (IF (< (HISTORY-LENGTH HISTORY) (+ END 3))
       (SETQ END (HISTORY-LENGTH HISTORY)))
   (LOOP FOR I FROM (1+ START) BELOW (1+ END)
@@ -137,17 +140,21 @@ END defaults to *HISTORY-MENU-LENGTH*."
 			(+ 1 (- I (HISTORY-YANK-POINTER HISTORY)))
 		      (- I (HISTORY-YANK-POINTER HISTORY)))
 		  I))
-	(IF (SEND STREAM :OPERATION-HANDLED-P :ITEM)
-	    (SEND STREAM :ITEM 'HISTORY-ELEMENT (LIST HISTORY I ELT)
-			       "~A" (FUNCALL (HISTORY-ELEMENT-STRING-FUNCTION HISTORY) ELT))
+	(IF (SEND STREAM ':OPERATION-HANDLED-P ':ITEM)
+	    (FUNCALL STREAM ':ITEM 'HISTORY-ELEMENT
+		     (LIST HISTORY I ELT)
+		     "~A"
+		     (FUNCALL (HISTORY-ELEMENT-STRING-FUNCTION HISTORY) ELT))
 	  (PRINC (FUNCALL (HISTORY-ELEMENT-STRING-FUNCTION HISTORY) ELT) STREAM))
 	(TERPRI STREAM))
   (WHEN (> (HISTORY-LENGTH HISTORY) END)
     (TERPRI STREAM)
-    (IF (SEND STREAM :OPERATION-HANDLED-P :ITEM)
-	(SEND STREAM :ITEM 'MORE-HISTORY-LEFT (CONS HISTORY END)
-		     "~D more elements in the history." (- (HISTORY-LENGTH HISTORY) END))
-      (FORMAT STREAM "~D more elements in the history." (- (HISTORY-LENGTH HISTORY) END)))
+    (IF (SEND STREAM ':OPERATION-HANDLED-P ':ITEM)
+	(SEND STREAM ':ITEM 'MORE-HISTORY-LEFT (CONS HISTORY END)
+	      "~D more elements in the history."
+	      (- (HISTORY-LENGTH HISTORY) END))
+      (FORMAT STREAM "~D more elements in the history."
+	      (- (HISTORY-LENGTH HISTORY) END)))
     (TERPRI STREAM)))
 
 (TV:ADD-TYPEOUT-ITEM-TYPE *TYPEOUT-COMMAND-ALIST* HISTORY-ELEMENT "Reuse"
@@ -179,9 +186,10 @@ By default, the previous entry is used, so that successive uses of this command
 get older and older things from the history.
 A numeric argument specifies how many entries forward or back to go;
 negative means to more recently killed text.
-An argument of zero means get rid of the yanked stuff and replace it with nothing." ()
+An argument of zero means get rid of the yanked stuff and replace it with nothing."
+	()
   ;; Need not check for MARK-P, by special case.
-  (UNLESS (TYPEP *LAST-COMMAND-TYPE* 'HISTORY) (BARF))
+  (OR (TYPEP *LAST-COMMAND-TYPE* 'HISTORY) (BARF))
   (FUNCALL (HISTORY-YANK-METHOD *LAST-COMMAND-TYPE*)
 	   (AND (NOT (ZEROP *NUMERIC-ARG*))
 		(ROTATE-HISTORY-YANK-POINTER *LAST-COMMAND-TYPE*
@@ -193,7 +201,7 @@ An argument of zero means get rid of the yanked stuff and replace it with nothin
 		    '(:BEFORE-COLD))
 
 (DEFUN CLEAR-ALL-HISTORIES ()
-  (MAPC #'CLEAR-HISTORY *HISTORIES-TO-CLEAR*))
+  (MAPC 'CLEAR-HISTORY *HISTORIES-TO-CLEAR*))
 
 ;; This function is the YANK-METHOD of the kill history, buffer histories, and most others.
 (DEFUN YANK-AS-TEXT (THING &OPTIONAL
@@ -216,17 +224,17 @@ A symbol or list is yanked as it would print, with slashification."
 	(LET ((*BATCH-UNDO-SAVE* T)
 	      (UNDO-ITEM (CAR (UNDO-STATUS-UNDO-LIST
 				(NODE-UNDO-STATUS (NODE-TOP-LEVEL-NODE *INTERVAL*))))))
-	  (WHEN UNDO-ITEM
-	    ;; Don't use WITH-UNDO-SAVE.  Instead, "re-open" the undo save for the COM-YANK,
-	    ;; so that any sequence C-Y M-Y M-Y ... is undone as a unit.
-	    (SETF (BP-STATUS (UNDO-ITEM-START-BP UNDO-ITEM)) ':NORMAL)
-	    (SETF (BP-STATUS (UNDO-ITEM-END-BP UNDO-ITEM)) ':MOVES))
+	  ;; Don't use WITH-UNDO-SAVE.  Instead, "re-open" the undo save for the COM-YANK,
+	  ;; so that any sequence C-Y M-Y M-Y ... is undone as a unit.
+	  (SETF (BP-STATUS (UNDO-ITEM-START-BP UNDO-ITEM)) ':NORMAL)
+	  (SETF (BP-STATUS (UNDO-ITEM-END-BP UNDO-ITEM)) ':MOVES)
 	  (UNWIND-PROTECT
 	      (PROGN
 		(DELETE-INTERVAL BP1 BP2 T)
 		(MOVE-BP (MARK) BP1)
 		(WHEN THING
-		  (MOVE-BP (POINT) (INSERT-KILL-RING-THING (MARK) THING))))
+		  (MOVE-BP (POINT) (INSERT-KILL-RING-THING (MARK) THING))
+		  ))
 	    (UNDO-SAVE-END))))
     (WITH-UNDO-SAVE ("Yank" (POINT) (POINT) T)
       (MOVE-BP (MARK) (POINT))
@@ -240,12 +248,10 @@ BP should not be of type :MOVES."
       (WITH-BP (BP1 (INSERT-THING BP THING) ':MOVES)
 ;	(FIXUP-FONTS-INTERVAL (GET THING ':FONTS) BP BP1 T)
 	(COND (*KILL-INTERVAL-SMARTS*
-;character lossage
-	       (IF (MEM #'CHAR-EQUAL (BP-CHARACTER-BEFORE BP) *BLANKS*)
+	       (IF (MEM #'CHAR-EQUAL (BP-CHAR-BEFORE BP) *BLANKS*)
 		   (DELETE-OVER *BLANKS* BP)
 		 (FIXUP-WHITESPACE BP))
-;character lossage
-	       (IF (MEM #'CHAR-EQUAL (BP-CHARACTER BP1) *BLANKS*)
+	       (IF (MEM #'CHAR-EQUAL (BP-CHAR BP1) *BLANKS*)
 		   (DELETE-BACKWARD-OVER *BLANKS* BP1)
 		 (FIXUP-WHITESPACE BP1))))
 	(COPY-BP BP1))
@@ -257,27 +263,26 @@ BP should not be of type :MOVES."
 (DEFUN FIXUP-WHITESPACE (BP &AUX BP2 BP1 CH1 CH2 SYN1 SYN2 FLAG BP3)
   (SETQ BP1 (BACKWARD-OVER *BLANKS* BP)
 	BP2 (FORWARD-OVER *BLANKS* BP)
-	CH1 (IF (SETQ BP3 (FORWARD-CHAR BP1 -1)) (BP-CH-CHARACTER BP3) #/NEWLINE)
-	CH2 (BP-CH-CHARACTER BP2)
+	CH1 (IF (SETQ BP3 (FORWARD-CHAR BP1 -1))
+		(BP-CH-CHAR BP3) #\CR)
+	CH2 (BP-CH-CHAR BP2)
 	SYN1 (LIST-SYNTAX CH1)
 	SYN2 (LIST-SYNTAX CH2))
-  (COND ((OR (EQ CH2 #/NEWLINE)		;If at the end of the line,
+  (COND ((OR (= CH2 #\CR)			;If at the end of the line,
 	     (AND (SETQ FLAG (OR (EQ (GET *MAJOR-MODE* 'EDITING-TYPE) ':LISP)
 				 (MULTIPLE-VALUE-BIND (STRING SLASH COMMENT)
 				     (LISP-BP-SYNTACTIC-CONTEXT BP1)	;or any funny syntax
 				   (OR STRING SLASH COMMENT))))
 		  (NOT (AND (BP-= BP BP1)
 			    (BP-= BP BP2))))))	;and some whitespace, leave it alone
-	((NEQ CH1 #/NEWLINE)			;If not at beginning of line,
+	((NOT (= CH1 #\CR))			;If not at beginning of line,
 	 (DELETE-INTERVAL BP1 BP2 T)		;flush whitespace, and
 	 (AND (IF FLAG
-;character lossage
-		  (NOT (OR (MEMQ CH1 *BLANKS*) (MEMQ (CHAR-INT CH1) *BLANKS*)
-			   (MEMQ CH2 *BLANKS*) (MEMQ (CHAR-INT CH2) *BLANKS*)))
+		  (NOT (OR (MEMQ CH1 *BLANKS*) (MEMQ CH2 *BLANKS*)))
 		  (AND ( SYN1 LIST-OPEN) ( SYN1 LIST-SINGLE-QUOTE) ( SYN2 LIST-CLOSE)))
-	      (INSERT BP1 (IN-CURRENT-FONT #/SPACE))))))
+	      (INSERT BP1 (IN-CURRENT-FONT #\SP))))))
 
-;;;; The kill history.
+;; The kill history.
 
 ;; This is the ELEMENT-STRING-FUNCTION for the kill history.
 (DEFUN SUMMARIZE-KILL-HISTORY-INTERVAL (INTERVAL)
@@ -326,8 +331,7 @@ EXPLICIT-P = T turns off the *KILL-INTERVAL-SMARTS* feature."
   (AND *KILL-INTERVAL-SMARTS*
        (NOT EXPLICIT-P)
        (OR (AND (EQ (BP-LINE BP1) (BP-LINE BP2)) (BEG-LINE-P BP1))
-;character lossage
-	   (AND (MEM #'CHAR-EQUAL (BP-CHARACTER-BEFORE BP1) *BLANKS*)
+	   (AND (MEM #'CHAR-EQUAL (BP-CHAR-BEFORE BP1) *BLANKS*)
 		(NOT (BEG-LINE-P (BACKWARD-OVER *BLANKS* BP1)))))
        (MOVE-BP BP2 (FORWARD-OVER *BLANKS* BP2)))
   (KILL-RING-SAVE-INTERVAL BP1 BP2 T FORWARDP)
@@ -353,7 +357,7 @@ if we merge (that is decided by *LAST-COMMAND-TYPE*)."
 	       (INTERVAL-FIRST-BP INT)))
 	   (COPY-INTERVAL BP1 BP2 T)))
 	(T (LET ((INT (COPY-INTERVAL BP1 BP2 T)))
-	     (PUTPROP INT (SEND (BP-TOP-LEVEL-NODE BP1) :GET-ATTRIBUTE ':FONTS) ':FONTS)
+	     (PUTPROP INT (SEND (BP-TOP-LEVEL-NODE BP1) ':GET-ATTRIBUTE ':FONTS) ':FONTS)
 	     (KILL-RING-PUSH INT)))))
 
 (DEFUN KILL-INTERVAL-ARG (BP1 BP2 ARG)
