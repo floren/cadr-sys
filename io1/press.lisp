@@ -487,7 +487,6 @@ This should be done before outputting directly to the current entity."
 
 (DEFUN PRESS-CHAR (CHAR)
   "Output CHAR to press file, with buffering.  Format effectors are allowed."
-  (IF (CHARACTERP CHAR) (SETQ CHAR (CHAR-INT CHAR)))
   (COND	((< CHAR #o200)				;Printing
 	 (SEND PRESS-EFTP-STREAM ':TYO CHAR)
 	 (INCF PRESS-N-CHARS)
@@ -594,7 +593,8 @@ Returns the font number it is assigned."
       (IF (ERRSET (FIND-FONT-DATA FAMILY-NAME FACE-NAME POINT-SIZE) NIL)
 	  (PRESS-DEFINE-FONT FAMILY-NAME FACE-NAME POINT-SIZE ROTATION)
 	(LET ((WIDTH 633.) (HEIGHT 698.) WIDTH-ARRAY FONT-DESC FONT-NUMBER)
-	  (SETQ WIDTH-ARRAY (MAKE-ARRAY #o400 ':TYPE 'ART-16B :INITIAL-ELEMENT 633.))
+	  (SETQ WIDTH-ARRAY (MAKE-ARRAY #o400 ':TYPE 'ART-16B))
+	  (FILLARRAY WIDTH-ARRAY '(633.))
 	  (SETQ FONT-DESC (LIST FAMILY-NAME FACE-NAME POINT-SIZE ROTATION
 				WIDTH HEIGHT WIDTH-ARRAY))
 	  (SETQ PRESS-FONT-LIST (NCONC PRESS-FONT-LIST (NCONS FONT-DESC)))
@@ -636,14 +636,14 @@ The font is specified by its decoded name."
        (N (STRING-LENGTH STR))
        (CH))
       ((= I N) FACE-CODE)
-    (SETQ CH (CHAR-UPCASE (CHAR STR I)))
+    (SETQ CH (CHAR-UPCASE (AREF STR I)))
     (SETQ FACE-CODE (+ FACE-CODE
-		       (CASE CH
-			 (#/B 2)
-			 (#/L 4)
-			 (#/I 1)
-			 (#/C 6)
-			 (#/E 12.)
+		       (SELECTQ CH
+			 (#/B 2)
+			 (#/L 4)
+			 (#/I 1)
+			 (#/C 6)
+			 (#/E 12.)
 			 (OTHERWISE (FERROR NIL "~C illegal character in face name /"~A/""
 					    CH STR)))))))
 
@@ -1328,7 +1328,7 @@ And why the sea is boiling hot,
 ;;; This does not include TEX fonts, rotated fonts, or vector fonts
 ;;; Updated by DULCEY 5/16/82.
 
-(DEFVAR ALL-DOVER-FONTS '(
+(SETQ ALL-DOVER-FONTS '(
 
   (APL || 8.) (APL || 10.)
   
@@ -1443,8 +1443,8 @@ And why the sea is boiling hot,
 (DEFUN COMPUTE-DOVER-FONTS (&AUX NAME FACE POINT ROT TEM ANSWER (*READ-BASE* 10.))
   (WITH-OPEN-FILE (I "AI: FONTS; DOVER FONTS")
     (DO ((LINE) (EOF)) (NIL)
-      (MULTIPLE-VALUE-SETQ (LINE EOF)
-	(SEND I :LINE-IN))
+      (MULTIPLE-VALUE (LINE EOF)
+	(SEND I ':LINE-IN))
       (AND EOF
 	   (OR (NULL LINE) (EQUAL LINE ""))
 	   (RETURN (NREVERSE ANSWER)))
@@ -1457,10 +1457,10 @@ And why the sea is boiling hot,
 		       ((STRING-EQUAL LINE "BR" ':START1 TEM ':END1 (+ TEM 2) ':END2 2) 'B)
 		       ((STRING-EQUAL LINE "BI" ':START1 TEM ':END1 (+ TEM 2) ':END2 2) 'BI)
 		       (T (FERROR NIL "Parsing error in fonts file.")))
-	    TEM (1+ (STRING-SEARCH-CHAR #/( LINE TEM))
-	    POINT (CLI:READ-FROM-STRING LINE T NIL :START TEM)
-	    TEM (+ (STRING-SEARCH-CHAR #/: LINE TEM) 2)
-	    ROT (CLI:READ-FROM-STRING LINE T NIL :START TEM))
+	    TEM (1+ (STRING-SEARCH-CHAR #/( LINE TEM))
+	    POINT (READ-FROM-STRING LINE 'SI:NO-EOF-OPTION TEM)
+	    TEM (+ (STRING-SEARCH-CHAR #/: LINE TEM) 2)
+	    ROT (READ-FROM-STRING LINE 'SI:NO-EOF-OPTION TEM))
       (PUSH (LIST NAME FACE POINT ROT) ANSWER))))
 
 
