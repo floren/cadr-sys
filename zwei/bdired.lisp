@@ -110,11 +110,11 @@
 		#/r (0 #/R)
 		#/T COM-BDIRED-TRANSFER
 		#/t (0 #/T)
-		#/U COM-BDIRED-UNMARK
+		#/U COM-BDIRED-UNDELETE
 		#/u (0 #/U)
 		#/V COM-DIRED-VIEW-FILE
 		#/v (0 #/V)
-		#/RUBOUT COM-BDIRED-REVERSE-UNMARK
+		#/RUBOUT COM-DIRED-REVERSE-UNDELETE
 		#/ABORT COM-BDIRED-ABORT
 		#/END COM-BDIRED-EXIT)
 	      '())
@@ -254,7 +254,8 @@ making it the current buffer."
 			    (ASET #/T LINE 0)
 			    (BDIRED-MARK-TRANSFER (BDIRED-LINE-CFILE LINE)))))
 
-(DEFCOM COM-BDIRED-UNMARK "Un-mark file(s) for transfer or other action." ()
+(DEFCOM COM-BDIRED-UNDELETE "Un-mark file(s) for transfer.
+Also cancels any other operation requested on the file." ()
   (DIRED-MAP-OVER-LINES (IF (AND (NOT *NUMERIC-ARG-P*)
 				 (OR (NOT (DIRED-LINE-PATHNAME (BP-LINE (POINT))))
 				     (EQ (BP-CHAR (BEG-LINE (POINT))) #/SP)))
@@ -264,10 +265,6 @@ making it the current buffer."
 			    (MUNG-LINE LINE)
 			    (ASET #/SP LINE 0)
 			    (BDIRED-UNMARK-TRANSFER (BDIRED-LINE-CFILE LINE)))))
-
-(DEFCOM COM-BDIRED-REVERSE-UNMARK "Un-mark previous file(s) for transfer or other action." ()
-  (SETQ *NUMERIC-ARG* (- *NUMERIC-ARG*))
-  (COM-BDIRED-UNMARK))
 
 (COMMENT					;may want some of this later.
 
@@ -365,15 +362,15 @@ information of the other file to match this file." ()
 (DEFCOM COM-BDIRED-HELP "Explain use of DIRED commands" ()
   (FORMAT T "You are in the balance directories editor.  The commands are:
 	T	Mark the current file to be transferred.
-	P	Mark the current file to be printed on the standard hardcopy device.
-	U	Cancel any request marked on the current line, or else the line above.
-	Rubout	Move up and cancel any request marked on that line.
+	P	Print the current file on the standard hardcopy device.
+	U	Undelete the current file, or else the file just above the cursor.
+		Also used to cancel a Print request.
 	R	Rename this file.  You type the new filename in a mini buffer.
 	C	Copy this file.  You type the new filename in a mini buffer.
+	Rubout	Undelete file above the cursor.
 	Space	Move to the next line.
 	  Above commands repeat with a numeric argument,
 	  backwards if the argument is negative.	  
-	V	View current file.
 	Q (or END)  Exit.  The remaining files in the transfer lists will be moved.
 	ABORT	Exit without performing any transfers.
 	=	SRCCOM this file with the > version.
