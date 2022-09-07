@@ -5,7 +5,7 @@
 ;;; Character search
 
 (DEFCONST *STRING-SEARCH-OPTION-DOCUMENTATION*
-  "While you are typing the search string, the following characters have special meanings:
+"While you are typing the search string, the following characters have special meanings:
 C-B     Search forward from the beginning of the buffer.
 C-E     Search backwards from the end of the buffer.
 C-F     Leave the point at the top of the window, if the window must be recentered.
@@ -78,7 +78,7 @@ Reverse String search, which you get into from C-A, reads in a string and search
   (UNWIND-PROTECT
     (PROG (XCHAR CHAR UCHAR BJP ZJP TOP-P STRING BP FAILED-P QUOTE-P
 	   (ORIG-PT (COPY-BP (POINT))) (ARG *NUMERIC-ARG*)
-	   (FCN 'ZWEI-SEARCH))
+	   (FCN 'SEARCH))
 	(AND (MINUSP ARG) (SETQ REVERSEP (NOT REVERSEP) ARG (- ARG)))
      LOOP (COND ((OR FAILED-P			;Force redisplay on failing search
 		     (NULL (SETQ XCHAR (SEND *STANDARD-INPUT* ':TYI-NO-HANG))))
@@ -180,7 +180,7 @@ Reverse String search, which you get into from C-A, reads in a string and search
 (DEFUN COM-STRING-SEARCH-INTERNAL (REVERSEP BJP ZJP TOP-P &AUX TEM)
   (UNWIND-PROTECT
     (PROG ((STRING (MAKE-STRING 10 ':FILL-POINTER 0))
-	   (ORIG-PT (COPY-BP (POINT))) (FCN 'ZWEI-SEARCH)
+	   (ORIG-PT (COPY-BP (POINT))) (FCN 'SEARCH)
 	   XCHAR CHAR HACK1 HACK2 ECHOED-P FAILED-P
 	   REPEATING-STRING-NOT-ECHOED-FLAG
 	   SEARCHING-DONE-AT-LEAST-ONCE)
@@ -192,10 +192,10 @@ Reverse String search, which you get into from C-A, reads in a string and search
 		    (AND ZJP (FORMAT *QUERY-IO* "End "))
 		    (AND TOP-P (FORMAT *QUERY-IO* "Top Line "))
 		    (AND REVERSEP (FORMAT *QUERY-IO* "Reverse "))
-		    (FORMAT *QUERY-IO* (CASE FCN
-					 (ZWEI-SEARCH "String search: ")
-					 (WORD-SEARCH "Word search: ")
-					 (DELIMITED-SEARCH "Delimited search: ")))
+		    (FORMAT *QUERY-IO* (SELECTQ FCN
+				       (SEARCH "String search: ")
+				       (WORD-SEARCH "Word search: ")
+				       (DELIMITED-SEARCH "Delimited search: ")))
 		    (FORMAT *QUERY-IO* "~A" STRING)))
 	     (AND FAILED-P (GO FAILED))
 	     (GO LOP1)
@@ -595,7 +595,7 @@ previous search string is used again." (KM)
                  ;; before then, this level is determined and we can work on the next.
                  ;; Otherwise, we remain in the :GO state and do 100 more lines next time.
                  (MULTIPLE-VALUE (NEW-BP TIME-OUT)
-                     (ZWEI-SEARCH BP1 *IS-STRING*
+                     (SEARCH BP1 *IS-STRING*
                              (AREF *IS-REVERSE-P* P1) NIL 100))
                  ;; What happened?
                  (COND (TIME-OUT
@@ -646,7 +646,7 @@ previous search string is used again." (KM)
 		   (STRING-NCONC (MAKE-STRING (ARRAY-ACTIVE-LENGTH *IS-STRING*)
 					      ':FILL-POINTER 0)
 				 *IS-STRING*)
-		   'ZWEI-SEARCH)
+		   'SEARCH)
                  (FORMAT *QUERY-IO* "")
 		 (MAYBE-PUSH-POINT ORIG-PT)
 		 (SELECT-WINDOW *WINDOW*)
@@ -678,7 +678,7 @@ previous search string is used again." (KM)
 Prompts for two string: to replace all FOO's with BAR's, type FOO and BAR.
 With no numeric arg, all occurrences after point are replaced.
 With numeric arg, that many occurrences are replaced.
-If *CASE-REPLACE* is non-null, BAR's initial will be capitalized
+If *CASE-REPLACE-P* is nonnull, BAR's initial will be capitalized
 if FOO's initial had been (supply it in lower case)." ()
   (LET ((FROM (TYPEIN-LINE-READLINE
 		"Replace ~:[all~*~;next ~D~] occurrences ~:[in the region ~]of:"
@@ -721,7 +721,7 @@ Period => replace this FOO and exit.  Altmode => just exit.
 R => enter editing mode recursively.  L => redisplay screen.
 Exclamation mark => replace all remaining FOOs without asking.
 Any other character exits and (except altmode) is read again.
-If *CASE-REPLACE* is non-null, BAR's initial will be capitalized
+If *CASE-REPLACE-P* is nonnull, BAR's initial will be capitalized
 if FOO's initial had been.
 If you give a numeric argument, it will not consider FOOs that are not
 bounded on both sides by delimiter characters." ()
@@ -776,7 +776,7 @@ BREAKS non-NIL means only consider replacing occurrences surrounded by delimiter
   (QUERY-REPLACE-INTERNAL START-BP END-BP *QUERY-FROM* *QUERY-TO* 'QUERY-REPLACE-SEARCH BREAKS))
 
 (DEFUN QUERY-REPLACE-SEARCH (BP TO-BP QUERY-FROM IGNORE &AUX BP1)
-  (AND (SETQ BP1 (ZWEI-SEARCH BP QUERY-FROM NIL NIL NIL TO-BP))
+  (AND (SETQ BP1 (SEARCH BP QUERY-FROM NIL NIL NIL TO-BP))
        (VALUES BP1 (FORWARD-CHAR BP1 (- (STRING-LENGTH QUERY-FROM))))))
 
 (DEFMACRO QREP ()
