@@ -750,12 +750,6 @@ STARTING-STRING goes on the first line of the page the possibilities occupy."
 (DEFPROP SECTION-POSSIBILITY "Section ~A" POSSIBILITY-FORMAT-STRING)
 (DEFUN SECTION-POSSIBILITY (BP SECTION)
   (DECLARE (IGNORE BP))
-  (DISPLAY-SECTION SECTION T NIL))
-
-(DEFUN DISPLAY-SECTION (SECTION POINT-PDL-PUSH REDISPLAY-NOW)
-  "Move point to the start of SECTION and redisplay.
-If POINT-PDL-PUSH, then push (POINT) onto the point-pdl-buffer
-if REDISPLAY-NOW, force redisplay once we have moved (POINT)."
   (IF (NOT (MEMQ (NODE-SUPERIOR SECTION) *ZMACS-BUFFER-LIST*))
       (FORMAT *QUERY-IO* "~&The section ~A is in a buffer that has been killed." SECTION)
     (LET* ((SECTION-NODE-DEFUN-LINE (SECTION-NODE-DEFUN-LINE SECTION))
@@ -764,12 +758,11 @@ if REDISPLAY-NOW, force redisplay once we have moved (POINT)."
 				(CREATE-BP SECTION-NODE-DEFUN-LINE 0)
 			      (INTERVAL-FIRST-BP SECTION)))))
       (IF (NOT SECTION-BP)
-	  (FORMAT *QUERY-IO* "Cannot find section ~A." SECTION)	;unreal section (deleted, eg)
-	(IF POINT-PDL-PUSH (POINT-PDL-PUSH (POINT) *WINDOW* T))
+	  (FORMAT *QUERY-IO* "Cannot edit section ~A." SECTION)	;unreal section (deleted, eg)
+	(POINT-PDL-PUSH (POINT) *WINDOW* T)
 	(MAKE-BUFFER-CURRENT (NODE-SUPERIOR SECTION))
 	(MOVE-BP (POINT) SECTION-BP)
-	(LET ((DIS (RECENTER-WINDOW *WINDOW* :START (BACKWARD-OVER-COMMENT-LINES (POINT) NIL))))
-	  (IF REDISPLAY-NOW (REDISPLAY *WINDOW*) DIS))))))
+	(RECENTER-WINDOW *WINDOW* :START (BACKWARD-OVER-COMMENT-LINES (POINT) NIL))))))
 
 ;;;; EDIT-DEFINITION and its subroutines.
 ;;;; This uses a special buffer of possibilities, called *Definitions*.
