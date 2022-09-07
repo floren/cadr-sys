@@ -1,4 +1,4 @@
-;;; Macros for ZWEI.   -*- Mode:LISP; Package:ZWEI; Base:8; Readtable:ZL -*-
+;;; Macros for ZWEI.   -*- Mode:LISP; Package:ZWEI; Base:8; Readtable:T -*-
 ;;; ** (c) Copyright 1980 Massachusetts Institute of Technology **
 
 (DEFMACRO CHARMAP ((FROM-BP-FORM TO-BP-FORM . RETURN-FORMS) &BODY BODY)
@@ -56,6 +56,8 @@ The values returned are the values of the RETURN-FORMS."
 	    (NOT *THIS-IS-THE-LAST-LINE*))
        #/NEWLINE
        (GLOBAL:AREF LINE INDEX)))
+
+
 
 (DEFMACRO CHARMAP-CH-CHARACTER ()
   "Within the body of a CHARMAP, the character being scanned, sans font and meta-bits"
@@ -668,11 +670,32 @@ when ZWEI is initialized."
     (LET ((V (CDAR L)))
       (SET V (GET V 'VARIABLE-INIT)))))
 
-(DEFVAR *ORIGINAL-LISP-INDENT-OFFSET-ALIST*
-	'((*CATCH 1 1) (CATCH 1 1))
-  ;These guys don't have debugging info. Sigh
-  "See ZWEI::INDENT-FOR-LISP for the meaning of the elements of this list.
-Its use has been largely subsumed by the ZWEI:INDENTATION declaration in functions.")
+;;; In case loading ZWEI in to some other package for debugging.
+(OR (VARIABLE-BOUNDP *INITIAL-LISP-INDENT-OFFSET-ALIST*)
+    (SETQ *INITIAL-LISP-INDENT-OFFSET-ALIST* NIL))
+
+(SETQ *INITIAL-LISP-INDENT-OFFSET-ALIST*
+      (NCONC *INITIAL-LISP-INDENT-OFFSET-ALIST*
+	     '((LAMBDA 1 1) (*CATCH 1 1) (CATCH 1 1) (IF 2 1)
+	       (LET 1 1) (LET* 1 1) (LET-IF 2 1)
+	       (WITH-STACK-LIST 1 1) (WITH-STACK-LIST* 1 1)
+	       (CATCH-CONTINUATION-IF 2 3 4 1)
+	       (CATCH-CONTINUATION 1 3 3 1)
+	       (CONDITION-CASE 1 3 2 1) (CONDITION-CASE-IF 2 3 3 1)
+	       (CONDITION-CALL 1 3 2 1) (CONDITION-CALL-IF 2 3 3 1)
+	       (COMPILER-LET 1 1)
+	       (PROGV 2 1) (PROGW 1 1)
+	       (DO 2 1) (DO-NAMED 3 1) (DO* 2 1) (DO*-NAMED 3 1)
+	       (RETURN-FROM 1 1)
+	       (PROG . INDENT-PROG) (PROG* . INDENT-PROG) (TAGBODY . INDENT-PROG)
+	       (BLOCK 1 1) (NTH-VALUE 1 1)
+	       (MULTIPLE-VALUE 1 1) (MULTIPLE-VALUE-SETQ 1 1)
+	       (MULTIPLE-VALUE-BIND 1 3 2 1)
+	       (DEFFLAVOR 1 12 3 1) (DEFPROP 0 0)
+	       (EVAL-WHEN 1 1)
+	       (UNWIND-PROTECT 0 3 1 1)
+	       (FLET 1 1) (MACROLET 1 1) (LABELS 1 1)
+	       (LOCALLY 1 1))))
 
 (DEFVARIABLE *FILL-COLUMN* 576. :PIXEL
    "Width in pixels used for filling text.")
@@ -713,7 +736,7 @@ Its use has been largely subsumed by the ZWEI:INDENTATION declaration in functio
    "Characters that should be followed by two spaces when filling is done.")
 (DEFVARIABLE *FLASH-MATCHING-PAREN* T :BOOLEAN
    "When point is to the right of a close paren, flash the matching open paren.")
-(DEFVARIABLE *FLASH-MATCHING-PAREN-MAX-LINES* 300. :FIXNUM
+(DEFVARIABLE *FLASH-MATCHING-PAREN-MAX-LINES* 200. :FIXNUM
    "Max number of lines to scan when trying to flash the matching open paren.")
 (DEFVARIABLE *COMMENT-START* NIL :STRING
    "String that indicates the start of a comment.")
@@ -786,8 +809,7 @@ It should be a symbol, either :UNDERLINE or :REVERSE-VIDEO.")
 (DEFVARIABLE *LISP-DEFUN-INDENTATION* '(2 1) :ANYTHING
    "Amount to indent the second line of a defun.")
 (DEFVARIABLE *LISP-INDENT-OFFSET-ALIST* *INITIAL-LISP-INDENT-OFFSET-ALIST* :ANYTHING
-   "Describe this someday when all figured out.
-See the function ZWEI::INDENT-FOR-LISP for the meaning of the components of this list")
+   "Describe this someday when all figured out.")
 (DEFVARIABLE *LISP-INDENT-LONE-FUNCTION-OFFSET* 1 :FIXNUM
    "Amount to offset indentation of car of list.")
 (DEFVARIABLE *FILE-VERSIONS-KEPT* 2 :FIXNUM
