@@ -1,7 +1,7 @@
-;;; -*- Mode:LISP; Package:FILE-SYSTEM; Base:10; Readtable:T -*-
+;;; -*- Mode:Lisp;Package:File-System;Base:10-*-
 ;;; (c) 1984 Massachusetts Institute of Technology
 ;;;
-;;; This is SYS: IO; FILE; ACCESS
+;;; This is SYS: IO; ACCESS
 ;;;
 ;;; Flavor definitions for file access.  Also includes useful functions and variables that
 ;;; are needed by various kinds of access.
@@ -35,13 +35,14 @@
 ;;; to use the proceed type :RETRY-FILE-OPERATION.
 (DEFUN FILE-PROCESS-ERROR (CONDITION-NAME ERROR-STRING &OPTIONAL PATHNAME-OR-STREAM
 			   PROCEEDABLE NOERROR &REST MAKE-CONDITION-ARGS &AUX WHO-FOR)
-  (TYPECASE PATHNAME-OR-STREAM
-    (PATHNAME (SETQ WHO-FOR PATHNAME-OR-STREAM))
-    (SI:FILE-STREAM-MIXIN (SETQ WHO-FOR (SEND PATHNAME-OR-STREAM :PATHNAME)))
-    (T (SETQ WHO-FOR PATHNAME-OR-STREAM)))
+  (COND ((TYPEP PATHNAME-OR-STREAM 'PATHNAME)
+	 (SETQ WHO-FOR PATHNAME-OR-STREAM))
+	((TYPEP PATHNAME-OR-STREAM 'SI:FILE-STREAM-MIXIN)
+	 (SETQ WHO-FOR (SEND PATHNAME-OR-STREAM :PATHNAME)))
+	(T (SETQ WHO-FOR PATHNAME-OR-STREAM)))
   (AND WHO-FOR
-       (SETQ ERROR-STRING (STRING-APPEND ERROR-STRING " for " WHO-FOR)))
-  (LET ((CONDITION (APPLY #'MAKE-CONDITION (OR CONDITION-NAME 'FILE-OPERATION-FAILURE-1)
+       (SETQ ERROR-STRING (STRING-APPEND ERROR-STRING " for " (STRING WHO-FOR))))
+  (LET ((CONDITION (APPLY 'MAKE-CONDITION (OR CONDITION-NAME 'FILE-OPERATION-FAILURE-1)
 			  "~A"  WHO-FOR MAKE-CONDITION-ARGS)))
     (SEND CONDITION :SET-FORMAT-ARGS (LIST ERROR-STRING))
     (IF NOERROR CONDITION
@@ -64,7 +65,7 @@
 ;;; This method may be overidden by other flavors, or by site information to distinguish
 ;;; slightly differing versions of file systems.
 (DEFMETHOD (FILE-HOST-MIXIN :FILE-SYSTEM-TYPE) ()
-  (OR (GETF SI:PROPERTY-LIST 'FILE-SYSTEM-TYPE)
+  (OR (GET (LOCF SI:PROPERTY-LIST) 'FILE-SYSTEM-TYPE)
       (SEND SELF :SYSTEM-TYPE)))
 
 (DEFMETHOD (FILE-HOST-MIXIN :FILE-HOST-P) () T)
@@ -146,8 +147,8 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
 			       APPROPRIATE-ACCESS-FLAVORS NIL))))
 
 ;;; This also frees up any slots marked as open
-(DEFMETHOD (FILE-HOST-MIXIN :CLOSE-ALL-FILES) (&OPTIONAL (MODE :ABORT))
-  (AND ACCESS (SEND ACCESS :CLOSE-ALL-FILES MODE)))
+(DEFMETHOD (FILE-HOST-MIXIN :CLOSE-ALL-FILES) ()
+  (AND ACCESS (SEND ACCESS :CLOSE-ALL-FILES)))
 
 (DEFMETHOD (FILE-HOST-MIXIN :OPEN-STREAMS) ()
   (AND ACCESS (SEND ACCESS :OPEN-STREAMS)))
@@ -160,18 +161,18 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
 
 ;;; This method is currently QFILE specific
 (DEFMETHOD (FILE-HOST-MIXIN :HSNAME-INFORMATION) (UNIT STR IDX)
-  (LET* ((HSNAME (SUBSTRING STR (INCF IDX)
-			    	(SETQ IDX (STRING-SEARCH-CHAR #/NEWLINE STR IDX))))
+  (LET* ((HSNAME (SUBSTRING STR (SETQ IDX (1+ IDX))
+			    (SETQ IDX (STRING-SEARCH-CHAR #/NEWLINE STR IDX))))
 	 (DEFAULT-CONS-AREA SYS:BACKGROUND-CONS-AREA)
 	 (HSNAME-PATHNAME (SEND SELF :HSNAME-PATHNAME HSNAME (SEND UNIT :HOST)))
-	 (PERSONAL-NAME (SUBSTRING STR (INCF IDX)
-				       (SETQ IDX (STRING-SEARCH-CHAR #/NEWLINE STR IDX))))
+	 (PERSONAL-NAME (SUBSTRING STR (SETQ IDX (1+ IDX))
+				   (SETQ IDX (STRING-SEARCH-CHAR #/NEWLINE STR IDX))))
 	 (GROUP-AFFILIATION (IF (OR (NULL IDX) (= IDX (1- (STRING-LENGTH STR))))
-				#/SP
-			        (CHAR STR (1+ IDX)))))
+				#/SP
+			      (AREF STR (1+ IDX)))))
     (SETQ IDX (STRING-SEARCH ", " PERSONAL-NAME)
 	  STR (NSUBSTRING PERSONAL-NAME 0 IDX))
-    (AND IDX (SETQ STR (STRING-APPEND (NSUBSTRING PERSONAL-NAME (+ IDX 2)) #/SP STR)))
+    (AND IDX (SETQ STR (STRING-APPEND (NSUBSTRING PERSONAL-NAME (+ IDX 2)) #/SP STR)))
     (VALUES HSNAME-PATHNAME PERSONAL-NAME GROUP-AFFILIATION STR)))
 
 (DEFMETHOD (FILE-HOST-MIXIN :LOGIN-UNIT) (UNIT LOGIN-P)
@@ -191,20 +192,37 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
 
 (DEFMETHOD (CASTE-FILE-HOST-MIXIN :ENABLE-CAPABILITIES) (&REST CAPABILITIES)
   (SEND SELF :ACCESS-OPERATION :ENABLE-CAPABILITIES
-	(OR CAPABILITIES (SEND SELF :DEFAULT-CAPABILITIES))))
+	(OR CAPABILITIES (SEND SELF :DEFAULT-CAPABILITES))))
 
 (DEFMETHOD (CASTE-FILE-HOST-MIXIN :DISABLE-CAPABILITIES) (&REST CAPABILITIES)
   (SEND SELF :ACCESS-OPERATION :DISABLE-CAPABILITIES CAPABILITIES))
 
+;;; Disembodied plists whose property names are host objects
+;;; and whose values are pathnames connected to or accessed to.
+;;; Used so that when a new host unit connection is made
+;;; it can be told to connect or access as specified.
+(DEFVAR HOST-CONNECTED-DIRECTORY-PLIST (CONS NIL NIL))
+(DEFVAR HOST-ACCESSED-DIRECTORY-PLIST (CONS NIL NIL))
+(DEFVAR HOST-CAPABILITIES-PLIST (CONS NIL NIL))
+
+(DEFUN CLEAR-CONNECT-AND-ACCESS-MEMORY ()
+  "Clear the records of what remote access and connects have been done to what hosts.
+Also clears out records of enabled capabilities."
+  (SETQ HOST-CONNECTED-DIRECTORY-PLIST (CONS NIL NIL))
+  (SETQ HOST-ACCESSED-DIRECTORY-PLIST (CONS NIL NIL))
+  (SETQ HOST-CAPABILITIES-PLIST (CONS NIL NIL)))
+
 (DEFUN FORGET-PASSWORD (NEW-USER-ID HOST)
-  (LET ((ALIST-ELEMENT (ASS #'EQUALP `(,NEW-USER-ID ,(SEND HOST :NAME))
+  (LET ((ALIST-ELEMENT (ASS 'EQUALP (LIST NEW-USER-ID (SEND HOST :NAME))
 			    USER-HOST-PASSWORD-ALIST)))
     (IF ALIST-ELEMENT
 	(SETQ USER-HOST-PASSWORD-ALIST
 	      (DELQ ALIST-ELEMENT USER-HOST-PASSWORD-ALIST)))))
 
 (DEFUN GUESS-PASSWORD-MAYBE (NEW-USER-ID HOST &AUX PASSWORD)
-  (OR (CADR (ASS #'EQUALP `(,NEW-USER-ID ,(SEND HOST :NAME)) USER-HOST-PASSWORD-ALIST))
+  (OR (CADR (ASS 'EQUALP
+		 (LIST NEW-USER-ID (SEND HOST :NAME))
+		 USER-HOST-PASSWORD-ALIST))
       ;; None remembered => guess, except on Multics
       ;; since multics would hassle the guy if it's wrong.
       (IF (EQ (SEND HOST :SYSTEM-TYPE) :MULTICS) "")
@@ -214,8 +232,11 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
       (PROG1
 	(SETQ PASSWORD
 	      (SUBSTRING NEW-USER-ID
-			 (1+ (OR (STRING-REVERSE-SEARCH #/. NEW-USER-ID) -1))))
-	(PUSH `((,NEW-USER-ID ,(SEND HOST :NAME)) ,PASSWORD) USER-HOST-PASSWORD-ALIST))))
+			 (1+ (OR (STRING-REVERSE-SEARCH #/. NEW-USER-ID)
+				 -1))))
+	(PUSH (LIST (LIST NEW-USER-ID (SEND HOST :NAME))
+		    PASSWORD)
+	      USER-HOST-PASSWORD-ALIST))))
 
 ;;; This function should be useful for the :LOGIN methods of host units.  UNAME-HOST and
 ;;; HOST are usually the same, unless UNAME-HOST is the symbol FS:ITS
@@ -234,7 +255,7 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
 	((OR NEED-PASSWORD
 	     ;(NULL NEW-USER-ID)
 	     )
-	 (MULTIPLE-VALUE-SETQ (NEW-USER-ID PASSWORD ENABLE-CAPABILITIES)
+	 (MULTIPLE-VALUE (NEW-USER-ID PASSWORD ENABLE-CAPABILITIES)
 	   (FILE-GET-PASSWORD USER-ID UNAME-HOST)))
 	;; We know the user id; use remembered password if any.
 	((NULL PASSWORD)
@@ -252,7 +273,7 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
        (SETQ USER-PERSONAL-NAME PERSONAL-NAME
 	     USER-GROUP-AFFILIATION GROUP
 	     USER-PERSONAL-NAME-FIRST-NAME-FIRST PERSONAL-NAME-1))
-  (SETQ CHAOS::GIVE-FINGER-SAVED-USER-ID T)	;Clear cache
+  (SETQ CHAOS:GIVE-FINGER-SAVED-USER-ID T)	;Clear cache
   ;; If this is the user's login host but the host user id is not the one specified in LOGIN,
   ;; do not accept the file server's suggested home dir
   ;; since it is based on the file server login id.
@@ -261,8 +282,8 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
        (SETQ HSNAME-PATHNAME (QUIET-USER-HOMEDIR HOST)))
   ;; Record homedir for this host.
   (IF (SETQ ITEM (ASSQ HOST USER-HOMEDIRS))
-      (SETF (CDR ITEM) HSNAME-PATHNAME)
-      (PUSH (CONS HOST HSNAME-PATHNAME) USER-HOMEDIRS)))
+      (RPLACD ITEM HSNAME-PATHNAME)
+    (PUSH (CONS HOST HSNAME-PATHNAME) USER-HOMEDIRS)))
 
 (DEFFLAVOR BASIC-ACCESS
 	   (HOST)
@@ -272,7 +293,7 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
   (:REQUIRED-METHODS
     :RESET		; () Close all streams, reset host units
     :OPEN-STREAMS	; () List of open streams
-    :CLOSE-ALL-FILES	; (&optional (mode :abort))
+    :CLOSE-ALL-FILES	; ()
     :OPEN 		; (FILE PATHNAME &REST OPTIONS) The PATHNAME argument is for the
 			; the PATHNAME which was originally requested; the usual ``different''
 			; thing for this to be is a logical pathname.
@@ -302,10 +323,10 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
 ;;; are changed only on that unit.  The UNIT argument should be ignored by access objects
 ;;; for which it does not make sense.
 
-(DEFMETHOD (BASIC-ACCESS :PRINT-SELF) (STREAM &REST CRUFT)
-  (DECLARE (IGNORE CRUFT))
-  (IF *PRINT-ESCAPE*
-      (SYS:PRINTING-RANDOM-OBJECT (SELF STREAM :TYPE)
+(DEFMETHOD (BASIC-ACCESS :PRINT-SELF) (STREAM PRINDEPTH ESCAPE-P)
+  PRINDEPTH
+  (IF ESCAPE-P
+      (SI:PRINTING-RANDOM-OBJECT (SELF STREAM :TYPEP)
 	(FORMAT STREAM "~A access to ~A" (SEND SELF :ACCESS-DESCRIPTION) HOST))
     (FORMAT STREAM "~A access to ~A" (SEND SELF :ACCESS-DESCRIPTION) HOST)))
 
@@ -330,7 +351,7 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
 	DIR))))
 
 (DEFMETHOD (BASIC-ACCESS :DELETE-MULTIPLE-FILES) (ERROR-P FILES)
-  (MAPCAR #'FUNCALL FILES (CIRCULAR-LIST :DELETE) ERROR-P))
+  (MAPCAR 'FUNCALL FILES (CIRCULAR-LIST :DELETE) ERROR-P))
 
 ;;; This is currently here to abstract the usual file access protocol maintenance issues.
 ;;; It is not neccessary to use this, but it will be easier in many cases.
@@ -357,14 +378,15 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
   (DOLIST (HOST-UNIT HOST-UNITS)
     (SEND HOST-UNIT :DORMANT-RESET)))
 
-(DEFMETHOD (HOST-UNIT-ACCESS-MIXIN :CLOSE-ALL-FILES) (&OPTIONAL (MODE :ABORT) &AUX CLOSED)
+(DEFMETHOD (HOST-UNIT-ACCESS-MIXIN :CLOSE-ALL-FILES) (&AUX THINGS-CLOSED)
   (DOLIST (UNIT HOST-UNITS)
-    (SETQ CLOSED (NCONC CLOSED (SEND UNIT :CLOSE-ALL-FILES MODE))))
-  CLOSED)
+    (SETQ THINGS-CLOSED (NCONC THINGS-CLOSED (SEND UNIT :CLOSE-ALL-FILES))))
+  THINGS-CLOSED)
 
-(DEFMETHOD (HOST-UNIT-ACCESS-MIXIN :NEW-HOST-UNIT)
-	   (&OPTIONAL (NOERROR-P NIL) &AUX UNIT (DEFAULT-CONS-AREA SYS:BACKGROUND-CONS-AREA))
-  (SETQ UNIT (MAKE-INSTANCE (SEND SELF :HOST-UNIT-FLAVOR) :ACCESS SELF :HOST HOST))
+(DEFMETHOD (HOST-UNIT-ACCESS-MIXIN :NEW-HOST-UNIT) (&OPTIONAL (NOERROR-P NIL) &AUX UNIT
+					  (DEFAULT-CONS-AREA SYS:BACKGROUND-CONS-AREA))
+  (SETQ UNIT (MAKE-INSTANCE (SEND SELF :HOST-UNIT-FLAVOR)
+			    :ACCESS SELF :HOST HOST))
   (SETQ HOST-UNITS (NCONC HOST-UNITS (NCONS UNIT)))
   (AND (SEND UNIT :VALIDATE-CONTROL-CONNECTION NOERROR-P)
        UNIT))
@@ -390,7 +412,7 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
 (DEFMETHOD (HOST-UNIT-ACCESS-MIXIN :LOGIN-UNIT) (-UNIT- LOGIN-P UNAME-HOST)
   (SEND -UNIT- :LOGIN LOGIN-P UNAME-HOST))
 
-(DEFCONST HOST-UNIT-LIFETIME 72000.)		;20 Minutes.
+(DEFCONST HOST-UNIT-LIFETIME 214500)   ;20 MINUTES.
 
 (DEFCONST DATA-CONNECTION-LIFETIME 3600.)
 
@@ -403,7 +425,7 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
   (HOST-UNIT-ACCESS-MIXIN))
 
 ;;; This can be redefined
-(DEFMETHOD (DC-ACCESS-MIXIN :ACCESS-SPECIFIC-DATA-CONN-LIMIT) () #o37)
+(DEFMETHOD (DC-ACCESS-MIXIN :ACCESS-SPECIFIC-DATA-CONN-LIMIT) () #O37)
 
 ;;; Get a DATA-CONNECTION for use in DIRECTION.
 ;;; Make two passes over existing units, first trying open ones.
@@ -433,13 +455,13 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
 (DEFFLAVOR DIRECTORY-STREAM-ACCESS-MIXIN () ()
   (:REQUIRED-FLAVORS BASIC-ACCESS)
   (:REQUIRED-METHODS
-    :DIRECTORY-STREAM-DEFAULT-PARSER	; () Returns function that takes args like SUBSTRING
-    :DIRECTORY-STREAM			; (PATHNAME OPTIONS) Stream be parsed
-    :READ-DIRECTORY-STREAM-ENTRY	; (STREAM PATHNAME) Use PATHNAME for defaults
+    :DIRECTORY-STREAM-DEFAULT-PARSER ; () Returns function that takes args like SUBSTRING
+    :DIRECTORY-STREAM		; (PATHNAME OPTIONS) Stream be parsed
+    :READ-DIRECTORY-STREAM-ENTRY ; (STREAM PATHNAME) PATHNAME defaults any fns encountered
     ))
 
 (DEFMETHOD (DIRECTORY-STREAM-ACCESS-MIXIN :DIRECTORY-LIST) (PATHNAME OPTIONS &AUX DIR-LIST)
-  (WITH-OPEN-STREAM (STREAM (SEND SELF :DIRECTORY-STREAM PATHNAME (REMQ :SORTED OPTIONS)))
+  (WITH-OPEN-STREAM (STREAM (SEND SELF :DIRECTORY-STREAM PATHNAME (REMQ ':SORTED OPTIONS)))
     (IF (ERRORP STREAM) STREAM
       (SETQ DIR-LIST
 	    (LET ((PATHNAME (SEND STREAM :PATHNAME)))
@@ -455,13 +477,13 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
 
 ;; This tells READ-DIRECTORY-STREAM-ENTRY how to parse most lines of directory stream data.
 (DEFMETHOD (DIRECTORY-STREAM-ACCESS-MIXIN :DEFAULT-DIRECTORY-STREAM-PARSER) ()
-  #'SUBSTRING)
+  'SUBSTRING)
 
 (DEFMETHOD (DIRECTORY-STREAM-ACCESS-MIXIN :DIRECTORY-LIST-STREAM) (PATHNAME OPTIONS)
   (LET ((STREAM (SEND SELF :DIRECTORY-STREAM PATHNAME OPTIONS)))
     (IF (ERRORP STREAM)
 	STREAM
-      (LET-CLOSED ((INTERNAL-STREAM STREAM) (DEFAULTING-PATHNAME (SEND STREAM :PATHNAME))
+      (LET-CLOSED ((INTERNAL-STREAM STREAM) (DEFAULTING-PATHNAME (SEND STREAM ':PATHNAME))
 		   (ACCESS SELF))
 	#'DIRECTORY-STREAM-DIRECTORY-LIST-STREAM))))
 
@@ -477,8 +499,7 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
   (:REQUIRED-METHODS :DIRECTORY-LIST)) ; (PATHNAME OPTIONS) Defines :DIRECTORY-LIST-STREAM
 
 (DEFMETHOD (DIRECTORY-LIST-MIXIN :DIRECTORY-LIST-STREAM)
-	   (PATHNAME OPTIONS &AUX DIRECTORY-LIST)
-  (DECLARE (SPECIAL DIRECTORY-LIST))
+	   (PATHNAME OPTIONS &AUX &SPECIAL DIRECTORY-LIST)
   (IF (ERRORP (SETQ DIRECTORY-LIST (SEND SELF :DIRECTORY-LIST PATHNAME OPTIONS)))
       DIRECTORY-LIST
     (CLOSURE '(DIRECTORY-LIST) #'DEFAULT-DIRECTORY-LIST-STREAM)))
@@ -502,9 +523,8 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
 		; close control connection
     :DORMANT-RESET ; () Reset self if dormant
     :DORMANT-P	; () Return T if dormant.
-    :CLOSE-ALL-FILES ; (&optional (mode :abort))
-		; close all files in this host unit, reporting to *ERROR-OUTPUT*
-    		;  and returning a list of closed streams
+    :CLOSE-ALL-FILES ; () close all files in this host unit, reporting to *ERROR-OUTPUT*
+    		; and returning a list of closed streams
     :VALIDATE-CONTROL-CONNECTION ; (&optional no-error-p) Check that connection hasn't
 		; gone away, making a new one if necessary.  Return NIL when failure
 		; and NO-ERROR-P equal to T, otherwise barf on failure
@@ -512,40 +532,36 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
     :OPEN-CONTROL-CONNECTION-P ; () Returns T if the connection is in an open state
     :CLOSE-CONTROL-CONNECTION ; () Close connection, for logging out
     )
-  (:OUTSIDE-ACCESSIBLE-INSTANCE-VARIABLES LOCK LAST-USE-TIME))
+  (:OUTSIDE-ACCESSIBLE-INSTANCE-VARIABLES LOCK))
 
-(DEFMETHOD (BASIC-HOST-UNIT :PRINT-SELF) (STREAM DEPTH ESCAPEP)
-  (DECLARE (IGNORE DEPTH ESCAPEP))
-  (SI:PRINTING-RANDOM-OBJECT (SELF STREAM :TYPE)
+(DEFMETHOD (BASIC-HOST-UNIT :PRINT-SELF) (STREAM PRINDEPTH ESCAPE-P)
+  PRINDEPTH ESCAPE-P
+  (SI:PRINTING-RANDOM-OBJECT (SELF STREAM :TYPEP)
     (FORMAT STREAM "for ~A" ACCESS)))
 
 ;;; Restore connected/accessed directories, capabilities of a unit.  If ENABLE-CAPABILITIES
 ;;; is T, enable capabilities for the host as a whole
-(DEFMETHOD (BASIC-HOST-UNIT :RESTORE-SERVER-STATE) (ENABLE-CAPABILITIES &AUX TEM)
-  (IF (SETQ TEM (GET HOST 'CONNECTED-DIRECTORY))
-      (SEND ACCESS :REMOTE-CONNECT TEM T NIL SELF))
-  (IF (SETQ TEM (GET HOST 'ACCESSED-DIRECTORIES))
-      (DOLIST (X TEM)
-	(SEND ACCESS :REMOTE-CONNECT X T T SELF)))
-  (IF (SETQ TEM (GET HOST 'CAPABILITIES-ALIST))
-      (DOLIST (X TEM)
-	(WITH-STACK-LIST (CAP (CAR X))
-	  (SEND ACCESS (IF (CDR X) :ENABLE-CAPABILITIES :DISABLE-CAPABILITIES) CAP))))
-  (IF ENABLE-CAPABILITIES (SEND HOST :ENABLE-CAPABILITIES)))
+(DEFMETHOD (BASIC-HOST-UNIT :RESTORE-SERVER-STATE) (ENABLE-CAPABILITIES)
+  (IF (GET HOST-CONNECTED-DIRECTORY-PLIST HOST)
+      (SEND ACCESS :REMOTE-CONNECT (GET HOST-CONNECTED-DIRECTORY-PLIST HOST) T NIL SELF))
+  (IF (GET HOST-ACCESSED-DIRECTORY-PLIST HOST)
+      (SEND ACCESS :REMOTE-CONNECT (GET HOST-ACCESSED-DIRECTORY-PLIST HOST) T T SELF))
+  (IF ENABLE-CAPABILITIES (SEND HOST :ENABLE-CAPABILITIES)
+    (IF (GET HOST-CAPABILITIES-PLIST HOST)
+	(SEND ACCESS :ENABLE-CAPABILITIES (GET HOST-CAPABILITIES-PLIST HOST) SELF))))
 
 ;;; Lock a host unit around BODY
 (DEFMACRO LOCK-HOST-UNIT ((HOST-UNIT) &BODY BODY)
-  (LET ((LOCK (GENSYM)) (LOCKED-P (GENSYM)) (HU (GENSYM)))
-    `(LET* ((,HU ,HOST-UNIT)
-	    (,LOCK (LOCF (BASIC-HOST-UNIT-LOCK ,HU)))
-	    (,LOCKED-P NIL))
+  (LET ((LOCK (GENSYM)) (LOCKED-P (GENSYM)))
+    `(LET ((,LOCK (LOCF (BASIC-HOST-UNIT-LOCK ,HOST-UNIT)))
+	   (,LOCKED-P NIL))
        (UNWIND-PROTECT
 	 (PROGN
 	   (COND ((NEQ (CAR ,LOCK) CURRENT-PROCESS)
 		  (PROCESS-LOCK ,LOCK)
 		  (SETQ ,LOCKED-P T)))
 	   . ,BODY)
-	 (SETF (BASIC-HOST-UNIT-LAST-USE-TIME ,HU) (TIME))
+	 (SETQ LAST-USE-TIME (TIME))
 	 (AND ,LOCKED-P (PROCESS-UNLOCK ,LOCK))))))
 
 (DEFMETHOD (BASIC-HOST-UNIT :VALID-CONTROL-CONNECTION-P) ()
@@ -568,7 +584,7 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
   INPUT-HANDLE
   OUTPUT-HANDLE
   (LAST-USE-TIME (TIME))
-  (STREAM-LIST (LIST :INPUT NIL :OUTPUT NIL))
+  (STREAM-LIST (LIST ':INPUT NIL ':OUTPUT NIL))
   )
 
 (DEFSUBST DATA-HANDLE (DATA-CONNECTION DIRECTION)
@@ -580,8 +596,8 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
   (CADR (MEMQ DIRECTION (DATA-STREAM-LIST DATA-CONNECTION))))
 
 (DEFUN DATA-CONNECTION-DORMANT (DATA-CONNECTION)
-  (AND (NULL (DATA-STREAM DATA-CONNECTION :INPUT))
-       (NULL (DATA-STREAM DATA-CONNECTION :OUTPUT))
+  (AND (NULL (DATA-STREAM DATA-CONNECTION ':INPUT))
+       (NULL (DATA-STREAM DATA-CONNECTION ':OUTPUT))
        (> (TIME-DIFFERENCE (TIME) (DATA-LAST-USE-TIME DATA-CONNECTION))
 	  DATA-CONNECTION-LIFETIME)))
 
@@ -634,27 +650,25 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
 	(SEND SELF :RESET))))
 
 ;;; This also frees up any slots marked as open
-(DEFMETHOD (DATA-CONNECTION-MIXIN :CLOSE-ALL-FILES) (&OPTIONAL (MODE :ABORT) &AUX CLOSED)
+(DEFMETHOD (DATA-CONNECTION-MIXIN :CLOSE-ALL-FILES) (&AUX THINGS-CLOSED)
   (DOLIST (DATA-CONN DATA-CONNECTIONS)
-    (DO ((LIST (DATA-STREAM-LIST DATA-CONN) (CDDR LIST)))
-	((NULL LIST))
-      (LET ((STREAM (CADR LIST)))
-	(COND ((NULL STREAM))
-	      ((EQ STREAM T)
-	       (SETF (CADR LIST) NIL))
-	      (T
-	       (FORMAT *ERROR-OUTPUT* "~%Closing ~S" STREAM)
-	       (PUSH STREAM CLOSED)
-	       (SEND STREAM :CLOSE MODE))))))
-  CLOSED)
+    (DO LIST (DATA-STREAM-LIST DATA-CONN) (CDDR LIST) (NULL LIST)
+	(LET ((STREAM (CADR LIST)))
+	  (COND ((NULL STREAM))
+		((EQ STREAM T)
+		 (SETF (CADR LIST) NIL))
+		(T
+		 (FORMAT *ERROR-OUTPUT* "~%Closing ~S" STREAM)
+		 (PUSH STREAM THINGS-CLOSED)
+		 (SEND STREAM :CLOSE :ABORT))))))
+  THINGS-CLOSED)
 
 (DEFMETHOD (DATA-CONNECTION-MIXIN :OPEN-STREAMS) (&AUX STREAMS)
   (DOLIST (DATA-CONN DATA-CONNECTIONS)
-    (DO ((LIST (DATA-STREAM-LIST DATA-CONN) (CDDR LIST)))
-	((NULL LIST))
-      (LET ((STREAM (CADR LIST)))
-	(UNLESS (SYMBOLP STREAM)
-	  (PUSH STREAM STREAMS)))))
+    (DO LIST (DATA-STREAM-LIST DATA-CONN) (CDDR LIST) (NULL LIST)
+	(LET ((STREAM (CADR LIST)))
+	  (OR (SYMBOLP STREAM)
+	      (PUSH STREAM STREAMS)))))
   STREAMS)
 
 ;;; This is for winning protocols like CHAOS FILE (affectionately known as QFILE)
@@ -707,8 +721,7 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
 	     (SETF (DATA-STREAM DATA-CONN DIRECTION) T)	;Mark as allocated
 	     (RETURN DATA-CONN))))))
 
-
-;;; The following takes care of the process to do the above stuff every minute.
+;;; The following takes care of the process to do the above stuff every minute.
 ;;; These functions take care of closing connections that have not been used for a while.
 (DEFUN RESET-DORMANT-HOST-UNITS ()
   (ERRSET
@@ -740,7 +753,7 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
 
 (DEFUN INIT-DORMANT-HOST-GC-PROCESS ()
   (OR (BOUNDP 'DORMANT-HOST-GC-PROCESS)
-      (SETQ DORMANT-HOST-GC-PROCESS (MAKE-PROCESS "Dormant FILE connection GC" :SIMPLE-P T)))
+      (SETQ DORMANT-HOST-GC-PROCESS (MAKE-PROCESS "Dormant FILE connection GC" ':SIMPLE-P T)))
   (PROCESS-PRESET DORMANT-HOST-GC-PROCESS 'DORMANT-HOST-CONNECTION-GC-TOP-LEVEL)
   (PROCESS-RESET-AND-ENABLE DORMANT-HOST-GC-PROCESS))
 
@@ -748,14 +761,12 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
 		    `(INIT-DORMANT-HOST-GC-PROCESS)
 		    '(:NORMAL))
 
-
-(DEFUN FILE-LOGIN (LOGINP &AUX TEM)
-  "Log all open host units in or out.  LOGINP = NIL means log out, otherwise log in."
+(DEFUN FILE-LOGIN (LOGIN-P)
+  "Log all open host units in or out.  LOGIN-P = NIL means log out, otherwise log in."
+  (CLEAR-CONNECT-AND-ACCESS-MEMORY)
   (DOLIST (HOST *PATHNAME-HOST-LIST*)
-    (DOLIST (PROP '(QFILE-CONNECTED-DIRECTORY QFILE-ACCESSED-DIRECTORY CAPABILITIES-ALIST))
-      (AND (SETQ TEM (GET-LOCATION-OR-NIL HOST PROP)) (SETF (CONTENTS TEM) NIL)))
     (DOLIST (UNIT (SEND HOST :SEND-IF-HANDLES :HOST-UNITS))
-      (SEND HOST :LOGIN-UNIT UNIT LOGINP))))
+      (SEND HOST :LOGIN-UNIT UNIT LOGIN-P))))
 
 (ADD-INITIALIZATION "File Login" '(FILE-LOGIN T) '(LOGIN))
 (ADD-INITIALIZATION "File Logout" '(FILE-LOGIN NIL) '(LOGOUT))
@@ -774,15 +785,15 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
 (DEFMETHOD (FILE-HOST-ITS-MIXIN :HSNAME-INFORMATION) (UNIT STR IDX)
   (LET* ((HOST (SEND UNIT :HOST))
 	 (DEFAULT-CONS-AREA SYS:BACKGROUND-CONS-AREA)
-	 (HSNAME (SUBSTRING STR (INCF IDX)
-			        (SETQ IDX (STRING-SEARCH-CHAR #/NEWLINE STR IDX))))
+	 (HSNAME (SUBSTRING STR (SETQ IDX (1+ IDX))
+			    (SETQ IDX (STRING-SEARCH-CHAR #/NEWLINE STR IDX))))
 	 (HSNAME-PATHNAME (MAKE-PATHNAME :HOST HOST :DEVICE "DSK" :DIRECTORY HSNAME))
-	 (PERSONAL-NAME (SUBSTRING STR (INCF IDX)
-				       (SETQ IDX (STRING-SEARCH-CHAR #/NEWLINE STR IDX))))
-	 (GROUP-AFFILIATION (CHAR STR (1+ IDX))))
+	 (PERSONAL-NAME (SUBSTRING STR (SETQ IDX (1+ IDX))
+				   (SETQ IDX (STRING-SEARCH-CHAR #/NEWLINE STR IDX))))
+	 (GROUP-AFFILIATION (AREF STR (1+ IDX))))
     (SETQ IDX (STRING-SEARCH ", " PERSONAL-NAME)
 	  STR (NSUBSTRING PERSONAL-NAME 0 IDX))
-    (AND IDX (SETQ STR (STRING-APPEND (NSUBSTRING PERSONAL-NAME (+ IDX 2)) #/SP STR)))
+    (AND IDX (SETQ STR (STRING-APPEND (NSUBSTRING PERSONAL-NAME (+ IDX 2)) #/SP STR)))
     (VALUES HSNAME-PATHNAME PERSONAL-NAME GROUP-AFFILIATION STR)))
 
 (DEFMETHOD (FILE-HOST-ITS-MIXIN :LOGICALLY-BACKTRANSLATE-HOST-DEV-DIR)
@@ -792,7 +803,7 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
       (VALUES SELF "DSK" PHYSICAL-DIRECTORY)))
 
 (DEFMETHOD (FILE-HOST-ITS-MIXIN :GENERIC-BASE-TYPE) (FILE-TYPE)
-  (IF (ASSOC-EQUAL FILE-TYPE *GENERIC-BASE-TYPE-ALIST*)
+  (IF (ASSOC FILE-TYPE *GENERIC-BASE-TYPE-ALIST*)
       :UNSPECIFIC  ;on ITS, we cant distinguish base types, since name2 is frequently
     FILE-TYPE))	    ; used as a version number.
 
@@ -828,13 +839,17 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
 ;;; Mixin for hosts that knows how to name itself.
 (DEFFLAVOR FILE-HOST-LISPM-MIXIN () (FILE-HOST-MIXIN))
 
+(DEFMETHOD (FILE-HOST-LISPM-MIXIN :PATHNAME-HOST-NAMEP) (STRING)
+  (AND (EQ SELF SI:LOCAL-HOST)
+       (STRING-EQUAL STRING "LM")))
+
 (DEFMETHOD (FILE-HOST-LISPM-MIXIN :PRIMARY-DEVICE) () "DSK")
 
 ;;;; FILE protocol support.
-(DEFMETHOD (FILE-HOST-LISPM-MIXIN :MAX-DATA-CONNECTIONS) () #o37)
+(DEFMETHOD (FILE-HOST-LISPM-MIXIN :MAX-DATA-CONNECTIONS) () #O37)
 
 (DEFMETHOD (FILE-HOST-LISPM-MIXIN :LOGIN-UNIT)
-	   (UNIT LOGINP &AUX TEM (DEFAULT-CONS-AREA SYS:BACKGROUND-CONS-AREA))
+	   (UNIT LOGIN-P &AUX TEM (DEFAULT-CONS-AREA SYS:BACKGROUND-CONS-AREA))
   ;; Don't confuse the user by asking for UNAME and PASSWORD if he's logged in elsewhere.
   (AND (SETQ TEM (COND ((NOT (EQUAL USER-ID "")) USER-ID)
 		       ((CDR (ASSQ 'ITS USER-UNAMES)))
@@ -842,16 +857,16 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
        (PUSH (CONS SELF TEM) USER-UNAMES))
   ;; Connection is used up when logging out
   (AND (SEND UNIT :VALID-CONTROL-CONNECTION-P)
-       (IF LOGINP
-	   (SEND UNIT :LOGIN LOGINP SELF)
-	   (SEND UNIT :CLOSE-CONTROL-CONNECTION)))
+       (IF LOGIN-P
+	   (SEND UNIT :LOGIN LOGIN-P SELF)
+	 (SEND UNIT :CLOSE-CONTROL-CONNECTION)))
   T)
 
 ;;; The Fileserver doesn't supply the user name information, so might as well use
 ;;; whatever's hanging around.
 (DEFMETHOD (FILE-HOST-LISPM-MIXIN :HSNAME-INFORMATION) (IGNORE STR IDX)
-  (VALUES (PARSE-PATHNAME STR NIL *DEFAULT-PATHNAME-DEFAULTS*
-			  (INCF IDX) (STRING-SEARCH-CHAR #/NEWLINE STR IDX))
+  (VALUES (PARSE-PATHNAME (SUBSTRING STR (SETQ IDX (1+ IDX))
+				     (STRING-SEARCH-CHAR #/NEWLINE STR IDX)))
 	  USER-PERSONAL-NAME USER-GROUP-AFFILIATION
 	  USER-PERSONAL-NAME-FIRST-NAME-FIRST))
 
@@ -888,7 +903,8 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
 
 (DEFUN SITE-PATHNAME-INITIALIZE ()
   ;; Flush all old hosts
-  (SETQ *PATHNAME-HOST-LIST* (DEL-IF #'(LAMBDA (X) (SEND X :SEND-IF-HANDLES :FILE-HOST-P))
+  (SETQ *PATHNAME-HOST-LIST* (DEL-IF #'(LAMBDA (X)
+					 (SEND X :SEND-IF-HANDLES :FILE-HOST-P))
 				     *PATHNAME-HOST-LIST*))
   ;; And add new ones
   (DOLIST (HOST (OR (SI:GET-SITE-OPTION :FILE-SERVER-HOSTS)
@@ -898,12 +914,12 @@ accept :HOST as an init keyword.  The desirability is expressed as a flonum in t
   (ADD-LMFILE-HOSTS)
   (DOLIST (SPEC (GET-SITE-OPTION :HOST-DEFAULT-DEVICE-ALIST))
     (LET ((HOST (GET-PATHNAME-HOST (CAR SPEC) T)))
-      (AND HOST (SET-IN-INSTANCE HOST 'SI::PRIMARY-DEVICE (CDR SPEC))))))
+      (AND HOST (SET-IN-INSTANCE HOST 'SI:PRIMARY-DEVICE (CDR SPEC))))))
 
 (DEFUN ADD-FILE-COMPUTER (HOST)
   "Add HOST to the list of hosts that can act as file servers.
 HOST can be either a host name or a list (<host-name> <file-system-type>)."
-  (IF (CONSP HOST)
+  (IF (LISTP HOST)
       (LET ((H (FS:GET-PATHNAME-HOST (CAR HOST))))
 	(SETF (GET H 'FILE-SYSTEM-TYPE) (CADR HOST))
 	H)
@@ -942,7 +958,7 @@ HOST can be either a host name or a list (<host-name> <file-system-type>)."
   (WITHOUT-INTERRUPTS
     (SETQ OPEN-STREAMS (DELQ STREAM OPEN-STREAMS))))
 
-;(DECLARE (*EXPR CLEAR-FILE-SYSTEM) (*EXPR STOP-FILE-SYSTEM))
+(DECLARE (*EXPR CLEAR-FILE-SYSTEM) (*EXPR STOP-FILE-SYSTEM))
 
 (DEFMETHOD (LMFILE-HOST :SHUT-DOWN) (&OPTIONAL DRASTIC)
   (SETQ OPEN-STREAMS NIL)
@@ -968,15 +984,11 @@ HOST can be either a host name or a list (<host-name> <file-system-type>)."
 ;;; whatever's hanging around.  Also, use this host as the host in the homedir,
 ;;; since the fileserver may use its own machine's hostname.
 (DEFMETHOD (LMFILE-HOST :HSNAME-INFORMATION) (IGNORE STR IDX)
-  (VALUES (SEND (PARSE-PATHNAME STR NIL *DEFAULT-PATHNAME-DEFAULTS*
-				(INCF IDX) (STRING-SEARCH-CHAR #/NEWLINE STR IDX))
+  (VALUES (SEND (PARSE-PATHNAME (SUBSTRING STR (SETQ IDX (1+ IDX))
+					   (STRING-SEARCH-CHAR #/NEWLINE STR IDX)))
 		:NEW-PATHNAME :HOST SELF)
 	  USER-PERSONAL-NAME USER-GROUP-AFFILIATION
 	  USER-PERSONAL-NAME-FIRST-NAME-FIRST))
-
-;; interim kludge since lmfile hosts can only be chaos hosts currently
-(DEFMETHOD (LMFILE-HOST :NETWORK-TYPEP) (TYPE)
-  (EQ TYPE :CHAOS))
 
 (DEFINE-SITE-VARIABLE LMFILE-SERVER-HOSTS :LMFILE-SERVER-HOSTS)
 
@@ -1026,4 +1038,3 @@ HOST can be either a host name or a list (<host-name> <file-system-type>)."
 	 (SETQ *PATHNAME-HOST-LIST* (DELQ HOST *PATHNAME-HOST-LIST*)))))
 
 (COMPILE-FLAVOR-METHODS LMFILE-HOST)
-
