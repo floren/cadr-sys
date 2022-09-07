@@ -506,7 +506,7 @@ such as SCROLL-REDISPLAY-DISPLAY-ITEM."
 	  LINE-HEIGHT				;Pixels per item
 	  (IF TOP-ITEM				;Number currently displayed
 	      (MAX 0 (- BOTTOM-ITEM TOP-ITEM))
-	    1))))
+	    1)))
 
 (DEFMETHOD (BASIC-SCROLL-WINDOW :AFTER :REFRESH) (&OPTIONAL TYPE)
   (AND (OR (NOT RESTORED-BITS-P) (EQ TYPE ':SIZE-CHANGED))
