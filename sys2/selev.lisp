@@ -1,4 +1,4 @@
-;;; -*- Mode:LISP; Package:SYSTEM-INTERNALS; Readtable:ZL; Base:10 -*-
+;;; -*- Mode:LISP; Package:SYSTEM-INTERNALS; Base:8; Readtable:T -*-
 
 ;;; Macros to do things similar to BLISS' SELECT.
 
@@ -17,7 +17,7 @@ or NIL if no clauses executed,  and the macro will not return multiple-values."
 	      (SEEN-OTHERWISE-OR-ALWAYS))
 	     ((NULL CS) (NREVERSE FORMS))
 	   (PUSH
-	    (CASE (CAR CLAUSE)
+	    (SELECTQ (CAR CLAUSE)
 	      ((:ALWAYS T ALWAYS)
 	       (SETQ SEEN-OTHERWISE-OR-ALWAYS ':ALWAYS)
 	       `(SETQ ,VALUE (PROGN . ,(CDR CLAUSE))))
@@ -59,7 +59,7 @@ or NIL if no clauses executed,  and the macro will not return multiple-values."
 	    FORMS))))
 
 ;;;; SELECT-MATCH
-#||
+#|
 The syntax is 
    (SELECT-MATCH <object>
      (`<pattern> <condition> <sexp> ... <sexp>)
@@ -127,10 +127,19 @@ The example above expands into this code (which, surprisingly, compiles very wel
          'WIN)
         (T 'LOSE-BIG)))
 
-||#
+|#
 
-(DEFMACRO SELECT-MATCH (OBJECT &BODY CLAUSES)
-  (DECLARE (ZWEI:INDENTATION 1 1))		;indents like CASE
+;;; Make SELECT-MATCH indent like SELECTQ.
+(IF (VARIABLE-BOUNDP ZWEI:*LISP-INDENT-OFFSET-ALIST*)
+    (PUSH (CONS 'SELECT-MATCH (CDR (ASSQ 'SELECTQ ZWEI:*LISP-INDENT-OFFSET-ALIST*)))
+	  ZWEI:*LISP-INDENT-OFFSET-ALIST*)
+  (PUSH (CONS 'SELECT-MATCH (CDR (ASSQ 'SELECTQ ZWEI:*INITIAL-LISP-INDENT-OFFSET-ALIST*)))
+	ZWEI:*INITIAL-LISP-INDENT-OFFSET-ALIST*))
+
+(DEFMACRO SELECT-MATCH (OBJECT . CLAUSES)
+  ;; We want ARGLIST to say we have a BODY,
+  ;; but don't set up &BODY indentation, because we use the hairier SELECTQ identation.
+  (DECLARE (ARGLIST OBJECT &BODY CLAUSES))
   "Execute the first clause whose pattern matches the value of OBJECT.
 The syntax is 
 
@@ -258,7 +267,7 @@ Example: (LIST-MATCH-P '(FOO BAR BAR) `(FOO ,X ,X)) returns T and sets X to BAR.
 	     `(EQUAL ,EXPR ',PATT)))
 	((SYMBOLP PATT)
 	 (COND ((EQ PATT 'IGNORE) T)
-	       ((MEMBER-EQUAL PATT BOUNDVARS) `(EQUAL ,EXPR ,PATT))
+	       ((MEMBER PATT BOUNDVARS) `(EQUAL ,EXPR ,PATT))
 	       (T (PUSH PATT BOUNDVARS)
 		  `(PROGN (SETQ ,PATT ,EXPR) T))))
 	(T (FERROR NIL "Unexpected function ~S found in SELECT-MATCH pattern."
@@ -270,7 +279,7 @@ Example: (LIST-MATCH-P '(FOO BAR BAR) `(FOO ,X ,X)) returns T and sets X to BAR.
 ;  (COND	((NULL PATT) `((NULL ,EXPR)))
 ;	((SYMBOLP PATT)
 ;	 (COND ((EQ PATT 'IGNORE) NIL)
-;	       ((MEMBER-EQUAL PATT BOUNDVARS) `(EQUAL ,PATT ,EXPR))
+;	       ((MEMBER PATT BOUNDVARS) `(EQUAL ,PATT ,EXPR))
 ;	       (T (PUSH PATT BOUNDVARS)
 ;		  `(PROGN (SETQ ,PATT ,EXPR) T))))
 ;	((EQ (CAR PATT) 'XR-BQ-CONS)
