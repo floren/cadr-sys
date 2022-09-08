@@ -1,4 +1,4 @@
-;-*- Mode:LISP; Package:SYSTEM-INTERNALS; Readtable:ZL; Base:10; Lowercase:T -*-
+;-*- Mode:LISP; Package:SYSTEM-INTERNALS; Base:8; Lowercase:T -*-
 
 ;;; Implements the mechanism by which advised functions operate.
 
@@ -14,32 +14,31 @@
 ;;; NOTE!!  Each of the above must have an optimizer in QCOPT, to compile properly.
 
 (defmacro advised-function (before after around inner-function-expression)
-  "Expands into the code that executes advice in the proper order."
-  (let ((default-cons-area background-cons-area))
-    `(advise-prog (values)
-		  (declare (special values))
-	          (advise-setq values
-			       (advise-multiple-value-list
-				 (advise-progn
-				   ,@before
-				   ,(advise-merge-arounds around inner-function-expression))))
-		  ,@after
-		  (advise-return-list values))))
+ "Expands into the code that executes advice in the proper order."
+ (let ((default-cons-area background-cons-area))
+  `(advise-prog (values)
+		(declare (special values))
+     (advise-setq values
+		  (advise-multiple-value-list
+		    (advise-progn
+		      ,@before
+		      ,(advise-merge-arounds around inner-function-expression))))
+     ,@after
+     (advise-return-list values))))
 
 ;;; Take the list of around advise and merge it together
 ;;; Producing a form which evaluates them around the body.
 
 (defun advise-merge-arounds (advice-list inner-function-expression)
-  (if (null advice-list)
-      `(advise-apply ,inner-function-expression arglist)
-    (cli:subst (advise-merge-arounds (cdr advice-list) inner-function-expression)
-	       ':do-it
-	       (car advice-list))))
+  (cond ((null advice-list) `(advise-apply ,inner-function-expression arglist))
+	(t (subst (advise-merge-arounds (cdr advice-list) inner-function-expression)
+		  ':do-it
+		  (car advice-list)))))
 
-(defun (:property advise encapsulation-grind-function) (function def width real-io untyo-p)
-  (when def					; Print the advice as calls to advise.
+(defun (advise encapsulation-grind-function) (function def width real-io untyo-p)
+  (when def	; Print the advice as calls to advise.
     (if (typep def 'compiled-function)
-	(setq def (cadr (assq 'interpreted-definition (debugging-info def)))))
+	(setq def (cadr (assq ':interpreted-definition (debugging-info def)))))
     (let ((body (encapsulation-body def)))
       (when (eq (car (car body)) 'si:displaced)
 	(setf (car body) (cadr (car body))))
@@ -55,7 +54,7 @@
     (grind-top-level `(advise ,function ,slot-name ,(cadr (cadar l)) ,i . ,(cddar l))
 		     width real-io untyo-p)))
 
-(defvar *advised-functions* nil
+(defvar advised-functions nil
   "List of all function specs that have been advised.")
 
 ;;; Make a specifed function into an advised function
@@ -72,7 +71,7 @@
 	     (when (eq (car (car body)) 'si:displaced)
 	       (setf (car body) (cadr (car body))))))
 	  (t
-	   (push function-spec *advised-functions*)
+	   (push function-spec advised-functions)
 	   (encapsulate spec1 function-spec 'advise
 			`(advised-function nil nil nil ,encapsulated-function))))))
 
@@ -85,9 +84,8 @@ POSITION says where to put this advice wrt others of same class;
 it is a number, or the name of some other piece of advice to go after,
 or NIL meaning put this one first.
 If given no arguments, ADVISE returns a list of functions which are presently advised."
-  (if (null function-spec)
-      '*advised-functions*
-      `(advise-1 ',function-spec ',class ',name ',position ',forms)))
+  (if (null function-spec) 'advised-functions
+    `(advise-1 ',function-spec ',class ',name ',position ',forms)))
 
 (defun advise-1 (function-spec class name position forms)
   (setq function-spec (dwimify-arg-package function-spec 'function))
@@ -103,10 +101,10 @@ If given no arguments, ADVISE returns a list of functions which are presently ad
 (defun advise-find-slot (function-spec class &aux body)
   (uncompile function-spec t)
   (setq body (encapsulation-body (fdefinition function-spec)))
-  (nthcdr (ecase classs
-	    (:before 1)
-	    (:after 2)
-	    (:around 3))
+  (nthcdr (cond ((string= class "BEFORE") 1)
+		((string= class "AFTER") 2)
+		((string= class "AROUND") 3)
+		(t (ferror nil "Second argument is ~s, neither BEFORE, AFTER nor AROUND" class)))
 	  (car body)))
 
 (defun advise-update-list (slot-location name position forms)
@@ -141,13 +139,13 @@ If FUNCTION-SPEC is non-NIL, advice is removed from that function only.
 If CLASS is non-NIL, only advice of that class is removed.
 If POSITION is non-NIL (a number or name), only advice with that position is removed."
   (if (null function-spec)
-      `(dolist (fn *advised-functions*)
+      `(dolist (fn advised-functions)
 	 (unadvise-1 fn ',class ',position))
     `(unadvise-1 ',function-spec ',class ',position)))
 
 (defun unadvise-1 (function-spec &optional class position)
   (setq function-spec (dwimify-arg-package function-spec 'function))
-  (and (member-equal function-spec *advised-functions*) (advise-init function-spec))
+  (and (member function-spec advised-functions) (advise-init function-spec))
   (check-type class (member nil :before :after :around))
   (check-type position (or symbol (integer 0)))
   (let* ((spec1 (unencapsulate-function-spec function-spec 'advise)))
@@ -177,8 +175,7 @@ If POSITION is non-NIL (a number or name), only advice with that position is rem
 	   (cond ((eq (car (fdefinition spec1)) 'macro)
 		  (setq olddef (cons 'macro olddef))))
 	   (fdefine spec1 olddef)
-	   (setq *advised-functions* (cli:delete function-spec *advised-functions*
-						 :test #'equal))))
+	   (setq advised-functions (delete function-spec advised-functions))))
     (if compile-encapsulations-flag
 	(compile-encapsulations function-spec 'advise))
     nil))
@@ -189,8 +186,7 @@ If POSITION is non-NIL (a number or name), only advice with that position is rem
 (defmacro advise-within (within-function-spec function-to-advise class name position &rest forms)
   "Advise FUNCTION-TO-ADVISE, but only when called directly from WITHIN-FUNCTION-SPEC.
 This is like using ADVISE on (:WITHIN WITHIN-FUNCTION-SPEC FUNCTION-TO-ADVISE)."
-  `(advise-within-1 ',within-function-spec ',function-to-advise
-		    ',class ',name ',position ',forms))
+  `(advise-within-1 ',within-function-spec ',function-to-advise ',class ',name ',position ',forms))
 
 (defun advise-within-1 (within-function-spec function-to-advise class name position forms)
   (advise-1 `(:within ,within-function-spec ,function-to-advise)
@@ -211,7 +207,7 @@ With no argument, all advice placed on any function within another function is r
 (defun unadvise-within-1 (within-function-spec &optional advised-function class position)
   (if (and within-function-spec advised-function)
       (unadvise-1 `(:within ,within-function-spec ,advised-function) class position)
-    (dolist (fn *advised-functions*)
+    (dolist (fn advised-functions)
       (when (and (eq (car-safe fn) ':within)
 		 (or (null within-function-spec)
 		     (eq within-function-spec (second fn)))
