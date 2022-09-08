@@ -22,8 +22,7 @@
 (DEFVAR GC-SECOND-NEXT-FLIP-LIST NIL
   "Forms to evaluate just on the flip after next")
 (DEFVAR GC-AFTER-FLIP-LIST NIL
-  "OBSOLETE: Use the after-flip-initialization-list instead!
-Used to be forms to evaluate after flipping")
+  "Forms to evaluate after flipping")
 (DEFVAR GC-BEFORE-RECLAIM-LIST NIL
   "Forms to eval just before reclaiming oldspace")
 
@@ -80,9 +79,8 @@ because regions are allocated bigger than their data.")
 	((EQ GC-REPORT-STREAM T)
 	 (APPLY #'PROCESS-RUN-FUNCTION "GC notification"
 		#'TV:NOTIFY NIL FORMAT-CONTROL FORMAT-ARGS))
-	(T
-	 (SEND GC-REPORT-STREAM :FRESH-LINE)
-	 (APPLY #'FORMAT GC-REPORT-STREAM FORMAT-CONTROL FORMAT-ARGS))))
+	(T (SEND GC-REPORT-STREAM :FRESH-LINE)
+	   (APPLY #'FORMAT GC-REPORT-STREAM FORMAT-CONTROL FORMAT-ARGS))))
 
 (DEFUN GC-WARM-BOOT ()
   ;; %GC-FLIP-READY is always set to NIL by warm boot.
@@ -129,7 +127,7 @@ because regions are allocated bigger than their data.")
     (MULTIPLE-VALUE-BIND (DYNAMIC-SIZE STATIC-SIZE EXITED-SIZE FREE-SIZE)
 	(GC-GET-SPACE-SIZES)
       (GC-REPORT			;separate static from exited when exited exists?
-	"GC: About to flip.  Dynamic space=~D. Static space=~D. Free space=~D."
+	"GC: About to flip.  Dynamic space=~D., Static space=~D., Free space=~D."
 	DYNAMIC-SIZE (+ STATIC-SIZE EXITED-SIZE) FREE-SIZE)
       (WITHOUT-INTERRUPTS
 	(PROCESS-WAIT "Flip inhibited" #'(LAMBDA () (NOT INHIBIT-GC-FLIPS)))
@@ -142,7 +140,6 @@ because regions are allocated bigger than their data.")
 	;; is it necessary.
 	(DO ((REGION (1- SIZE-OF-AREA-ARRAYS) (1- REGION)))
 	    ((MINUSP REGION))
-	  (%GC-SCAV-RESET REGION)
 	  (STORE (REGION-GC-POINTER REGION) 0))
 	;; Invalidate AR-1's cache.
 	(SETQ AR-1-ARRAY-POINTER-1 NIL)
@@ -154,10 +151,9 @@ because regions are allocated bigger than their data.")
 	  (IF (= %REGION-SPACE-OLD
 		 (%LOGLDB %%REGION-SPACE-TYPE (REGION-BITS REGION)))
 	      (DEALLOCATE-END-OF-REGION REGION)))
-	(INCF %GC-GENERATION-NUMBER)
+	(SETQ %GC-GENERATION-NUMBER (1+ %GC-GENERATION-NUMBER))
 	(WHEN GC-AFTER-FLIP-LIST
-	  (GC-REPORT
-	    "GC: something is using SI::GC-AFTER-FLIP-LIST; please send a bug report.")
+	  (GC-REPORT "GC: something is using SI:GC-AFTER-FLIP-LIST; please send a bug report.")
 	  (MAPC #'EVAL GC-AFTER-FLIP-LIST))
 	(INITIALIZATIONS 'AFTER-FLIP-INITIALIZATION-LIST T))
       (SETQ GC-OLDSPACE-EXISTS T)
@@ -166,7 +162,9 @@ because regions are allocated bigger than their data.")
 ;;;; Compute statistics needed for GC decisions.
 
 (DEFUN GET-FREE-SPACE-SIZE ()
-  (NTH-VALUE 3 (GC-GET-SPACE-SIZES)))
+  (MULTIPLE-VALUE-BIND (NIL NIL NIL FREE)
+      (GC-GET-SPACE-SIZES)
+    FREE))
 
 (DEFUN GC-GET-SPACE-SIZES (&OPTIONAL STATIC-REGIONS-OF-DYNAMIC-AREAS-ARE-DYNAMIC)
   (DECLARE (RETURN-LIST DYNAMIC-SPACE-WORDS STATIC-SPACE-WORDS NIL
@@ -340,72 +338,70 @@ The second value is the part which is not certain (u.b. minus l.b.)."
 (DEFUN GC-STATUS (&OPTIONAL (STREAM *STANDARD-OUTPUT*))
   "Print various statistics about garbage collection."
   (UNLESS %GC-FLIP-READY
-    (FORMAT STREAM "~&~:[Incremental~;Batch~] garbage collection now in progress."
-	    GC-BATCH-THIS-TIME))
+    (FORMAT STREAM "~&~A now in progress."
+	    (IF GC-BATCH-THIS-TIME "Batch garbage collection" "Incremental garbage collection")))
   (MULTIPLE-VALUE-BIND (COMMITTED-FREE-SPACE FREE-SPACE)
-      (GC-GET-COMMITTED-FREE-SPACE)
+		(GC-GET-COMMITTED-FREE-SPACE)
     (MULTIPLE-VALUE-BIND (DYNAMIC-SIZE STATIC-SIZE NIL NIL OLD-SIZE)
-	(GC-GET-SPACE-SIZES)
-      (FORMAT STREAM "~&Dynamic (new+copy) space ~:D, Old space ~:D, Static ~:D,"
-	      DYNAMIC-SIZE OLD-SIZE STATIC-SIZE)
-      (COND (%GC-FLIP-READY
-	     (FORMAT STREAM "~%Free space ~:D, with ~:D needed for garbage collection
- assuming ~D% live data (~S = ~D)."
-		     FREE-SPACE
-		     (FLOOR (* GC-FLIP-RATIO
-			       (+ COMMITTED-FREE-SPACE COMMITTED-FREE-SPACE-FUDGE)))
-		     (FLOOR (* GC-FLIP-RATIO 100.))
-		     'GC-FLIP-RATIO GC-FLIP-RATIO)
-	     (LET ((DISTANCE
-		     (- FREE-SPACE
-			(FLOOR (* GC-FLIP-RATIO
-				  (+ COMMITTED-FREE-SPACE COMMITTED-FREE-SPACE-FUDGE)))))
-		   (SAFE-DISTANCE
-		     (- FREE-SPACE
-			(FLOOR (* (OR GC-FLIP-MINIMUM-RATIO GC-FLIP-RATIO)
-				  (+ COMMITTED-FREE-SPACE
-				     COMMITTED-FREE-SPACE-FUDGE)))))
-		   (NONINC-DISTANCE
-		     (- FREE-SPACE
-			(FLOOR (* (OR GC-FLIP-MINIMUM-RATIO GC-FLIP-RATIO)
-				  (+ (GC-GET-COMMITTED-FREE-SPACE T)
-				     COMMITTED-FREE-SPACE-FUDGE))))))
-	       (COND ((PLUSP DISTANCE)
-		      (IF (ASSQ GC-PROCESS ACTIVE-PROCESSES)
-			  (FORMAT STREAM "~%A")
+		(GC-GET-SPACE-SIZES)
+	 (FORMAT STREAM "~&Dynamic (new+copy) space ~:D, Old space ~:D, Static ~:D,"
+		 DYNAMIC-SIZE OLD-SIZE STATIC-SIZE)
+	 (IF %GC-FLIP-READY
+	     (PROGN
+	       (FORMAT STREAM "~%Free space ~:D, with ~:D needed for garbage collection
+ assuming ~D% live data (SI:GC-FLIP-RATIO = ~D)."
+		       FREE-SPACE
+		       (FLOOR (* GC-FLIP-RATIO
+				 (+ COMMITTED-FREE-SPACE COMMITTED-FREE-SPACE-FUDGE)))
+		       (FLOOR (* GC-FLIP-RATIO 100.))
+		       GC-FLIP-RATIO)
+	       (LET ((DISTANCE
+		       (- FREE-SPACE
+			  (FLOOR (* GC-FLIP-RATIO
+				    (+ COMMITTED-FREE-SPACE COMMITTED-FREE-SPACE-FUDGE)))))
+		     (SAFE-DISTANCE
+		       (- FREE-SPACE
+			  (FLOOR (* (OR GC-FLIP-MINIMUM-RATIO GC-FLIP-RATIO)
+				    (+ COMMITTED-FREE-SPACE
+				       COMMITTED-FREE-SPACE-FUDGE)))))
+		     (NONINC-DISTANCE
+		       (- FREE-SPACE
+			  (FLOOR (* (OR GC-FLIP-MINIMUM-RATIO GC-FLIP-RATIO)
+				    (+ (GC-GET-COMMITTED-FREE-SPACE T)
+				       COMMITTED-FREE-SPACE-FUDGE))))))
+		 (COND ((PLUSP DISTANCE)
+			(IF (ASSQ GC-PROCESS ACTIVE-PROCESSES)
+			    (FORMAT STREAM "~%A")
 			  (FORMAT STREAM "~%If GC is turned on, a"))
-		      (FORMAT STREAM " flip will happen in ~:D words." DISTANCE))
-		     ((MINUSP NONINC-DISTANCE)
-		      (FORMAT STREAM "~%It is ~:D words too late to do garbage collection of any sort."
-			      (- NONINC-DISTANCE)))
-		     ((MINUSP SAFE-DISTANCE)
-		      (FORMAT STREAM
-			      "~%It is ~:D words too late to do incremental garbage collection
- but batch (~S, or ~S set to ~S)
+			(FORMAT STREAM " flip will happen in ~:D words." DISTANCE))
+		       ((MINUSP NONINC-DISTANCE)
+			(FORMAT STREAM "~%It is ~:D words too late to do garbage collection of any sort."
+				(- NONINC-DISTANCE)))
+		       ((MINUSP SAFE-DISTANCE)
+			(FORMAT STREAM "~%It is ~:D words too late to do incremental garbage collection
+ but batch (GC-IMMEDIATELY, or SI:GC-RECLAIM-IMMEDIATELY set to T)
  is still safe for ~:D more words."
-			      (- SAFE-DISTANCE) 'GC-IMMEDIATELY 'GC-RECLAIM-IMMEDIATELY T
-			      NONINC-DISTANCE))
-		     (T (FORMAT STREAM "~%A flip should have happened ~:D words ago,
+				(- SAFE-DISTANCE)
+				NONINC-DISTANCE))
+		       (T (FORMAT STREAM "~%A flip should have happened ~:D words ago,
  but it is still safe to turn on GC for ~:D more words."
-				(MINUS DISTANCE) SAFE-DISTANCE)))))
-	    (T
-	     (MULTIPLE-VALUE-BIND (WORK COPYING)
-		 (GET-MAX-GC-WORK-REMAINING)
-	       (LET ((FREE-SIZE (GET-FREE-SPACE-SIZE)))
-		 (FORMAT STREAM "~%Between ~:D and ~:D words of scavenging left to do.
+				  (MINUS DISTANCE) SAFE-DISTANCE)))))
+	   (MULTIPLE-VALUE-BIND (WORK COPYING)
+	       (GET-MAX-GC-WORK-REMAINING)
+	     (LET ((FREE-SIZE (GET-FREE-SPACE-SIZE)))
+	       (FORMAT STREAM "~%Between ~:D and ~:D words of scavenging left to do.
 Free space ~:D (of which ~:D might be needed for copying).~:[
 Warning: You may require more space for copying than there is freespace, and gc may fail!~;
-Ratio scavenging work//free space = ~3F~]"
-			 (GET-DIRECT-GC-WORK-REMAINING) WORK FREE-SIZE COPYING
-			 (PLUSP (- FREE-SIZE COPYING))
-		       (// (FLOAT WORK) (- FREE-SIZE COPYING)))))))))
+Ratio scavenging work//free space = ~3F.~]"
+		       (GET-DIRECT-GC-WORK-REMAINING) WORK FREE-SIZE COPYING
+		       (PLUSP (- FREE-SIZE COPYING))
+		       (// (FLOAT WORK) (- FREE-SIZE COPYING))))))))
   (FORMAT STREAM "~&Scavenging during cons ~:[On~;Off~], Idle scavenging ~:[On~;Off~],~%"
 	  INHIBIT-SCAVENGING-FLAG INHIBIT-IDLE-SCAVENGING-FLAG)
-  (FORMAT STREAM "Automatic garbage collection ~:[Off~;On~].~%"
-	  (ASSQ GC-PROCESS ACTIVE-PROCESSES))
+  (FORMAT STREAM "Automatic garbage collection ~A.~%"
+	  (IF (ASSQ GC-PROCESS ACTIVE-PROCESSES) "On" "Off"))
   (FORMAT STREAM "GC Flip Ratio ~D, GC Reclaim Immediately ~:[Off~;On~]~%"
-	  GC-FLIP-RATIO GC-RECLAIM-IMMEDIATELY)
-  (VALUES))
+	  GC-FLIP-RATIO GC-RECLAIM-IMMEDIATELY))
 
 ;;; This function gets rid of oldspace.
 (DEFUN GC-RECLAIM-OLDSPACE ()
@@ -414,35 +410,38 @@ Does nothing if there is no oldspace.  Programs may call this
 function every so often to say, /"If you must garbage collect
 while running me, do so as a batch process/"."
   (WITH-LOCK (GC-FLIP-LOCK)
-    (WHEN GC-OLDSPACE-EXISTS
-      ;; Make sure all regions are clean (no pointers to oldspace)
-      (LET-GLOBALLY ((GC-BATCH-THIS-TIME T))
-	(DO ((%SCAVENGER-WS-ENABLE 0))	;Use all of memory as long as using all of processor
-	    (%GC-FLIP-READY)		;Stop when scavenger says all is clean
-	  (%GC-SCAVENGE #o10000)))
-      ;; Execute certain forms after all is scavanged but before reclamation.
-      ;; This is what processes weak links.
-      (MAPC #'EVAL GC-BEFORE-RECLAIM-LIST)
-      ;; Report oldspace statistics
-      (WHEN GC-REPORT-STREAM
-	(DO ((REGION (1- SIZE-OF-AREA-ARRAYS) (1- REGION))
-	     (OLD-TOTAL-SIZE 0)
-	     (OLD-USED-SIZE 0))
-	    ((MINUSP REGION)
-	     (GC-REPORT "GC: Flushing oldspace.  allocated=~D. used=~D."
-			OLD-TOTAL-SIZE OLD-USED-SIZE))
-	  (WHEN (= (LDB %%REGION-SPACE-TYPE (REGION-BITS REGION))
-		   %REGION-SPACE-OLD)
-	    (INCF OLD-TOTAL-SIZE (%POINTER-UNSIGNED (REGION-LENGTH REGION)))
-	    (INCF OLD-USED-SIZE (%POINTER-UNSIGNED (REGION-FREE-POINTER REGION))))))
-      ;; Discard oldspace
-      (DOLIST (AREA AREA-LIST)
-	(LET ((AREA-NUMBER (SYMBOL-VALUE AREA)))
-	  (AND (OR (MINUSP AREA-NUMBER) ( AREA-NUMBER SIZE-OF-AREA-ARRAYS))
-	       (FERROR NIL "Area-symbol ~S clobbered" AREA))	;don't get grossly faked out
-	  (GC-RECLAIM-OLDSPACE-AREA AREA-NUMBER)))
-      (SETQ GC-DAEMON-PAGE-CONS-ALARM -1)	;Wake up daemon process
-      (SETQ GC-OLDSPACE-EXISTS NIL)))))
+    (COND (GC-OLDSPACE-EXISTS
+	   ;; Make sure all regions are clean (no pointers to oldspace)
+	   (LET-GLOBALLY ((GC-BATCH-THIS-TIME T))
+	     (DO ((%SCAVENGER-WS-ENABLE 0))  ;Use all of memory as long as using all of processor
+		 (%GC-FLIP-READY)		  ;Stop when scavenger says all is clean
+	       (%GC-SCAVENGE 10000)))
+	   ;; Execute certain forms after all is scavanged but before reclamation.
+	   ;; This is what processes weak links.
+	   (MAPC 'EVAL GC-BEFORE-RECLAIM-LIST)
+	   ;; Report oldspace statistics
+	   (COND (GC-REPORT-STREAM
+		  (DO ((REGION (1- SIZE-OF-AREA-ARRAYS) (1- REGION))
+		       (OLD-TOTAL-SIZE 0)
+		       (OLD-USED-SIZE 0))
+		      ((MINUSP REGION)
+		       (GC-REPORT "GC: Flushing oldspace.  allocated=~D., used=~D."
+				  OLD-TOTAL-SIZE OLD-USED-SIZE))
+		    (COND ((= (LDB %%REGION-SPACE-TYPE (REGION-BITS REGION))
+			      %REGION-SPACE-OLD)
+			   (SETQ OLD-TOTAL-SIZE (+ (%POINTER-UNSIGNED (REGION-LENGTH REGION))
+						   OLD-TOTAL-SIZE)
+				 OLD-USED-SIZE (+ (%POINTER-UNSIGNED
+						    (REGION-FREE-POINTER REGION))
+						  OLD-USED-SIZE)))))))
+	   ;; Discard oldspace
+	   (DOLIST (AREA AREA-LIST)
+	     (LET ((AREA-NUMBER (SYMBOL-VALUE AREA)))
+	       (AND (OR (MINUSP AREA-NUMBER) ( AREA-NUMBER SIZE-OF-AREA-ARRAYS))
+		    (FERROR NIL "Area-symbol ~S clobbered" AREA)) ;don't get grossly faked out
+	       (GC-RECLAIM-OLDSPACE-AREA AREA-NUMBER)))
+	   (SETQ GC-DAEMON-PAGE-CONS-ALARM -1)	;Wake up daemon process
+	   (SETQ GC-OLDSPACE-EXISTS NIL)))))
 
 ;;; GC-RECLAIM-OLDSPACE-AREA - deletes all old-space regions of a specified area,
 ;;; unthreading from the lists, and returning the virtual memory to free.
@@ -451,7 +450,8 @@ while running me, do so as a batch process/"."
 ;;; losing the REGION-BITS.  For now just keep around one region.  This only
 ;;; happens when an area is completely disused.
 (DEFUN GC-RECLAIM-OLDSPACE-AREA (AREA)
-  (CHECK-ARG AREA (AND (NUMBERP AREA) ( 0 AREA SIZE-OF-AREA-ARRAYS)) "an area number")
+  (CHECK-ARG AREA (AND (NUMBERP AREA) ( AREA 0) ( AREA SIZE-OF-AREA-ARRAYS))
+	     "an area number")
   (WITHOUT-INTERRUPTS
     (OR %GC-FLIP-READY
 	(FERROR NIL "You cannot reclaim oldspace now, there may be pointers to it"))
@@ -480,56 +480,6 @@ while running me, do so as a batch process/"."
 						(%LOGDPB %REGION-SPACE-NEW
 							 %%REGION-SPACE-TYPE
 							 (REGION-BITS REGION))))))))
-
-;; until khs uses whatever brain he has and puts in (if-in-lambda conditionalizations,
-;; his code doesn't get used...
-;(DEFUN GC-RECLAIM-OLDSPACE-AREA (AREA)
-;  (CHECK-ARG AREA (AND (NUMBERP AREA) ( 0 AREA SIZE-OF-AREA-ARRAYS)) "an area number")
-;  (WITHOUT-INTERRUPTS
-;    (OR %GC-FLIP-READY
-;	(FERROR NIL "You cannot reclaim oldspace now, there may be pointers to it"))
-;    (DO ((REGION (AREA-REGION-LIST AREA) (REGION-LIST-THREAD REGION))
-;	 (REGION-TO-FREE)
-;	 (PREV-REGION NIL REGION))
-;	(())
-;     NEXTLOOP					;May GO here to avoid advancing DO variables
-;      (AND (MINUSP REGION) (RETURN NIL))
-;      (AND (= (LDB %%REGION-SPACE-TYPE (REGION-BITS REGION)) %REGION-SPACE-OLD)
-;	   ;--no longer true--
-;	   ;; Free this region unless that would leave the area without any regions
-;	   ;; at all, which would lose since there would be no place to remember its bits.
-;	   ;; Before freeing, unthread from area's region list.
-; 	   (COND ((OR PREV-REGION (NOT (MINUSP (REGION-LIST-THREAD REGION))))
-;		  (SETQ REGION-TO-FREE REGION
-;			REGION (REGION-LIST-THREAD REGION))
-;		  (IF PREV-REGION (STORE (REGION-LIST-THREAD PREV-REGION) REGION)
-;		    (STORE (AREA-REGION-LIST AREA) REGION))
-;		  (%GC-FREE-REGION REGION-TO-FREE)
-;		  (GO NEXTLOOP))
-;		 (T
-;		  ;; Force region to new space, and reset free,GC pointers.
-;		  (CHANGE-REGION-TO-NEW-SPACE REGION)
-;		  (SETF (REGION-FREE-POINTER REGION) 0)
-;		  (%GC-SCAV-RESET REGION))))
-;      (AND (= (LDB %%REGION-SPACE-TYPE (REGION-BITS REGION)) %REGION-SPACE-COPY)
-;           ;;; Change this region to NEW space so that it can be used for normal
-;           ;;; consing
-;	   (CHANGE-REGION-TO-NEW-SPACE REGION)))))
-
-(defun change-region-to-new-space (region)
-  (setf (region-bits region)
-	(%logdpb 0 %%region-scavenge-enable
-		 (%logdpb %region-space-new %%region-space-type
-			  (%logdpb 1 %%region-oldspace-meta-bit (region-bits region)))))
-  (invalidate-region-mapping region))
-
-(defun invalidate-region-mapping (region)
-  (do ((ra 0 (+ ra page-size))
-       (virtual-address))
-      ((> ra (region-length region)))
-    (setq virtual-address (%pointer-plus (region-origin region) ra))
-    (%change-page-status virtual-address nil nil)))
-
 
 ;;;; GC Process
 
@@ -581,37 +531,35 @@ while running me, do so as a batch process/"."
 (DEFUN GC-ON ()
   "Turn on automatic garbage collection.
 It is batch if SI:GC-RECLAIM-IMMEDIATELY is T, incremental if that is NIL."
-  (LET ((FLIP-RATIO (OR GC-FLIP-MINIMUM-RATIO GC-FLIP-RATIO)))
-    (WHEN (AND %GC-FLIP-READY
-	       ( (* FLIP-RATIO (GC-GET-COMMITTED-FREE-SPACE))
-		  (GET-FREE-SPACE-SIZE)))
-      (FORMAT *QUERY-IO*
-	      (IF (AND (NULL GC-RECLAIM-IMMEDIATELY)
-		       (< (* FLIP-RATIO
-			     (GC-GET-COMMITTED-FREE-SPACE T))
-			  (GET-FREE-SPACE-SIZE)))
-		  "~&There may not be enough free space for incremental garbage collection,
+  (PROG ((FLIP-RATIO
+	   (OR GC-FLIP-MINIMUM-RATIO GC-FLIP-RATIO)))
+	(COND ((AND %GC-FLIP-READY
+		    ( (* FLIP-RATIO (GC-GET-COMMITTED-FREE-SPACE))
+		       (GET-FREE-SPACE-SIZE)))
+	       (FORMAT *QUERY-IO*
+		       (IF (AND (NULL GC-RECLAIM-IMMEDIATELY)
+				(< (* FLIP-RATIO
+				      (GC-GET-COMMITTED-FREE-SPACE T))
+				   (GET-FREE-SPACE-SIZE)))
+			   "~&There may not be enough free space for incremental garbage collection,
 though it may still succeed depending on how much garbage there is,
 and what your program does during the garbage collection.
 
 There is certainly enough free space for a batch garbage collection
-/(that is, with ~S = ~S)."
-		  "~&There is probably too little free space for a garbage collection.
-Even a batch garbage collection (that is, ~S = ~S)
-is possible only if there is a lot of garbage; but it has a better chance.")
-	      'GC-RECLAIM-IMMEDIATELY T)
-      (IF (NOT (Y-OR-N-P "Try garbage collecting after all? "))
-	  (RETURN-FROM GC-ON NIL)
-	(AND (NULL GC-RECLAIM-IMMEDIATELY)
-	     (Y-OR-N-P "Set ~S to get a better chance? " 'GC-RECLAIM-IMMEDIATELY)
-	     (SETQ GC-RECLAIM-IMMEDIATELY T))))
-    (GC-MAYBE-SET-FLIP-READY)			;if no oldspace regions
-    (PROCESS-PRESET GC-PROCESS 'GC-PROCESS)
-    (SETQ GC-ON T)
-    (PROCESS-ENABLE GC-PROCESS)			;Start flipper process
-    (SETQ INHIBIT-SCAVENGING-FLAG NIL)		;Enable scavenging during cons
-    (ADD-INITIALIZATION "GC-PROCESS" '(GC-ON) '(:WARM))	;Do this on future warm boots
-    T))
+/(that is, with SI:GC-RECLAIM-IMMEDIATELY = T)."
+			 "~&There is probably too little free space for a garbage collection.
+Even a batch garbage collection (that is, SI:GC-RECLAIM-IMMEDIATELY = T)
+is possible only if there is a lot of garbage; but it has a better chance."))
+	       (OR (Y-OR-N-P "Try garbage collecting after all? ")
+		   (RETURN NIL))
+	       (IF (Y-OR-N-P "Set SI:GC-RECLAIM-IMMEDIATELY to get a better chance? ")
+		   (SETQ GC-RECLAIM-IMMEDIATELY T))))
+	(GC-MAYBE-SET-FLIP-READY)		;if no oldspace regions
+	(PROCESS-PRESET GC-PROCESS 'GC-PROCESS)
+	(SETQ GC-ON T)
+	(PROCESS-ENABLE GC-PROCESS)		;Start flipper process
+	(SETQ INHIBIT-SCAVENGING-FLAG NIL)	;Enable scavenging during cons
+	(ADD-INITIALIZATION "GC-PROCESS" '(GC-ON) '(:WARM))))	;Do this on future warm boots
 
 (DEFUN GC-OFF ()
   "Turn off automatic garbage collection."
@@ -636,7 +584,8 @@ is possible only if there is a lot of garbage; but it has a better chance.")
 
 (DEFUN MAKE-AREA-STATIC (AREA)
   "Make a dynamic area static.  Takes affect at next flip."
-  (CHECK-ARG AREA (AND (NUMBERP AREA) ( 0 AREA SIZE-OF-AREA-ARRAYS)) "an area number")
+  (CHECK-ARG AREA (AND (NUMBERP AREA) ( AREA 0) ( AREA SIZE-OF-AREA-ARRAYS))
+	     "an area number")
   (PUSH `(MAKE-AREA-STATIC-INTERNAL ,AREA) GC-NEXT-FLIP-LIST)
   T)
 
@@ -665,11 +614,12 @@ is possible only if there is a lot of garbage; but it has a better chance.")
   "Make a static area dynamic.  It will be garbage collected starting at the next flip.
 The area remains dynamic permanently unless you change it back.
 To change it temporarily, use SI:CLEAN-UP-STATIC-AREA."
-  (CHECK-ARG AREA (AND (NUMBERP AREA) ( 0 AREA SIZE-OF-AREA-ARRAYS)) "an area number")
+  (CHECK-ARG AREA (AND (NUMBERP AREA) ( AREA 0) ( AREA SIZE-OF-AREA-ARRAYS))
+	     "an area number")
   ;; Cancel any plans to make this area static at next flip,
   ;; for otherwise they would override what we do now.
-  (SETQ GC-NEXT-FLIP-LIST (GLOBAL:REMOVE `(MAKE-AREA-STATIC-INTERNAL ,AREA)
-					 GC-NEXT-FLIP-LIST))
+  (SETQ GC-NEXT-FLIP-LIST (REMOVE `(MAKE-AREA-STATIC-INTERNAL ,AREA)
+				  GC-NEXT-FLIP-LIST))
   (WITHOUT-INTERRUPTS
     (LET ((BITS (AREA-REGION-BITS AREA)))
       (AND (= (LDB %%REGION-SPACE-TYPE BITS) %REGION-SPACE-STATIC)
@@ -685,15 +635,16 @@ To change it temporarily, use SI:CLEAN-UP-STATIC-AREA."
 (DEFUN AREA-STATIC-P (AREA)
   "Returns T if the specified area is currently or normally static.
 Areas temporarily made dynamic by (SI:FULL-GC T) still count as static."
-  (CHECK-ARG AREA (AND (NUMBERP AREA) ( 0 AREA SIZE-OF-AREA-ARRAYS)) "an area number")
+  (CHECK-ARG AREA (AND (NUMBERP AREA) ( AREA 0) ( AREA SIZE-OF-AREA-ARRAYS))
+	     "an area number")
   (OR (= (LDB %%REGION-SPACE-TYPE (AREA-REGION-BITS AREA))
 	 %REGION-SPACE-STATIC)
-      (MEMBER-EQUAL `(MAKE-AREA-STATIC-INTERNAL ,AREA) GC-NEXT-FLIP-LIST)))
+      (MEMBER `(MAKE-AREA-STATIC-INTERNAL ,AREA) GC-NEXT-FLIP-LIST)))
 
 (DEFVAR AFTER-FULL-GC-INITIZIALIZATION-LIST NIL "Initializations performed after SI:FULL-GC.
 But a non-NIL :NO-RECOPYING arg suppresses them.")
 (DEFVAR FULL-GC-INITIZIALIZATION-LIST NIL "Initializations performed before SI:FULL-GC.
-But a non-NIL :NO-PRE-GC-INITIALIZATIONS arg suppresses them.")
+But a non-NIL :NO-TEMPORARY-AREAS arg suppresses them.")
 (DEFVAR AFTER-FLIP-INITIALIZATION-LIST NIL "Initializations performed after every flip.")
 
 (DEFCONST FIRST-FULL-GC-AREA INIT-LIST-AREA)
@@ -701,9 +652,9 @@ But a non-NIL :NO-PRE-GC-INITIALIZATIONS arg suppresses them.")
 (DEFUN GC-IMMEDIATELY ()
   "Perform a complete garbage collection right away, running in this process.
 It is not necessary to turn on automatic GC to use this function."
-  (FULL-GC :NO-PRE-GC-INITIALIZATIONS T :NO-STATIC-REGIONS T :NO-RECOPYING T))
+  (FULL-GC :NO-TEMPORARY-AREAS T :NO-STATIC-REGIONS T :NO-RECOPYING T))
 
-(DEFUN FULL-GC (&KEY NO-PRE-GC-INITIALIZATIONS NO-STATIC-REGIONS NO-RECOPYING DUPLICATE-PNAMES)
+(DEFUN FULL-GC (&KEY NO-TEMPORARY-AREAS NO-STATIC-REGIONS NO-RECOPYING DUPLICATE-PNAMES)
   "Do a complete batch-style garbage collection to make minimum size for saved band.
 It is best to do this twice in a row to make sure that the used part of memory
 is at the bottom of the address space.
@@ -714,6 +665,8 @@ by default.
 
 Unless NO-STATIC-REGIONS is non-NIL, the existing full regions of
 WORKING-STORAGE-AREA are marked as static when the GC is done.
+Unless NO-TEMPORARY-AREAS is non-NIL, all temporary regions are reset
+to achieve minimum band size.
 Unless NO-RECOPYING is non-NIL, various structures are recopied after
 the GC is done to make sure they are compact (to improve paging efficiency).
 GC-IMMEDIATELY uses FULL-GC as a subroutine, supplying T for these three args."
@@ -724,18 +677,14 @@ GC-IMMEDIATELY uses FULL-GC as a subroutine, supplying T for these three args."
 unless there is a lot of garbage to be freed.")
     (UNLESS (Y-OR-N-P "Try garbage collecting anyway? ")
       (RETURN-FROM FULL-GC NIL)))
-  (UNLESS NO-PRE-GC-INITIALIZATIONS
-    (INITIALIZATIONS 'FULL-GC-INITIALIZATION-LIST T))
   ;; For extra reduction in size of band, reset all temporary areas.
   ;; Do this first, since this may free up other things that they point to.
-#|
-  This causes lossage since things still point to them!
   (UNLESS NO-TEMPORARY-AREAS
+    (INITIALIZATIONS 'FULL-GC-INITIALIZATION-LIST T)
     (DO ((AREA FIRST-FULL-GC-AREA (1+ AREA)))
 	((= AREA SIZE-OF-AREA-ARRAYS))
       (IF (AREA-TEMPORARY-P AREA)
 	  (RESET-TEMPORARY-AREA AREA))))
-|#
   (WHEN DUPLICATE-PNAMES
     (COLLAPSE-DUPLICATE-PNAMES))
   (UNLESS NO-STATIC-REGIONS
@@ -768,8 +717,8 @@ unless there is a lot of garbage to be freed.")
 ;;; Also moves symbols with no value, function defn or plist
 ;;; into worthless-symbol-area.
 (DEFUN COLLAPSE-DUPLICATE-PNAMES ()
-  (LET ((TEM-PKG (OR (FIND-PACKAGE "GC Temporary")
-		     (MAKE-PACKAGE "GC Temporary" :USE () :SIZE 50000.)))
+  (LET ((TEM-PKG (OR (FIND-PACKAGE "GC-TEM")
+		     (MAKE-PACKAGE "GC-TEM" :USE () :SIZE 50000.)))
 	(SYMBOLS-MOVED 0)
 	(COUNT 0)
 	(TOTAL-SIZE 0))
@@ -780,7 +729,7 @@ unless there is a lot of garbage to be freed.")
 	  ;; Collapse the pname if this is not the first symbol with this pname.
 	  (WHEN (AND (SYMBOL-PACKAGE SYMBOL) ;Otherwise INTERN would side-effect the symbol.
 		     ( (%P-DATA-TYPE (SYMBOL-NAME SYMBOL)) DTP-HEADER-FORWARD))
-	    (WHEN (AND (NEQ SYMBOL (SETQ TEM (INTERN-LOCAL (SYMBOL-NAME SYMBOL) TEM-PKG)))
+	    (WHEN (AND (NEQ SYMBOL (SETQ TEM (INTERN-LOCAL SYMBOL TEM-PKG)))
 		       (NEQ (SYMBOL-NAME SYMBOL) (SYMBOL-NAME TEM)))
 	      (LET ((%INHIBIT-READ-ONLY T))
 		(STRUCTURE-FORWARD (SYMBOL-NAME SYMBOL) (SYMBOL-NAME TEM)))
@@ -847,26 +796,24 @@ unless there is a lot of garbage to be freed.")
 	  (SIZE (REGION-LENGTH REGION))
 	  (BITS (REGION-BITS REGION)))
       (UNLESS (= SIZE FREE-POINTER)  ;It's already full?
-	(COND ((= (%LOGLDB %%REGION-REPRESENTATION-TYPE BITS)
-		  %REGION-REPRESENTATION-TYPE-LIST)
-	       ;; Fill all words of list region with (NIL).
-	       (%P-STORE-CONTENTS-OFFSET NIL ORIGIN FREE-POINTER)
-	       (%P-DPB-OFFSET CDR-NIL %%Q-CDR-CODE ORIGIN FREE-POINTER)
-	       (UNLESS (= SIZE (1+ FREE-POINTER))
-		 (%BLT (%POINTER-PLUS ORIGIN FREE-POINTER)
-		       (%POINTER-PLUS ORIGIN (1+ FREE-POINTER))
-		       (- SIZE FREE-POINTER 1) 1)))
-	      (T
-	       ;; Fill structure region up to page boundary with zero-length arrays.
-	       (DO ((I FREE-POINTER (1+ I)))
-		   ((= (\ I PAGE-SIZE) 0))
-		 (%BLT FILL-UP-REGION-ARRAY (%POINTER-PLUS ORIGIN I) 1 1))
-	       ;; Fill remaining pages with page-long arrays (faster to scavenge).
-	       (DO ((I (* (CEILING FREE-POINTER PAGE-SIZE) PAGE-SIZE)
-		       (+ I PAGE-SIZE)))
-		   ((= I SIZE))
-		 (%BLT FILL-UP-REGION-ARRAY (%POINTER-PLUS ORIGIN I) 1 1)	  
-		 (%P-DPB-OFFSET (1- PAGE-SIZE) %%ARRAY-INDEX-LENGTH-IF-SHORT ORIGIN I))))
+	(IF (= (%LOGLDB %%REGION-REPRESENTATION-TYPE BITS) %REGION-REPRESENTATION-TYPE-LIST)
+	    ;; Fill all words of list region with (NIL).
+	    (PROGN (%P-STORE-CONTENTS-OFFSET NIL ORIGIN FREE-POINTER)
+		   (%P-DPB-OFFSET CDR-NIL %%Q-CDR-CODE ORIGIN FREE-POINTER)
+		   (UNLESS (= SIZE (1+ FREE-POINTER))
+		     (%BLT (%MAKE-POINTER-OFFSET DTP-FIX ORIGIN FREE-POINTER)
+			   (%MAKE-POINTER-OFFSET DTP-FIX ORIGIN (1+ FREE-POINTER))
+			   (- SIZE FREE-POINTER 1) 1)))
+	  ;; Fill structure region up to page boundary with zero-length arrays.
+	  (DO ((I FREE-POINTER (1+ I)))
+	      ((= (\ I PAGE-SIZE) 0))
+	    (%BLT FILL-UP-REGION-ARRAY (%MAKE-POINTER-OFFSET DTP-FIX ORIGIN I) 1 1))
+	  ;; Fill remaining pages with page-long arrays (faster to scavenge).
+	  (DO ((I (* (CEILING FREE-POINTER PAGE-SIZE) PAGE-SIZE)
+		  (+ I PAGE-SIZE)))
+	      ((= I SIZE))
+	    (%BLT FILL-UP-REGION-ARRAY (%MAKE-POINTER-OFFSET DTP-FIX ORIGIN I) 1 1)	  
+	    (%P-DPB-OFFSET (1- PAGE-SIZE) %%ARRAY-INDEX-LENGTH-IF-SHORT ORIGIN I)))
 	(SETF (REGION-FREE-POINTER REGION) SIZE)))))
 
 (DEFUN DEALLOCATE-END-OF-REGION (REGION)
@@ -888,16 +835,16 @@ It can then be allocated into other regions."
 	    ((= I N-QUANTA))
 	  (SETF (AREF #'ADDRESS-SPACE-MAP (+ ORIGIN-QUANTUM I)) 0))
 	(SETF (REGION-LENGTH REGION) (* FIRST-FREE-QUANTUM %ADDRESS-SPACE-QUANTUM-SIZE))
-	(DEALLOCATE-PAGES (%POINTER-PLUS ORIGIN (REGION-LENGTH REGION))
+	(DEALLOCATE-PAGES (%MAKE-POINTER-OFFSET DTP-FIX ORIGIN
+						(REGION-LENGTH REGION))
 			  (TRUNCATE (%POINTER-DIFFERENCE SIZE (REGION-LENGTH REGION))
-				    PAGE-SIZE))))
-    (INVALIDATE-REGION-MAPPING REGION)))
+				    PAGE-SIZE))))))
 
 ;;; For N-PAGES pages starting at BASE-ADDR, mark them properly not in core.
 (DEFUN DEALLOCATE-PAGES (BASE-ADDR N-PAGES)
   (PAGE-IN-STRUCTURE #'DEALLOCATE-PAGES)	;Make sure entire fef is in core.
   (DO ((I 0 (1+ I))
-       (ADDRESS BASE-ADDR (%POINTER-PLUS ADDRESS PAGE-SIZE)))
+       (ADDRESS BASE-ADDR (%MAKE-POINTER-OFFSET DTP-FIX ADDRESS PAGE-SIZE)))
       ((= I N-PAGES))
     ;; Search for this page in the page hash table.
     (DO ((PHTX (%COMPUTE-PAGE-HASH ADDRESS) (+ PHTX 2))
@@ -934,9 +881,10 @@ It can then be allocated into other regions."
 
 (DEFUN AREA-NUMBER-STATIC-P (AREA-NUMBER)
   "Return NIL if area-number is not a static area, else return AREA-NUMBER."
-  ;; stolen from clean-up-static-area
+  ;;stolen from clean-up-static-area
   (AND (NUMBERP AREA-NUMBER)
-       ( 0 AREA-NUMBER SIZE-OF-AREA-ARRAYS)
+       ( AREA-NUMBER 0)
+       ( AREA-NUMBER SIZE-OF-AREA-ARRAYS)
        (AREA-STATIC-P AREA-NUMBER)
        (NOT (AREA-TEMPORARY-P AREA-NUMBER))
        AREA-NUMBER))
@@ -961,7 +909,7 @@ AREA-STATIC-P will continue to call this area a static area."
   (DO ((PHYS-ADR (- (SYSTEM-COMMUNICATION-AREA %SYS-COM-MEMORY-SIZE) PAGE-SIZE)
 		 (- PHYS-ADR PAGE-SIZE))
        (PAGES-FOUND 0))
-      ((OR (ZEROP PHYS-ADR) ( PAGES-FOUND WS-SIZE))
+      ((OR (ZEROP PHYS-ADR) (>= PAGES-FOUND WS-SIZE))
        (SETQ GC-SCAVENGER-WS-SIZE WS-SIZE
 	     %SCAVENGER-WS-ENABLE PHYS-ADR))
     (LET ((PPD-ADR (+ (REGION-ORIGIN PHYSICAL-PAGE-DATA)
@@ -972,11 +920,12 @@ AREA-STATIC-P will continue to call this area a static area."
 	    (IF (NOT
 		  (AND (NOT (ZEROP (%P-LDB %%PHT1-VALID-BIT PHT-ADR)))
 		       (= (%P-LDB %%PHT1-SWAP-STATUS-CODE PHT-ADR) %PHT-SWAP-STATUS-WIRED)))
-		(INCF PAGES-FOUND)))))))
+		(SETQ PAGES-FOUND (1+ PAGES-FOUND))))))))
 
 (DEFUN SET-SWAP-RECOMMENDATIONS-OF-AREA (AREA SWAP-RECOMMENDATIONS)
   "Set the number of pages to be swapped in at once in AREA."
-  (CHECK-ARG AREA (AND (NUMBERP AREA) ( 0 AREA SIZE-OF-AREA-ARRAYS)) "an area number")
+  (CHECK-ARG AREA (AND (NUMBERP AREA) ( AREA 0) ( AREA SIZE-OF-AREA-ARRAYS))
+	     "an area number")
   (WITHOUT-INTERRUPTS
     (STORE (SYS:AREA-REGION-BITS AREA)
 	   (%LOGDPB SWAP-RECOMMENDATIONS %%REGION-SWAPIN-QUANTUM (SYS:AREA-REGION-BITS AREA)))
@@ -1053,13 +1002,12 @@ Note that number of pages swapped is one greater than the recommendation.")
 ;;; must be consed before the function goes off.  If you want your
 ;;; queue element to be more than four long, pre-create it and pass it in
 (DEFUN GC-DAEMON-QUEUE (NAME FUNCTION N-REGIONS N-PAGES &OPTIONAL ELEM)
-  (SETQ ELEM (OR ELEM
-		 (ASSQ NAME GC-DAEMON-QUEUE)
-		 (LIST NAME FUNCTION NIL NIL)))
+  (OR ELEM (SETQ ELEM (ASSQ NAME GC-DAEMON-QUEUE)) (SETQ ELEM (LIST NAME FUNCTION NIL NIL)))
   (WITHOUT-INTERRUPTS
     (SETF (THIRD ELEM) (+ %REGION-CONS-ALARM N-REGIONS))
     (SETF (FOURTH ELEM) (+ %PAGE-CONS-ALARM N-PAGES))
-    (PUSHNEW ELEM GC-DAEMON-QUEUE :TEST #'EQ)
+    (OR (MEMQ ELEM GC-DAEMON-QUEUE)
+	(PUSH ELEM GC-DAEMON-QUEUE))
     (SETQ GC-DAEMON-PAGE-CONS-ALARM -1)))	;Wake up daemon process
 
 ;;; This is the function that runs in the scheduler
@@ -1157,8 +1105,8 @@ Note that number of pages swapped is one greater than the recommendation.")
 		   (< FREE-REGIONS ADDRESS-SPACE-WARNING-GC-OFF-REGIONS))
 	       (SEND GC-PROCESS :ACTIVE-P))
       (GC-OFF)
-      (PROCESS-RUN-FUNCTION "GC Notification" #'TV:NOTIFY NIL
-			    "Turning off GC to avoid a crash."))
+      (PROCESS-RUN-FUNCTION "GC Notification"
+			    #'TV:NOTIFY NIL "Turning off GC to avoid a crash."))
     ;; Re-queue self
     (GC-DAEMON-QUEUE 'ADDRESS-SPACE-WARNING 'ADDRESS-SPACE-WARNING
 		     (- FREE-REGIONS
@@ -1191,15 +1139,16 @@ Note that number of pages swapped is one greater than the recommendation.")
 			 (GC-GET-COMMITTED-FREE-SPACE BATCH-WARNING-FLAG))
 		      COMMITTED-FREE-SPACE-FUDGE)
 		   (GET-FREE-SPACE-SIZE)))
-	   (PROCESS-RUN-FUNCTION "GC Notification" #'TV:NOTIFY NIL
+	   (PROCESS-RUN-FUNCTION
+	     "GC Notification" #'TV:NOTIFY NIL
 	     (IF BATCH-WARNING-FLAG
 		 "It will soon be too late to start even a batch garbage collection
 unless a lot of your consing has been garbage.
-Do ~*~S for more information."
-	         "It is nearly too late to start incremental garbage collection,
+Do (GC-STATUS) for more information."
+	       "It is nearly too late to start incremental garbage collection,
 unless a lot of your consing has been garbage.
-Batch garbage collection ~S will remain possible for a while.
-Do ~S for more information." '(GC-IMMEDIATELY) '(GC-STATUS)))
+Batch garbage collection (GC-IMMEDIATELY) will remain possible for a while.
+Do (GC-STATUS) for more information."))
 	   (SETQ GC-TOO-LATE-WARNING-GIVEN
 		 (IF BATCH-WARNING-FLAG
 		     'BATCH T))))
