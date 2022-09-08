@@ -28,8 +28,11 @@
 ;;; DECLARE-FLAVOR-INSTANCE-VARIABLES - macro to put around a function
 ;;;		that will be called by methods and wants to access instance
 ;;;		variables.
-;;;		This is a crufty old method of doing this. A better technique is to use
-;;;	        (:DECLARE SELF-FLAVOR foo)
+;;; FUNCALL-SELF - a macro which, assuming you are a flavor instance, will
+;;;		call yourself without bothering about rebinding the
+;;;		variables.  Will do something totally random if SELF
+;;;		isn't a flavor instance.
+;;; LEXPR-FUNCALL-SELF - LEXPR-FUNCALL version of above
 ;;; *ALL-FLAVOR-NAMES* - list of all symbols which have been used as the name of a flavor
 ;;; *ALL-FLAVOR-NAMES-AARRAY* - completion aarray of flavor names to flavors.
 ;;;		Each flavor is included twice, once with and once without its package prefix.
@@ -204,9 +207,9 @@ INSTANCE-VARIABLES built on COMPONENT-FLAVORS.
 
 (DEFUN UNDEFFLAVOR (FLAVOR-NAME &AUX FL)
   "Make the flavor named FLAVOR-NAME cease to be defined."
-  (CHECK-ARG FLAVOR-NAME (EQ 'FLAVOR (TYPE-OF (SETQ FL (IF (SYMBOLP FLAVOR-NAME)
-							   (GET FLAVOR-NAME 'FLAVOR)
-							   FLAVOR-NAME))))
+  (CHECK-ARG FLAVOR-NAME (EQ 'FLAVOR (TYPEP (SETQ FL (IF (SYMBOLP FLAVOR-NAME)
+							 (GET FLAVOR-NAME 'FLAVOR)
+						       FLAVOR-NAME))))
 	     "a flavor or the name of one")
   (DOLIST (DEPENDENT (FLAVOR-DEPENDED-ON-BY FL))
     (PUSH (CONS (FLAVOR-NAME FL) DEPENDENT)
@@ -512,7 +515,7 @@ which are mapped by mapping tables with this flavor as the method-flavor.")
     :plist-location :property-list-location :setplist :set)
    . flavor-property-list-handler))
 (defun flavor-property-list-handler (op self &rest args)
-  (apply #'property-list-handler op (locf (flavor-plist self)) args))
+  (apply 'property-list-handler op (locf (flavor-plist self)) args))
 
 ;;; These properties are not discarded by redoing a DEFFLAVOR.
 (DEFCONST DEFFLAVOR1-PRESERVED-PROPERTIES
@@ -703,8 +706,6 @@ which are mapped by mapping tables with this flavor as the method-flavor.")
 (DEFCONST *INVERSE-SPECIALLY-COMBINED-METHOD-TYPES*
 	  '((:INVERSE-AROUND PUT-AROUND-METHOD-INTO-COMBINED-METHOD)
 	    (:INVERSE-WRAPPER PUT-WRAPPER-INTO-COMBINED-METHOD)))
-
-(defconst *method-types-needing-fef-equal-check* '(:WRAPPER :INVERSE-WRAPPER))
 
 ;;; Definitions of a meth (the datum which stands for a method)
 (DEFSTRUCT (METH :LIST :CONC-NAME (:CONSTRUCTOR NIL) (:ALTERANT NIL))
@@ -1010,7 +1011,7 @@ which are mapped by mapping tables with this flavor as the method-flavor.")
 		 (EQUAL OLD-REQUIRED-INIT-KEYWORDS (FLAVOR-GET FL :REQUIRED-INIT-KEYWORDS))
 		 (EQUAL OLD-INIT-KWDS (FLAVOR-INIT-KEYWORDS FL)))
 	    (PERFORM-FLAVOR-BINDINGS-REDEFINITION FLAVOR-NAME)))
-      (FLAVOR-HACK-DOCUMENTATION FLAVOR-NAME))
+      (flavor-hack-documentation flavor-name))
     FLAVOR-NAME))
 
 (DEFUN FLAVOR-KNOWN-UNMAPPED-INSTANCE-VARIABLES (FL)
@@ -1206,9 +1207,9 @@ to be special, for flavor ~S" (FLAVOR-NAME FLAVOR)))
 (DEFUN DESCRIBE-FLAVOR (FLAVOR-NAME &AUX FL)
   "Prints out descriptive information about FLAVOR-NAME including the combined list of
 its component flavors."
-  (CHECK-ARG FLAVOR-NAME (EQ 'FLAVOR (TYPE-OF (SETQ FL (IF (SYMBOLP FLAVOR-NAME)
-							   (GET FLAVOR-NAME 'FLAVOR)
-							   FLAVOR-NAME))))
+  (CHECK-ARG FLAVOR-NAME (EQ 'FLAVOR (TYPEP (SETQ FL (IF (SYMBOLP FLAVOR-NAME)
+							 (GET FLAVOR-NAME 'FLAVOR)
+							 FLAVOR-NAME))))
 	     "a flavor or the name of one")
   (FORMAT T "~&Flavor ~S directly depends on flavors: ~:[none~;~1G~{~<~%   ~3:;~S~>~^, ~}~]~%"
 	    FLAVOR-NAME (FLAVOR-DEPENDS-ON FL))
@@ -1274,12 +1275,12 @@ its component flavors."
 		 (SETQ STRINGS (NCONC STRINGS (NCONS TEM)))))
 	  (DOLIST (TEM DOC)
 	    (UNLESS (STRINGP TEM)
-	      (SETQ STRINGS (NCONC STRINGS (LIST* (IF (AND STRINGS (NOT FOO)) #/RETURN "")
+	      (SETQ STRINGS (NCONC STRINGS (LIST* (IF (AND STRINGS (NOT FOO)) #/RETURN "")
 						  (IF FOO "" (SETQ FOO "A "))
-						  TEM #/SPACE NIL)))))
+						  TEM #/SPACE NIL)))))
 	  (IF FOO (NCONC STRINGS (LIST "Flavor.")))
-	  (SETF (DOCUMENTATION FLAVOR-NAME 'FLAVOR) (APPLY #'STRING-APPEND STRINGS)))
-      (IF (DOCUMENTATION FLAVOR-NAME 'FLAVOR)
+	  (SETF (DOCUMENTATION FLAVOR-NAME 'FLAVOR) (APPLY 'STRING-APPEND STRINGS)))
+      (IF (DOCUMENTATION FLAVOR-NAME 'DEFFLAVOR)
 	  (SETF (DOCUMENTATION FLAVOR-NAME 'FLAVOR) NIL)))))
 
 ;;; This is the standard way of defining a method of a class,
@@ -1584,14 +1585,14 @@ Syntax is identical to the beginning of a defmethod for the same method."
 		       ;; If we load a method compiled before system 83,
 		       ;; that expects instance variables to be bound,
 		       ;; make it work by forcing this flavor to bind all variables.
-		       (IF (AND (TYPEP ARG1 'COMPILED-FUNCTION)
+		       (IF (AND (TYPEP ARG1 :COMPILED-FUNCTION)
 				(ZEROP (%P-LDB %%FEFH-GET-SELF-MAPPING-TABLE ARG1))
 				(NOT (ASSQ 'ENCAPSULATED-DEFINITION (DEBUGGING-INFO ARG1))))
 			   (MAKE-FLAVOR-ALL-SPECIAL FL))
 		       ;; Incrementally recompile the flavor if this is a new method, unless
 		       ;; it is a :COMBINED method, which is the result of compilation,
 		       ;; not a client of it.
-		       (COND ((MEMQ METHOD-TYPE *method-types-needing-fef-equal-check*)
+		       (COND ((MEMQ METHOD-TYPE '(:WRAPPER :INVERSE-WRAPPER))
 			      (OR (AND (CONSP OLD-DEFINITION)
 				       (FEF-EQUAL (CDR ARG1) (CDR OLD-DEFINITION)))
 				  ;; Wrapper is really changed; must recompile flavors.
@@ -1630,10 +1631,9 @@ Syntax is identical to the beginning of a defmethod for the same method."
 		    (RECOMPILE-FLAVOR (FLAVOR-NAME FL) MESSAGE)	;Propagate the change
 		    (NULLIFY-METHOD-DEFINITION METH))	;Say propagation is complete.
 		   (COMPILER-FDEFINEDP METH)
-		   (GET (AND METH (GETF (METH-PLIST METH) ARG1 ARG2)))
+		   (GET (AND METH (GETF (METH-PLIST METH) ARG1)))
 		   (PUTPROP (LET ((DEFAULT-CONS-AREA BACKGROUND-CONS-AREA))
 			      (SETF (GETF (METH-PLIST METH) ARG2) ARG1)))
-		   (remprop (remf (meth-plist meth) arg1))
 		   (PUSH-PROPERTY
 		    (LET ((DEFAULT-CONS-AREA BACKGROUND-CONS-AREA))
 		      (PUSH ARG1 (GETF (METH-PLIST METH) ARG2))))
@@ -1875,19 +1875,13 @@ returned an invalid value, ~S, not a flavor name." FLAVOR-NAME))
 	       (OR (LOCATION-BOUNDP (%INSTANCE-LOC INSTANCE (1+ INDEX)))
 		   (SETF (%INSTANCE-REF INSTANCE (1+ INDEX)) (CADR PL))))
 	      ((NOT (MEMQ (CAR PL) REMAINING-KEYWORDS))
-	       (PUSHNEW (CAR PL) UNHANDLED-KEYWORDS :TEST #'EQ)))))
+	       (PUSHNEW (CAR PL) UNHANDLED-KEYWORDS)))))
     ;; Now do all the default initializations, of one sort or other,
     ;; that have not been overridden.
     (LET ((SELF INSTANCE))
       (DOLIST (D (FLAVOR-INSTANCE-VARIABLE-INITIALIZATIONS FL))
-	(UNLESS (LOCATION-BOUNDP (%INSTANCE-LOC INSTANCE (1+ (CAR D))))
-	  (SETF (%INSTANCE-REF INSTANCE (1+ (CAR D)))
-		(ECASE (CADDR D)
-		  (QUOTE (CADR D))
-		  (SYMBOL-VALUE (SYMBOL-VALUE (CADR D)))
-		  (FUNCALL (FUNCALL (CADR D)))
-;>>> ex-eval lossage
-		  ((NIL) (EVAL (CADR D)))))))
+	(OR (LOCATION-BOUNDP (%INSTANCE-LOC INSTANCE (1+ (CAR D))))
+	    (SETF (%INSTANCE-REF INSTANCE (1+ (CAR D))) (EVAL (CADR D)))))
       ;; Now stick any default init plist items that aren't handled by that
       ;; onto the actual init plist.
       (DO ((PL (FLAVOR-REMAINING-DEFAULT-PLIST FL) (CDDR PL))) ((NULL PL))
@@ -1896,7 +1890,6 @@ returned an invalid value, ~S, not a flavor name." FLAVOR-NAME))
 	      (UNLESS (EQ INIT-PLIST (LOCF NEW-PLIST))
 		(SETQ NEW-PLIST (CDR INIT-PLIST)
 		      INIT-PLIST (LOCF NEW-PLIST)))
-;>>> EVAL lossage
 	      (SETQ NEW-PLIST (LIST* (CAR PL) (EVAL (CADR PL)) NEW-PLIST)))))))
   ;; Complain if any keywords weren't handled, unless our caller
   ;; said it wanted to take care of this.
@@ -1944,7 +1937,6 @@ default init plist entries which it does not override."
     (DO ((L (GETF (FLAVOR-PLIST FFL) :DEFAULT-INIT-PLIST) (CDDR L)))
 	((NULL L))
       (DO ((M (CDR INIT-PLIST) (CDDR M)))
-;>> eval lossage
 	  ((NULL M) (SETF (GET INIT-PLIST (CAR L)) (EVAL (CADR L))))
 	(WHEN (EQ (CAR M) (CAR L))
 	  (RETURN)))))
@@ -2738,8 +2730,7 @@ or a component flavor name and T."
 				   (FLAVOR-METHOD-HASH-TABLE FL)))
 			       (GET-HANDLER-MAPPING-TABLE FL (CAR HANDLERS) DEF))))))
 	  (SETF (FLAVOR-METHOD-HASH-TABLE FL)
-		(SYMEVAL-IN-INSTANCE (DONT-OPTIMIZE
-				       (HASH-TABLE-INSTANCE (FLAVOR-METHOD-HASH-TABLE FL)))
+		(SYMEVAL-IN-INSTANCE (DONT-OPTIMIZE (HASH-TABLE-INSTANCE (FLAVOR-METHOD-HASH-TABLE FL)))
 				     'HASH-ARRAY)))
 	;; Working on all operations at once.
 	(T
@@ -3037,7 +3028,7 @@ because that variable is globally special~%"
   (SETQ REMAINING-INIT-KEYWORDS    
 	(SUBSET-NOT #'MEMQ (FLAVOR-ALLOWED-INIT-KEYWORDS FL)
 		    (CIRCULAR-LIST ALL-INITTABLE-IVARS)))
-  (PUSHNEW :ALLOW-OTHER-KEYS REMAINING-INIT-KEYWORDS :TEST #'EQ)
+  (PUSHNEW :ALLOW-OTHER-KEYS REMAINING-INIT-KEYWORDS :TEST 'EQ)
   (SETF	(FLAVOR-REMAINING-INIT-KEYWORDS FL) REMAINING-INIT-KEYWORDS)
   ;; Then look at all the default init plists, for anything there
   ;; that initializes an instance variable.  If it does, make an entry on ALIST.
@@ -3054,15 +3045,19 @@ because that variable is globally special~%"
 	(IF INDEX
 	    ;; This keyword initializes an instance variable,
 	    ;; so record an initialization of that variable if none found yet.
-	    (UNLESS (ASSQ INDEX ALIST)
-;>>> eval lossage
+	    (OR (ASSQ INDEX ALIST)
 		(PUSH (LIST INDEX ARG)
 		      ALIST))
 	  ;; This keyword does not just initialize an instance variable.
-	  (UNLESS (GETF REMAINING-DEFAULT-PLIST KEYWORD)
-	    (SETF (GETF REMAINING-DEFAULT-PLIST KEYWORD) VALUE))
+	  (UNLESS (GET (LOCF REMAINING-DEFAULT-PLIST) KEYWORD)
+	    (PUTPROP (LOCF REMAINING-DEFAULT-PLIST) ARG KEYWORD))
 	  (UNLESS (MEMQ KEYWORD REMAINING-INIT-KEYWORDS)
-	    (PUSHNEW KEYWORD UNHANDLED-INIT-KEYWORDS :TEST #'EQ))))))
+	    (PUSHNEW KEYWORD UNHANDLED-INIT-KEYWORDS))
+	  ;;(IF (MEMQ KEYWORD (FLAVOR-REMAINING-INIT-KEYWORDS FL))
+	  ;;    (OR (GET (LOCF REMAINING-DEFAULT-PLIST) KEYWORD)
+	  ;;        (PUTPROP (LOCF REMAINING-DEFAULT-PLIST) ARG KEYWORD))
+	  ;;  (FERROR NIL "The flavor ~S has keyword ~S in its default init plist, but doesn't handle it" (FLAVOR-NAME FL) KEYWORD))
+	  ))))
   (SETF (FLAVOR-UNHANDLED-INIT-KEYWORDS FL) UNHANDLED-INIT-KEYWORDS)
   ;; Then, look for default values provided in list of instance vars.
   (DOLIST (FFL (FLAVOR-DEPENDS-ON-ALL FL))
@@ -3790,7 +3785,7 @@ prevent this inclusion."))
 
 (DEFMETHOD (VANILLA-FLAVOR :DESCRIBE) ()
   (FORMAT T "~&~S, an object of flavor ~S,~% has instance variable values:~%"
-	    SELF (TYPE-OF SELF))
+	    SELF (TYPEP SELF))
   (DO ((IVARS (FLAVOR-ALL-INSTANCE-VARIABLES (INSTANCE-FLAVOR SELF))
 	      (CDR IVARS))
        (I 1 (1+ I)))
@@ -3829,7 +3824,8 @@ prevent this inclusion."))
 (DEFMETHOD (VANILLA-FLAVOR :GET-HANDLER-FOR) (OP)
   (GET-HANDLER-FOR SELF OP))
 
-;;; Useful(???) methods for debugging.
+;;; Useful methods for debugging.
+;;; They all cause the instance variables of SELF to be bound as specials.
 (DEFMETHOD (VANILLA-FLAVOR :EVAL-INSIDE-YOURSELF) (FORM)
   (WITH-SELF-VARIABLES-BOUND (EVAL FORM)))
 
@@ -3909,26 +3905,26 @@ The vector may not be forwarded.")
 (DEFMETHOD (PRINT-READABLY-MIXIN :PRINT-SELF) (STREAM &REST IGNORE)
   (SEND STREAM ':STRING-OUT "#")
   (LET ((*PACKAGE* PKG-USER-PACKAGE))
-    (PRIN1 (TYPE-OF SELF) STREAM))
-  (SEND STREAM :TYO #/SP)
+    (PRIN1 (TYPEP SELF) STREAM))
+  (SEND STREAM ':TYO #/SP)
   (DO ((INIT-OPTIONS (SEND SELF ':RECONSTRUCTION-INIT-PLIST) (CDDR INIT-OPTIONS)))
       ((NULL INIT-OPTIONS))
     (PRIN1 (CAR INIT-OPTIONS) STREAM)
-    (SEND STREAM :TYO #/SP)
+    (SEND STREAM ':TYO #/SP)
     (PRIN1 (CADR INIT-OPTIONS) STREAM)
     (IF (CDDR INIT-OPTIONS)
-	(SEND STREAM :TYO #/SP)))
-  (SEND STREAM :TYO #/))
+	(SEND STREAM ':TYO #/SP)))
+  (SEND STREAM ':TYO #/))
 
 (DEFMETHOD (PRINT-READABLY-MIXIN :READ-INSTANCE) (FLAVOR STREAM)
   (DO (CH INIT-OPTIONS)
       (())
     ;; Skip past spaces.
     (DO ()
-	((NOT (= (SETQ CH (SEND STREAM ':TYI)) #/SP))
-	 (SEND STREAM :UNTYI CH)))
-    (IF (= CH #/)
-	(RETURN (APPLY #'MAKE-INSTANCE FLAVOR INIT-OPTIONS)))
+	((NOT (= (SETQ CH (SEND STREAM ':TYI)) #/SP))
+	 (SEND STREAM ':UNTYI CH)))
+    (IF (= CH #/)
+	(RETURN (APPLY 'MAKE-INSTANCE FLAVOR INIT-OPTIONS)))
     (SETQ INIT-OPTIONS
 	  (LIST* (READ STREAM)
 		 (READ STREAM)
@@ -3938,16 +3934,16 @@ The vector may not be forwarded.")
   "Given a functional object, return its subfunction to do the given operation or NIL.
    Returns NIL if it does not reduce to a select-method or if it does not handle that."
   (DO-FOREVER					;Repeat until reduced to a select-method
-    (TYPECASE FUNCTION				;  (if possible)
-      (ARRAY
+    (SELECT (%DATA-TYPE FUNCTION)		;  (if possible)
+      (DTP-ARRAY-POINTER
        ;; Set function to NIL or named-structure handler
        (SETQ FUNCTION (GET (NAMED-STRUCTURE-P FUNCTION) 'NAMED-STRUCTURE-INVOKE)))
-      (FUNCTION
+      (DTP-SYMBOL
        (OR (FBOUNDP FUNCTION) (RETURN NIL))
-       (SETQ FUNCTION (SYMBOL-FUNCTION FUNCTION)))
-      ((OR ENTITY CLOSURE)
+       (SETQ FUNCTION (FSYMEVAL FUNCTION)))
+      ((DTP-ENTITY DTP-CLOSURE)
        (SETQ FUNCTION (CAR (%MAKE-POINTER DTP-LIST FUNCTION))))
-      (SELECT
+      (DTP-SELECT-METHOD
        (SETQ FUNCTION (%MAKE-POINTER DTP-LIST FUNCTION))
        (DO-FOREVER
 	 ;; Iterate down select-method, then continue with tail
@@ -3961,7 +3957,7 @@ The vector may not be forwarded.")
 		(RETURN-FROM GET-HANDLER-FOR (CDAR FUNCTION))))
 	 (SETQ FUNCTION (CDR FUNCTION))
 	 (OR (CONSP FUNCTION) (RETURN NIL))))
-      (INSTANCE
+      (DTP-INSTANCE
        (SETQ FUNCTION (INSTANCE-FUNCTION FUNCTION))
        (IF (ARRAYP FUNCTION)
 	   (RETURN-FROM GET-HANDLER-FOR
@@ -3969,7 +3965,7 @@ The vector may not be forwarded.")
 		    (GETHASH OPERATION
 			     (DONT-OPTIMIZE
 			       (HASH-TABLE-INSTANCE FUNCTION))))))))
-      (T
+      (OTHERWISE
        (RETURN-FROM GET-HANDLER-FOR NIL)))))
 
 (DEFUN GET-FLAVOR-TRACING-ALIASES (FLAVOR-NAME &AUX FL)
@@ -4038,7 +4034,7 @@ The vector may not be forwarded.")
 
 ;This is in SYS: WINDOW; COLD now, and no longer defined this way.
 ;(DEFUN SYMEVAL-IN-INSTANCE (INSTANCE PTR)
-;  (CHECK-ARG INSTANCE INSTANCE)
+;  (CHECK-ARG INSTANCE (TYPEP INSTANCE :INSTANCE) "an instance")
 ;  (OR (SYMBOLP PTR) (SETQ PTR (%FIND-STRUCTURE-HEADER PTR)))
 ;  (LET ((N (FIND-POSITION-IN-LIST PTR (FLAVOR-ALL-INSTANCE-VARIABLES
 ;					(INSTANCE-FLAVOR INSTANCE)))))
@@ -4069,7 +4065,7 @@ PTR can also be a locative pointer to a value cell."
 					(INSTANCE-FLAVOR INSTANCE)))))
     (IF N
 	(%INSTANCE-REF INSTANCE (1+ N))
-	(SYMBOL-VALUE PTR))))
+	(SYMEVAL PTR))))
 
 ;;; Interface to the compiler.
 ;;; If called in *JUST-COMPILING* mode, during a QC-FILE, sends output into the QFASL file.
@@ -4114,7 +4110,7 @@ PTR can also be a locative pointer to a value cell."
 	;; If the compiler is not loaded, try to limp through with interpreted methods
 	(FUNCALL (IF (FBOUNDP 'COMPILE)
 		     'COMPILE
-		     'FDEFINE)
+		   'FDEFINE)
 		 NAME LAMBDA-EXP)))
     ;; Evaluate form now or send it over in the qfasl file
     (AND FORM-TO-EVAL
