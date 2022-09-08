@@ -193,7 +193,7 @@
 ;;; returns ANS in stronger type -- should we use %numeric-contage???
 (defsubst numeric-contage (ans influencer)
   "Return a number = ANS and of the weakest type stronger than both ANS and INFLUENCER."
-  (+ ans (- influencer influencer)))
+  (+ ans (zero-of-type influencer)))
 
 (defun float-coerce (ans influencer)
   "Return a number = ANS and of the same type as INFLUENCER.
