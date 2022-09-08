@@ -204,7 +204,7 @@ Look in the code for SI::PRINT-ARRAY to find out how this is used.")
 	    (:SPACE . #o40) (:SP . #o40)
 	    (:INTEGRAL . #o177)
 	    ;; sigh. 259 > char-code-limit
-	    (:COKE-BOTTLE . #.(+ 128. 69.) (:COKEBOTTLE . #.(+ 128. 69.)
+	    (:COKE-BOTTLE . #.(+ 128. 69.)) (:COKEBOTTLE . #.(+ 128. 69.))
 	    )
 	  (MAPCAR #'(LAMBDA (X) (CONS (CAR X)
 				      (DPB 1 %%XR-SPECIAL-CHARACTER-NAMES-MOUSE-BIT
