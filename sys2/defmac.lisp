@@ -1,4 +1,4 @@
-;;; DEFMACRO -*- Mode:LISP; Package:SI; Readtable:ZL; Base:8 -*-
+;;; DEFMACRO -*- Mode:LISP; Package:SI; Base:8; Readtable:T -*-
 ;	** (c) Copyright 1980 Massachusetts Institute of Technology **
 
 ;;; Note: differences from Common Lisp specs:
@@ -17,14 +17,15 @@
 (DEFVAR *VALLIST* :UNBOUND
   "Used within DEFMACRO.")
 
-(DEFMACRO DEFMACRO (&ENVIRONMENT ENV &REST X)
-  "Define FUNCTION-SPEC as a macro.
+(DEF DEFMACRO
+  (DEFUN (DEFMACRO MACRO) (X)
+    "Define FUNCTION-SPEC as a macro.
 When a call to the macro is expanded, the argument list LAMBDA-LIST
 is matched against the arguments supplied to the macro.
 The variables in it are bound.  Then the BODY is executed,
 and the value of the last form in it is the expansion of the macro."
-  (DECLARE (ARGLIST FUNCTION-SPEC LAMBDA-LIST &BODY BODY))
-  (DEFMACRO1 X 'MACRO ENV))
+    (DECLARE (ARGLIST FUNCTION-SPEC LAMBDA-LIST &BODY BODY))
+    (DEFMACRO1 (CDR X) 'MACRO)))
 
 (DEFF MACRO-DISPLACE 'MACRO)
 (COMPILER:MAKE-OBSOLETE MACRO-DISPLACE "it is now identical to MACRO")
@@ -32,8 +33,9 @@ and the value of the last form in it is the expansion of the macro."
 (COMPILER:MAKE-OBSOLETE DEFMACRO-DISPLACE "it is now identical to DEFMACRO")
 
 
-(DEFMACRO DEFLAMBDA-MACRO (&ENVIRONMENT ENV &REST X)
-  "Define LAMBDA-MACRO-NAME as a lambda macro.
+(DEF DEFLAMBDA-MACRO
+  (DEFUN (DEFLAMBDA-MACRO MACRO) (X)
+    "Define LAMBDA-MACRO-NAME as a lambda macro.
 When a list starting with LAMBDA-MACRO-NAME is encountered as a function,
 it is expanded by executing the lambda macro definition
 to get a new function to use instead.  The argument list LAMBDA-LIST
@@ -41,54 +43,52 @@ is matched against the remainder of the list which is the function.
 The variables in it are bound.  Then the BODY is executed,
 and the value of the last form in it is the expansion of the macro,
 the new function."
-  (DECLARE (ARGLIST LAMBDA-MACRO-NAME LAMBDA-LIST &BODY BODY))
-  (DEFMACRO1 X 'LAMBDA-MACRO ENV))
+    (DECLARE (ARGLIST LAMBDA-MACRO-NAME LAMBDA-LIST &BODY BODY))
+    (DEFMACRO1 (CDR X) 'LAMBDA-MACRO)))
+
+(DEF LAMBDA-MACRO-DISPLACE
+  (DEFUN (LAMBDA-MACRO-DISPLACE MACRO) (X)
+         `(LAMBDA-MACRO ,(CADR X) ,(CADDR X)
+		        (DISPLACE ,(CAADDR X) (PROGN . ,(CDDDR X))))))
 
 (DEFF DEFLAMBDA-MACRO-DISPLACE 'DEFLAMBDA-MACRO)
 (COMPILER:MAKE-OBSOLETE DEFLAMBDA-MACRO-DISPLACE "it is now identical to DEFLAMBDA-MACRO")
 
 ;;; Onto this are pushed all the specified-flags of optional args
 ;;; (such as, FOOP in &OPTIONAL (FOO 69 FOOP)).
-(DEFVAR *DEFMACRO-OPTIONAL-SPECIFIED-FLAGS*)
+(PROCLAIM '(SPECIAL OPTIONAL-SPECIFIED-FLAGS))
 
 ;;; This is set to T if the pattern used &body instead of &rest.
 ;;; This allows us to tell ZWEI about how to indent the form.
-(DEFVAR DEFMACRO-&BODY-FLAG)
+(PROCLAIM '(SPECIAL DEFMACRO-&BODY-FLAG))
 
 ;;; X is the cdr of the DEFMACRO form.  TYPE is MACRO or MACRO-DISPLACE.
-(DEFUN DEFMACRO1 (X TYPE &OPTIONAL ENV)
-  (LET (*VARLIST*
-	*VALLIST*
-	*DEFMACRO-OPTIONAL-SPECIFIED-FLAGS*
-	DEFMACRO-&BODY-FLAG
+(DEFUN DEFMACRO1 (X TYPE)
+  (LET (*VARLIST* *VALLIST* OPTIONAL-SPECIFIED-FLAGS DEFMACRO-&BODY-FLAG
 	(ARGLIST (CADR X)))
     (WHEN (EQ (CAR-SAFE ARGLIST) '&WHOLE)
       (SETQ ARGLIST (CDDR ARGLIST)))
     (LET* ((ARGS-DATA (DEFMACRO-&MUMBLE-CHEVEUX ARGLIST '(CDR *MACROARG*) 0))
 	   (MIN-ARGS (CAR ARGS-DATA))
 	   (OPT-ARGS (CADR ARGS-DATA)))
-      `(,TYPE ,(STANDARDIZE-FUNCTION-SPEC (CAR X))
-	. ,(LAMBDA-EXP-ARGS-AND-BODY
-	     (EXPAND-DEFMACRO X ENV
-			      `((ARGLIST . ,(LOOP FOR TAIL ON (CADR X)
-						  WHEN (AND (ATOM TAIL) TAIL)
-						    RETURN (CADR X)
-						    UNTIL (EQ (CAR TAIL) '&AUX)
-						    ;; user doesn't want to see these
-						    WHEN (MEMQ (CAR TAIL)
-							       '(&ENVIRONMENT &WHOLE))
-						      DO (SETQ TAIL (CDR TAIL))
-						      ELSE COLLECT (CAR TAIL)))
-				,@(IF DEFMACRO-&BODY-FLAG
-				      `((ZWEI:INDENTATION ,(+ MIN-ARGS OPT-ARGS) 1))))))))))
+     `(LOCAL-DECLARE ((ARGLIST
+		       . ,(LOOP FOR TAIL ON (CADR X)
+				WHEN (AND (ATOM TAIL) TAIL) RETURN (CADR X)
+				UNTIL (EQ (CAR TAIL) '&AUX)
+				;; user doesn't want to see &environment...
+				WHEN (EQ (CAR TAIL) '&ENVIRONMENT)
+				  DO (SETQ TAIL (CDR TAIL))
+				  ELSE COLLECT (CAR TAIL))))
+       ,@(AND DEFMACRO-&BODY-FLAG
+	      `((EVAL-WHEN (EVAL COMPILE LOAD)
+		  (DEFMACRO-SET-INDENTATION-FOR-ZWEI ',(CAR X) ',(+ MIN-ARGS OPT-ARGS)))))
+       (,TYPE ,(STANDARDIZE-FUNCTION-SPEC (CAR X))
+	. ,(LAMBDA-EXP-ARGS-AND-BODY (EXPAND-DEFMACRO X)))))))
 
 ;;; X is the cdr of the DEFMACRO form.
 ;;; Return a LAMBDA expression for the expander function.
-(DEFUN EXPAND-DEFMACRO (X ENV &OPTIONAL EXTRA-DECLARATIONS)
-  (LET (*VARLIST*
-	*VALLIST*
-	*DEFMACRO-OPTIONAL-SPECIFIED-FLAGS*
-	DEFMACRO-&BODY-FLAG
+(DEFUN EXPAND-DEFMACRO (X)
+  (LET (*VARLIST* *VALLIST* OPTIONAL-SPECIFIED-FLAGS DEFMACRO-&BODY-FLAG
 	(ARGLIST (CADR X))
 	WHOLE-ARG-DATA)
     (WHEN (EQ (CAR-SAFE ARGLIST) '&WHOLE)
@@ -99,18 +99,13 @@ the new function."
 	   (MAX-ARGS (CADDR ARGS-DATA))
 	   (BODY (CDDR X))
 	   DOC-STRING DECLS)
-      (MULTIPLE-VALUE-SETQ (BODY DECLS DOC-STRING)
-	(EXTRACT-DECLARATIONS BODY NIL T ENV))
-      (SETQ DECLS (NCONC DECLS EXTRA-DECLARATIONS))
-;>> This is pretty bogus. Probably should be flushed.
-;      (SETQ DECLS (SUBSET #'(LAMBDA (DECL)
-;			      (MEMQ (CAR-SAFE DECL) '(ARGLIST
-;						      VALUES RETURN-LIST
-;						      ZWEI:INDENTATION
-;						      IGNORE)))
-;			   DECLS))
-      (IF DOC-STRING (PUSH `(DOCUMENTATION ,DOC-STRING) DECLS))
+      (MULTIPLE-VALUE (BODY DECLS DOC-STRING)
+	(EXTRACT-DECLARATIONS BODY NIL T))
+      (SETQ DECLS (SUBSET #'(LAMBDA (DECL)
+			      (MEMQ (CAR-SAFE DECL) '(ARGLIST RETURN-LIST VALUES)))
+			  DECLS))
       `(NAMED-LAMBDA ,(CAR X) (*MACROARG* &OPTIONAL *MACROENVIRONMENT*)
+	,@(IF DOC-STRING (LIST DOC-STRING))
 	,@(IF DECLS `((DECLARE . ,DECLS)))
 	*MACROENVIRONMENT*			; Ok not to refer to it.
 	,@(COND ((AND DEFMACRO-CHECK-ARGS
@@ -127,28 +122,26 @@ the new function."
 					  ,(1+ MAX-ARGS)))))
 			(MACRO-REPORT-ARGS-ERROR *MACROARG* ,MIN-ARGS ,MAX-ARGS))))
 		(T NIL))
-	(LET* (,@*DEFMACRO-OPTIONAL-SPECIFIED-FLAGS*
+	(LET* (,@OPTIONAL-SPECIFIED-FLAGS
 	       ,@WHOLE-ARG-DATA
 	       . ,(MAPCAR #'LIST (NREVERSE *VARLIST*) (NREVERSE *VALLIST*)))
-	  ,@(IF DECLS `((DECLARE . ,DECLS)))
 	  . ,BODY)))))
 
 (DEFPROP MACRO-REPORT-ARGS-ERROR T :ERROR-REPORTER)
 (DEFUN MACRO-REPORT-ARGS-ERROR (MACRO-FORM MIN MAX &AUX (NARGS (1- (LENGTH MACRO-FORM))))
   (IF (< NARGS MIN)
-      (FERROR NIL "Too few arguments to macro: ~D passed, ~D required." NARGS MIN)
+      (FERROR NIL "Too few arguments to macro: ~D passed, ~D required."
+	      NARGS MIN)
     (IF (AND MAX (> NARGS MAX))
-	(FERROR NIL "Too many arguments to macro: ~D passed, ~D allowed." NARGS MAX))))
+	(FERROR NIL "Too many arguments to macro: ~D passed, ~D allowed."
+		NARGS MAX))))
 
 (DEFMACRO DESTRUCTURING-BIND (VARIABLES DATA &BODY BODY)
   "Bind the VARIABLES to the components of DATA that they match, then execute the BODY.
 DATA is evaluated; the VARIABLES list or tree is not evaluated."
-  (LET (*VARLIST*
-	*VALLIST*
-	*DEFMACRO-OPTIONAL-SPECIFIED-FLAGS*
-	DEFMACRO-&BODY-FLAG)
+  (LET (*VARLIST* *VALLIST* OPTIONAL-SPECIFIED-FLAGS DEFMACRO-&BODY-FLAG)
     (DEFMACRO-&MUMBLE-CHEVEUX VARIABLES DATA 0)
-    `(LET* (,@*DEFMACRO-OPTIONAL-SPECIFIED-FLAGS*
+    `(LET* (,@OPTIONAL-SPECIFIED-FLAGS
 	    . ,(MAPCAR #'LIST (NREVERSE *VARLIST*) (NREVERSE *VALLIST*)))
        . ,BODY)))
 
@@ -174,7 +167,7 @@ DATA is evaluated; the VARIABLES list or tree is not evaluated."
 	 (COND ((> STATE 1)
 		(FERROR NIL "Non-NIL end of list, ~S, following ~S in destructuring pattern."
 			PATTERN
-			(CASE STATE
+			(SELECTQ STATE
 			  (2 '&REST)
 			  (3 '&AUX)
 			  (4 '&KEY)
@@ -183,30 +176,27 @@ DATA is evaluated; the VARIABLES list or tree is not evaluated."
 		  (LIST 0 0 NIL))))
 	((EQ (CAR PATTERN) '&OPTIONAL)
 	 (COND ((> STATE 1)
-		(FERROR NIL "~S in bad context in destructuring pattern." '&OPTIONAL))
+		(FERROR NIL "&OPTIONAL in bad context in destructuring pattern."))
 	       (T (DEFMACRO-&MUMBLE-CHEVEUX (CDR PATTERN) PATH 1))))
 	((MEMQ (CAR PATTERN) '(&REST &BODY))
 	 (AND (EQ (CAR PATTERN) '&BODY)
 	      (SETQ DEFMACRO-&BODY-FLAG T))
 	 (AND (NULL (CDR PATTERN))
-	      (FERROR NIL "~S or ~S followed by no argument, in destructuring pattern."
-		      '&REST '&BODY))
-	 (COND ((> STATE 1) (FERROR NIL "~S or ~S in bad context in destructuring pattern."
-				    '&REST '&BODY))
+	      (FERROR NIL "&REST or &BODY followed by no argument, in destructuring pattern."))
+	 (COND ((> STATE 1) (FERROR NIL "&REST or &BODY in bad context in destructuring pattern."))
 	       (T (DEFMACRO-&MUMBLE-CHEVEUX (CDR PATTERN) PATH 2))))
 	((EQ (CAR PATTERN) '&AUX)
-	 (COND (( STATE #o10) (FERROR NIL "~S following a ~S in destructuring pattern."
-				       '&AUX '&LIST-OF))
+	 (COND (( STATE #o10) (FERROR NIL "&AUX following a &LIST-OF in destructuring pattern."))
 	       (T (DEFMACRO-&MUMBLE-CHEVEUX (CDR PATTERN) PATH 3))))
 	((EQ (CAR PATTERN) '&KEY)
-	 (COND ((> STATE 2) (FERROR NIL "~S in bad context in destructuring pattern." '&KEY))
+	 (COND ((> STATE 2) (FERROR NIL "&KEY in bad context in destructuring pattern."))
 	       (T (DEFMACRO-&MUMBLE-CHEVEUX (CDR PATTERN) PATH 4))))
 	((EQ (CAR PATTERN) '&ENVIRONMENT)
-	 (DEFMACRO-&MUMBLE-CHEVEUX (CDR PATTERN) PATH (+ STATE #o20)))
+	 (DEFMACRO-&MUMBLE-CHEVEUX (CDR PATTERN) PATH (+ STATE 20)))
 	((EQ (CAR PATTERN) '&LIST-OF)
 	 (COND ((< STATE 3)
-		(DEFMACRO-&MUMBLE-CHEVEUX (CDR PATTERN) PATH (+ #o10 STATE)))
-	       (T (FERROR NIL "~S used incorrectly in destructuring pattern." '&LIST-OF))))
+		(DEFMACRO-&MUMBLE-CHEVEUX (CDR PATTERN) PATH (+ 10 STATE)))
+	       (T (FERROR NIL "&LIST-OF used incorrectly in destructuring pattern."))))
 	((EQ (CAR PATTERN) '&ALLOW-OTHER-KEYS)
 	 (DEFMACRO-&MUMBLE-CHEVEUX (CDR PATTERN) PATH STATE))
 	((= STATE 0)
@@ -218,7 +208,7 @@ DATA is evaluated; the VARIABLES list or tree is not evaluated."
 		(DEFMACRO-CHEVEUX (CAR PATTERN) `(CAR ,PATH)))
 	       (T
 		(AND (CADDAR PATTERN)
-		     (PUSH (CADDAR PATTERN) *DEFMACRO-OPTIONAL-SPECIFIED-FLAGS*))
+		     (PUSH (CADDAR PATTERN) OPTIONAL-SPECIFIED-FLAGS))
 		(DEFMACRO-CHEVEUX (CAAR PATTERN)
 				  `(COND (,PATH
 					  ,(AND (CADDAR PATTERN)
@@ -232,7 +222,7 @@ DATA is evaluated; the VARIABLES list or tree is not evaluated."
 	 (COND ((CDR PATTERN)
 		(AND (OR (ATOM (CDR PATTERN))
 			 (NOT (MEMQ (CADR PATTERN) '(&AUX &KEY))))
-		     (FERROR NIL "More than one ~S argument in a macro." '&REST))
+		     (FERROR NIL "More than one &REST argument in a macro."))
 		(DEFMACRO-&MUMBLE-CHEVEUX (CDR PATTERN) PATH 2)))
 	 (LIST 0 0 NIL))
 	((= STATE 3)
@@ -265,9 +255,9 @@ DATA is evaluated; the VARIABLES list or tree is not evaluated."
 	   (DEFMACRO-&MUMBLE-CHEVEUX (CDR PATTERN) `(CDR ,PATH) 0)))
 	((= STATE 9.)				;&LIST-OF optional
 	 (AND (ATOM (CAR PATTERN))
-	      (FERROR NIL "Incorrect use of ~S in destructuring pattern." '&LIST-OF))
+	      (FERROR NIL "Incorrect use of &LIST-OF in destructuring pattern."))
 	 (AND (CADDAR PATTERN)
-	      (PUSH (CADDAR PATTERN) *DEFMACRO-OPTIONAL-SPECIFIED-FLAGS*))
+	      (PUSH (CADDAR PATTERN) OPTIONAL-SPECIFIED-FLAGS))
 	 (DEFMACRO-&LIST-OF-CHEVEUX (CAAR PATTERN)
 				    `(COND (,PATH
 					    ,(AND (CADDAR PATTERN)
@@ -281,7 +271,7 @@ DATA is evaluated; the VARIABLES list or tree is not evaluated."
 	 (WHEN (CDR PATTERN)
 	   (AND (OR (ATOM (CDR PATTERN))
 		    (NOT (EQ (CADR PATTERN) '&AUX)))
-		(FERROR NIL "More than one ~S argument in destructuring pattern." '&REST))
+		(FERROR NIL "More than one &REST argument in destructuring pattern."))
 	   (DEFMACRO-&MUMBLE-CHEVEUX (CDDR PATTERN) PATH 3))
 	 (LIST 0 0 NIL))
 	(( STATE #o20)
@@ -295,7 +285,8 @@ DATA is evaluated; the VARIABLES list or tree is not evaluated."
 	  (DEFMACRO-CHEVEUX PATTERN 'X)
 	  (DO ((NVALS (NREVERSE *VALLIST*) (CDR NVALS))
 	       (VALS VALS
-		     (CONS `(MAPCAR #'(LAMBDA (X) ,(CAR NVALS))
+		     (CONS `(MAPCAR (FUNCTION
+				      (LAMBDA (X) ,(CAR NVALS)))
 			            ,PATH)
 			   VALS)))
 	      ((NULL NVALS) VALS)))))
@@ -304,8 +295,8 @@ DATA is evaluated; the VARIABLES list or tree is not evaluated."
   (COND ((NULL PATTERN))
 	((ATOM PATTERN)
 	 (AND (SYMBOLP PATTERN)
-	      (CHAR= (CHAR (SYMBOL-NAME PATTERN) 0) #/&)
-	      (FERROR NIL "~S -- unrecognized &-keyword in ~S." PATTERN 'DEFMACRO))
+	      (EQ (CHAR (SYMBOL-NAME PATTERN) 0) #/&)
+	      (FERROR NIL "~S -- unrecognized &-keyword in DEFMACRO." PATTERN))
 	 (SETQ *VARLIST* (CONS PATTERN *VARLIST*))
 	 (SETQ *VALLIST* (CONS PATH *VALLIST*)))
 	(T 
