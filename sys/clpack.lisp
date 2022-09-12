@@ -1,4 +1,4 @@
-;-*- Mode:LISP; Package:SI; Readtable:ZL; Cold-Load:T; Base:8; Lowercase:T -*-
+;-*- Mode:LISP; Package:SI; Readtable:T; Cold-Load:T; Base:8; Lowercase:T -*-
 
 ;;; Full list of user incompatibilities:
 ;;;  PKG-FIND-PACKAGE, some minor change.
@@ -48,13 +48,13 @@
 
 (defun list-all-packages ()
   "Returns a list of all existing packages."
-  (copy-list *all-packages*))
+  *all-packages*)
 
 ;;;; Low level data structure and interface definitions.
 
 ;;; This defines the format of a PACKAGE.
 ;;; SYS:UCADR;QF knows about it!
-(cl:defstruct (package :named-array-leader
+(cli:defstruct (package :named-array-leader
 			(:callable-constructors nil)
 			(:conc-name pkg-)
 			(:constructor pkg-make-package))
@@ -1386,12 +1386,9 @@ flag for SYM in PKG (ie sign bit of pkg-slot-code)"
 	(pkg-make-code 1 (pkg-slot-code pkg index)))
   (values sym :external pkg))
 
-(defun pkg-keyword-store (hash sym pkg &aux index)
-  (set sym sym)					;make keywords self-evaluate and external
-  (setq index (nth-value 3 (pkg-intern-store hash sym pkg)))
-  (setf (pkg-slot-code pkg index)
-	(pkg-make-code 1 (pkg-slot-code pkg index)))
-  (values sym :external pkg))
+(defun pkg-keyword-store (hash sym pkg)
+  (set sym sym)					;make keywords self-evaluate
+  (pkg-intern-store hash sym pkg))
 
 
 ;;; Remove a symbol from a package.  Leaves T as the "hash code" where the
@@ -1404,7 +1401,7 @@ flag for SYM in PKG (ie sign bit of pkg-slot-code)"
 		 &aux hash tem str must-replace replacement-sym)
   "Removes (uninterns) any symbol whose pname matches SYM from package PKG.
 SYM may be a symbol or a string.
-PKG defaults to *PACKAGE*, -NOT- (symbol-package SYM)
+PKG defaults to *PACKAGE* (common-lisp braindamage)
 FORCE-FLAG says do not check for name conflicts.
 Returns T if a symbol was removed, NIL if there was no such symbol present."
   (when pkg
@@ -1492,8 +1489,7 @@ Symbols from packages ~A all want to be inherited."
 	     (elt (rassq desired-pkg available-syms)))
     (values (cdr elt) (car elt)))))
 
-;;;; Old interface still called.
-
+;;; Old interface still called.
 (defun pkg-prefix (sym fcn &optional (pkg *package*))
   (let ((prefix (pkg-printing-prefix sym pkg)))
     (when prefix (funcall fcn
@@ -1679,13 +1675,11 @@ and by random processes that don't bind *PACKAGE*."
 ;;;; Installation
 
 (defconst initial-packages
-  '(("GLOBAL" :nicknames ("ZETALISP" "ZL" #| "LISP" |#) :size 2000. :use nil :auto-export-p t)
-    ("KEYWORD" :nicknames ("") :size 3000. :use ()
-     :new-symbol-function pkg-keyword-store
-     :auto-export-p t)
+  '(("GLOBAL" :nicknames ("ZETALISP" "ZL" "LISP") :size 2000. :use nil :auto-export-p t)
+			;; The name LISP had better be here
+			;; if there is no other package that is going to be named that.
+    ("KEYWORD" :nicknames ("") :size 3000. :use nil :new-symbol-function pkg-keyword-store)
     ("SYSTEM" :nicknames ("SYS") :size 1500. :auto-export-p t)
-    ;; nickname of "CL" is temporary until the real cl package is defined.
-    ("LISP" :use () :nicknames ("CL") :size 900. :auto-export-p t :read-lock t)
     ("CADR" :size 7000. :use ("GLOBAL" "SYS") :nicknames ("CC"))
     ("CHAOS" :size 1200. :use ("GLOBAL" "SYS")
 	     :shadow ("OPEN" "STATUS" "CLOSE" "LISTEN" "FINISH"))
@@ -1711,13 +1705,13 @@ and by random processes that don't bind *PACKAGE*."
     ("FORMAT" :size 400.)
     ("ZWEI" :size 7000. :shadow ("SEARCH")); "FIND"
     ("MICRO-ASSEMBLER" :size 6000. :nicknames ("UA") :prefix-name "UA"
-     :shadow ("FIXNUM" "MERGE" "AREA-LIST")); "INCLUDE"
+     :shadow ("FIXNUM" "INCLUDE" "MERGE" "AREA-LIST"))
     ("MATH" :size 200.)
     ("HACKS" :size 2000.)
     ("SRCCOM" :size 100. :shadow ("FILE-LENGTH"))
     ("UNIX" :size 500. :use ("GLOBAL"))
     ("USER" :size 2000.)
-    ("COMMON-LISP-INCOMPATIBLE" :nicknames ("CLI") :prefix-name "CLI"
+    ("COMMON-LISP-INCOMPATIBLE" :nicknames ("CLI" "CL") :prefix-name "CLI"
      				:size 64. :use nil :auto-export-p t
 				;; this export also does all our interning
 				:export (cli://		cli:*DEFAULT-PATHNAME-DEFAULTS*
@@ -1761,14 +1755,11 @@ Each element is an argument list to which MAKE-PACKAGE is applied.")
   ;; Following two lines overridden below. Just used during initial package build.
   (setf (pkg-new-symbol-function pkg-global-package) #'pkg-global-store)
   (setf (pkg-new-symbol-function pkg-system-package) #'pkg-global-store)
-  (setf (pkg-new-symbol-function pkg-lisp-package) #'pkg-global-store)
   ;; Put in the symbols that are supposed to be in GLOBAL and SYSTEM.
   (dolist (sym initial-global-symbols)
     (intern sym pkg-global-package))
   (dolist (sym initial-system-symbols)
     (intern sym pkg-system-package))
-  (dolist (sym initial-lisp-symbols)
-    (intern sym pkg-lisp-package))
   ;; These are here so that code using these doesn't bomb out.
   ;; They should be flushed altogether in System 100.
   ;; This would do the wrong thing if done before these symbols are put into GLOBAL.
@@ -1778,19 +1769,18 @@ Each element is an argument list to which MAKE-PACKAGE is applied.")
   (intern 'compiler:warn 'compiler)
   ;; We have packages!!
   (setq *package* pkg-user-package)
-  ;; For Console program
-  (setf (aref (symbol-function 'system-communication-area) %sys-com-obarray-pntr) '*package*)
+  (store (system-communication-area %sys-com-obarray-pntr) '*package*)	;For Console program
   ;; Put system variables and system constants on the SYSTEM package
   ;; (unless they are already in the LISP package.
   (dolist (list system-variable-lists)
-    (dolist (var (symbol-value list))
+    (dolist (var (symeval list))
       (intern var pkg-system-package)))
   (dolist (list system-constant-lists)
-    (dolist (var (symbol-value list))
+    (dolist (var (symeval list))
       (intern var pkg-system-package)))
   (dolist (var a-memory-counter-block-names)
     (intern var pkg-system-package))
-  (dolist (var (g-l-p (symbol-function 'micro-code-symbol-name-area)))
+  (dolist (var (g-l-p #'micro-code-symbol-name-area))
     (intern var pkg-system-package))
   ;; Now all other system symbols go in the SYSTEM-INTERNALS package, unless
   ;; the cold-load has specified a different place for them to go.
@@ -1798,7 +1788,8 @@ Each element is an argument list to which MAKE-PACKAGE is applied.")
     #'(lambda (sym &aux sym1 pkg pkg1)
 	(unless (arrayp (setq pkg1 (symbol-package sym))) ;already interned in a package
 	  (setf (symbol-package sym) nil)
-	  (setq pkg (if pkg1 (find-package pkg1) pkg-system-internals-package))
+	  (setq pkg (if pkg1 (find-package pkg1)
+		      pkg-system-internals-package))
 	  (setq sym1 (intern-local sym pkg))
 	  (cond ((neq sym1 sym)
 		 (princ " Multiple symbols with same pname and package.")
@@ -1810,7 +1801,6 @@ Each element is an argument list to which MAKE-PACKAGE is applied.")
   ;; Give normal new-symbol-intern function now that bootstrap cruft has been done.
   (setf (pkg-new-symbol-function pkg-global-package) #'pkg-auto-export-store)
   (setf (pkg-new-symbol-function pkg-system-package) #'pkg-auto-export-store)
-  (setf (pkg-new-symbol-function pkg-lisp-package) #'pkg-auto-export-store)
   (setq array-type-keywords
 	(loop for a in array-types
 	      collect (intern (string a) pkg-keyword-package)))
@@ -1843,10 +1833,3 @@ Each element is an argument list to which MAKE-PACKAGE is applied.")
 	    (copy-list (pkg-plist pkg))))))
 
 (add-initialization 'linearize-package-data '(linearize-package-data) '(:full-gc))
-
-;(defun export-all-symbols-of-package-without-checking-for-conflicts (pkg)
-;  (setq pkg (pkg-find-package pkg))
-;  (dotimes (index (pkg-number-of-slots pkg))
-;    (let ((code (pkg-slot-code pkg index)))
-;      (when (pkg-code-valid-p code)
-;	(setf (pkg-slot-code pkg index) (pkg-make-code 1 code))))))
