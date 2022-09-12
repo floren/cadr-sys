@@ -401,8 +401,9 @@ looking for a resume handler for an unhandled SIGNAL on a non-error condition.")
 (defmethod (condition :proceed) (&rest args &aux (proceed-type (car args)))
   (if (cdr args)
       (values-list args)
-    (if (send self :proceed-asking-user :operation-handled-p proceed-type)
-	(send self :proceed-asking-user proceed-type 'values 'read-object)
+    (if (send self ':proceed-asking-user
+	      ':operation-handled-p proceed-type)
+	(send self ':proceed-asking-user proceed-type 'values 'read-object)
       proceed-type)))
 
 (defmethod (condition :user-proceed-types) (proceed-types) proceed-types)
@@ -449,7 +450,7 @@ looking for a resume handler for an unhandled SIGNAL on a non-error condition.")
 (defmethod (no-action-mixin :case :proceed-asking-user :no-action)
 	   (continuation ignore)
   "Simply proceed."
-  (funcall continuation :no-action))
+  (funcall continuation ':no-action))
 
 (defflavor warning () (no-action-mixin condition))
 
@@ -460,7 +461,7 @@ looking for a resume handler for an unhandled SIGNAL on a non-error condition.")
 
 (defprop signal t :error-reporter)
 (defun signal (signal-name-or-condition-object &rest args
-	       &key (proceed-types nil proceed-types-p) &allow-other-keys)
+	       &key &optional (proceed-types nil proceed-types-p) &allow-other-keys)
   "Signal a condition, allowing handlers to proceed with the specified PROCEED-TYPES.
 SIGNAL-NAME-OR-CONDITION-OBJECT may be a condition object to be signaled,
 or it and ARGS may be args to give to MAKE-CONDITION to create such an object.
@@ -475,13 +476,14 @@ proceed-types which the specific flavor of condition can handle is used."
 	  (if (typep signal-name-or-condition-object ':instance)
 	      signal-name-or-condition-object
 	    (apply #'make-condition signal-name-or-condition-object args))))
-    (signal-condition condition
-		      (if proceed-types-p
-			  (if (or (consp proceed-types) (null proceed-types))
-			      proceed-types
-			    (list proceed-types))
-			(union (send condition :proceed-asking-user :which-operations)
-			       (send condition :proceed :which-operations))))))
+    (signal-condition
+      condition
+      (if proceed-types-p
+	  (if (or (consp proceed-types) (null proceed-types))
+	      proceed-types
+	    (list proceed-types))
+	(union (send condition ':proceed-asking-user ':which-operations)
+	       (send condition ':proceed ':which-operations))))))
 
 (defprop error t :error-reporter)
 ;;; (ERROR <message> &optional <object> <interrupt>)
@@ -506,8 +508,9 @@ or it and ARGS may be args to give to MAKE-CONDITION to create such an object."
 			(if (get (cadr args) 'condition-name)
 			    '(:new-value))
 			t)
-    (signal-condition (apply #'make-condition signal-name-or-condition-object args)
-		      nil t)))
+    (signal-condition
+      (apply #'make-condition signal-name-or-condition-object args)
+      nil t)))
 
 (defflavor multiple-cerror (proceed-alist) (error)
   :inittable-instance-variables
@@ -520,7 +523,7 @@ Usually used in conjunction with the macro MULTIPLE-CERROR"))
 	   (cont mt args &optional subop arg1 arg2)
   (case subop
     (:which-operations
-     (nconc (mapcar #'car proceed-alist)
+     (nconc (mapcar 'car proceed-alist)
 	    (around-method-continue cont mt args)))
     (:operation-handled-p
      (not (not (or (assq arg1 proceed-alist)
@@ -557,7 +560,7 @@ The values of the last statement in the clause whih is used to proceed are retur
       (let ((gensym (gensym)))
 	(push `(cons ',gensym ,(car c)) proceed-alist)
 	(push (cons gensym (cdr c)) clauses)))
-    (setq clauses (nreverse clauses))
+    (setq clauses (nreverse clauses))		;gratuitous, but makes disassembly better
     `(signal-proceed-case (()
 			   'multiple-cerror
 			   :condition-names ,condition-names
@@ -602,16 +605,18 @@ In this case, NIL is always returned."
       ;; common-lisp cerror
       (with-stack-list* (format-args signal-name format-string args)
 	(multiple-cerror 'common-lisp-cerror ()	;for compatabilty with manual.
+			 ;; KLUGDE ALERT!!!
 			 ("~1{~:}" unused format-args)
-	  ((apply #'format nil proceedable-flag format-args) nil)))	;returns nil
-    (nth-value 1 (signal-condition
-		   (apply #'make-condition signal-name format-string args)
-		   (case proceedable-flag
-		     ((t) '(:new-value))
-		     ((nil) nil)
-		     (:yes '(:no-action))
-		     (t (if (atom proceedable-flag)
-			    (list proceedable-flag) proceedable-flag)))))))
+	  (proceedable-flag nil)))		;returns nil
+    (multiple-value-bind (nil value)
+	(signal-condition
+	  (apply #'make-condition signal-name format-string args)
+	  (case proceedable-flag
+	    ((t) '(:new-value))
+	    ((nil) nil)
+	    (:yes '(:no-action))
+	    (t (if (atom proceedable-flag) (list proceedable-flag) proceedable-flag))))
+      value)))
 
 (defprop fsignal t :error-reporter)
 (defun fsignal (format-string &rest args)
@@ -777,7 +782,7 @@ UCODE-ERROR-STATUS is non-NIL only when this function is called
 		     (memq c trace-conditions))
 		   (return t))))
 	 (let (trace-conditions errset-status condition-handlers condition-default-handlers)
-	   (cerror :no-action nil nil "A traced condition was signaled:~%~A" condition)))
+	   (cerror ':no-action nil nil "A traced condition was signaled:~%~A" condition)))
     (when condition-names
       (setq tem1
 	    (invoke-handlers condition condition-names)))
@@ -838,11 +843,11 @@ Bind ERROR-DEPTH to one plus its current value before calling this."
     (break "Attempting to invoke debugger for~%~A" condition))
   nil)
 
-(defun invoke-restart-handlers (condition &key flavors)
+(defun invoke-restart-handlers (condition &key &optional flavors)
   "For compatibility with Symbolics software only."
   (invoke-resume-handler (or condition
 			     (and flavors
-				  (make-instance 'condition :condition-names flavors)))))
+				  (make-instance 'condition ':condition-names flavors)))))
 
 (defprop invoke-resume-handler t :error-reporter)
 (defun invoke-resume-handler (condition &optional proceed-type &rest args)
@@ -908,7 +913,7 @@ ERROR-OBJECT is the object to document.  Output goes to *STANDARD-OUTPUT*."
 	  ((null keywords))
 	(if (zerop i)
 	    (format t "~&~%Commands available for this particular error:~2%"))
-	(format t "~C" (+ (char-code #/S-A) i))
+	(format t "~C" (+ #/S-A i))
 	(when proceed-types
 	  (setq this-one-for-abort
 		(eq (find-resume-handler error-object (car keywords) resume-handlers)
@@ -916,14 +921,14 @@ ERROR-OBJECT is the object to document.  Output goes to *STANDARD-OUTPUT*."
 	  (if this-one-for-abort (setq abort-handler nil)))
 	(cond ((and (zerop i) (atom (car proceed-types)))
 	       ;; Resume only works for proceed-types that are atomic.
-	       (format t ", ~C" #/Resume))
+	       (format t ", ~C" #/Resume))
 	      ((setq tem (assq (car keywords)
 			       (if proceed-types *proceed-type-special-keys*
 				 *special-command-special-keys*)))
 	       (format t ", ~C" (cdr tem)))
 	      ;; If Abort is synonymous with this one, mention that.
 	      (this-one-for-abort
-	       (format t ", ~C" #/Abort)))
+	       (format t ", ~C" #/Abort)))
 	(format t ":~13T")
 	(send error-object
 	      (if proceed-types
@@ -934,7 +939,7 @@ ERROR-OBJECT is the object to document.  Output goes to *STANDARD-OUTPUT*."
       (when abort-handler
 	;; Abort is not currently synonymous with any of the proceed types.
 	;; So document it specially.
-	(format t "~C:~13T" #/Abort)
+	(format t "~C:~13T" #/Abort)
 	(send abort-object ':document-proceed-type (second abort-handler)
 	      *standard-output* resume-handlers)
 	(send *standard-output* ':fresh-line)))))
@@ -1818,7 +1823,7 @@ control will be returned from the micro-routine that got the error."
 (defmethod (floating-exponent-underflow-error :case :proceed-asking-user
 					      :use-zero)
 	   (continuation read-object-function)
-  "Use zero as the result."
+  "Use 0.0 as the result."
   (when (funcall read-object-function
 		 '(:fquery :list-choices nil :fresh-line nil)
 		 "Proceeds using 0.0~:[s~;f~]0 as the value instead? "
@@ -2717,7 +2722,7 @@ cannot be RPLACD'ed.  The list is ~S."
 (defun cell-contents-error-dwimify (sym cell *query-io*)
   (declare (return-list success-p new-value new-symbol))
   (let ((dwim-value (dwimify-package-0 sym (second cell))))
-    (send *query-io* :fresh-line)
+    (send *query-io* ':fresh-line)
     (and dwim-value (values t (funcall (third cell) dwim-value) dwim-value))))
 
 (defmethod (cell-contents-error :user-proceed-types) (proceed-types)
@@ -2802,15 +2807,15 @@ cannot be RPLACD'ed.  The list is ~S."
 
 (defun (function-entry make-ucode-error-function) (ignore sg ignore)
   (make-instance 'function-entry-error
-		 :function (aref (sg-regular-pdl sg) (sg-ap sg))
-		 :argument-list (cdr (get-frame-function-and-args sg (sg-ap sg)))
-		 :nargs (rp-number-args-supplied (sg-regular-pdl sg) (sg-ap sg))
-		 :condition-names (list (function-entry-error sg))))
+		 ':function (aref (sg-regular-pdl sg) (sg-ap sg))
+		 ':argument-list (cdr (get-frame-function-and-args sg (sg-ap sg)))
+		 ':nargs (rp-number-args-supplied (sg-regular-pdl sg) (sg-ap sg))
+		 ':condition-names (list (function-entry-error sg))))
 
 (defsignal-explicit sys:too-few-arguments (function-entry-error sys:too-few-arguments)
   (ignore function nargs argument-list)
   "FUNCTION was called with only NARGS args, which were ARGUMENT-LIST."
-  :function function :nargs nargs :argument-list argument-list)
+  ':function function ':nargs nargs ':argument-list argument-list)
 
 (defsignal-explicit sys:too-many-arguments (function-entry-error sys:too-many-arguments)
   (ignore function nargs argument-list)
@@ -2891,7 +2896,7 @@ cannot be RPLACD'ed.  The list is ~S."
 			      "Arg ~D~A, or ~C: " "Arg ~D~A: ")
 			  i
 			  (format:output nil (display-arg-name " (~A)" -function- i))
-			  #/End)
+			  #/End)
 	       (if flag (return))
 	       (setq new-args
 		     (nconc new-args
@@ -2914,16 +2919,16 @@ cannot be RPLACD'ed.  The list is ~S."
   (funcall continuation ':return-value
 	   (funcall read-object-function ':eval-read
 		    "Form to evaluate and return from ~S: "
-		    (function-name (send self :function)))))
+		    (function-name (send self ':function)))))
 
 (defmethod (function-entry-error :case :proceed-ucode-with-args :fewer-arguments)
 	   (sg n)
-  (send self :proceed-ucode-with-args :new-argument-list sg
+  (send self ':proceed-ucode-with-args ':new-argument-list sg
 	(firstn n argument-list)))
 
 (defmethod (function-entry-error :case :proceed-ucode-with-args :additional-arguments)
 	   (sg args)
-  (send self :proceed-ucode-with-args :new-argument-list sg
+  (send self ':proceed-ucode-with-args ':new-argument-list sg
 	(append argument-list (copylist args))))
 
 (defmethod (function-entry-error :case :proceed-ucode-with-args :new-argument-list)
