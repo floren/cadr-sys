@@ -690,9 +690,9 @@ the arguments that came with the operation."
 :WHICH-OPERATIONS is handled by returning a list of all the
 keywords which are tested for in the clauses."
   (let (otherwise)
-    (cond ((string-equal (caar (last clauses)) 'otherwise)
-	   (setq otherwise (last clauses)
-		 clauses (butlast clauses))))
+    (when (memq (caar (last clauses)) '(t otherwise :otherwise))
+      (setq otherwise (last clauses)
+	    clauses (butlast clauses)))
     `(selectq ,thing
        ,@clauses
        (:which-operations ',(loop for clause in clauses
