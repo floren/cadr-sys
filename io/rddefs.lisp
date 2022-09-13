@@ -139,7 +139,7 @@ Look in the code for SI::PRINT-ARRAY to find out how this is used.")
 (DEFSUBST RDTBL-CODE (RDTBL CHAR)
   (AREF RDTBL 1 CHAR))
 
-(DEFUBST RDTBL-TRANS (RDTBL CHAR)
+(DEFSUBST RDTBL-TRANS (RDTBL CHAR)
   (AREF RDTBL 2 CHAR))
 
 ;;; Names of special characters, as an a-list.  FORMAT searches this list to
