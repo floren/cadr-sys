@@ -90,8 +90,8 @@
 				       (ALPHA-CHAR-P (CHAR STRING (1+ I)))
 				       ;; Special kludge: if it is AM- or PM-, break
 				       ;; here; some hosts send AM-EDT and such.
-				       (NOT (MEMBER-EQUAL (SUBSTRING STRING (MAX 0 (- I 2)) I)
-							  '("AM" "PM" "am" "pm"))))))))
+				       (NOT (MEMBER (SUBSTRING STRING (MAX 0 (- I 2)) I)
+						    '("AM" "PM" "am" "pm"))))))))
 		  (PUSH (MONTH-INTERN
 			  (STRING-UPCASE
 			    (NSUBSTRING STRING
