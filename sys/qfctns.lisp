@@ -1307,6 +1307,25 @@ every element of LIST even if extra args are exhausted by cdr'ing."
 
     (POP LIST)))
 
+(DEFUN FSYMEVAL-IN-ENVIRONMENT (SYMBOL ENVIRONMENT CHECK-SYMBOL-FUNCTION &AUX MUMBLE)
+  "Returns SYMBOL's function or macro definition within ENVIRONMENT,
+If CHECK-SYMBOL-FUNCTION is T we take SYMBOL-FUNCTION of SYMBOL if the function is not
+defined by ENVIRONMENT, otherwise we return NIL if the environment doesn't define it."
+  (DOLIST (FRAME (CAR ENVIRONMENT) (IF CHECK-SYMBOL-FUNCTION (SYMBOL-FUNCTION SYMBOL) NIL))
+    (AND (SETQ MUMBLE (GET-LOCATION-OR-NIL (LOCF FRAME) (LOCF (SYMBOL-FUNCTION SYMBOL))))
+	 (RETURN (CAR MUMBLE)))))
+
+;;; Note: this is different from (macro-function symbol environment),
+;;;  as this doesn't look at alternate-macro-definitions
+(DEFUN MACRO-IN-ENVIRONMENT-P (SYMBOL ENVIRONMENT &AUX TEM)
+  "Returns SYMBOL's macroexpansion function if it is defined as a macro (either
+within ENVIRONMENT or gloablly), or NIL if it does not have a macro definition"
+  (IF (SETQ TEM (FSYMEVAL-IN-ENVIRONMENT SYMBOL ENVIRONMENT NIL))
+      (IF (EQ (CAR-SAFE TEM) 'MACRO) (CADR TEM))
+    (AND (FBOUNDP SYMBOL)
+	 (EQ (CAR-SAFE (SETQ TEM (SYMBOL-FUNCTION SYMBOL))) 'MACRO)
+	 TEM)))
+
 (DEFCONST FUNCTION-START-SYMBOLS
 	  '(LAMBDA SUBST CLI:SUBST NAMED-LAMBDA NAMED-SUBST CURRY-BEFORE CURRY-AFTER)
   "A list starting with one of these symbols can be a function.")
