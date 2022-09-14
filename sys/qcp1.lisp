@@ -8,7 +8,13 @@
 
 (PROCLAIM '(SPECIAL MC-HOLDPROG ULAP-DEBUG LAP-DEBUG))
 
-;;; Initialize all global variables and compiler switches
+(DEFVAR SELF-REFERENCES-PRESENT :UNBOUND
+  "Set to T during pass 1 if any SELF-REFs are generated.")
+
+;;; Initialize all global variables and compiler switches, and make sure
+;;; that some built in variables are known to be special
+;;; (logically, the cold load would contain SPECIAL properties for them,
+;;; but this function is how they actually get put on).
 (DEFUN QC-PROCESS-INITIALIZE ()
   (SETQ HOLDPROG T)
   (SETQ MC-HOLDPROG T)
@@ -20,8 +26,7 @@
   (SETQ ALL-SPECIAL-SWITCH NIL)
   (SETQ OBSOLETE-FUNCTION-WARNING-SWITCH T)
   (SETQ RUN-IN-MACLISP-SWITCH NIL)
-  (SETQ INHIBIT-STYLE-WARNINGS-SWITCH NIL)
-  (SETQ *CHECK-STYLE-P* T))
+  (SETQ INHIBIT-STYLE-WARNINGS-SWITCH NIL))
 
 ;;; Compile a function which already has an interpreted definition,
 ;;; or define it to a newly supplied definition's compilation.
@@ -41,16 +46,17 @@ If NAME is NIL, LAMBDA-EXP is compiled and the result is just returned."
 	(COMPILER-WARNINGS-CONTEXT-BIND
 	  (LET (TEM FILE-SPECIAL-LIST FILE-UNSPECIAL-LIST FILE-LOCAL-DECLARATIONS)
 	    (QC-PROCESS-INITIALIZE)
-	    (OR LAMBDA-EXP
-		(WHEN (FDEFINEDP NAME)
-		  (SETQ TEM (FDEFINITION (SI:UNENCAPSULATE-FUNCTION-SPEC NAME)))
-		  (cond ((consp tem)
-			 (SETQ LAMBDA-EXP TEM))
-			((closurep tem)
-			((SETQ TEM (ASSQ 'INTERPRETED-DEFINITION
-					 (DEBUGGING-INFO TEM)))
-			 (SETQ LAMBDA-EXP (CADR TEM)))))
-		(FERROR NIL "Can't find ~S expression for ~S" 'lambda NAME))
+	    (COND (LAMBDA-EXP)
+		  ((AND (FDEFINEDP NAME)
+			(CONSP (SETQ TEM (FDEFINITION (SI:UNENCAPSULATE-FUNCTION-SPEC NAME)))))
+		   (SETQ LAMBDA-EXP TEM))
+		  ((AND (FDEFINEDP NAME)
+			(SETQ TEM (ASSQ 'INTERPRETED-DEFINITION
+					(DEBUGGING-INFO
+					  (FDEFINITION
+					    (SI:UNENCAPSULATE-FUNCTION-SPEC NAME))))))
+		   (SETQ LAMBDA-EXP (CADR TEM)))
+		  (T (FERROR NIL "Can't find LAMBDA expression for ~S" NAME)))
 	    (LET ((INHIBIT-FDEFINE-WARNINGS T))
 	      (COMPILE-1 NAME LAMBDA-EXP))
 	    NAME))))))
@@ -121,7 +127,7 @@ QC-TF-OUTPUT-MODE is used by LAP to determine where to put the compiled code.
  It is COMPILE-TO-CORE for making an actual FEF, QFASL, REL, or
  QFASL-NO-FDEFINE to simply dump a FEF without trying to define a function
 EXP is the lambda-expression.
-NAME-FOR-FUNCTION is what the FEF's name field should say;
+NAME-FOR-FUNCTION is what the fef's name field should say;
  if omitted, FUNCTION-SPEC is used for that too.
 In MACRO-COMPILE mode, the return value is the value of QLAPP for the first function."
  (WHEN COMPILER-VERBOSE
@@ -150,6 +156,7 @@ In MACRO-COMPILE mode, the return value is the value of QLAPP for the first func
 	 *OUTER-CONTEXT-LOCAL-FUNCTIONS*
 	 *OUTER-CONTEXT-FUNCTION-ENVIRONMENT*
 	 *OUTER-CONTEXT-PROGDESC-ENVIRONMENT*
+;	 COMPILER-LEXICAL-RETPROGDESC
 	 *OUTER-CONTEXT-GOTAG-ENVIRONMENT*
 	 (EXP)
 	 NAME-FOR-FUNCTION
@@ -167,6 +174,7 @@ In MACRO-COMPILE mode, the return value is the value of QLAPP for the first func
       (SETQ *OUTER-CONTEXT-FUNCTION-ENVIRONMENT*
 	    (COMPILER-QUEUE-ENTRY-FUNCTION-ENVIRONMENT (CAR L)))
       (SETQ *OUTER-CONTEXT-PROGDESC-ENVIRONMENT* (COMPILER-QUEUE-ENTRY-PROGDESCS (CAR L)))
+;     (SETQ COMPILER-LEXICAL-RETPROGDESC (COMPILER-QUEUE-ENTRY-RETPROGDESC (CAR L)))
       (SETQ *OUTER-CONTEXT-GOTAG-ENVIRONMENT* (COMPILER-QUEUE-ENTRY-GOTAGS (CAR L)))
       (OBJECT-OPERATION-WITH-WARNINGS (NAME-FOR-FUNCTION)
 	(CATCH-ERROR-RESTART (ERROR "Give up on compiling ~S" NAME-FOR-FUNCTION)
@@ -233,96 +241,79 @@ Otherwise, it is done as soon as it is safe."
 ;;; Compile an internal lambda which must be passed as an argument
 ;;; into a separate function, which has its own name which is a list.
 ;;; That name is returned.
-(defun breakoff (x &optional lexical &aux fname fname-to-give local-name)
-  (let ((non-instance-vars)
-	(sfd self-flavor-declaration)
-	;selfp
-	)
-    (dolist (home vars)
-      (and (eq (var-type home) 'fef-local)
-	   ;; Omit shadowed bindings.
-	   (eq home (assq (var-name home) vars))
-	   (pushnew (var-name home) non-instance-vars)))
-    (dolist (elt *outer-context-variable-environment*)
-      (dolist (home elt)
-	(push (var-name home) non-instance-vars)))
-    (multiple-value-bind (vars-needed-lexically functions-needed-lexically
-			  block-names go-tags)
-	(cw-top-level-lambda-expression
-	  x					;form
-	  (append (if sfd (list* 'self (cddr sfd)))
-		  non-instance-vars)		;variables we're interested in
-	  (mapcar #'car *local-functions*)	;functions we're interested in
-	  *function-environment*)
-      (let (tem w)
-	(dolist (v vars-needed-lexically)
-	  (cond ((and (memq v (cddr sfd)) (not (memq v non-instance-vars)))
-		 (warn 'instance-variable-used-in-internal-lambda :unimplemented
-		       "The ~:[~;special ~]instance variable ~S of flavor ~S
-is being referenced by a lexically closed-over function.
-This will not work outside of the dynamic scope of ~S.~:[
-This problem will be fixed when Mly's brain hurts a little less.~]"
-		     (memq v (cadr sfd)) v (car sfd) 'self (prog1 w (setq w t))))
-		((and (eq v 'self) sfd)
-		 (warn 'self-used-in-internal-lambda :unimplemented
-		       "~S is being referenced by a lexically closed-over function.
-This will not, of course, work outside of the dynamic scope of ~S.~:[
-This problem will be fixed when Mly's brain hurts a little less.~]"
-		       'self 'self (prog1 w (setq w t))))
-		(t
-		 ;; Note: if V is not on VARS, it must come from an outer lexical level.
-		 ;; That is ok, and it still requires this LAMBDA to be lexical to access it.
-		 (setq lexical t)
-		 (setq tem (assq v vars))
-		 (when tem
-		   (pushnew 'fef-arg-used-in-lexical-closures (var-misc tem) :test #'eq))))))
-      (dolist (f functions-needed-lexically)
-	(let ((tem (assq f *local-functions*)))
-	  (when tem
-	    (setq lexical t)
-	    (pushnew 'fef-arg-used-in-lexical-closures
-		     (var-misc (cadr tem)) :test #'eq))))
-      (dolist (b block-names)
-	(let ((tem (assq b *progdesc-environment*)))
-	  (when tem
-	    (setq lexical t)
-	    (setf (progdesc-used-in-lexical-closures-flag tem) t))))
-      (dolist (g go-tags)
-	(let ((tem (assoc-equal g *gotag-environment*)))
-	  (when tem
-	    (setq lexical t)
-	    (setf (gotag-used-in-lexical-closures-flag tem) t)
-	    (setf (progdesc-used-in-lexical-closures-flag (gotag-progdesc tem)) t))))))
-  (if (and (eq (car x) 'named-lambda)
-	   (not (memq (cadr x) local-function-map)))
-      (setq local-name (cadr x))
-      (setq local-name *breakoff-count*))
-  (setq fname `(:internal ,function-to-be-defined ,*breakoff-count*)
-	fname-to-give `(:internal ,name-to-give-function ,local-name))
-  (push local-name local-function-map)
-  (incf *breakoff-count*)
-  (when lexical
-    (incf *lexical-closure-count*))
-  (let ((local-decls local-declarations))
-;>> this is already in there.
-;    ;; Pass along the parent function's self-flavor declaration.
-;    (if sfd (push `(:self-flavor . ,sfd) local-decls))
-    (setq compiler-queue
-	  (nconc compiler-queue
-		 (ncons
-		   (make-compiler-queue-entry
-		     :function-spec fname
-		     :function-name fname-to-give
-		     :definition x
-		     :declarations local-decls
-		     :variables (and lexical (cons t *outer-context-variable-environment*))
-		     :local-functions (and lexical *local-functions*)
-		     :progdescs *progdesc-environment*
-		     :gotags *gotag-environment*
-		     :function-environment *function-environment*
+(DEFUN BREAKOFF (X &OPTIONAL LEXICAL &AUX FNAME FNAME-TO-GIVE LOCAL-NAME)
+  (MULTIPLE-VALUE-BIND (VARS-NEEDED-LEXICALLY FUNCTIONS-NEEDED-LEXICALLY
+			BLOCK-NAMES GO-TAGS)
+      (CW-TOP-LEVEL-LAMBDA-EXPRESSION
+	X					;form
+	(LET ((ACCUM				;variables to check for
+		(LOOP FOR HOME IN VARS
+		      WHEN (AND (EQ (VAR-TYPE HOME) 'FEF-LOCAL)
+				(EQ HOME (ASSQ (VAR-NAME HOME) VARS)))	;Omit shadowed bindings.
+		      COLLECT (VAR-NAME HOME))))
+	  (DOLIST (ELT *OUTER-CONTEXT-VARIABLE-ENVIRONMENT*)
+	    (DOLIST (HOME ELT)
+	      (PUSHNEW (VAR-NAME HOME) ACCUM :TEST 'EQ)))
+	  ACCUM)
+	(MAPCAR #'CAR *LOCAL-FUNCTIONS*)	;functions we're interested in
+	*FUNCTION-ENVIRONMENT*)
+    (DOLIST (V VARS-NEEDED-LEXICALLY)
+      ;; Note: if V is not on VARS, it must come from an outer lexical level.
+      ;; That is ok, and it still requires this LAMBDA to be lexical to access it.
+      (SETQ LEXICAL T)
+      (LET ((TEM (ASSQ V VARS)))
+	(WHEN TEM
+	  (PUSHNEW 'FEF-ARG-USED-IN-LEXICAL-CLOSURES
+		   (VAR-MISC TEM) :TEST 'EQ))))
+    (DOLIST (F FUNCTIONS-NEEDED-LEXICALLY)
+      (LET ((TEM (ASSQ F *LOCAL-FUNCTIONS*)))
+	(WHEN TEM
+	  (SETQ LEXICAL T)
+	  (PUSHNEW 'FEF-ARG-USED-IN-LEXICAL-CLOSURES
+		   (VAR-MISC (CADR TEM)) :TEST 'EQ))))
+    (DOLIST (B BLOCK-NAMES)
+      (LET ((TEM (ASSQ B *PROGDESC-ENVIRONMENT*)))
+	(WHEN TEM
+	  (SETQ LEXICAL T)
+	  (SETF (PROGDESC-USED-IN-LEXICAL-CLOSURES-FLAG TEM) T))))
+    (DOLIST (G GO-TAGS)
+      (LET ((TEM (SYS:ASSOC-EQUAL G *GOTAG-ENVIRONMENT*)))
+	(WHEN TEM
+	  (SETQ LEXICAL T)
+	  (SETF (GOTAG-USED-IN-LEXICAL-CLOSURES-FLAG TEM) T)
+	  (SETF (PROGDESC-USED-IN-LEXICAL-CLOSURES-FLAG (GOTAG-PROGDESC TEM)) T)))))
+  (IF (AND (EQ (CAR X) 'NAMED-LAMBDA)
+	   (NOT (MEMQ (CADR X) LOCAL-FUNCTION-MAP)))
+      (SETQ LOCAL-NAME (CADR X))
+    (SETQ LOCAL-NAME *BREAKOFF-COUNT*))
+  (SETQ FNAME `(:INTERNAL ,FUNCTION-TO-BE-DEFINED ,*BREAKOFF-COUNT*)
+	FNAME-TO-GIVE `(:INTERNAL ,NAME-TO-GIVE-FUNCTION ,LOCAL-NAME))
+  (PUSH LOCAL-NAME LOCAL-FUNCTION-MAP)
+  (INCF *BREAKOFF-COUNT*)
+  (WHEN LEXICAL
+    (INCF *LEXICAL-CLOSURE-COUNT*))
+  (LET ((SFD SELF-FLAVOR-DECLARATION)
+	(LOCAL-DECLS LOCAL-DECLARATIONS))
+    ;; Pass along the parent function's self-flavor declaration.
+    (IF SFD (PUSH `(:SELF-FLAVOR . ,SFD) LOCAL-DECLS))
+    (SETQ COMPILER-QUEUE
+	  (NCONC COMPILER-QUEUE
+		 (NCONS
+		   (MAKE-COMPILER-QUEUE-ENTRY
+		     :FUNCTION-SPEC FNAME
+		     :FUNCTION-NAME FNAME-TO-GIVE
+		     :DEFINITION X
+		     :DECLARATIONS LOCAL-DECLS
+;;; ******** why use this rather than *variable-environment* ?
+		     :VARIABLES (AND LEXICAL (CONS T *OUTER-CONTEXT-VARIABLE-ENVIRONMENT*))
+		     :LOCAL-FUNCTIONS (AND LEXICAL *LOCAL-FUNCTIONS*)
+		     :PROGDESCS *PROGDESC-ENVIRONMENT*
+;		     :RETPROGDESC RETPROGDESC
+		     :GOTAGS *GOTAG-ENVIRONMENT*
+		     :FUNCTION-ENVIRONMENT *FUNCTION-ENVIRONMENT*
 		     )))))
-  (let ((tem `(breakoff-function ,fname)))
-    (if lexical `(lexical-closure ,tem) tem)))
+  (LET ((TEM `(BREAKOFF-FUNCTION ,FNAME)))
+    (IF LEXICAL `(LEXICAL-CLOSURE ,TEM) TEM)))
 
 (DEFUN RECORD-VARIABLES-USED-IN-LEXICAL-CLOSURES ()
   (LET ((VARS-USED
@@ -364,28 +355,28 @@ This problem will be fixed when Mly's brain hurts a little less.~]"
        (VAR-LAP-ADDRESS HOME))
     (WHEN (MEMQ HOME (CAR E))
       (RETURN
-	`(LEXICAL-REF ,(DPB I (BYTE 12. 12.) (FIND-POSITION-IN-LIST HOME (CAR E))))))))
+	`(LEXICAL-REF ,(DPB I (BYTE 12. 12.)
+			    (FIND-POSITION-IN-LIST HOME (CAR E))))))))
 
 ;;; The SELF-FLAVOR-DECLARATION variable looks like
-;;; (flavor-name special-ivars instance-var-names...)
+;;; (flavor-name map-set-up instance-var-names...)
 ;;; and describes the flavor we are compiling access to instance vars of.
 (DEFUN TRY-REF-SELF (VAR)
-  (WHEN (MEMQ VAR (CDDR SELF-FLAVOR-DECLARATION))
-    ;; If variable is explicitly declared special, use that instead.
-    (COND ((LET ((BARF-SPECIAL-LIST NIL))
-	     (SPECIALP VAR))
-	   (OR (MEMQ VAR (CADR SELF-FLAVOR-DECLARATION))
-	       (WARN 'SPECIAL-VARIABLE-IS-UNSPECIAL-INSTANCE-VARIABLE :IMPOSSIBLE
-		     "The special variable ~S is an instance variable of ~S
-but was not mentioned in a ~S in that flavor.
-This function will not execute correctly unless the ~S is fixed."
-		     VAR (CAR SELF-FLAVOR-DECLARATION)
-		     :SPECIAL-INSTANCE-VARIABLES 'DEFFLAVOR))
-	   (MAKESPECIAL VAR)
-	   VAR)
-	  (T
-	   (SETQ SELF-REFERENCES-PRESENT T)
-	   `(SELF-REF ,(CAR SELF-FLAVOR-DECLARATION) ,VAR)))))
+  (COND ((MEMQ VAR (CDDR SELF-FLAVOR-DECLARATION))
+	 ;; If variable is explicitly declared special, use that instead.
+	 (COND ((LET ((BARF-SPECIAL-LIST NIL))
+		  (SPECIALP VAR))
+		(OR (MEMQ VAR (CADR SELF-FLAVOR-DECLARATION))
+		    (WARN 'SPECIAL-VARIABLE-IS-UNSPECIAL-INSTANCE-VARIABLE :IMPOSSIBLE
+			  "The special variable ~S is an instance variable of ~S
+but was not mentioned in a :SPECIAL-INSTANCE-VARIABLES in that flavor.
+This function will not execute correctly unless the DEFFLAVOR is fixed."
+			  VAR (CAR SELF-FLAVOR-DECLARATION)))
+		(MAKESPECIAL VAR)
+		VAR)
+	       (T
+		(SETQ SELF-REFERENCES-PRESENT T)
+		`(SELF-REF ,(CAR SELF-FLAVOR-DECLARATION) ,VAR))))))
 
 ;;;; QCOMPILE0 compiles one function, producing a list of lap code in QCMP-OUTPUT.
 ;;; The first argument is the lambda-expression which defines the function.
@@ -400,8 +391,6 @@ This function will not execute correctly unless the ~S is fixed."
 (PROCLAIM '(SPECIAL WITHIN-CATCH CALL-BLOCK-PDL-LEVELS TAGOUT P2FN
 		    BDEST DROPTHRU M-V-TARGET WITHIN-POSSIBLE-LOOP))
 
-(DEFPROP COMPILER-ARGLIST T SI::DEBUG-INFO)
-
 (DEFUN QCOMPILE0 (EXP FUNCTION-TO-BE-DEFINED GENERATING-MICRO-COMPILER-INPUT-P
 		  &OPTIONAL (NAME-TO-GIVE-FUNCTION FUNCTION-TO-BE-DEFINED))
   (LET ((EXP1 EXP)
@@ -414,7 +403,7 @@ This function will not execute correctly unless the ~S is fixed."
 	(ALLGOTAGS)
 	(TLEVEL T)
 	(P1VALUE T)				;Compiling for value
-	(BINDP NIL)				;%BIND not yet used in this frame
+	(BINDP NIL)				;%BIND not used
 	(LVCNT)
 	(DROPTHRU T)				;Can drop in if false, flush stuff till tag or
 	(MAXPDLLVL 0)				;deepest lvl reached by local pdl
@@ -424,6 +413,7 @@ This function will not execute correctly unless the ~S is fixed."
 	(*LOCAL-FUNCTIONS* *OUTER-CONTEXT-LOCAL-FUNCTIONS*)
 	(*FUNCTION-ENVIRONMENT* *OUTER-CONTEXT-FUNCTION-ENVIRONMENT*)
 	(*PROGDESC-ENVIRONMENT* *OUTER-CONTEXT-PROGDESC-ENVIRONMENT*)
+;	(RETPROGDESC COMPILER-LEXICAL-RETPROGDESC)
 	(*GOTAG-ENVIRONMENT* *OUTER-CONTEXT-GOTAG-ENVIRONMENT*)
 	(LL)
 	(TAGOUT)
@@ -442,7 +432,8 @@ This function will not execute correctly unless the ~S is fixed."
 	(VARIABLES-USED-IN-LEXICAL-CLOSURES)
 	(MACROS-EXPANDED)			;List of all macros found in this function,
 						; for the debugging info.
-	(SELF-FLAVOR-DECLARATION (cdr (assq :self-flavor local-declarations)))
+	(SELF-FLAVOR-DECLARATION)		;(declare (:self-flavor ...))
+						; cdr is list of instance variables of flavor
 	(SELF-REFERENCES-PRESENT)		;Bound to T if any SELF-REFs are present
 	(LOCAL-DECLARATIONS LOCAL-DECLARATIONS)	;Don't mung ouside value
 	(SUBST-FLAG)				;T if this is a SUBST being compiled.
@@ -474,8 +465,7 @@ This function will not execute correctly unless the ~S is fixed."
       ;; declarations made outside of compilation
       ;; but after anything coming from a DECLARE in the body.
       (DOLIST (ELT (REVERSE EXPR-DEBUG-INFO))
-	(WHEN (AND (NEQ (CAR ELT) 'DOCUMENTATION)
-		   (GET (CAR ELT) 'SI::DEBUG-INFO))
+	(WHEN (ASSQ (CAR ELT) *DEBUG-INFO-LOCAL-DECLARATION-TYPES*)
 	  (PUSH ELT LOCAL-DECLARATIONS))))
     (SETQ LL (CADR EXP1))			;lambda list.
     (SETQ BODY (CDDR EXP1))
@@ -484,19 +474,18 @@ This function will not execute correctly unless the ~S is fixed."
 	(SETQ THIS-FUNCTION-ARGLIST-FUNCTION-NAME NAME-TO-GIVE-FUNCTION
 	      THIS-FUNCTION-ARGLIST LL))
     ;; Extract documentation string and declarations from the front of the body.
-    (MULTIPLE-VALUE-SETQ (BODY LOCAL-DECLARATIONS DOCUMENTATION)
-;>> need to pass environment into extract-declarations here
+    (MULTIPLE-VALUE (BODY LOCAL-DECLARATIONS DOCUMENTATION)
       (EXTRACT-DECLARATIONS BODY LOCAL-DECLARATIONS T))
     (SETQ SELF-FLAVOR-DECLARATION
-	  (CDR (ASSQ ':SELF-FLAVOR LOCAL-DECLARATIONS)))
+	  (CDR (ASS #'STRING= "SELF-FLAVOR" LOCAL-DECLARATIONS)))
     ;; If the user just did (declare (:self-flavor flname)),
     ;; compute the full declaration for that flavor.
     (WHEN (AND SELF-FLAVOR-DECLARATION
 	       (NULL (CDR SELF-FLAVOR-DECLARATION)))
       (SETQ SELF-FLAVOR-DECLARATION
-	    (CDR (SI::FLAVOR-DECLARATION (CAR SELF-FLAVOR-DECLARATION)))))
+	    (CDR (SI:FLAVOR-DECLARATION (CAR SELF-FLAVOR-DECLARATION)))))
     ;; Actual DEFMETHODs must always have SELF-FLAVOR
-    (WHEN (EQ (CAR-SAFE FUNCTION-TO-BE-DEFINED) :METHOD)
+    (WHEN (EQ (CAR-SAFE FUNCTION-TO-BE-DEFINED) ':METHOD)
       (SETQ SELF-REFERENCES-PRESENT T))
     ;; Process &KEY and &AUX vars, if there are any.
     (WHEN (OR (MEMQ '&KEY LL) (MEMQ '&AUX LL))
@@ -570,17 +559,16 @@ This function will not execute correctly unless the ~S is fixed."
 				   VARIABLES-USED-IN-LEXICAL-CLOSURES)))))
     ;; Set up the debug info from the local declarations and other things
     (LET ((DEBUG-INFO NIL) TEM)
-      (AND DOCUMENTATION (PUSH `(DOCUMENTATION ,DOCUMENTATION) DEBUG-INFO))
-      (DOLIST (DCL LOCAL-DECLARATIONS)
-	(WHEN (SYMBOLP (CAR DCL))
-	  (SETQ TEM (GET (CAR DCL) 'SI::DEBUG-INFO))
-	  (IF (EQ TEM T) (SETQ TEM (CAR DCL)))
-	  (UNLESS (ASSQ TEM DEBUG-INFO)
-	    (PUSH (IF (EQ TEM (CAR DCL)) DCL (CONS TEM (CDR DCL))) DEBUG-INFO))))
+      (AND DOCUMENTATION (PUSH `(:DOCUMENTATION ,DOCUMENTATION) DEBUG-INFO))
+      (DOLIST (DCL *DEBUG-INFO-LOCAL-DECLARATION-TYPES*)
+	(IF (SETQ TEM (ASSQ (CAR DCL) LOCAL-DECLARATIONS))
+	    (IF (NEQ (CAR DCL) (CDR DCL))
+		(PUSH (CONS (CDR DCL) (CDR TEM)) DEBUG-INFO)
+	      (PUSH TEM DEBUG-INFO))))
       ;; Propagate any other kinds of debug info from the expr definition.
       (DOLIST (DCL EXPR-DEBUG-INFO)
-	(UNLESS (ASSQ (CAR DCL) DEBUG-INFO)
-	  (PUSH DCL DEBUG-INFO)))
+	(OR (ASSQ (CAR DCL) DEBUG-INFO)
+	    (PUSH DCL DEBUG-INFO)))
       (WHEN (PLUSP *BREAKOFF-COUNT*)		; local functions
 	(LET ((INTERNAL-OFFSETS (MAKE-LIST *BREAKOFF-COUNT*)))
 	  (OUTF `(BREAKOFFS ,INTERNAL-OFFSETS))
@@ -606,7 +594,7 @@ This function will not execute correctly unless the ~S is fixed."
 		;; but put the names and sxhashes into the file's list.
 		(PUSH `(:MACROS-EXPANDED ,MACROS-EXPANDED) DEBUG-INFO)
 		(DOLIST (M MACROS-AND-SXHASHES)
-		  (OR (MEMBER-EQUAL M QC-FILE-MACROS-EXPANDED)
+		  (OR (SYS:MEMBER-EQUAL M QC-FILE-MACROS-EXPANDED)
 		      (LET ((DEFAULT-CONS-AREA BACKGROUND-CONS-AREA))
 			(PUSH (COPYTREE M) QC-FILE-MACROS-EXPANDED)))))
 	    (PUSH `(:MACROS-EXPANDED ,MACROS-AND-SXHASHES)
@@ -621,11 +609,9 @@ This function will not execute correctly unless the ~S is fixed."
 					       (IF (LDB-TEST %ARG-DESC-EVALED-REST ARGS-INFO)
 						   1 0))
 					    :INITIAL-ELEMENT '(GENSYM)))))
-;>> this somewhat bogus. The environment should be much hairier. Or should it?
-	  (UNLESS (WITH-STACK-LIST (ENV *FUNCTION-ENVIRONMENT*)
-;>> BULLSHIT. this cannot hope to work. sigh.
-		    (EQUAL (SI::SUBST-EXPAND EXP DUMMY-FORM ENV NIL)
-			   (SI::SUBST-EXPAND EXP DUMMY-FORM ENV T)))
+	  (UNLESS (WITH-STACK-LIST (SI:*MACROEXPAND-ENVIRONMENT* *FUNCTION-ENVIRONMENT*)
+		    (EQUAL (SI:SUBST-EXPAND EXP DUMMY-FORM)
+			   (SI:SUBST-EXPAND EXP DUMMY-FORM T)))
 	    ;; If simple and thoughtful substitution give the same result
 	    ;; even with the most intractable arguments,
 	    ;; we need not use thoughtful substitution for this defsubst.
@@ -657,7 +643,7 @@ This function will not execute correctly unless the ~S is fixed."
 	  ((NULL FUNCTION) NIL)
 	  ((SYMBOLP FUNCTION) (EXPR-SXHASH FUNCTION))
 	  ((CONSP FUNCTION)
-	   (SXHASH (SI::LAMBDA-EXP-ARGS-AND-BODY FUNCTION))))))
+	   (SXHASH (SI:LAMBDA-EXP-ARGS-AND-BODY FUNCTION))))))
 
 ;;; This must follow FUNCTION-EXPR-SXHASH or else FASLOAD bombs out
 ;;; loading this file for the first time.
@@ -728,17 +714,15 @@ We create this:
     (IF (EQ (CAR LAMBDA-EXP) 'LAMBDA)
 	(SETQ LAMBDA-LIST (CADR LAMBDA-EXP) BODY (CDDR LAMBDA-EXP))
       (SETQ LAMBDA-LIST (CADDR LAMBDA-EXP) BODY (CDDDR LAMBDA-EXP)))	;named-lambda
-    (MULTIPLE-VALUE-SETQ (POSITIONAL-ARGS NIL AUXVARS
-			  REST-ARG POSITIONAL-ARG-NAMES
-			  KEYKEYS KEYNAMES KEYINITS KEYFLAGS ALLOW-OTHER-KEYS)
+    (MULTIPLE-VALUE (POSITIONAL-ARGS NIL AUXVARS
+		     REST-ARG POSITIONAL-ARG-NAMES
+		     KEYKEYS KEYNAMES NIL KEYINITS KEYFLAGS ALLOW-OTHER-KEYS)
       (DECODE-KEYWORD-ARGLIST LAMBDA-LIST))
     (SETQ PSEUDO-KEYNAMES (COPY-LIST KEYNAMES))
-    (MULTIPLE-VALUE-SETQ (NIL DECLS)
-;>> need to pass environment into extract-declarations here
-      (EXTRACT-DECLARATIONS BODY NIL NIL))
-    (DO ((D DECLS (CDR D)))
-	((NULL D))
-      (SETF (CAR D) `(DECLARE ,(CAR D))))
+    (multiple-value (nil decls) (extract-declarations body nil nil))
+    (do ((d decls (cdr d)))
+	((null d))
+      (setf (car d) `(declare ,(car d))))
     ;; For each keyword arg, decide whether we need to init it to KEYWORD-GARBAGE
     ;; and check explicitly whether that has been overridden.
     ;; If the arg is optional
@@ -759,11 +743,11 @@ We create this:
 		 (NOT (ASSQ KEYNAME VARS))
 		 (NOT (LEXICAL-VAR-P KEYNAME))
 		 (NOT (SPECIALP KEYNAME)))
-	    (PROGN (SETF (CAR KIS) 'SI::KEYWORD-GARBAGE)
+	    (PROGN (SETF (CAR KIS) 'SI:KEYWORD-GARBAGE)
 		   (SETQ PSEUDO-KEYNAME (GENSYM))
 		   (SETF (CAR PKNS) PSEUDO-KEYNAME)
 		   (PUSH `(,KEYNAME
-			   (COND ((EQ ,PSEUDO-KEYNAME SI::KEYWORD-GARBAGE)
+			   (COND ((EQ ,PSEUDO-KEYNAME SI:KEYWORD-GARBAGE)
 				  ,KEYINIT)
 				 (T ,(AND KEYFLAG `(SETQ ,KEYFLAG T))
 				    ,PSEUDO-KEYNAME)))
@@ -776,7 +760,7 @@ We create this:
     (OR REST-ARG (SETQ REST-ARG (GENSYM)
 		       MAYBE-REST-ARG (LIST '&REST REST-ARG)))
     `(LAMBDA (,@POSITIONAL-ARGS ,@MAYBE-REST-ARG)
-       (LET* (,@(MAPCAR #'(LAMBDA (V INIT) `(,V ,INIT)) PSEUDO-KEYNAMES KEYINITS)
+       (LET* (,@(MAPCAR '(LAMBDA (V INIT) `(,V ,INIT)) PSEUDO-KEYNAMES KEYINITS)
 	      ,@KEYFLAGS)
 ;       (COND ((EQ (CAR ,REST-ARG) 'PERMUTATION-TABLE)
 ;	      (OR (%PERMUTE-ARGS)
@@ -790,63 +774,60 @@ We create this:
 ;	      ,(AND (NOT MAYBE-REST-ARG) `(SETQ ,REST-ARG (CDDR ,REST-ARG))))
 ;	     (T
 	 (WHEN ,REST-ARG
-	   (SI::STORE-KEYWORD-ARG-VALUES (%STACK-FRAME-POINTER)
-					 ,REST-ARG ',KEYKEYS
-					 ,ALLOW-OTHER-KEYS
-					 ;; kludgey-compilation-variable-location is just like
-					 ;; variable-location except that it doesn't increment
-					 ;; the var-use-count of its arg
-					 (KLUDGEY-COMPILATION-VARIABLE-LOCATION
-					   ,(CAR PSEUDO-KEYNAMES))))
+	   (SI:STORE-KEYWORD-ARG-VALUES (%STACK-FRAME-POINTER)
+					,REST-ARG ',KEYKEYS
+					,ALLOW-OTHER-KEYS
+					(VARIABLE-LOCATION ,(CAR PSEUDO-KEYNAMES))))
 	 (LET* ,KEYCHECKS
-	   ,@DECLS
+	   ,@decls
 	   ((LAMBDA ,AUXVARS . ,BODY)))))))
 
-;This optimization isn't in use yet, and may never be
-; if microcoding STORE-KEYWORD-ARG-VALUES is winning enough.
+#|This optimization isn't in use yet, and may never be
+  if microcoding STORE-KEYWORD-ARG-VALUES is winning enough.
 
-;;; Given a permutation table for keyword args whose contents are garbage,
-;;; and the actual arglist with keywords,
-;;; compute the contents of the permutation table
-;;; based on calling the fef NEW-FEF.
-;(DEFUN RECOMPUTE-KEYWORD-PERMUTATION-TABLE (TABLE-AND-ARGS NEW-FEF KEYWORDS)
-;  (LET ((TABLE (CAR TABLE-AND-ARGS)))
-;    (DO ((I 0 (1+ I))
-;	 (ARGS1 (CDR TABLE-AND-ARGS) (CDDR ARGS1)))
-;	((NULL ARGS1)
-;	 (SETF (ARRAY-LEADER TABLE 0) NEW-FEF))
-;      (LET ((KEYWORD (CAR ARGS1)))
-;	(DO (INDEX) (())
-;	  (SETQ INDEX (FIND-POSITION-IN-LIST KEYWORD KEYWORDS))
-;	  (AND INDEX (RETURN (SETF (AREF TABLE I) INDEX)))
-;	  (SETQ KEYWORD (CERROR T NIL :UNDEFINED-ARG-KEYWORD
-;				"Keyword arg keyword ~S unrecognized"
-;				KEYWORD)))))))
+;Given a permutation table for keyword args whose contents are garbage,
+;and the actual arglist with keywords,
+;compute the contents of the permutation table
+;based on calling the fef NEW-FEF.
+(DEFUN RECOMPUTE-KEYWORD-PERMUTATION-TABLE (TABLE-AND-ARGS NEW-FEF KEYWORDS)
+  (LET ((TABLE (CAR TABLE-AND-ARGS)))
+    (DO ((I 0 (1+ I))
+	 (ARGS1 (CDR TABLE-AND-ARGS) (CDDR ARGS1)))
+	((NULL ARGS1)
+	 (SETF (ARRAY-LEADER TABLE 0) NEW-FEF))
+      (LET ((KEYWORD (CAR ARGS1)))
+	(DO (INDEX) (())
+	  (SETQ INDEX (FIND-POSITION-IN-LIST KEYWORD KEYWORDS))
+	  (AND INDEX (RETURN (SETF (AREF TABLE I) INDEX)))
+	  (SETQ KEYWORD (CERROR T NIL :UNDEFINED-ARG-KEYWORD
+				"Keyword arg keyword ~S unrecognized"
+				KEYWORD)))))))
 
 ;;; Given a form that is a call to a function which takes keyword args,
 ;;; stick in a permutation table, if the keyword names are constant.
 ;;; The question of how calls to such functions are detected is still open.
-;(DEFUN OPTIMIZE-KEYWORD-CALL (FORM)
-;  (LET ((ARGS-INFO (ARGS-INFO (CAR FORM))))
-;    (LET ((KEYARGS (CDR (NTHCDR (LDB %%ARG-DESC-MAX-ARGS ARGS-INFO) FORM))))
-;      (COND ((DO ((TAIL KEYARGS (CDDR TAIL)))
-;		 ((NULL TAIL) T)
-;	       (OR (QUOTEP (CAR TAIL)) (RETURN NIL)))
-;	     ;; Here if every keyword name is quoted.
-;	     `(,@(LDIFF FORM KEYARGS)
-;	       'PERMUTATION-TABLE
-;	       ',(MAKE-ARRAY (TRUNCATE 2 (LENGTH KEYARGS))
-;			     :LEADER-LENGTH 1 :TYPE ART-8B)
-;	       . ,KEYARGS))
-;	    (T FORM)))))
+(DEFUN OPTIMIZE-KEYWORD-CALL (FORM)
+  (LET ((ARGS-INFO (ARGS-INFO (CAR FORM))))
+    (LET ((KEYARGS (CDR (NTHCDR (LDB %%ARG-DESC-MAX-ARGS ARGS-INFO) FORM))))
+      (COND ((DO ((TAIL KEYARGS (CDDR TAIL)))
+		 ((NULL TAIL) T)
+	       (OR (QUOTEP (CAR TAIL)) (RETURN NIL)))
+	     ;; Here if every keyword name is quoted.
+	     `(,@(LDIFF FORM KEYARGS)
+	       'PERMUTATION-TABLE
+	       ',(MAKE-ARRAY (TRUNCATE 2 (LENGTH KEYARGS))
+			     :LEADER-LENGTH 1 :TYPE ART-8B)
+	       . ,KEYARGS))
+	    (T FORM)))))
 
 ;;; Temporary definition for what ought to be defined in the microcode.
 ;;; Keyed functions' expansions call this, but until calls are open-coded
 ;;; the arguments will never be such as to make the call actually happen.
 ;;; The open-coding won't be installed until the ucode function works.
 ;;; Meanwhile this prevents warning messages when keyed functions are compiled.
-;(DEFUN %PERMUTE-ARGS () (FERROR NIL "%PERMUTE-ARGS called"))
+(DEFUN %PERMUTE-ARGS () (FERROR NIL "%PERMUTE-ARGS called"))
 
+|#
 
 ;;;; Pass 1.
 ;;; We expand all macros and perform source-optimizations
@@ -867,78 +848,77 @@ We create this:
 
 (DEFUN P1 (FORM &OPTIONAL DONT-OPTIMIZE &AUX TM)
   (UNLESS DONT-OPTIMIZE
-    (SETQ FORM (COMPILER-OPTIMIZE FORM)))
-  (SETQ FORM (COND ((ATOM FORM)
-		    (COND ((SELF-EVALUATING-P FORM)
-			   `',FORM)
-			  ((SETQ TM (ASSQ FORM VARS))
-			   (AND (EQ (VAR-KIND TM) 'FEF-ARG-FREE)
-				(ZEROP (VAR-USE-COUNT TM))
-				(PUSH (VAR-NAME TM) FREEVARS))
-			   (INCF (VAR-USE-COUNT TM))
-			   (VAR-LAP-ADDRESS TM))
-			  ((TRY-REF-SELF FORM))
-			  ((SPECIALP FORM)
-			   (MAKESPECIAL FORM) FORM)
-			  ((TRY-REF-LEXICAL-VAR FORM))
-			  (T (MAKESPECIAL FORM) FORM)))
-		   ((EQ (CAR FORM) 'QUOTE) FORM)
-		   ;; Certain constructs must be checked for here
-		   ;; so we can call P1 recursively without setting TLEVEL to NIL.
-		   ((NOT (ATOM (CAR FORM)))
-		    ;; Expand any lambda macros -- just returns old function if none found
-		    (LET ((FCTN (CAR FORM)))
-		      (OR (SYMBOLP (CAR FCTN))
-			  (WARN 'BAD-FUNCTION-CALLED :IMPOSSIBLE
-				"There appears to be a call to a function whose CAR is ~S."
-				(CAR FCTN)))
-		      (IF (MEMQ (CAR FCTN) '(LAMBDA NAMED-LAMBDA))
-			  (P1LAMBDA FCTN (CDR FORM))
-			;; Old Maclisp evaluated functions.
-			(WARN 'EXPRESSION-AS-FUNCTION :VERY-OBSOLETE
-			      "The expression ~S is used as a function; use ~S."
-			      (CAR FORM) 'FUNCALL)
-			(P1 `(FUNCALL . ,FORM)))))
-		   ((NOT (SYMBOLP (CAR FORM)))
-		    (WARN 'BAD-FUNCTION-CALLED :IMPOSSIBLE
-			  "~S is used as a function to be called." (CAR FORM))
-		    (P1 `(PROGN . ,(CDR FORM))))
-		   ((SETQ TM (ASSQ (CAR FORM) *LOCAL-FUNCTIONS*))
-		    (INCF (VAR-USE-COUNT (CADR TM)))
-		    `(FUNCALL ,(TRY-REF-LEXICAL-HOME (CADR TM))
-			      . ,(P1PROGN-1 (CDR FORM))))
-		   ((MEMQ (CAR FORM) '(PROG PROG*))
-		    (P1PROG FORM))
-		   ((MEMQ (CAR FORM) '(LET LET*))
-		    (P1LET FORM))
-		   ((EQ (CAR FORM) 'BLOCK)
-		    (P1BLOCK FORM))
-		   ((EQ (CAR FORM) 'TAGBODY)
-		    (P1TAGBODY FORM))
-		   ((EQ (CAR FORM) '%POP)	;P2 specially checks for this
-		    FORM)
-		   (T (SETQ TLEVEL NIL)
-		      ;; Check for functions with special P1 handlers.
-		      (IF (SETQ TM (GET (CAR FORM) 'P1))
-			  (FUNCALL TM FORM)
-			(IF (NOT (AND ALLOW-VARIABLES-IN-FUNCTION-POSITION-SWITCH
-				      (ASSQ (CAR FORM) VARS)
-				      (NULL (FUNCTION-P (CAR FORM)))))
-			    (P1ARGC FORM (GETARGDESC (CAR FORM)))
-			  (WARN 'EXPRESSION-AS-FUNCTION :VERY-OBSOLETE
-				"The variable ~S is used in function position; use FUNCALL."
-				(CAR FORM))
-			  (P1 `(FUNCALL . ,FORM)))))))
-  (IF (AND (ATOM FORM) (SELF-EVALUATING-P FORM))
-      ;; a p1 handler may return :foo, for example
-      `',FORM
-      FORM))
+    (SETQ FORM (COMPILER-OPTIMIZE FORM T)))
+  (COND
+    ((ATOM FORM)
+     (COND ((AND (CONSTANTP FORM)
+		 (OR (NOT (SYMBOLP FORM)) (BOUNDP FORM))
+		 (EQ FORM (EVAL FORM)))
+	    `',FORM)
+	   ((SETQ TM (ASSQ FORM VARS))
+	    (AND (EQ (VAR-KIND TM) 'FEF-ARG-FREE)
+		 (ZEROP (VAR-USE-COUNT TM))
+		 (PUSH (VAR-NAME TM) FREEVARS))
+	    (INCF (VAR-USE-COUNT TM))
+	    (VAR-LAP-ADDRESS TM))
+	   ((TRY-REF-SELF FORM))
+	   ((SPECIALP FORM)
+	    (MAKESPECIAL FORM) FORM)
+	   ((TRY-REF-LEXICAL-VAR FORM))
+	   (T (MAKESPECIAL FORM) FORM)))
+    ((EQ (CAR FORM) 'QUOTE) FORM)
+    ;; Certain constructs must be checked for here
+    ;; so we can call P1 recursively without setting TLEVEL to NIL.
+    ((NOT (ATOM (CAR FORM)))
+     ;; Expand any lambda macros -- just returns old function if none found
+     (LET ((FCTN (CAR FORM)))
+       (OR (SYMBOLP (CAR FCTN))
+	   (WARN 'BAD-FUNCTION-CALLED :IMPOSSIBLE
+		 "There appears to be a call to a function whose CAR is ~S."
+		 (CAR FCTN)))
+       (IF (MEMQ (CAR FCTN) '(LAMBDA NAMED-LAMBDA))
+	   (P1LAMBDA FCTN (CDR FORM))
+	 ;; Old Maclisp evaluated functions.
+	 (WARN 'EXPRESSION-AS-FUNCTION :VERY-OBSOLETE
+	       "The expression ~S is used as a function; use FUNCALL."
+	       (CAR FORM))
+	 (P1 `(FUNCALL . ,FORM)))))
+    ((NOT (SYMBOLP (CAR FORM)))
+     (WARN 'BAD-FUNCTION-CALLED :IMPOSSIBLE
+	   "~S is used as a function to be called." (CAR FORM))
+     (P1 `(PROGN . ,(CDR FORM))))
+    ((SETQ TM (ASSQ (CAR FORM) *LOCAL-FUNCTIONS*))
+     (INCF (VAR-USE-COUNT (CADR TM)))
+     `(FUNCALL ,(TRY-REF-LEXICAL-HOME (CADR TM))
+	       . ,(P1PROGN-1 (CDR FORM))))
+    ((MEMQ (CAR FORM) '(PROG PROG*))
+     (P1PROG FORM))
+    ((MEMQ (CAR FORM) '(LET LET*))
+     (P1LET FORM))
+    ((EQ (CAR FORM) 'BLOCK)
+     (P1BLOCK FORM))
+    ((EQ (CAR FORM) 'TAGBODY)
+     (P1TAGBODY FORM))
+    ((EQ (CAR FORM) '%POP)			;P2 specially checks for this
+      FORM)
+    (T (SETQ TLEVEL NIL)
+       ;; Check for functions with special P1 handlers.
+       (IF (SETQ TM (GET (CAR FORM) 'P1))
+	   (FUNCALL TM FORM)
+	 (IF (NOT (AND ALLOW-VARIABLES-IN-FUNCTION-POSITION-SWITCH
+		       (ASSQ (CAR FORM) VARS)
+		       (NULL (FUNCTION-P (CAR FORM)))))
+	     (P1ARGC FORM (GETARGDESC (CAR FORM)))
+	   (WARN 'EXPRESSION-AS-FUNCTION :VERY-OBSOLETE
+		 "The variable ~S is used in function position; use FUNCALL."
+		 (CAR FORM))
+	   (P1 `(FUNCALL . ,FORM)))))))
 
 (DEFUN FUNCTION-P (X)
   (COND ((SYMBOLP X)
 	 (OR (FBOUNDP X) (GETL X '(*EXPR ARGDESC))))
 	((FDEFINEDP X))
-	(T (FUNCALL (GET (CAR X) 'FUNCTION-SPEC-HANDLER) 'SI::COMPILER-FDEFINEDP X))))
+	(T (FUNCALL (GET (CAR X) 'FUNCTION-SPEC-HANDLER) 'SI:COMPILER-FDEFINEDP X))))
 
 (DEFUN MSPL2 (X)
   (WHEN (LET ((BARF-SPECIAL-LIST THIS-FUNCTION-BARF-SPECIAL-LIST))
@@ -950,7 +930,7 @@ We create this:
 	    "The variable ~S is used free; assumed special." X))
     (LET ((DEFAULT-CONS-AREA BACKGROUND-CONS-AREA))
       (UNLESS INHIBIT-SPECIAL-WARNINGS  ;Free var in a DEFSUBST shouldn't be special for whole file.
-	(PUSHNEW X BARF-SPECIAL-LIST :TEST #'EQ))
+	(PUSHNEW X BARF-SPECIAL-LIST :TEST 'EQ))
       (PUSH X THIS-FUNCTION-BARF-SPECIAL-LIST))
     (WHEN (ASSQ X ALLVARS)
       (WARN 'FREE-VARIABLE :IMPOSSIBLE
@@ -958,117 +938,112 @@ We create this:
 
 (DEFUN MAKESPECIAL (X)
   (MSPL2 X)
-  (PUSHNEW X FREEVARS :TEST #'EQ)
+  (PUSHNEW X FREEVARS :TEST 'EQ)
   T)
 
 ;;; make the first cons of form a 3-hunk to flag that has been optimized
 ;;; what a hack! rms' idea
-(defun flag-already-optimized (form &aux l)
-  (if (not (consp form))
-      form
-    (without-interrupts
-      (setq l (make-list 3 :initial-element 'already-optimized))
-      (setf (car l) (car form)
-	    (cadr l) (cdr form))
-      (%p-dpb cdr-normal %%q-cdr-code (%pointer l))
-      (%p-dpb cdr-normal %%q-cdr-code (1+ (%pointer l)))
-      l)))
+(DEFUN FLAG-ALREADY-OPTIMIZED (FORM &AUX L)
+  (IF (NOT (CONSP FORM))
+      FORM
+    (WITHOUT-INTERRUPTS
+      (SETQ L (MAKE-LIST 3 :INITIAL-ELEMENT 'ALREADY-OPTIMIZED))
+      (SETF (CAR L) (CAR FORM)
+	    (CADR L) (CDR FORM))
+      (%P-DPB CDR-NORMAL %%Q-CDR-CODE (%POINTER L))
+      (%P-DPB CDR-NORMAL %%Q-CDR-CODE (1+ (%POINTER L)))
+      L)))
 
-(defun already-optimized-p (form)
-  (without-interrupts
-    (or (atom form)
-	(and (eq (%p-ldb %%q-cdr-code (%pointer form)) cdr-normal)
-	     (eq (%p-ldb %%q-cdr-code (1+ (%pointer form))) cdr-normal)
-	     (eq (%p-ldb %%q-pointer (+ (%pointer form) 2)) (%pointer 'already-optimized))))))
+(DEFUN ALREADY-OPTIMIZED-P (FORM)
+  (WITHOUT-INTERRUPTS
+    (OR (ATOM FORM)
+	(AND (EQ (%P-LDB %%Q-CDR-CODE (%POINTER FORM)) CDR-NORMAL)
+	     (EQ (%P-LDB %%Q-CDR-CODE (1+ (%POINTER FORM))) CDR-NORMAL)
+	     (EQ (%P-LDB %%Q-POINTER (+ (%POINTER FORM) 2)) (%POINTER 'ALREADY-OPTIMIZED))))))
 
 ;;; Given a form, apply optimizations and expand macros until no more is possible
 ;;; (at the top level).  Also apply style-checkers to the supplied input
 ;;; but not to generated output.  This function is also in charge of checking for
 ;;; too few or too many arguments so that this happens before optimizers are applied.
-;;; Note that this does not mean that optimizers will always get a form with the
-;;; correct number of arguments; it just means that they shouldn't (in general) barf about
-;;; the wrong number.
-(defun compiler-optimize (form &aux (macro-cons-area
-				      (if (eq qc-tf-output-mode 'compile-to-core)
-					  background-cons-area
-					  default-cons-area))
-			  	    (*check-style-p* *check-style-p*))
-  (if (already-optimized-p form)
-      form
-    (do (tm fn local-definition optimizations-begun-flag)
-	((atom form))				;Do until no more expansions possible
-      (let ((default-cons-area macro-cons-area))
-	(setq fn (lambda-macro-expand (car form))))
-      (unless (eq fn (car form)) (setq form (cons fn (cdr form))))
-      (unless optimizations-begun-flag
+(DEFUN COMPILER-OPTIMIZE (FORM CHECK-STYLE
+			  &AUX (MACRO-CONS-AREA
+				 (IF (EQ QC-TF-OUTPUT-MODE 'COMPILE-TO-CORE)
+				     BACKGROUND-CONS-AREA
+				     DEFAULT-CONS-AREA))
+			       (LOCAL-MACRO-P NIL)
+			       (OPTIMIZATIONS-BEGUN-FLAG NIL))
+  (IF (ALREADY-OPTIMIZED-P FORM)
+      FORM
+    (DO ((TM) (FN))
+	((ATOM FORM))				;Do until no more expansions possible
+      (LET ((DEFAULT-CONS-AREA MACRO-CONS-AREA))
+	(SETQ FN (LAMBDA-MACRO-EXPAND (CAR FORM))))
+      (UNLESS (EQ FN (CAR FORM)) (SETQ FORM (CONS FN (CDR FORM))))
+      (UNLESS OPTIMIZATIONS-BEGUN-FLAG
 	;; Check for too few or too many arguments
-	(check-number-of-args form fn))
-      (setq local-definition
-	    (and (symbolp fn) (fsymeval-in-function-environment fn *function-environment*)))
-      (unless (or optimizations-begun-flag
-		  local-definition
-		  (not *check-style-p*)
-		  inhibit-style-warnings-switch)
+	(CHECK-NUMBER-OF-ARGS FORM FN))
+      (setq tm (if (symbolp fn) (fsymeval-in-function-environment fn *function-environment*)))
+      (if tm
+	  (if (eq (car-safe tm) 'macro)
+	      (setq local-macro-p t)
+	    ;; If function is redefined locally with FLET,
+	    ;; don't use things that reflect its global definition.
+	    (return))
+	(setq local-macro-p nil))
+      (UNLESS OPTIMIZATIONS-BEGUN-FLAG
 	;; Do style checking
-	(cond ((atom fn)
-	       (and (symbolp fn)
-		    (setq tm (get fn 'style-checker))
-		    (funcall tm form)))
-	      ((not run-in-maclisp-switch))
-	      ((memq (car fn) '(lambda named-lambda))
-	       (lambda-style fn))
-	      ((memq (car fn) '(curry-before curry-after))
-	       (warn 'not-in-maclisp :maclisp "~S does not work in Maclisp."
-		     (car fn)))))
-      ;; Optimize args to vanilla functions
-      (when (symbolp fn)
-	;; don't optimize args to macros of special forms, or to frobs with p1 handlers
-	(unless (if local-definition
-		    (eq (car-safe local-definition) 'macro)
-		  (or (get fn 'p1)
-		      (macro-function fn)
-		      (special-form-p fn)))
-	  (setq form `(,(car form) . ,(mapcar #'compiler-optimize (cdr form))))))
-      (or (unless (or local-definition (not (symbolp fn)))
-	    (dolist (opt (get fn 'optimizers))
-	      (unless (eq form (setq form (funcall opt form)))
-		;; Optimizer changed something, don't do macros this pass
-		(setq optimizations-begun-flag t)
-		(return t))))
+	(AND CHECK-STYLE (NOT INHIBIT-STYLE-WARNINGS-SWITCH) (NOT LOCAL-MACRO-P)
+	     (COND ((ATOM FN)
+		    (AND (SYMBOLP FN)
+			 (SETQ TM (GET FN 'STYLE-CHECKER))
+			 (FUNCALL TM FORM)))
+		   ((NOT RUN-IN-MACLISP-SWITCH))
+		   ((MEMQ (CAR FN) '(LAMBDA NAMED-LAMBDA))
+		    (LAMBDA-STYLE FN))
+		   ((MEMQ (CAR FN) '(CURRY-BEFORE CURRY-AFTER))
+		    (WARN 'NOT-IN-MACLISP :MACLISP "~S does not work in Maclisp."
+			  (CAR FN))))))
+      ;; Apply optimizations
+      (OR (AND (SYMBOLP FN)
+	       (NOT LOCAL-MACRO-P)
+	       (PROGN
+		 ;; if not a special form or macro or has p1 handler, optimize arguments first
+		 (IF (NOT (OR (AND (GET FN 'P1)	;p1 handlers expected to optimize own args
+				   (NOT (GET FN 'OPTIMIZERS)))	;except if also has optimizers
+			      (SPECIAL-FORM-P FN)
+			      (MACRO-FUNCTION FN)))
+		     (SETQ FORM (CONS (CAR FORM)
+				      (MAPCAR #'(LAMBDA (X) (COMPILER-OPTIMIZE X CHECK-STYLE))
+					      (CDR FORM)))))
+		 (DOLIST (OPT (GET FN 'OPTIMIZERS))
+		   (UNLESS (EQ FORM (SETQ FORM (FUNCALL OPT FORM)))
+		     ;; Optimizer changed something, don't do macros this pass
+		     (SETQ OPTIMIZATIONS-BEGUN-FLAG T)
+		     (RETURN T)))))
 	  ;; No optimizer did anything => try expanding macros.
-	  (warn-on-errors ('macro-expansion-error "Error expanding macro ~S:" fn)
+	  (WARN-ON-ERRORS ('MACRO-EXPANSION-ERROR "Error expanding macro ~S:" FN)
 	    ;; This LET returns T if we expand something.
-	    (or (let ((default-cons-area macro-cons-area)
-		      (record-macros-expanded t))
-		  (multiple-value-setq (form tm)
-		    (compiler-macroexpand-1 form))
-		  tm)				;non-nil if macroexpansion happened
+	    (OR (LET ((OLD-FORM FORM)
+		      (DEFAULT-CONS-AREA MACRO-CONS-AREA)
+		      (RECORD-MACROS-EXPANDED T))
+		  ;; car of macroexpand environment is local macros (and functions)
+		  (WITH-STACK-LIST (TEM1 *FUNCTION-ENVIRONMENT*)
+		    (SETQ FORM (MACROEXPAND-1 FORM TEM1)))
+		  (NEQ FORM OLD-FORM))
 		;; Stop looping, no expansions apply
-		(return)))
+		(RETURN)))
 	  ;; The body of the WARN-ON-ERRORS either does RETURN or returns T.
 	  ;; So if we get here, there was an error inside it.
-	  (return (setq form `(error-macro-expanding ',form))))
+	  (RETURN (SETQ FORM `(ERROR-MACRO-EXPANDING ',FORM))))
       ;; Only do style checking the first time around
-      (setq *check-style-p* nil))
+      (SETQ CHECK-STYLE NIL))
     ;; Result is FORM
-    (flag-already-optimized form)))
+    (FLAG-ALREADY-OPTIMIZED FORM)))
 
 (DEFPROP ERROR-MACRO-EXPANDING T :ERROR-REPORTER)
 (DEFUN ERROR-MACRO-EXPANDING (FORM)
   (FERROR NIL "The form ~S which appeared at this point
 was not compiled due to an error in macro expansion." FORM))
-
-;;>> this should eventually be different from macroexpand-1, in that it supply a
-;;>> *macroexpand-hook* which will not do mogus things with things we know about
-;;>> specially (such as (common-lisp-only) "macros" which we really implement as
-;;>> special forms, or things with p1 handlers or optimizers)
-;;>> For now, macroexpand-1 doesn't hack the things with si::alternate-macro-definitions,
-;;>> so this will do.
-;;>> Also, we really should pass more than just the function env -- also need declarations &c.
-(defun compiler-macroexpand-1 (form)
-  ;; CAR of environment is local macros (and functions)
-  (with-stack-list (env *function-environment*)
-    (macroexpand-1 form env)))
 
 ;;; Given a non-atomic form issue any warnings required because of wrong number of arguments.
 ;;; This function has some of the same knowledge as GETARGDESC but doesn't call
@@ -1194,8 +1169,7 @@ was not compiled due to an error in macro expansion." FORM))
 						    KEY))))
 				       ((CONSTANTP KEY)
 					(BAD-ARGUMENTS
-					  (FORMAT NIL "~S appearing where a keyword should"
-						  KEY))))))))))))))
+					  (FORMAT NIL "~S appearing where a keyword should" KEY))))))))))))))
 		   
 
 ;;; Pass 1 processing for a call to an ordinary function (ordinary, at least, for pass 1).
@@ -1249,7 +1223,7 @@ was not compiled due to an error in macro expansion." FORM))
 		 (MEMQ 'FEF-QT-DONTCARE TOKEN-LIST))
 	     (RPLACA ARGS-LEFT
 		     (IF (AND (MEMQ 'FEF-FUNCTIONAL-ARG TOKEN-LIST)
-			      (NOT (ATOM (SETQ TM (COMPILER-OPTIMIZE (CAR ARGS-LEFT)))))
+			      (NOT (ATOM (SETQ TM (COMPILER-OPTIMIZE (CAR ARGS-LEFT) T))))
 			      (EQ (CAR TM) 'QUOTE))	;Look for '(LAMBDA...)
 			 (P1FUNCTION TM)
 		       (P1 (CAR ARGS-LEFT)))))
@@ -1332,8 +1306,8 @@ was not compiled due to an error in macro expansion." FORM))
 	       (IF (NOT (SYMBOLP VARN))
 		   (WARN 'VARIABLE-NOT-SYMBOL :IMPOSSIBLE
 			 "~S appears in a list of variables to be bound." VARN)
-		 (AND (NOT (OR (STRING= VARN "IGNORE")
-			       (STRING= VARN "IGNORED")
+		 (AND (NOT (OR (STRING-EQUAL VARN "IGNORE")
+			       (STRING-EQUAL VARN "IGNORED")
 			       (NULL VARN)))
 		      ;; Does this variable appear again later?
 		      ;; An exception is made in that a function argument can be repeated
@@ -1511,18 +1485,14 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
 	((KEYWORDP NAME)
 	 (WARN 'KEYWORD-BOUND :IMPOSSIBLE
 	       "Binding the keyword symbol ~S." NAME))
-	((CONSTANTP NAME)
+	((GET NAME 'SYSTEM-CONSTANT)
 	 (WARN 'SYSTEM-CONSTANT-BOUND :IMPLAUSIBLE
-	       "Binding ~S, which is a constant." NAME))
-	((MEMQ NAME (CDDR SELF-FLAVOR-DECLARATION))
+	       "Binding the system constant symbol ~S." NAME))
+	((AND (MEMQ NAME (CDDR SELF-FLAVOR-DECLARATION))
+	      (EQ TYPE 'FEF-LOCAL))
 	 (WARN 'INSTANCE-VARIABLE-BOUND :IMPLAUSIBLE
-	       "Binding ~S, which has the same name as an instance variable of flavor ~S"
-	       NAME (CAR SELF-FLAVOR-DECLARATION)))
-	((AND (EQ NAME 'SELF)
-	      SELF-FLAVOR-DECLARATION
-	      (EQ TYPE 'FEF-SPECIAL))
-	 (WARN 'SELF-BOUND :IMPLAUSIBLE
-	       "Rebinding ~S. You may lose!" 'self)))
+	       "Rebinding the instance variable ~S.  The new binding will be local."
+	       NAME)))
   ;; Rest args interfere with fast arg option except when there are no specials.
   ;; We need to look at this to
   ;;  decide how to process all the AUX variables and can't tell when processing
@@ -1546,9 +1516,6 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
   (SETQ HOME (MAKE-VAR :NAME NAME :KIND KIND :TYPE TYPE
 		       :INIT INIT-SPECS :EVAL EVAL-TYPE :MISC MISC-TYPES
 		       :DECLARATIONS (DECLARATIONS-FOR-VARIABLE NAME THIS-FRAME-DECLARATIONS)))
-  (IF (AND (EQ TYPE 'FEF-SPECIAL) (GETF (VAR-DECLARATIONS HOME) 'IGNORE))
-      (WARN 'NOT-IGNORED :IMPLAUSIBLE
-	    "The special variable ~S was declared to be ignored" NAME))
   (SETF (VAR-LAP-ADDRESS HOME)
 	;; Not the real lap address,
 	;; but something for P1 to use for the value of the variable
@@ -1569,7 +1536,7 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
       ((TYPE)
        (IF (MEMQ NAME (CDDR X)) (SETF (GETF RESULT 'TYPE) (CADR X))))
 ;     ((SPECIAL UNSPECIAL			;already processed
-;	:SELF-FLAVOR FUNCTION-PARENT FTYPE	;irrelevant
+;	:SELF-FLAVOR SYS:FUNCTION-PARENT FTYPE	;irrelevant
 ;	FUNCTION INLINE NOTINLINE OPTIMIZE DECLARATION))
       ))
   RESULT)
@@ -1725,7 +1692,7 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
 		   ;; Don't spoil the fast arg option with nontrivial inits for aux's. 
 		   (AND (EQ KIND 'FEF-ARG-AUX)
 			FAST-ARGS-POSSIBLE
-			(NOT (MEMBER-EQUAL INIT-FORM '(NIL 'NIL))))
+			(NOT (SYS:MEMBER-EQUAL INIT-FORM '(NIL 'NIL))))
 		   (IF PARALLEL (NEQ TYPE 'FEF-LOCAL))))
       (SETQ INIT-TYPE 'FEF-INI-COMP-C)
       ;; Note: if we are initting by code, there is no advantage
@@ -1798,7 +1765,6 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
 	(M-V-FORM (CADDR FORM))
 	(BODY (CDDDR FORM)))
     (SETF (VALUES BODY THIS-FRAME-DECLARATIONS)
-;>> need to pass environment into extract-declarations here
 	  (EXTRACT-DECLARATIONS-RECORD-MACROS BODY NIL NIL))
     (PROCESS-SPECIAL-DECLARATIONS THIS-FRAME-DECLARATIONS)
     (SETQ OUTER-VARS VARS)
@@ -1810,16 +1776,14 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
     (SETQ VARIABLES (MAPCAR #'(LAMBDA (V) `(,V (%POP))) VARIABLES))
     (P1SBIND VARIABLES 'FEF-ARG-INTERNAL-AUX T T THIS-FRAME-DECLARATIONS)
     (SETQ LOCAL-DECLARATIONS (NCONC THIS-FRAME-DECLARATIONS LOCAL-DECLARATIONS))
-    ;; Return something with the same sort of arguments a LET has when given to pass 2,
-    ;; but with the multiple value producing form as an additional argument at the front.
-    `(,(CAR FORM) ,M-V-FORM ,VARIABLES ,OUTER-VARS ,VARS
-      . ,(CDDDDR (P1V `(LET () . ,BODY))))))
+    (SETQ BODY (P1PROGN-1 BODY))
+    `(,(CAR FORM) ,VARIABLES ,OUTER-VARS ,VARS ,M-V-FORM . ,BODY)))
 
 (DEFUN PROCESS-SPECIAL-DECLARATIONS (DECLS)
   (DOLIST (DECL DECLS)
     (IF (EQ (CAR DECL) 'SPECIAL)
 	(DOLIST (VARNAME (CDR DECL))
-	  (PUSHNEW VARNAME FREEVARS :TEST #'EQ)
+	  (PUSHNEW VARNAME FREEVARS :TEST 'EQ)
 	  (PUSH (MAKE-FREE-VAR-HOME VARNAME) VARS)))))
 
 (DEFPROP WITH-STACK-LIST P1-WITH-STACK-LIST P1)
@@ -1890,7 +1854,6 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
     (IF (EQ FN 'LET-FOR-AUXVARS) (SETQ FN 'LET*))
     ;; Take all DECLAREs off the body.
     (SETF (VALUES BODY THIS-FRAME-DECLARATIONS)
-;>> need to pass environment into extract-declarations here
 	  (EXTRACT-DECLARATIONS-RECORD-MACROS BODY NIL NIL))
     (PROCESS-SPECIAL-DECLARATIONS THIS-FRAME-DECLARATIONS)
     (SETQ OUTER-VARS VARS)
@@ -1940,7 +1903,7 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
       (COND ((EQUAL (CAR BODY) '((SETQ)))
 	     (POP BODY))
 	    ((OR (ATOM (CAR BODY))
-		 (ATOM (SETQ TEM (COMPILER-OPTIMIZE (CAR BODY))))
+		 (ATOM (SETQ TEM (COMPILER-OPTIMIZE (CAR BODY) NIL)))
 		 (NOT (EQ (CAR TEM) 'SETQ))
 		 (NOT (MEMQ (CADR TEM) VLIST))	;we're binding it
 		 (NOT (CONSTANTP (CADDR TEM)))	;initializing to constant
@@ -1992,7 +1955,6 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
 	(ENTRY-LEXICAL-CLOSURE-COUNT *LEXICAL-CLOSURE-COUNT*))
     ;; Take all DECLAREs off the body.
     (SETF (VALUES BODY THIS-FRAME-DECLARATIONS)
-;>> need to pass environment into extract-declarations here
 	  (EXTRACT-DECLARATIONS-RECORD-MACROS (CDDR FORM) NIL NIL))
     (SETQ VLIST (P1SBIND (CADR FORM)
 			 (IF TLEVEL 'FEF-ARG-AUX 'FEF-ARG-INTERNAL-AUX)
@@ -2021,7 +1983,13 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
   (LET* ((PROGNAME (CADR FORM)) (BODY (CDDR FORM))
 	 (RETTAG (GENSYM))
 	 (*GOTAG-ENVIRONMENT*)
-	 (*PROGDESC-ENVIRONMENT* *PROGDESC-ENVIRONMENT*))
+	 (*PROGDESC-ENVIRONMENT* *PROGDESC-ENVIRONMENT*)
+;	 (RETPROGDESC
+;	   (IF (OR (AND BIND-RETPROGDESC (NEQ PROGNAME 'T))
+;		   (EQ PROGNAME 'NIL))
+;	       (CAR *PROGDESC-ENVIRONMENT*)
+;	     RETPROGDESC))
+	 )
     (WHEN (OR (AND ALSO-BLOCK-NAMED-NIL (NEQ PROGNAME 'T))
 	      (EQ PROGNAME 'NIL))
       (PUSH (MAKE-PROGDESC :NAME 'NIL
@@ -2072,7 +2040,9 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
 
 (DEFPROP RETURN-FROM P1RETURN-FROM P1)
 (DEFUN P1RETURN-FROM (FORM)
-  (LET ((PROGDESC (ASSQ (CADR FORM) *PROGDESC-ENVIRONMENT*)))
+  (LET ((PROGDESC #|(IF (NULL (CADR FORM))
+		        RETPROGDESC |#
+		  (ASSQ (CADR FORM) *PROGDESC-ENVIRONMENT*)))
     (IF (MEMQ PROGDESC *OUTER-CONTEXT-PROGDESC-ENVIRONMENT*)
 	`(*THROW ,(TRY-REF-LEXICAL-HOME (PROGDESC-USED-IN-LEXICAL-CLOSURES-FLAG PROGDESC))
 		 ,(IF (= (LENGTH (CDDR FORM)) 1)	;return all values of only form
@@ -2085,6 +2055,14 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
 (DEFPROP RETURN P1RETURN P1)
 (DEFUN P1RETURN (FORM)
   (P1RETURN-FROM `(RETURN-FROM NIL . ,(CDR FORM))))
+; (IF (MEMQ RETPROGDESC *OUTER-CONTEXT-PROGDESC-ENVIRONMENT*)
+;     `(*THROW ',(PROGDESC-USED-IN-LEXICAL-CLOSURES-FLAG RETPROGDESC)
+;	       ,(IF (= (LENGTH (CDR FORM)) 1)
+;		    (P1 (THIRD FORM))
+;		  (LET ((P1VALUE 1))
+;		    `(VALUES . ,(MAPCAR #'P1 (CDR FORM))))))
+;   (LET ((P1VALUE 1))
+;     `(RETURN . ,(MAPCAR #'P1 (CDR FORM))))))
 
 (DEFPROP TAGBODY P1TAGBODY P1)
 (DEFUN P1TAGBODY (FORM)
@@ -2096,7 +2074,10 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
     (DOLIST (ELT BODY)
       (WHEN (ATOM ELT)
 	(P1TAGAD ELT MYPROGDESC)))
-    (SETQ BODY (MAPCAR #'(LAMBDA (STMT) (IF (ATOM STMT) STMT (P1 STMT)))
+    (SETQ BODY (MAPCAR #'(LAMBDA (STMT)
+			   (IF (ATOM STMT)
+			       STMT
+			       (P1 STMT)))
 		       BODY))
     (IF (PROGDESC-USED-IN-LEXICAL-CLOSURES-FLAG MYPROGDESC)
 	(LET ((FRAMEWORK
@@ -2144,13 +2125,13 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
 	 ;; will be ignored by pass 2, to avoid making LAP get unhappy.
 	 '(QUOTE NIL))
 	(T (PUSH X ALLGOTAGS)
-	   (PUSH (MAKE-GOTAG X (IF (MEMBER-EQUAL X ALLGOTAGS) (GENSYM) X) NIL PROGDESC)
+	   (PUSH (MAKE-GOTAG X (IF (SYS:MEMBER-EQUAL X ALLGOTAGS) (GENSYM) X) NIL PROGDESC)
 		 *GOTAG-ENVIRONMENT*)
 	   X)))
 
 (DEFPROP GO P1GO P1)
 (DEFUN P1GO (FORM)
-  (LET ((GOTAG (ASSOC-EQUAL (CADR FORM) *GOTAG-ENVIRONMENT*)))
+  (LET ((GOTAG (SYS:ASSOC-EQUAL (CADR FORM) *GOTAG-ENVIRONMENT*)))
     (IF (MEMQ GOTAG *OUTER-CONTEXT-GOTAG-ENVIRONMENT*)
 	`(*THROW ,(TRY-REF-LEXICAL-HOME
 		    (PROGDESC-USED-IN-LEXICAL-CLOSURES-FLAG
@@ -2171,7 +2152,6 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
       (SETQ PROGNAME (POP FORM)))
     (SETQ VLIST (POP FORM))
     (SETF (VALUES BODY DECLS)
-;>> need to pass environment into extract-declarations here
 	  (EXTRACT-DECLARATIONS-RECORD-MACROS FORM NIL NIL))
     (P1 `(BLOCK-FOR-PROG ,PROGNAME
 			 (,(IF (EQ FN 'PROG) 'LET 'LET*)
@@ -2179,30 +2159,44 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
 			  ,@(IF DECLS `((DECLARE . ,DECLS)))
 			  (TAGBODY . ,BODY))))))
 
-;;;; FLET, LABELS, MACROLET
-
-(defun (:property flet p1) (form)
-  (let* ((locals (mapcar #'(lambda (ignore) (gensym)) (cadr form))))
+(DEFUN (:PROPERTY FLET P1) (FORM)
+  (LET* ((LOCALS (MAPCAR #'(LAMBDA (IGNORE) (GENSYM)) (CADR FORM))))
     ;; LOCALS are local variables that really hold the functions.
-    (mapc #'(lambda (var fndef)
-	      (putprop var (car fndef) 'local-function-name))
-	  locals (cadr form))
+    (MAPC #'(LAMBDA (VAR FNDEF)
+	      (PUTPROP VAR (CAR FNDEF) 'LOCAL-FUNCTION-NAME))
+	  LOCALS (CADR FORM))
     ;; P1 will translate any reference to a local function
     ;; into a FUNCALL to the corresponding variable.
-    (p1 `(let ,(mapcar #'(lambda (var def)
-			   `(,var #'(named-lambda . ,def)))
-		       locals (cadr form))
-	   (flet-internal ,(mapcar #'(lambda (var def)
-				       (list (car def) var `(named-lambda . def)))
-				   locals (cadr form))
-			  . ,(cddr form)))
-	t)))					;inhibit optimizations on this pass, since
+    (P1 `(LET ,(MAPCAR #'(LAMBDA (VAR DEF)
+			   `(,VAR #'(NAMED-LAMBDA . ,DEF)))
+		       LOCALS (CADR FORM))
+	   (FLET-INTERNAL ,(MAPCAR #'(LAMBDA (VAR DEF)
+				       (LIST (CAR DEF) VAR `(NAMED-LAMBDA . DEF)))
+				   LOCALS (CADR FORM))
+			  . ,(CDDR FORM)))
+	T)))					;inhibit optimizations on this pass, since
 						; functions with optimizers may be lexically
 						; shadowed, and environment isn't set up until
 						; flet-internal's p1 handler is executed.
 						; We do the optimizations of the body forms in
-						; that handler (by way of p1progn-1)
+						; that handler
 
+;(DEFUN (:PROPERTY FLET-INTERNAL P1) (FORM)
+;  (LET ((*LOCAL-FUNCTIONS*
+;	  (NCONC (MAPCAR #'(LAMBDA (ELT)
+;			     ;; ELT looks like
+;			     ;; (local-function-name tempvar-name definition)
+;			     (LIST (CAR ELT)
+;				   (ASSQ (CADR ELT) VARS)
+;				   (CADDR ELT)))
+;			 (CADR FORM))
+;		 *LOCAL-FUNCTIONS*))
+;	(*FUNCTION-ENVIRONMENT*
+;	  ;; Defining a local function hides any local macro definition of same symbol.
+;	  (CONS (LOOP FOR ELT IN (CADR FORM)
+;		      NCONC (LIST* (LOCF (SYMBOL-FUNCTION (CAR ELT))) NIL NIL))
+;		*FUNCTION-ENVIRONMENT*)))
+;    `(PROGN . ,(P1PROGN-1 (CDDR FORM)))))
 (defun (:property flet-internal p1) (form)
   (let ((*local-functions* *local-functions*)
 	(*function-environment* *function-environment*)
@@ -2215,24 +2209,39 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
     (push frame *function-environment*)
     `(progn . ,(p1progn-1 (cddr form)))))
 
-(defun (:property labels p1) (form)
-  (let* ((locals (mapcar #'(lambda (ignore) (gensym)) (cadr form))))
+(DEFUN (:PROPERTY LABELS P1) (FORM)
+  (LET* ((LOCALS (MAPCAR #'(LAMBDA (IGNORE) (GENSYM)) (CADR FORM))))
     ;; LOCALS are local variables that really hold the functions.
-    (mapc #'(lambda (var fndef)
-	      (putprop var (car fndef) 'local-function-name))
-	  locals (cadr form))
+    (MAPC #'(LAMBDA (VAR FNDEF)
+	      (PUTPROP VAR (CAR FNDEF) 'LOCAL-FUNCTION-NAME))
+	  LOCALS (CADR FORM))
     ;; P1 will translate any reference to a local function
     ;; into a FUNCALL to the corresponding variable.
-    (p1 `(let ,locals
-	   (labels-internal ,(mapcar #'(lambda (var def)
-					 (list (car def) var `(named-lambda . ,def)))
-				     locals (cadr form))
-			    ,(mapcan #'(lambda (var def)
-					 `(,var #'(named-lambda . ,def)))
-				     locals (cadr form))
-			    . ,(cddr form)))
-	t)))					;see above note about why we do this
+    (P1 `(LET ,LOCALS
+	   (LABELS-INTERNAL ,(MAPCAR #'(LAMBDA (VAR DEF)
+					 (LIST (CAR DEF) VAR `(NAMED-LAMBDA . ,DEF)))
+				     LOCALS (CADR FORM))
+			    ,(MAPCAN #'(LAMBDA (VAR DEF)
+					 `(,VAR #'(NAMED-LAMBDA . ,DEF)))
+				     LOCALS (CADR FORM))
+			    . ,(CDDR FORM)))
+	T)))					;see above note about why we do this
 
+;(DEFUN (:PROPERTY LABELS-INTERNAL P1) (FORM)
+;  (LET ((*LOCAL-FUNCTIONS*
+;	  (NCONC (MAPCAR #'(LAMBDA (ELT)
+;			     (LIST (CAR ELT)
+;				   (ASSQ (CADR ELT) VARS)
+;				   (CADDR ELT)))
+;			 (CADR FORM))
+;		 *LOCAL-FUNCTIONS*))
+;	(*FUNCTION-ENVIRONMENT*
+;	  ;; Defining a local function hides any local macro definition of same symbol.
+;	  (CONS (LOOP FOR ELT IN (CADR FORM)
+;		      NCONC (LIST* (LOCF (SYMBOL-FUNCTION (CAR ELT))) NIL NIL))
+;		*FUNCTION-ENVIRONMENT*)))
+;    `(PROGN ,(P1 `(PSETQ . ,(CADDR FORM)))
+;	    . ,(P1PROGN-1 (CDDDR FORM)))))
 (defun (:property labels-internal p1) (form)
   (let ((*local-functions* *local-functions*)
 	(*function-environment* *function-environment*)
@@ -2250,9 +2259,8 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
 				   *local-functions*))
 	frame)
     (dolist (elt (reverse (cadr exp)))
-      (setq frame (list* (locf (symbol-function (car elt)))
-			 `(macro . ,(si::expand-defmacro elt *function-environment*))
-			 frame)))
+      (setq frame `(,(locf (symbol-function (car elt))) (macro . ,(si::expand-defmacro elt))
+		    . ,frame)))
     (push frame *function-environment*)
     `(progn . ,(p1progn-1 (cddr exp)))))
 
@@ -2260,7 +2268,7 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
 ;;; into one containing a LET* and having no &AUX variables.
 (DEFUN P1AUX (LAMBDA)
   (LET (STANDARDIZED AUXVARS AUXLIST NONAUXLIST DECLS BODY)
-    (SETQ STANDARDIZED (SI::LAMBDA-EXP-ARGS-AND-BODY LAMBDA))
+    (SETQ STANDARDIZED (SI:LAMBDA-EXP-ARGS-AND-BODY LAMBDA))
     (OR (SETQ AUXLIST (MEMQ '&AUX (CAR STANDARDIZED)))
 	(RETURN-FROM P1AUX LAMBDA))
     (SETQ AUXVARS (CDR AUXLIST))
@@ -2277,7 +2285,7 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
     (SETQ BODY (CDR STANDARDIZED))
     ;; Take all DECLAREs off the body and put them on DECLS.
     (SETF (VALUES BODY DECLS)
-	  (EXTRACT-DECLARATIONS-RECORD-MACROS BODY NIL *FUNCTION-ENVIRONMENT*))
+	  (EXTRACT-DECLARATIONS-RECORD-MACROS BODY NIL NIL))
     `(LAMBDA ,NONAUXLIST
        ,@(IF DECLS `((DECLARE . ,DECLS)))
        (LET* ,AUXVARS
@@ -2295,10 +2303,11 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
   (LET (ARGLIST BODY ARGS1 OPTIONAL PROGVARS VAR QUOTEFLAG
 	SPECIAL-FLAG SPECIAL-VARS UNSPECIAL-FLAG UNSPECIAL-VARS
 	DECLS KEYCHECKS BORDER-VARIABLE PSEUDO-KEYNAMES)
-    (SETQ LAMBDA (SI::LAMBDA-EXP-ARGS-AND-BODY (P1AUX LAMBDA)))
+    (SETQ LAMBDA (SI:LAMBDA-EXP-ARGS-AND-BODY (P1AUX LAMBDA)))
     (SETQ ARGLIST (CAR LAMBDA) BODY (CDR LAMBDA))
-    (MULTIPLE-VALUE-BIND (NIL NIL NIL
-			  REST-ARG NIL KEYKEYS KEYNAMES KEYINITS KEYFLAGS ALLOW-OTHER-KEYS)
+    (MULTIPLE-VALUE-BIND (NIL NIL NIL REST-ARG
+			  NIL KEYKEYS KEYNAMES NIL KEYINITS KEYFLAGS
+			  ALLOW-OTHER-KEYS)
 	(DECODE-KEYWORD-ARGLIST ARGLIST)
       (WHEN (AND KEYNAMES (NOT REST-ARG))
 	(SETQ REST-ARG (GENSYM)))
@@ -2336,17 +2345,18 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
 					  (CAR ARGS1)))
 			      PROGVARS))
 		       (T
-			(UNLESS (NOT OPTIONAL)
-			  (WARN 'BAD-ARGUMENT-LIST :IMPOSSIBLE
-				"The mandatory argument ~S of an internal lambda was given a default value."
-				(CAR VAR)))
+			(COND ((NOT OPTIONAL)
+			       (WARN 'BAD-ARGUMENT-LIST :IMPOSSIBLE
+				     "The mandatory argument ~S of an internal lambda ~
+  was given a default value."
+				     (CAR VAR))))
 			(PUSH (LIST (CAR VAR)
-				    (IF ARGS1 (IF QUOTEFLAG `',(CAR ARGS1) (CAR ARGS1))
-				      (CADR VAR)))
-			      PROGVARS)))
+				    (COND (ARGS1 (IF QUOTEFLAG `',(CAR ARGS1)
+						   (CAR ARGS1)))
+					  (T (CADR VAR)))) PROGVARS)))
 		 (POP ARGS1))))
       (WHEN KEYNAMES
-	(SETQ PSEUDO-KEYNAMES (COPY-LIST KEYNAMES))
+	(SETQ PSEUDO-KEYNAMES (COPYLIST KEYNAMES))
 	;; For each keyword arg, decide whether we need to init it to KEYWORD-GARBAGE
 	;; and check explicitly whether that has been overridden.
 	;; If the initial value is a constant, we can really init it to that.
@@ -2366,11 +2376,11 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
 		     (NOT (ASSQ KEYNAME VARS))
 		     (NOT (LEXICAL-VAR-P KEYNAME))
 		     (NOT (SPECIALP KEYNAME)))
-		(PROGN (SETF (CAR KIS) 'SI::KEYWORD-GARBAGE)
+		(PROGN (SETF (CAR KIS) 'SI:KEYWORD-GARBAGE)
 		       (SETQ PSEUDO-KEYNAME (GENSYM))
 		       (SETF (CAR PKNS) PSEUDO-KEYNAME)
 		       (PUSH `(,KEYNAME
-			       (COND ((EQ ,PSEUDO-KEYNAME SI::KEYWORD-GARBAGE)
+			       (COND ((EQ ,PSEUDO-KEYNAME SI:KEYWORD-GARBAGE)
 				      ,KEYINIT)
 				     (T ,(AND KEYFLAG `(SETQ ,KEYFLAG T))
 					,PSEUDO-KEYNAME)))
@@ -2384,11 +2394,11 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
 	(SETQ BORDER-VARIABLE (GENSYM))
 	(SETQ BODY
 	      `((LET* (,BORDER-VARIABLE
-		       ,@(MAPCAR #'(LAMBDA (V INIT) `(,V ,INIT)) PSEUDO-KEYNAMES KEYINITS)
+		       ,@(MAPCAR '(LAMBDA (V INIT) `(,V ,INIT)) PSEUDO-KEYNAMES KEYINITS)
 		       ,@KEYFLAGS)
 		  ,BORDER-VARIABLE
 		  (WHEN ,REST-ARG
-		    (SI::STORE-KEYWORD-ARG-VALUES-INTERNAL-LAMBDA
+		    (SI:STORE-KEYWORD-ARG-VALUES-INTERNAL-LAMBDA
 		      (VARIABLE-LOCATION ,BORDER-VARIABLE)
 		      ,REST-ARG ',KEYKEYS
 		      ,ALLOW-OTHER-KEYS
@@ -2397,7 +2407,6 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
 		    . ,BODY)))))
       ;; Take all DECLAREs off the body and put them on DECLS.
       (SETF (VALUES BODY DECLS)
-;>> need to pass environment into extract-declarations here
 	    (EXTRACT-DECLARATIONS-RECORD-MACROS BODY NIL NIL))
       (WHEN SPECIAL-VARS
 	(PUSH `(SPECIAL . ,SPECIAL-VARS) DECLS))
@@ -2410,21 +2419,18 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
 
 (DEFPROP *THROW P1EVARGS P1)
 
-(DEFUN (:PROPERTY COND P1) (X)
-  (COND ((NULL (CDR X))
-	 ''NIL)
-	((ATOM (CDR X))
-	 (WARN 'BAD-COND :IMPOSSIBLE
-	       "The atom ~S appears as the body of a ~S." (CDR X) 'COND)
-	 ''NIL)
-	(T `(COND . ,(MAPCAR #'(LAMBDA (CLAUSE)
-				 (COND ((ATOM CLAUSE)
-					(WARN 'BAD-COND :IMPOSSIBLE
-					      "The atom ~S appears as a ~S-clause."
-					      CLAUSE 'COND)
-					NIL)
-				       (T (P1COND-CLAUSE CLAUSE))))
-			     (CDR X))))))
+(DEFPROP COND P1COND P1)
+(DEFUN P1COND (X)
+  `(COND . ,(IF (ATOM (CDR X))
+		(WARN 'BAD-COND :IMPOSSIBLE
+		      "The atom ~S appears as the body of a COND." X)
+	      (MAPCAR #'P1COND-1 (CDR X)))))
+
+(DEFUN P1COND-1 (FORMS)
+  (IF (ATOM FORMS)
+      (WARN 'BAD-COND :IMPOSSIBLE
+	    "The atom ~S appears as a COND-clause." FORMS)
+    (P1COND-CLAUSE FORMS)))
 
 (DEFUN (:PROPERTY IF P1) (FORM)
   `(COND ,(P1COND-CLAUSE `(,(CADR FORM) ,(CADDR FORM)))
@@ -2439,7 +2445,6 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
 (DEFUN P1PROGN (FORM)
   (SETQ TLEVEL NIL)
   (MULTIPLE-VALUE-BIND (BODY THIS-FRAME-DECLARATIONS)
-;>> need to pass environment in to extract-declarations here
       (EXTRACT-DECLARATIONS-RECORD-MACROS (CDR FORM) NIL NIL)
     (LET ((VARS VARS)
 	  (LOCAL-DECLARATIONS LOCAL-DECLARATIONS))
@@ -2588,11 +2593,10 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
 	  (P1V (CAR FORMS-LEFT) (IF (CDR FORMS) NIL P1VALUE) T))))
 
 (DEFUN (:PROPERTY INHIBIT-STYLE-WARNINGS P1) (FORM &REST (FORMS (CDR FORM)))
-  (DO ((FORMS-LEFT (SETQ FORMS (COPY-LIST FORMS)) (CDR FORMS-LEFT))
-       (*CHECK-STYLE-P* NIL))
+  (DO ((FORMS-LEFT (SETQ FORMS (COPY-LIST FORMS)) (CDR FORMS-LEFT)))
       ((NULL FORMS-LEFT) `(PROGN . ,FORMS))
     (SETF (CAR FORMS-LEFT)
-	  (P1V (CAR FORMS-LEFT) (IF (CDR FORMS) NIL P1VALUE)))))
+	  (P1V (COMPILER-OPTIMIZE (CAR FORMS-LEFT) T) (IF (CDR FORMS) NIL P1VALUE) T))))
 
 ;;; Execute body with SELF's mapping table set up.
 (DEFUN (:PROPERTY WITH-SELF-ACCESSIBLE P1) (FORM)
@@ -2602,7 +2606,7 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
 ;;; Execute body with all instance variables of SELF bound as specials.
 (DEFUN (:PROPERTY WITH-SELF-VARIABLES-BOUND P1) (FORM)
   (P1 `(LET ()
-	 (%USING-BINDING-INSTANCES (SI::SELF-BINDING-INSTANCES))
+	 (%USING-BINDING-INSTANCES (SI:SELF-BINDING-INSTANCES))
 	 . ,(CDR FORM))))
 
 ;;; The flavor system sometimes generates SELF-REFs by hand.
@@ -2680,22 +2684,6 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
 		`(%EXTERNAL-VALUE-CELL ',TEM))
 	       (T `(VARIABLE-LOCATION ,TEM))))))
 
-;;; this is for expand-keyed-lambda.
-;;; Like variable-location, but doesn't increment var-use-count, so that
-;;; (lambda (&key x y)) gets a bound-but-not-used warning for x as well as for y
-(DEFUN (:PROPERTY KLUDGEY-COMPILATION-VARIABLE-LOCATION P1) (FORM &AUX TEM TEM1)
-  (SETQ FORM (CADR FORM))
-  (SETQ TEM (COND ((SETQ TEM1 (ASSQ FORM VARS))
-		   (AND (EQ (VAR-KIND TEM1) 'FEF-ARG-FREE)
-			(ZEROP (VAR-USE-COUNT TEM1))
-			(PUSH (VAR-NAME TEM1) FREEVARS))
-		   (VAR-LAP-ADDRESS TEM1))
-		  ((SPECIALP FORM) FORM)
-		  (T (BARF form "Lossage in keyed-lambda compilation" 'BARF))))
-  (IF (SYMBOLP TEM)
-      `(%EXTERNAL-VALUE-CELL ',TEM)
-    `(VARIABLE-LOCATION ,TEM)))
-
 (DEFUN (VARIABLE-MAKUNBOUND P1) (FORM &AUX TEM)
   (IF (COND ((NOT (SYMBOLP (CADR FORM)))
 	     (WARN 'VARIABLE-NOT-SYMBOL :IMPOSSIBLE
@@ -2762,14 +2750,6 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
   (P1EVARGS FORM))
 (MAKE-OBSOLETE BIND "use SYS:%BIND")
 
-;; It turns out that there is no need to preserve the cdr-codes
-;; when this is used in compiled code.
-;; (It is used only in expansions of LET-GLOBALLY).
-(DEFUN (:PROPERTY SI:COPY-VALUE P1) (FORM)
-  (LET ((TO-CELL (CADR FORM))
-	(FROM-CELL (CADDR FORM)))
-    (P1 `(%BLT-TYPED ,FROM-CELL ,TO-CELL 1 0))))
-
 ;;; For (CLOSURE '(X Y Z) ...), make sure that X, Y, Z are special.
 (DEFUN (:PROPERTY P1CLOSURE P1) (FORM)
   (AND (EQ (CAR-SAFE (CADR FORM)) 'QUOTE)
@@ -2784,4 +2764,3 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
 
 ;;; ARGDESC properties for functions with hairy eval/quote argument patterns
 (DEFPROP ARRAY ((2 (FEF-ARG-REQ FEF-QT-QT)) (#o20 (FEF-ARG-OPT FEF-QT-EVAL))) ARGDESC)
-
