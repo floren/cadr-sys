@@ -844,6 +844,7 @@
 ;;; This is the real top level for the compiler.  It takes a source file
 ;;; and writes out the QFASL for it.
 (DEFUN RTC-FILE (FILENAME)
+  (LET ((*PACKAGE* (FIND-PACKAGE "SI")))
   (WITH-OPEN-FILE (FROM FILENAME :DIRECTION :INPUT)
     (DO ((X (READ FROM '*EOF*) (READ FROM '*EOF*))
 	 (LIST)
@@ -882,7 +883,7 @@
 			 (WARNING "No destination for readtable."))))
 		 ((DECLARE EVAL-WHEN) NIL)
 		 (OTHERWISE
-		  (WARNING "Strange object in file: " X))))))))
+		  (WARNING "Strange object in file: " X)))))))))
 
 (DEFUN RTC1 (LIST OPTIONS)
   (LET (ESCAPE
