@@ -927,18 +927,18 @@ of a list satisfies the test. Eg (EQ . MEMQ)")
 (defoptimizer comment-expand comment () (ignore)
   `'comment)
 
-(defrewrite defprop-expand defprop (putprop) (x)
+(defoptimizer defprop-expand defprop (putprop) (x)
   `(putprop ',(cadr x) ',(caddr x) ',(cadddr x)))
 
 ;;; Make *CATCH compile arguments other than the first and the last for
 ;;; effect rather than for value.
-(defrewrite *catch-prognify *catch () (form)
+(defoptimizer *catch-prognify *catch () (form)
   (if (cdddr form)
       `(*catch ,(cadr form) (progn . ,(cddr form)))
     form))
 
 ;;; Make PROGV work compiled.
-(defrewrite progv-expand progv () (form)
+(defoptimizer progv-expand progv () (form)
   (let ((varnames (cadr form)) (vals (caddr form)) (body (cdddr form))
 	(vars-var (gensym))
 	(vals-var (gensym)))
@@ -955,12 +955,12 @@ of a list satisfies the test. Eg (EQ . MEMQ)")
 
 ;;; Turn PROG1 into PROG2 since that is open-coded.
 ;;; Also turn (PROG1 FOO NIL) into FOO since PBIND generates that and it makes better code
-(defrewrite prog1-prog2 prog1 (prog2) (form)
+(defoptimizer prog1-prog2 prog1 (prog2) (form)
   (if (equal (cddr form) '(nil))
       (cadr form)
     `(prog2 nil . ,(cdr form))))
 
-(defrewrite progw-expand progw (prog bind) (form)
+(defoptimizer progw-expand progw (prog bind) (form)
   (destructuring-bind (ignore vars-and-vals &body body) form
     (let ((vars-and-vals-var (gensym)))
       `(prog ((,vars-and-vals-var ,vars-and-vals))
@@ -972,7 +972,7 @@ of a list satisfies the test. Eg (EQ . MEMQ)")
 		    (go loop)))
 	     (return (progn . ,body))))))
 
-(defrewrite let-if-expand let-if (cond let) (form)
+(defoptimizer let-if-expand let-if (cond let) (form)
   (destructuring-bind (ignore cond vars-and-vals &body body) form
     (cond ((null cond) `(let () . ,body))		;Macros generate this
 	  ((eq cond t) `(let ,vars-and-vals . ,body))	;and this
@@ -1024,10 +1024,10 @@ of a list satisfies the test. Eg (EQ . MEMQ)")
       form)))
 
 ;;;; Convert DOs into PROGs.
-(defrewrite doexpander	do)
-(defrewrite doexpander	do-named)
-(defrewrite doexpander	do*)
-(defrewrite doexpander	do*-named)
+(defoptimizer doexpander	do)
+(defoptimizer doexpander	do-named)
+(defoptimizer doexpander	do*)
+(defoptimizer doexpander	do*-named)
 
 (defun doexpander (x)
   (let ((progname) (progrest) serial decls)
@@ -1121,12 +1121,12 @@ of a list satisfies the test. Eg (EQ . MEMQ)")
       	`(,(if serial 'prog* 'prog)
 	  . ,progrest))))
 
-(defrewrite mapexpand	mapl)
-(defrewrite mapexpand	mapc)
-(defrewrite mapexpand	mapcar)
-(defrewrite mapexpand	maplist)
-(defrewrite mapexpand	mapcan)
-(defrewrite mapexpand	mapcon)
+(defoptimizer mapexpand	mapl)
+(defoptimizer mapexpand	mapc)
+(defoptimizer mapexpand	mapcar)
+(defoptimizer mapexpand	maplist)
+(defoptimizer mapexpand	mapcan)
+(defoptimizer mapexpand	mapcon)
 
 (defun mapexpand (form)
   (if (or (null (cddr form))		;Don't bomb out if no args for the function to map.
@@ -1226,8 +1226,8 @@ of a list satisfies the test. Eg (EQ . MEMQ)")
 	  )))))
 
 
-(defrewrite subset-expand subset)
-(defrewrite subset-expand subset-not)
+(defoptimizer subset-expand subset)
+(defoptimizer subset-expand subset-not)
 (defun subset-expand (form)
   (let ((fn (cadr form))
 	predargs doclauses tem)
@@ -1266,17 +1266,17 @@ of a list satisfies the test. Eg (EQ . MEMQ)")
   `(,(function-name (symbol-function (car form))) . ,(cdr form)))
 
 ;;; These functions are defined in ENCAPS, but loaded here
-(defrewrite fix-synonym-special-form si:encapsulation-let (list))
-(defrewrite fix-synonym-special-form si:encapsulation-list* (list*))
+(defoptimizer fix-synonym-special-form si:encapsulation-let (list))
+(defoptimizer fix-synonym-special-form si:encapsulation-list* (list*))
 
-(defrewrite fix-synonym-special-form si:advise-prog (prog))
-(defrewrite fix-synonym-special-form si:advise-setq (setq))
-(defrewrite fix-synonym-special-form si:advise-progn (progn))
-(defrewrite fix-synonym-special-form si:advise-multiple-value-list (multiple-value-list))
-(defrewrite fix-synonym-special-form si:advise-return-list (return-list))
-(defrewrite fix-synonym-special-form si:advise-apply (apply))
-(defrewrite fix-synonym-special-form si:advise-let (let))
-(defrewrite fix-synonym-special-form si:advise-list* (list*))
+(defoptimizer fix-synonym-special-form si:advise-prog (prog))
+(defoptimizer fix-synonym-special-form si:advise-setq (setq))
+(defoptimizer fix-synonym-special-form si:advise-progn (progn))
+(defoptimizer fix-synonym-special-form si:advise-multiple-value-list (multiple-value-list))
+(defoptimizer fix-synonym-special-form si:advise-return-list (return-list))
+(defoptimizer fix-synonym-special-form si:advise-apply (apply))
+(defoptimizer fix-synonym-special-form si:advise-let (let))
+(defoptimizer fix-synonym-special-form si:advise-list* (list*))
 
 ;;; Style checkers are, unlike optimizers or macro definitions,
 ;;; run only on user-supplied input, not the results of expansions.
@@ -1360,7 +1360,7 @@ of a list satisfies the test. Eg (EQ . MEMQ)")
 	      'make-list (third form)
 	      (if (member-equal (second form) '(nil 'nil)) nil (second form)) :area))))
 
-(defrewrite break-decruftify break () (form)
+(defoptimizer break-decruftify break () (form)
   (if (not (and (symbolp (cadr-safe form)) (not (constantp (cadr-safe form)))))
       form
     (warn 'break-arg :obsolete
