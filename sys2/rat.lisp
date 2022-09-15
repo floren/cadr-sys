@@ -98,7 +98,7 @@ TOLERANCE specifies how much precision of X to regard as valid:
   ;; Continued fraction expansion. This keeps track of precision.
   ;; It also assumes only loss of precision is in the subtraction, and one in
   ;; the division. This seems to be a good assumption - BEE
-  (loop with terms ()
+  (loop with terms = ()
 	with pow2 = (%single-float-exponent x)
 	as int-part = (fix x)
 	do (progn (push int-part terms)
