@@ -690,14 +690,10 @@ See P2BRANCH.")
 ;;;; Functions to gobble multiple values.
 
 (DEFUN (:PROPERTY MULTIPLE-VALUE-BIND P2) (TAIL DEST)
-  ;; The first "argument" is the multiple-value producing form.
-  (LET ((MVFORM (CAR TAIL))
-	(TAIL (CDR TAIL))   ; Remove that, and we have what looks like
-			    ; the arguments that a LET would have in pass 2.
-	NBINDS)
-    (LET* ((VLIST (CAR TAIL))
-	   (MVTARGET (LENGTH VLIST))
-	   (VARS (SECOND TAIL)))
+  (LET ((VLIST (CAR TAIL)))
+    (LET ((MVTARGET (LENGTH VLIST))
+	  (VARS (SECOND TAIL))
+	  (MVFORM (FOURTH TAIL)))
       ;; Compile the form to leave N things on the stack.
       ;; If it fails to do so, then it left only one, so push the other N-1.
       (AND (P2MV MVFORM 'D-PDL MVTARGET)
@@ -708,11 +704,13 @@ See P2BRANCH.")
       ;; Note that the vlist contains the variables
       ;; in the original order,
       ;; each with an initialization of (%POP).
-      (SETQ NBINDS (P2PBIND VLIST (THIRD TAIL)))
+      (P2PBIND VLIST (THIRD TAIL))
       ;; Record that they were popped. -- 9/8/84
       ;; This is needed because P2PBIND binds PDLLVL.
       (MKPDLLVL (- PDLLVL MVTARGET)))
-    (P2LET-INTERNAL (SECOND TAIL) NBINDS TAIL DEST)))
+    (LET ((VARS (THIRD TAIL))
+	  (BODY (CDDDDR TAIL)))
+      (P2PROG12N (LENGTH BODY) DEST BODY))))
 
 (DEFUN (:PROPERTY NTH-VALUE P2) (TAIL DEST)
   (IF (TYPEP (CAR TAIL) '(INTEGER 0))
