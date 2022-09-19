@@ -103,6 +103,7 @@
 		 "SYS: COLD; SYSTEM"
 		 "SYS: SYS2; UNFASL"
 		 "SYS: IO; UNIBUS"
+		 "SYS: SYS2; ANALYZE"
 		 "SYS: SYS2; CLMAC"	;alternate macro definitions for some zl special forms
 		 ))
   (:MODULE RDTBL ("SYS: IO; RDTBL" "SYS: IO; CRDTBL"))
