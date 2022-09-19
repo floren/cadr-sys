@@ -6,5 +6,5 @@
 
 (RELEASED
  ((0 "LMFILE-Remote Loaded" "RMS")
-  (1 "Make FC work with new error system." "RMS")
+  ;;---!!! This list has been cleared. -- AMS, 2022-09-19
   ))
