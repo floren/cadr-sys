@@ -2252,12 +2252,57 @@ If the first argument is explicitly supplied as NIL,
 ;	(PUSH NEW-READTABLE *ALL-READTABLES*))
       NEW-READTABLE)))
 
-; not patched in 98.
-(DEFUN FIND-READTABLE-NAMED (NAME)
-  (SETQ NAME (STRING NAME))
-  (DOLIST (RDTBL *ALL-READTABLES*)
-    (WHEN (SYS:MEMBER-EQUALP NAME (RDTBL-NAMES RDTBL))
-      (RETURN RDTBL))))
+(defun find-readtable-named (name &optional create-p &aux (rdtbl *readtable*))
+  "Find or possibly create a readtable named NAME
+If there is a readtable which has a name STRING-EQUAL it, we return that readtable.
+Otherwise, we may create such a readtable, depending on CREATE-P.
+Possible values of CREATE-P:
+ NIL or :ERROR means get an error,
+ :FIND means return NIL,
+ :ASK means ask whether to create a readtable named NAME which is a copy of the current
+   readtable, and returns it if so.
+ T means create the readtable (a copy of *READTABLE*) and return it."
+  (cond ((readtablep name)
+	 name)
+	((null name) *readtable*)
+	(t
+	 (setq name (string name))
+	 (unless (dolist (r *all-readtables*)
+		   (when (sys:member-equalp name (rdtbl-names r))
+		     (return (setq rdtbl r))))
+	   (ecase create-p
+	     (:find nil)
+	     (:ask
+	      (if (fquery format:yes-or-no-p-options
+			  "~&Readtable ~S not found. Create a copy of ~A and name it ~A? "
+			  name *readtable* name)
+		  (progn (setq rdtbl (copy-readtable))
+			 (setf (rdtbl-names rdtbl) (list name)))
+		(cerror "Proceed, once you have defined the readtable"
+			"Please define a readtable named /"~A/" and then continue." name)
+		(find-readtable-named name :error)))
+	     ((t)
+	      (setq rdtbl (copy-readtable rdtbl))
+	      (setf (rdtbl-names rdtbl) (list name)))
+	     ((nil :error)
+	      (multiple-cerror 'si:readtable-not-found
+			       (:readtable-name name)
+			       ("Cannot find a readtable named ~S" name)
+		((format nil "Create it, using a copy of ~A" *readtable*)
+		 (setq rdtbl (copy-readtable rdtbl))
+		 (setf (rdtbl-names rdtbl) (list name)))
+		((format nil "Use ~A" rdtbl))
+		("Try again to find the readtable"
+		 (find-readtable-named name create-p))
+		("Supply the name of a different readtable to use"
+		 (setq rdtbl (find-readtable-named 
+			       (let ((*query-io* *debug-io*))
+				 (prompt-and-read :string-trim
+						  "Name of readtable to use instead: "))
+			       :error))))))
+	   (if (rdtbl-names rdtbl)
+	       (pushnew rdtbl *all-readtables* :test 'eq)))
+	 rdtbl)))
 
 ;;; MacLisp compatible (sort of) setsyntax:
 
