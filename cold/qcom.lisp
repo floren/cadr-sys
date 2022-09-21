@@ -1187,6 +1187,8 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
   %UNIBUS-CHANNEL-INTERRUPT-ENABLE-BITS		;Bit(s) in CSR which enable interrupts.
   %UNIBUS-CHANNEL-OUTPUT-TURNOFF-ADDRESS	;Address to write to shut down output channel
   %UNIBUS-CHANNEL-OUTPUT-TURNOFF-BITS		;Value to write into that address
+  %UNIBUS-CHANNEL-CSR-CLEAR-BITS		;** Bits to clear at start of interrupt.
+  %UNIBUS-CHANNEL-CSR-SET-BITS			;** Bits to set at start of interrupt.
   ))
 (ASSIGN-VALUES-INIT-DELTA UNIBUS-CHANNEL-QS 0 1 1)
 
@@ -1200,6 +1202,10 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
   %%UNIBUS-CSR-TWO-DATA-REGISTERS 2201		;Device has two 16-bit data registers;
 						; assume lower unibus addr has low bits.
   %%UNIBUS-CSR-SB-ENABLE 2301			;Enable sequence break (input only).
+  %%UNIBUS-CSR-SET-BITS-P 2401			;** %UNIBUS-CHANNEL-CSR-SET-BITS is
+						;  significant.
+  %%UNIBUS-CSR-CLEAR-BITS-P 2501		;** %UNIBUS-CHANNEL-CSR-CLEAR-BITS is
+						;  significant.
   ))
 (ASSIGN-ALTERNATE UNIBUS-CSR-BIT-VALUES)
 
@@ -1208,6 +1214,8 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
   %%UNIBUS-CSR-TIMESTAMPED
   %%UNIBUS-CSR-TWO-DATA-REGISTERS
   %%UNIBUS-CSR-SB-ENABLE
+  %%UNIBUS-CSR-SET-BITS-P
+  %%UNIBUS-CSR-CLEAR-BITS-P
   ))
 
 ;;;; Definitions for Chaos net hardware and microcode
