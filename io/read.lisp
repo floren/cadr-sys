@@ -1021,35 +1021,32 @@ RECURSIVE-P should be supplied non-NIL when this is called from a reader macro."
 ;;; value will equal the "length" argument if it got to the end of the string.
 ;;; it takes a base as well.
 (DEFUN XR-READ-FIXNUM-INTERNAL (STRING II LEN &OPTIONAL (IBS *READ-BASE*)
-				&AUX (SIGN 1) (NUM 0) CH (SECONDVAL LEN))
+				&AUX (SIGN 1) (NUM 0) CH)
   (SETQ CH (AREF STRING II))
   (COND ((= CH #/+)
 	 (INCF II))
 	((= CH #/-)
 	 (INCF II)
 	 (SETQ SIGN -1)))
-  (VALUES
-    (DO ((I II (1+ I)))
-	(( I LEN)
-	 (* SIGN NUM))
-      (SETQ CH (AREF STRING I))
-      (COND (( #/0 CH #/9)
-	     (SETQ NUM (+ (* NUM IBS) (- CH #/0))))
-	    ((= CH #/.)
-	     (COND ((= IBS 10.)
-		    (SETQ SECONDVAL (1+ I))
-		    (RETURN (* SIGN NUM)))
-		   (T
-		    (SETQ IBS 10.)
-		    (SETQ NUM 0)
-		    (DECF I))))
-	    ((NOT (OR (< CH #/A) (> CH #/Z)))
-	     (SETQ NUM (+ (* NUM IBS) (- CH (- #/A 10.)))))
-	    ((NOT (OR (< CH #/a) (> CH #/z)))
-	     (SETQ NUM (+ (* NUM IBS) (- CH (- #/a 10.)))))
-	    (T (SETQ SECONDVAL I)
-	       (RETURN (* SIGN NUM)))))
-     SECONDVAL))
+  (DO ((I II (1+ I)))
+      (( I LEN)
+       (VALUES (* SIGN NUM) LEN))
+    (SETQ CH (AREF STRING I))
+    (COND (( #/0 CH #/9)
+	   (SETQ NUM (+ (* NUM IBS) (- CH #/0))))
+	  ((= CH #/.)
+	   (COND ((= IBS #10r10)
+		  (RETURN (* SIGN NUM) (1+ I)))
+		 (T
+		  ;; Start from beginning, but base ten this time.
+		  (SETQ IBS 10.)
+		  (SETQ NUM 0)
+		  (SETQ I (- II 1)))))
+	  ((NOT (OR (< CH #/A) (> CH #/Z)))
+	   (SETQ NUM (+ (* NUM IBS) (- CH (- #/A 10.)))))
+	  ((NOT (OR (< CH #/a) (> CH #/z)))
+	   (SETQ NUM (+ (* NUM IBS) (- CH (- #/a 10.)))))
+	  (T (RETURN (* SIGN NUM) I)))))
 
 ;; This function takes a string which represents a fixnum (and a stream
 ;; which it doesn't use), and returns the fixnum.  It ASSUMES that the string
