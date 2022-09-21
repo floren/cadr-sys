@@ -1,8 +1,10 @@
-;;; -*- Mode:LISP; Package:SI; Cold-Load:T; Base:8; Readtable:T -*-
+;;; -*- Mode:LISP; Package:SI; Base:8; Cold-load: T -*-
 
 ;	** (c) Copyright 1980 Massachusetts Institute of Technology **
 
 ;;; A BONUS DRIVEN READER!
+
+(PROCLAIM '(SPECIAL *STANDARD-INPUT*))
 
 (DEFVAR *READTABLE* :UNBOUND
   "Syntax table which controls operation of READ (and also PRINT, in limited ways).")
@@ -14,15 +16,15 @@
   "A list of all the named readtables in the world")
 
 (DEFVAR *READ-BASE* 10.
-  "Default radix for reading rational numbers.")
+  "Default radix for reading integers.")
 (DEFVAR IBASE :UNBOUND
-  "Default radix for reading rational numbers.")
+  "Default radix for reading integers.")
 (FORWARD-VALUE-CELL 'IBASE '*READ-BASE*)
 
 (DEFVAR INITIAL-READTABLE :UNBOUND
   "A readtable defining the standard Zetalisp syntax and symbols.
 This is a copy of the readtable that was current when the system was built.
-It does not contain any changes you have made to SI:STANDARD-READTABLE.")
+It does not contain any changes you have made to the default readtable.")
 
 (DEFVAR COMMON-LISP-READTABLE :UNBOUND
   "A readtable for Common Lisp syntax.")
@@ -33,7 +35,8 @@ This is a copy of the readtable that defined when the system was built.
 It does not contain any changes you have made to SI:COMMON-LISP-READTABLE.")
 
 (DEFVAR STANDARD-READTABLE :UNBOUND
-  "A readtable defining the standard traditional Zetalisp syntax.")
+  "The readtable to make current on booting (warm or cold).
+This is therefore the same as *READTABLE* unless you set one or the other.")
 
 (DEFVAR READ-PRESERVE-DELIMITERS NIL
   "If NIL, syntatically useless characters that terminate symbols and numbers are discarded.
@@ -126,39 +129,34 @@ NO-MULTIPLE-ESCAPES means do not process multiple-escape characters specially.
 The first value is the translated character.
 The second is the index for looking in READ's FSM.
 The third is the original, nontranslated character.
-The fourth is T if the character was preceded by one or more
- multi-character escape characters that were passed over.
 
 Has a kludge for *READ-BASE* > 10. where letters that should be digits
 return the readtable code for EXTENDED-DIGIT rather than their own codes."
-  (DECLARE (VALUES TRANSLATED-CHAR FSM-INDEX ACTUAL-CHAR FOUND-MULTI-ESCAPES))
-  (PROG (CH BITS CODE CH-CHAR FOUND-MULTI-ESCAPES)
+  (DECLARE (VALUES TRANSLATED-CHAR FSM-INDEX ACTUAL-CHAR))
+  (PROG TOP (CH BITS CODE CH-CHAR)
 	(SETQ XR-XRTYI-PREV-CHAR XR-XRTYI-LAST-CHAR)
      L
 	(DO-FOREVER
-	  (SETQ CH (SEND STREAM (IF (EQ RUBOUT-HANDLER STREAM) :ANY-TYI :TYI)))
+	  (SETQ CH (SEND STREAM (IF RUBOUT-HANDLER ':ANY-TYI ':TYI)))
 	  (if (fixnump ch) (setf (char-font ch) 0))
 	  (COND ((NULL CH)
-		 (RETURN-FROM XR-XRTYI (VALUES CH
-					       (RDTBL-EOF-CODE *READTABLE*)
-					       CH)))
+		 (RETURN-FROM TOP CH (RDTBL-EOF-CODE *READTABLE*) CH))
 		((CONSP CH)
-		 (AND (EQ (CAR CH) :ACTIVATION)
+		 (AND (EQ (CAR CH) ':ACTIVATION)
 		      ;; Ignore activations except in top-level context.
 		      (NOT IGNORE-WHITESPACE)
 		      (NOT NO-CHARS-SPECIAL)
 		      (NOT NO-MULTIPLE-ESCAPES)
 		      (LET ((CH1 (CAR (RDTBL-WHITESPACE *READTABLE*))))
-			(RETURN-FROM XR-XRTYI (VALUES CH1
-						      (RDTBL-CODE *READTABLE* CH1)
-						      CH)))))
+			(RETURN-FROM TOP
+			  CH1 (RDTBL-CODE *READTABLE* CH1) CH))))
 		((AND READ-DISCARD-FONT-CHANGES
 		      (EQ CH #/))
-		 (IF (EQ #/ (SEND STREAM :TYI))
+		 (IF (EQ #/ (SEND STREAM ':TYI))
 		     (RETURN)))
 		((NOT (> CH RDTBL-ARRAY-SIZE))
 		 (RETURN))))
-	(SETQ CH-CHAR (CHAR-CODE CH))
+	(SETQ CH-CHAR (LDB %%CH-CHAR CH))
 	(SETQ BITS (RDTBL-BITS *READTABLE* CH-CHAR))
 	(SETQ CODE (RDTBL-CODE *READTABLE* CH-CHAR))
 	(COND ((AND (NOT NO-CHARS-SPECIAL)
@@ -166,7 +164,6 @@ return the readtable code for EXTENDED-DIGIT rather than their own codes."
 		    (= CODE
 		       (RDTBL-MULTIPLE-ESCAPE-CODE *READTABLE*)))
 	       ;; Vertical bar.
-	       (SETQ FOUND-MULTI-ESCAPES T)
 	       (SETQ READ-INSIDE-MULTIPLE-ESCAPE
 		     (IF READ-INSIDE-MULTIPLE-ESCAPE NIL
 		       CH-CHAR))
@@ -177,66 +174,65 @@ return the readtable code for EXTENDED-DIGIT rather than their own codes."
 	       ;; Slash
 	       (SETQ XR-XRTYI-PREV-CHAR CH)
 	       (DO-FOREVER
-		 (SETQ CH (SEND STREAM :TYI))
+		 (SETQ CH (SEND STREAM ':TYI))
 		 (COND ((AND READ-DISCARD-FONT-CHANGES
 			     (EQ CH #/))
-			(IF (EQ #/ (SEND STREAM :TYI))
+			(IF (EQ #/ (SEND STREAM ':TYI))
 			    (RETURN)))
 		       (T (RETURN))))
 	       (SETQ XR-XRTYI-LAST-CHAR CH)
-	       (RETURN (VALUES (OR CH
-				   (PROGN
-				     (CERROR :NO-ACTION NIL 'SYS:READ-END-OF-FILE
-					     "EOF on ~S after a ~S." STREAM
-					     (STRING XR-XRTYI-PREV-CHAR))
-				     #/SPACE))
-			       (RDTBL-SLASH-CODE *READTABLE*)
-			       CH)))
+	       (RETURN (OR CH
+			   (PROGN
+			     (CERROR ':NO-ACTION NIL 'SYS:READ-END-OF-FILE
+				     "EOF on ~S after a ~S." STREAM
+				     (STRING XR-XRTYI-PREV-CHAR))
+			     #/SPACE))
+		       (RDTBL-SLASH-CODE *READTABLE*)
+		       CH))
 	      ((AND (NOT NO-CHARS-SPECIAL)
 		    (= CODE
 		       (RDTBL-CHARACTER-CODE-ESCAPE-CODE *READTABLE*)))
 	       ;; circlecross
 	       (SETQ XR-XRTYI-LAST-CHAR (XR-READ-CIRCLECROSS STREAM))
-	       (RETURN (VALUES XR-XRTYI-LAST-CHAR
-			       (RDTBL-SLASH-CODE *READTABLE*)
-			       XR-XRTYI-LAST-CHAR)))
+	       (RETURN XR-XRTYI-LAST-CHAR
+		       (RDTBL-SLASH-CODE *READTABLE*)
+		       XR-XRTYI-LAST-CHAR))
 	      (READ-INSIDE-MULTIPLE-ESCAPE
 	       ;; Ordinary character but within vertical bars.
 	       (SETQ XR-XRTYI-LAST-CHAR CH)
-	       (RETURN (VALUES (OR CH
-				   (PROGN
-				     (CERROR :NO-ACTION NIL 'SYS:READ-END-OF-FILE
-					     "EOF on ~S inside a ~C-quoted token." STREAM
-					     READ-INSIDE-MULTIPLE-ESCAPE)
-				     #/SPACE))
-			       (RDTBL-SLASH-CODE *READTABLE*)
-			       CH)))
+	       (RETURN (OR CH
+			   (PROGN
+			     (CERROR ':NO-ACTION NIL 'SYS:READ-END-OF-FILE
+				     "EOF on ~S inside a ~C-quoted token." STREAM
+				     READ-INSIDE-MULTIPLE-ESCAPE)
+			     #/SPACE))
+		       (RDTBL-SLASH-CODE *READTABLE*)
+		       CH))
 	      (T
 	       ;; Ordinary character.
-	       (COND ((AND IGNORE-WHITESPACE (NOT FOUND-MULTI-ESCAPES)
+	       (COND ((AND IGNORE-WHITESPACE
 			   (BIT-TEST 1 BITS))
 		      ;; Here if whitespace char to be ignored.
 		      (SETQ XR-XRTYI-PREV-CHAR CH)
 		      (GO L)))
 	       ;; Here for ordinary, significant input char.
 	       (SETQ XR-XRTYI-LAST-CHAR CH)
-	       (RETURN (VALUES (RDTBL-TRANS *READTABLE* CH-CHAR)
-			       ;; If not doing slashes, caller must not really want the
-			       ;;  RDTBL-CODE, so return a value which, if passed to
-			       ;;  XR-XRUNTYI, will prevent barfing.
-			       (IF NO-CHARS-SPECIAL 0
-				 (IF (AND (NUMBERP *READ-BASE*)
-					  ( #/A (CHAR-UPCASE CH) (+ *READ-BASE* #/A -11.)))
-				     (CDR (GETF (RDTBL-PLIST *READTABLE*) 'EXTENDED-DIGIT))
-				   (RDTBL-CODE *READTABLE* CH-CHAR)))
-			       CH
-			       T))))))
+	       (RETURN (RDTBL-TRANS *READTABLE* CH-CHAR)
+		       ;; If not doing slashes, caller must not really want the RDTBL-CODE,
+		       ;; so return a value which, if passed to XR-XRUNTYI,
+		       ;; will prevent barfing.
+		       (IF NO-CHARS-SPECIAL 0
+			 (IF (AND (NUMBERP *READ-BASE*)
+				  ( #/A (CHAR-UPCASE CH) (+ *READ-BASE* #/A -11.)))
+			     (CDR (GETF (RDTBL-PLIST *READTABLE*) 'EXTENDED-DIGIT))
+			   (RDTBL-CODE *READTABLE* CH-CHAR)))
+		       CH)))))
 
 (DEFUN XR-READ-CIRCLECROSS (STREAM &AUX CH1 CH2 CH3)
   (IF (NOT (AND (SETQ CH1 (XR-XRTYI STREAM))
 		(SETQ CH2 (XR-XRTYI STREAM))
 		(SETQ CH3 (XR-XRTYI STREAM))))
-      (PROGN (CERROR :NO-ACTION NIL 'SYS:READ-END-OF-FILE "EOF during a circlecross.")
+      (PROGN (CERROR ':NO-ACTION NIL 'SYS:READ-END-OF-FILE "EOF during a circlecross.")
 	     #/SPACE)
     (IF (OR (< CH1 #/0) (> CH1 #/7)
 	    (< CH2 #/0) (> CH2 #/7)
@@ -244,7 +240,7 @@ return the readtable code for EXTENDED-DIGIT rather than their own codes."
 	;; The lack of an explicit  character here is to get around
 	;; a stupid bug in the cold-load generator.
 	(PROGN
-	  (CERROR :NO-ACTION NIL 'SYS:READ-ERROR-1
+	  (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1
 		  "The three characters immediately following a circlecross must be octal -- ~C~C~C~C." #/ CH1 CH2 CH3)
 	  #/SPACE)
       (+ (* 100 (- CH1 #/0))
@@ -263,7 +259,7 @@ CH and NUM should be the third and second values returned by XR-XRTYI."
   (WHEN (AND CH (NOT (CONSP CH))
 	     (OR READ-PRESERVE-DELIMITERS (ZEROP (LOGAND 1 (RDTBL-BITS *READTABLE* CH)))))
     (SETQ XR-XRTYI-LAST-CHAR XR-XRTYI-PREV-CHAR)
-    (SEND STREAM :UNTYI CH)))
+    (SEND STREAM ':UNTYI CH)))
 
 ;;;; Middle level of READ - the FSM processor.
 
@@ -288,7 +284,7 @@ NIL means no string available for re-use now.")
 ;     (WITHOUT-INTERRUPTS
 ;       (PROG1 READ-TEMP-STRING (SETQ READ-TEMP-STRING NIL)))
      (PROGN (INCF READ-STRING-COUNT)
-	    (MAKE-STRING #o100 :FILL-POINTER 0))))
+	    (MAKE-ARRAY 100 ':TYPE ART-STRING ':FILL-POINTER 0))))
 
 ;;; The specific functions called by XR-READ-THING can return anything as a second value
 ;;; if that thing is the symbol "READER-MACRO" then the first thing is called as a
@@ -303,13 +299,9 @@ NIL means no string available for re-use now.")
 	 (READTABLE-FSM (RDTBL-FSM *READTABLE*))
 	 (FNPROP (RDTBL-READ-FUNCTION-PROPERTY *READTABLE*))
 	 (STATE (RDTBL-STARTING-STATE *READTABLE*))
-	 READ-INSIDE-MULTIPLE-ESCAPE FOUND-MULTI-ESCAPES)
-	(MULTIPLE-VALUE (CH NUM REAL-CH FOUND-MULTI-ESCAPES) (XR-XRTYI STREAM T))
+	 READ-INSIDE-MULTIPLE-ESCAPE)
+	(MULTIPLE-VALUE (CH NUM REAL-CH) (XR-XRTYI STREAM T))
 	(SETQ STATE (AREF READTABLE-FSM STATE NUM))
-	;; Compensate for bad readtable in system 99.
-	;; Detect the case of a whitespace char following a pair of vertical bars.
-	(AND (NULL STATE) FOUND-MULTI-ESCAPES
-	     (SETQ STATE '(UNTYI-FUNCTION . SYMBOL)))
 	(UNLESS (NUMBERP STATE)
 	  (LET ((FLAG (CAR STATE))
 		(TODO (CDR STATE)))
@@ -326,25 +318,15 @@ NIL means no string available for re-use now.")
 		   (SETQ A NIL B NIL)
 		 (SETQ STRING (GET-READ-STRING))
 		 (SETF (FILL-POINTER STRING) 1)
-		 (SETF (CHAR STRING 0) CH)
+		 (AS-1 CH STRING 0)
 		 (MULTIPLE-VALUE (A B ALREADY-RETURNED)
 		   (FUNCALL (GET TODO FNPROP) STREAM STRING))
 		 (UNLESS ALREADY-RETURNED
 		   (RETURN-READ-STRING STRING))))
-	      (UNTYI-QUOTE
+	      ((UNTYI-QUOTE UNTYI-FUNCTION)
 	       (FERROR 'SYS:READ-ERROR-1
 		       "Reader in infinite loop reading character: /"~C/"."
 		       REAL-CH))
-	      (UNTYI-FUNCTION
-	       (IF (NOT FOUND-MULTI-ESCAPES)
-		   (FERROR 'SYS:READ-ERROR-1
-			   "Reader in infinite loop reading character: /"~C/"."
-			   REAL-CH)
-		 (XR-XRUNTYI STREAM REAL-CH NUM)
-		 (IF *READ-SUPPRESS*
-		     (SETQ A NIL B NIL)
-		   (MULTIPLE-VALUE (A B)
-		     (FUNCALL (GET TODO FNPROP) STREAM "")))))
 	      (OTHERWISE
 	       (FERROR 'SYS:READ-ERROR-1
 		       "The reader found ~S in the finite state machine."
@@ -352,15 +334,15 @@ NIL means no string available for re-use now.")
 	    (RETURN A B)))
 	(SETQ STRING (GET-READ-STRING))
 	(SETQ STLEN (ARRAY-LENGTH STRING))
-     L  (SETF (CHAR STRING INDEX) CH)
+     L  (SETF (AREF STRING INDEX) CH)
 	(SETQ INDEX (1+ INDEX))
 	(MULTIPLE-VALUE (CH NUM REAL-CH) (XR-XRTYI STREAM))
 	(SETQ STATE (AREF READTABLE-FSM STATE NUM))
 	(COND ((NUMBERP STATE)
-	       (WHEN (= INDEX STLEN)
-		 (SETQ STLEN (+ 32. STLEN))
-		 (ADJUST-ARRAY-SIZE STRING STLEN)
-		 (SETQ STRING (FOLLOW-STRUCTURE-FORWARDING STRING)))
+	       (COND ((= INDEX STLEN)
+		      (SETQ STLEN (+ 32. STLEN))
+		      (ADJUST-ARRAY-SIZE STRING STLEN)
+		      (SETQ STRING (FOLLOW-STRUCTURE-FORWARDING STRING))))
 	       (GO L)))
 	(LET ((FLAG (CAR STATE))
 	      (TODO (CDR STATE)))
@@ -379,7 +361,7 @@ NIL means no string available for re-use now.")
 			STREAM STRING CH)))
 	    (NO-UNTYI-FUNCTION
 	     (SETF (FILL-POINTER STRING) (1+ INDEX))
-	     (SETF (CHAR STRING INDEX) CH)
+	     (SETF (AREF STRING INDEX) CH)
 	     (IF *READ-SUPPRESS*
 		 (SETQ A NIL B NIL)
 	       (MULTIPLE-VALUE (A B ALREADY-RETURNED)
@@ -417,11 +399,11 @@ NIL means no string available for re-use now.")
       (())
     (SETQ CHAR (XR-XRTYI STREAM NIL T))
     (COND ((NULL CHAR)
-	   (CERROR :NO-ACTION NIL 'READ-END-OF-FILE
+	   (CERROR ':NO-ACTION NIL 'READ-END-OF-FILE
 		   "End of file after dispatch macro character ~C." MACRO-CHAR)
 	   (RETURN NIL))
 	  ((SETQ TEM (CDR (ASSQ CHAR
-				'((#/ . 1) (#/ . 2) (#/ . 3)
+				'( (#/ . 1) (#/ . 2) (#/ . 3)
 				  (#/ . 4) (#/ . 8) ))))
 	   (SETQ ARG (LOGIOR (OR ARG 0) TEM)))
 	  (( #/0 CHAR #/9)
@@ -430,7 +412,7 @@ NIL means no string available for re-use now.")
 	   (LET ((FN (CADR (ASSQ (CHAR-UPCASE CHAR)
 				 (CDDR XR-MACRO-ALIST-ENTRY-CDR)))))
 	     (IF (NULL FN)
-		 (RETURN (CERROR :NO-ACTION NIL 'READ-ERROR-1
+		 (RETURN (CERROR ':NO-ACTION NIL 'READ-ERROR-1
 				 "Undefined dispatch macro combination ~C~C."
 				 MACRO-CHAR CHAR))
 	       (RETURN (FUNCALL FN STREAM CHAR ARG))))))))
@@ -441,81 +423,56 @@ NIL means no string available for re-use now.")
 ;;; See the Common Lisp manual for how they are supposed to work.
 (DEFVAR XR-LABEL-BINDINGS)
 				      
-(DEFUN READ-PRESERVING-WHITESPACE (&OPTIONAL (STREAM *STANDARD-INPUT*)
-				   EOF-ERROR-P EOF-VALUE RECURSIVE-P)
+(DEFUN READ-PRESERVING-WHITESPACE  (&OPTIONAL (STREAM *STANDARD-INPUT*)
+				    EOF-ERRORP EOF-VALUE RECURSIVE-P)
   "Similar to INTERNAL-READ, but never discards the character that terminates an object.
 If the object read required the following character to be seen to terminate it,
 normally READ will discard that character if it is whitespace.
 This function, by contrast, will never discard that character."
-  (INTERNAL-READ STREAM EOF-ERROR-P EOF-VALUE RECURSIVE-P T))
+  (INTERNAL-READ STREAM EOF-ERRORP EOF-VALUE RECURSIVE-P T))
 
 (DEFUN READ-FOR-TOP-LEVEL (&REST READ-ARGS)
   "Similar to READ, but ignores stray closeparens and ignores end of file.
 Interactive command loops such as the lisp listener use this function."
-  (DECLARE (ARGLIST STREAM EOF-OPTION (RUBOUT-HANDLER-OPTIONS '((:ACTIVATION = #/END)))))
-  (MULTIPLE-VALUE-BIND (STREAM NIL EOF-VALUE OPTIONS)
-      (DECODE-KLUDGEY-MUCKLISP-READ-ARGS READ-ARGS 1)
-    (WITH-INPUT-EDITING (STREAM (IF OPTIONS (CAR OPTIONS) '((:ACTIVATION = #/END))))
-      (INTERNAL-READ STREAM NIL EOF-VALUE NIL NIL T))))
+  (MULTIPLE-VALUE-BIND (STREAM EOF-OPTION)
+      (DECODE-READ-ARGS READ-ARGS)
+    (INTERNAL-READ STREAM NIL EOF-OPTION NIL NIL T)))
 
 (DEFUN READ (&REST READ-ARGS)
   "Read an s-expression from a stream and return it.
-EOF-OPTION, if supplied is returned if end of file is encountered.
+The args are the STREAM and an EOF-OPTION, in either order.
+The EOF-OPTION is recognized as anything that is not a reasonable stream.
+It is what will be returned if end of file is encountered.
 If there is no EOF-OPTION, end of file is an error.
-See the documentation for WITH-INPUT-EDITING for the format of RUBOUT-HANDLER-OPTIONS.
 READ gets an error if an extraneous closeparen or dot is found.
 Command loops should use READ-FOR-TOP-LEVEL instead, to discard them."
-  (DECLARE (ARGLIST STREAM EOF-OPTION (RUBOUT-HANDLER-OPTIONS '((:ACTIVATION = #/END)))))
-  (MULTIPLE-VALUE-BIND (STREAM EOF-ERROR-P EOF-VALUE OPTIONS)
-      (DECODE-KLUDGEY-MUCKLISP-READ-ARGS READ-ARGS 1)
-    (WITH-INPUT-EDITING (STREAM (IF OPTIONS (CAR OPTIONS) '((:ACTIVATION = #/END))))
-      (INTERNAL-READ STREAM EOF-ERROR-P EOF-VALUE NIL NIL))))
+  (MULTIPLE-VALUE-BIND (STREAM EOF-OPTION)
+      (DECODE-READ-ARGS READ-ARGS)
+    (INTERNAL-READ STREAM (EQ EOF-OPTION 'NO-EOF-OPTION) EOF-OPTION NIL NIL)))
 
 (DEFUN READ-CHECK-INDENTATION (&REST READ-ARGS)
   "Read an s-expression from a stream and return it, requiring proper indentation.
 We assume that all open parens in column zero are supposed
 to be top-level lists, except that EVAL-WHEN's, etc, may surround them.
-/(Symbols such as EVAL-WHEN should have a SI::MAY-SURROUND-DEFUN property).
-If an open paren is encountered in column 0 and is not top level, sufficient
-closeparens are /"imagined/" so as to close off enough pending lists to make
-the data valid.  End of file closes off all pending lists.
+/(Symbols such as EVAL-WHEN should have a SI:MAY-SURROUND-DEFUN property).
+If an open paren is encountered in column 0 and is not top level,
+closeparens are imagined so as to close off enough pending lists
+to make the data valid.  End of file closes off all pending lists.
 In either case, the SYS:MISSING-CLOSEPAREN condition is signaled,
 with an argument that is T for end of file, NIL for open paren encountered."
-  (DECLARE (ARGLIST STREAM EOF-OPTION (RUBOUT-HANDLER-OPTIONS '((:ACTIVATION = #/END)))))
-  (MULTIPLE-VALUE-BIND (STREAM EOF-ERROR-P EOF-VALUE OPTIONS)
-      (DECODE-KLUDGEY-MUCKLISP-READ-ARGS READ-ARGS 1)
-    (WITH-INPUT-EDITING (STREAM  (IF OPTIONS (CAR OPTIONS) '((:ACTIVATION = #/END))))
-      (INTERNAL-READ STREAM EOF-ERROR-P EOF-VALUE NIL NIL NIL T))))
+  (MULTIPLE-VALUE-BIND (STREAM EOF-OPTION)
+      (DECODE-READ-ARGS READ-ARGS)
+    (INTERNAL-READ STREAM (EQ EOF-OPTION 'NO-EOF-OPTION) EOF-OPTION NIL NIL NIL T)))
 
 (DEFUN READ-RECURSIVE (&OPTIONAL (STREAM *STANDARD-INPUT*))
   "Readmacros that wish to read an expression should use this funtion instead of READ."
   (INTERNAL-READ STREAM T NIL T))
 
-(DEFUN READ-OR-END (&REST READ-ARGS &AUX CH TEM)
-  "Like GLOBAL:READ, except that if the first non-blank character that the user types
-is END (the interactive input activation character), we immediately return two values:
-NIL and :END.  Otherwise, read and return an s-expression from STREAM.
-EOF-OPTION has the same meaning as it does for GLOABL:READ."
-  (DECLARE (ARGLIST STREAM EOF-OPTION RUBOUT-HANDLER-OPTIONS))
-  (MULTIPLE-VALUE-BIND (STREAM EOF-ERROR-P EOF-VALUE RH-OPTIONS)
-      (DECODE-KLUDGEY-MUCKLISP-READ-ARGS READ-ARGS 1)
-    (WITH-STACK-LIST* (RH-OPTIONS '(:ACTIVATION = #/END) RH-OPTIONS)
-      (IF (ASSQ :ACTIVATION (CDR RH-OPTIONS)) (POP RH-OPTIONS))
-      (WITH-INPUT-EDITING (STREAM RH-OPTIONS)
-	(SETQ TEM (IF (SEND STREAM :OPERATION-HANDLED-P :ANY-TYI) :ANY-TYI :TYI))
-	;; can't use PEEK-CHAR as that wouldn't get blips...
-	(DO-FOREVER
-	  (SETQ CH (SEND STREAM TEM EOF-ERROR-P))
-	  (COND ((EQ (CAR-SAFE CH) :ACTIVATION) (RETURN (VALUES NIL :END)))
-		;; should use the same readtable-based check that peek-char uses, but wtf
-		((MEMQ CH '(#/SPACE #/TAB #/RETURN)))	;do nothing
-		(T (SEND STREAM :UNTYI CH)
-		   (RETURN (INTERNAL-READ STREAM EOF-ERROR-P EOF-VALUE NIL NIL T)))))))))
+(DEFF CLI:READ 'INTERNAL-READ)
 
 (DEFVAR READ-STREAM :UNBOUND
   "Within READ, the stream being read from.  For creating error objects.")
 
-(DEFF CLI:READ 'INTERNAL-READ)
 (DEFUN INTERNAL-READ (&OPTIONAL (STREAM *STANDARD-INPUT*)
 		      (EOF-ERRORP T) EOF-VALUE RECURSIVE-P
 		      PRESERVE-WHITESPACE DISCARD-CLOSEPARENS CHECK-INDENTATION
@@ -540,8 +497,7 @@ just keep reading past it, with no error.
 CHECK-INDENTATION controls whether indentation is checked within this
 s-expression.  If RECURSIVE-P is non-NIL, this argument is ignored
 and the outer, nonrecursive call gets to control the matter."
-  (COND ((EQ STREAM T) (SETQ STREAM *TERMINAL-IO*))
-	((EQ STREAM NIL) (SETQ STREAM *STANDARD-INPUT*)))
+  (IF (EQ STREAM T) (SETQ STREAM *TERMINAL-IO*))
   (LET-IF (NOT RECURSIVE-P)
 	  ((XR-LABEL-BINDINGS NIL)
 	   (READ-PRESERVE-DELIMITERS PRESERVE-WHITESPACE)
@@ -550,17 +506,17 @@ and the outer, nonrecursive call gets to control the matter."
 	   (XR-XRTYI-PREV-CHAR NIL)
 	   (READ-STREAM STREAM)
 	   (MISSING-CLOSEPAREN-REPORTED NIL))
-    (SETQ W-O (SEND STREAM :WHICH-OPERATIONS))
-    (COND ((MEMQ :READ W-O)
-	   (SEND STREAM :READ NIL))
-	  ((AND (NOT RECURSIVE-P) (NEQ RUBOUT-HANDLER STREAM) (MEMQ :RUBOUT-HANDLER W-O))
+    (SETQ W-O (SEND STREAM ':WHICH-OPERATIONS))
+    (COND ((MEMQ ':READ W-O)
+	   (SEND STREAM ':READ NIL))
+	  ((AND (NOT RECURSIVE-P) (NOT RUBOUT-HANDLER) (MEMQ ':RUBOUT-HANDLER W-O))
 	   ;;We must get inside the rubout handler's top-level CATCH
 	   (WITH-INPUT-EDITING (STREAM '((:ACTIVATION = #/END)))
 	     (INTERNAL-READ STREAM EOF-ERRORP EOF-VALUE T)))
 	  ((PROG (THING TYPE XR-SHARP-ARGUMENT)
 	       A (MULTIPLE-VALUE (THING TYPE) (XR-READ-THING STREAM))
 		 (COND ((EQ TYPE 'READER-MACRO)
-			(LET ((XR-LIST-SO-FAR :TOPLEVEL)
+			(LET ((XR-LIST-SO-FAR ':TOPLEVEL)
 			      (XR-SPLICE-P NIL)
 			      VALUES)
 			  (SETQ VALUES (INVOKE-READER-MACRO THING STREAM))
@@ -571,7 +527,7 @@ and the outer, nonrecursive call gets to control the matter."
 		       ((EQ TYPE 'SPECIAL-TOKEN)
 			(COND ((EQ THING 'EOF)
 			       (IF EOF-ERRORP
-				   (CERROR :NO-ACTION NIL 'SYS:READ-END-OF-FILE
+				   (CERROR ':NO-ACTION NIL 'SYS:READ-END-OF-FILE
 					   "End of file encountered by READ on stream ~S."
 					   STREAM)
 				 (RETURN EOF-VALUE)))
@@ -579,7 +535,7 @@ and the outer, nonrecursive call gets to control the matter."
 				    (EQ THING 'CLOSE))
 			       (GO A))
 			      (T
-			       (CERROR :NO-ACTION NIL 'SYS:READ-ERROR-1
+			       (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1
 				       "The special token ~S was read in at top level."
 				       THING))))
 		       (T (RETURN THING))))))))
@@ -595,8 +551,8 @@ RECURSIVE-P should be supplied non-NIL when this is called from a reader macro."
 	   (XR-XRTYI-PREV-CHAR NIL)
 	   (READ-CHECK-INDENTATION NIL)
 	   (READ-PRESERVE-DELIMITERS NIL))
-    (IF (AND (NOT RECURSIVE-P) (NEQ RUBOUT-HANDLER STREAM)
-	     (SEND STREAM :OPERATION-HANDLED-P :RUBOUT-HANDLER))
+    (IF (AND (NOT RECURSIVE-P) (NOT RUBOUT-HANDLER)
+	     (SEND STREAM ':OPERATION-HANDLED-P ':RUBOUT-HANDLER))
 	;;We must get inside the rubout handler's top-level CATCH
 	(WITH-INPUT-EDITING (STREAM '((:ACTIVATION = #/END)))
 	  (READ-DELIMITED-LIST STOP-CHAR STREAM))
@@ -620,15 +576,15 @@ RECURSIVE-P should be supplied non-NIL when this is called from a reader macro."
 		   (RETURN 'CLOSE 'SPECIAL-TOKEN)))
 	    (SETQ MISSING-CLOSEPAREN-REPORTED NIL)
 	    (SETQ END-OF-LIST (LOCF LIST))
-	    (WHEN XR-CORRESPONDENCE-FLAG
-	      (SEND STREAM :UNTYI XR-XRTYI-LAST-CHAR)
-	      (SETQ CORRESPONDENCE-ENTRY
-		    `(NIL ,(SEND STREAM :READ-BP) NIL . ,XR-CORRESPONDENCE))
-	      (SETQ XR-CORRESPONDENCE CORRESPONDENCE-ENTRY)
-	      (SEND STREAM :TYI))
-	 A
-	    (AND XR-CORRESPONDENCE-FLAG
-		 (PUSH (SEND STREAM :READ-BP) (CADDR CORRESPONDENCE-ENTRY)))
+	    (COND (XR-CORRESPONDENCE-FLAG
+		   (SEND STREAM ':UNTYI XR-XRTYI-LAST-CHAR)
+		   (SETQ CORRESPONDENCE-ENTRY
+			 `(NIL ,(SEND STREAM ':READ-BP) NIL . ,XR-CORRESPONDENCE))
+		   (SETQ XR-CORRESPONDENCE CORRESPONDENCE-ENTRY)
+		   (SEND STREAM ':TYI)))
+	 A  (AND XR-CORRESPONDENCE-FLAG
+		 (PUSH (SEND STREAM ':READ-BP)
+		       (CADDR CORRESPONDENCE-ENTRY)))
 	    ;; Peek ahead to look for the terminator we expect.
 	    (MULTIPLE-VALUE-BIND (CHAR NUM ACTUAL-CHAR)
 		(XR-XRTYI STREAM T T)
@@ -636,7 +592,7 @@ RECURSIVE-P should be supplied non-NIL when this is called from a reader macro."
 		(RETURN LIST))
 	      (XR-XRUNTYI STREAM ACTUAL-CHAR NUM))
 	    ;; Read the next token, or a macro character.
-	    (MULTIPLE-VALUE-SETQ (THING TYPE) (XR-READ-THING STREAM))
+	    (MULTIPLE-VALUE (THING TYPE) (XR-READ-THING STREAM))
 	    ;; If this is the first element of a list starting in column 0,
 	    ;; and it is EVAL-WHEN or something like that,
 	    ;; say it is ok for our sublists to start in column 0.
@@ -649,10 +605,10 @@ RECURSIVE-P should be supplied non-NIL when this is called from a reader macro."
 		 (GET THING 'MAY-SURROUND-DEFUN)
 		 (SETQ INSIDE-COLUMN-0-LIST NIL))
 	    (COND ((EQ TYPE 'READER-MACRO)
-		   (WHEN XR-CORRESPONDENCE-FLAG
-		     (SEND STREAM :UNTYI XR-XRTYI-LAST-CHAR)
-		     (SETQ BP (SEND STREAM :READ-BP))
-		     (SEND STREAM :TYI))
+		   (COND (XR-CORRESPONDENCE-FLAG
+			  (SEND STREAM ':UNTYI XR-XRTYI-LAST-CHAR)
+			  (SETQ BP (SEND STREAM ':READ-BP))
+			  (SEND STREAM ':TYI)))
 		   (LET ((XR-LIST-SO-FAR LIST)
 			 (XR-SPLICE-P NIL)
 			 VALUES)
@@ -661,33 +617,37 @@ RECURSIVE-P should be supplied non-NIL when this is called from a reader macro."
 			    (SETQ LIST XR-LIST-SO-FAR)
 			    (AND XR-CORRESPONDENCE-FLAG
 				 (SETF (CADDR CORRESPONDENCE-ENTRY)
-				       (FIRSTN (LENGTH LIST) (CADDR CORRESPONDENCE-ENTRY))))
-			    (SETQ END-OF-LIST (IF (ATOM LIST) (LOCF LIST) (LAST LIST))))
+				       (FIRSTN (LENGTH LIST)
+					       (CADDR CORRESPONDENCE-ENTRY))))
+			    (SETQ END-OF-LIST
+				  (COND ((ATOM LIST) (LOCF LIST))
+					(T (LAST LIST)))))
 			   (VALUES
-			    (SETF (CDR END-OF-LIST)
-				  (SETQ VALUES (COPY-LIST VALUES READ-AREA)))
+			    (RPLACD END-OF-LIST
+				    (SETQ VALUES (COPYLIST VALUES READ-AREA)))
 			    (SETQ END-OF-LIST (LAST VALUES))
-			    (WHEN XR-CORRESPONDENCE-FLAG
-			      (SETQ XR-CORRESPONDENCE
-				    `(,(CAR VALUES) ,BP NIL . ,XR-CORRESPONDENCE))))))
+			    (AND XR-CORRESPONDENCE-FLAG
+				 (SETQ XR-CORRESPONDENCE
+				       `(,(CAR VALUES) ,BP NIL . ,XR-CORRESPONDENCE)))
+			    )))
 		   (GO A))
 		  ((EQ TYPE 'SPECIAL-TOKEN)
 		   (COND ((EQ THING 'EOF)
 			  (OR (AND READ-CHECK-INDENTATION MISSING-CLOSEPAREN-REPORTED)
-			      (SIGNAL-PROCEED-CASE (() 'SYS:READ-LIST-END-OF-FILE
-						       "End of file on ~S in the middle of the list ~:S."
-						       STREAM LIST)
+			      (SIGNAL-PROCEED-CASE
+				(() 'SYS:READ-LIST-END-OF-FILE
+				    "End of file on ~S in the middle of the list ~:S."
+				    STREAM LIST)
 				(:NO-ACTION
 				 (IF READ-CHECK-INDENTATION
 				     (SETQ MISSING-CLOSEPAREN-REPORTED T)))))
-			  (RETURN (VALUES LIST 'LIST)))
-			 (T (CERROR :NO-ACTION NIL 'SYS:READ-ERROR-1
+			  (RETURN LIST 'LIST))
+			 (T (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1
 				    "Incorrect terminator, ~C not ~C."
 				    XR-XRTYI-LAST-CHAR
 				    STOP-CHAR))))
 		  (T
-		   (SETF (CDR END-OF-LIST)
-			 (SETQ END-OF-LIST (NCONS-IN-AREA THING READ-AREA)))
+		   (RPLACD END-OF-LIST (SETQ END-OF-LIST (NCONS-IN-AREA THING READ-AREA)))
 		   (GO A)))))))
 
 
@@ -718,161 +678,164 @@ RECURSIVE-P should be supplied non-NIL when this is called from a reader macro."
 ;;; Note that the second arg (FIFTY) should be a number (50) rather than a string ("(")
 ;;; due to the LAST-CHAR hack.
 (DEFUN XR-READ-LIST (STREAM SHOULD-BE-NIL FIFTY)
-  (DECLARE (IGNORE SHOULD-BE-NIL))		;This would be the string if there were one.
-  (PROG (LIST THING TYPE END-OF-LIST BP CORRESPONDENCE-ENTRY
-	 (INSIDE-COLUMN-0-LIST INSIDE-COLUMN-0-LIST)
-	 (THIS-IS-COLUMN-0-LIST (AND READ-CHECK-INDENTATION
-				     (= XR-XRTYI-PREV-CHAR #/RETURN))))
-	(AND THIS-IS-COLUMN-0-LIST
-	     (NOT *READ-SUPPRESS*)
-	     (IF (NOT INSIDE-COLUMN-0-LIST)
-		 (SETQ INSIDE-COLUMN-0-LIST T)
-	       ;; ( in column 0 when not allowed.
-	       ;; Report it (but only report each occurrence once).
-	       (OR MISSING-CLOSEPAREN-REPORTED
-		   (PROGN (SETQ MISSING-CLOSEPAREN-REPORTED T)
-			  (SIGNAL-PROCEED-CASE (() 'SYS:MISSING-CLOSEPAREN
-						   "Open paren found in column zero; missing closeparens assumed.")
-			    (:NO-ACTION))))
-	       ;; Unread it the char.  The -1 prevents barfage in XR-XRUNTYI, that's all.
-	       (XR-XRUNTYI STREAM XR-XRTYI-LAST-CHAR -1)
-	       ;; Set a signal for the XR-READ-LIST frame that called us.
-	       (SETQ XR-SPLICE-P 'MISSING-CLOSEPAREN)
-	       (RETURN NIL)))
-	(SETQ MISSING-CLOSEPAREN-REPORTED NIL)
-	(SETQ END-OF-LIST (LOCF LIST))
-	(WHEN XR-CORRESPONDENCE-FLAG
-	  (SEND STREAM :UNTYI FIFTY)
-	  (SETQ CORRESPONDENCE-ENTRY
-		`(NIL ,(SEND STREAM :READ-BP) NIL . ,XR-CORRESPONDENCE))
-	  (SETQ XR-CORRESPONDENCE CORRESPONDENCE-ENTRY)
-	  (SEND STREAM :TYI))
-     A
-	(WHEN XR-CORRESPONDENCE-FLAG
-	  (PUSH (SEND STREAM :READ-BP) (CADDR CORRESPONDENCE-ENTRY)))
-	(MULTIPLE-VALUE-SETQ (THING TYPE) (XR-READ-THING STREAM))
-	;; If this is the first element of a list starting in column 0,
-	;; and it is EVAL-WHEN or something like that,
-	;; say it is ok for our sublists to start in column 0.
-	(AND THIS-IS-COLUMN-0-LIST
-	     (EQ END-OF-LIST (LOCF LIST))
-	     (SYMBOLP THING)
-	     ;; It is usually dangerous for READ to look at properties of symbols,
-	     ;; but this will only happen for the symbol after a paren in column 0
-	     ;; and never in lists read in interactively.
-	     (GET THING 'MAY-SURROUND-DEFUN)
-	     (SETQ INSIDE-COLUMN-0-LIST NIL))
-	(COND ((EQ TYPE 'READER-MACRO)
-	       (WHEN XR-CORRESPONDENCE-FLAG
-		 (SEND STREAM :UNTYI FIFTY)
-		 (SETQ BP (SEND STREAM :READ-BP))
-		 (SEND STREAM :TYI))
-	       (LET ((XR-LIST-SO-FAR LIST)
+       SHOULD-BE-NIL			;Ignored.  This would be the string if there were one
+       (PROG (LIST THING TYPE END-OF-LIST BP CORRESPONDENCE-ENTRY
+	      (INSIDE-COLUMN-0-LIST INSIDE-COLUMN-0-LIST)
+	      (THIS-IS-COLUMN-0-LIST (AND READ-CHECK-INDENTATION
+					  (EQ XR-XRTYI-PREV-CHAR #/RETURN))))
+	     (AND THIS-IS-COLUMN-0-LIST
+		  (NOT *READ-SUPPRESS*)
+		  (IF (NOT INSIDE-COLUMN-0-LIST)
+		      (SETQ INSIDE-COLUMN-0-LIST T)
+		    ;; ( in column 0 when not allowed.
+		    ;; Report it (but only report each occurrence once).
+		    (OR MISSING-CLOSEPAREN-REPORTED
+			(PROGN (SETQ MISSING-CLOSEPAREN-REPORTED T)
+			       (SIGNAL-PROCEED-CASE (() 'SYS:MISSING-CLOSEPAREN
+						     "Open paren found in column zero; missing closeparens assumed.")
+				 (:NO-ACTION))))
+		    ;; Unread it the char.  The -1 prevents barfage in XR-XRUNTYI, that's all.
+		    (XR-XRUNTYI STREAM XR-XRTYI-LAST-CHAR -1)
+		    ;; Set a signal for the XR-READ-LIST frame that called us.
+		    (SETQ XR-SPLICE-P 'MISSING-CLOSEPAREN)
+		    (RETURN NIL)))
+	     (SETQ MISSING-CLOSEPAREN-REPORTED NIL)
+             (SETQ END-OF-LIST (LOCF LIST))
+	     (COND (XR-CORRESPONDENCE-FLAG
+		    (SEND STREAM ':UNTYI FIFTY)
+		    (SETQ CORRESPONDENCE-ENTRY
+			  `(NIL ,(SEND STREAM ':READ-BP) NIL . ,XR-CORRESPONDENCE))
+		    (SETQ XR-CORRESPONDENCE CORRESPONDENCE-ENTRY)
+		    (SEND STREAM ':TYI)))
+	   A (AND XR-CORRESPONDENCE-FLAG
+		  (PUSH (SEND STREAM ':READ-BP)
+			(CADDR CORRESPONDENCE-ENTRY)))
+	     (MULTIPLE-VALUE (THING TYPE) (XR-READ-THING STREAM))
+	     ;; If this is the first element of a list starting in column 0,
+	     ;; and it is EVAL-WHEN or something like that,
+	     ;; say it is ok for our sublists to start in column 0.
+	     (AND THIS-IS-COLUMN-0-LIST
+		  (EQ END-OF-LIST (LOCF LIST))
+		  (SYMBOLP THING)
+		  ;; It is usually dangerous for READ to look at properties of symbols,
+		  ;; but this will only happen for the symbol after a paren in column 0
+		  ;; and never in lists read in interactively.
+		  (GET THING 'MAY-SURROUND-DEFUN)
+		  (SETQ INSIDE-COLUMN-0-LIST NIL))
+	     (COND ((EQ TYPE 'READER-MACRO)
+		    (COND (XR-CORRESPONDENCE-FLAG
+			   (SEND STREAM ':UNTYI FIFTY)
+			   (SETQ BP (SEND STREAM ':READ-BP))
+			   (SEND STREAM ':TYI)))
+		    (LET ((XR-LIST-SO-FAR LIST)
+			  (XR-SPLICE-P NIL)
+			  VALUES)
+		      (SETQ VALUES (INVOKE-READER-MACRO THING STREAM))
+		      (COND ((EQ XR-SPLICE-P 'MISSING-CLOSEPAREN)
+			     ;; This means that the reader macro was (
+			     ;; and it was unhappy about being at column 0
+			     ;; inside another column 0 list.
+			     ;; Pretend we saw a ).
+			     (AND XR-CORRESPONDENCE-FLAG
+				  (RPLACA CORRESPONDENCE-ENTRY LIST)
+				  (SETF (CADDR CORRESPONDENCE-ENTRY)
+					(NREVERSE (CADDR CORRESPONDENCE-ENTRY))))
+			     (RETURN LIST 'LIST))
+			    (XR-SPLICE-P
+			     (SETQ LIST XR-LIST-SO-FAR)
+			     (AND XR-CORRESPONDENCE-FLAG
+				  (SETF (CADDR CORRESPONDENCE-ENTRY)
+					(FIRSTN (LENGTH LIST)
+						(CADDR CORRESPONDENCE-ENTRY))))
+			     (SETQ END-OF-LIST
+				   (COND ((ATOM LIST) (LOCF LIST))
+					 (T (LAST LIST)))))
+			    (VALUES
+			     (RPLACD END-OF-LIST
+				     (SETQ VALUES (COPYLIST VALUES READ-AREA)))
+			     (SETQ END-OF-LIST (LAST VALUES))
+			     (AND XR-CORRESPONDENCE-FLAG
+				  (SETQ XR-CORRESPONDENCE
+					`(,(CAR VALUES) ,BP NIL . ,XR-CORRESPONDENCE)))
+			     )))
+		    (GO A))
+		   ((EQ TYPE 'SPECIAL-TOKEN)
+		    (COND ((EQ THING 'CLOSE)
+			   (AND XR-CORRESPONDENCE-FLAG
+				(RPLACA CORRESPONDENCE-ENTRY LIST)
+				(SETF (CADDR CORRESPONDENCE-ENTRY)
+				      (NREVERSE (CADDR CORRESPONDENCE-ENTRY))))
+			   (RETURN LIST 'LIST))
+			  ((EQ THING 'EOF)
+			   (OR (AND READ-CHECK-INDENTATION MISSING-CLOSEPAREN-REPORTED)
+			       (SIGNAL-PROCEED-CASE
+				   (() 'SYS:READ-LIST-END-OF-FILE
+				    "End of file on ~S in the middle of the list ~:S."
+				    STREAM LIST)
+				 (:NO-ACTION
+				   (IF READ-CHECK-INDENTATION
+				       (SETQ MISSING-CLOSEPAREN-REPORTED T)))))
+			   (RETURN LIST 'LIST))
+			  (*READ-SUPPRESS* NIL)
+			  ((EQ THING 'CONSING-DOT)
+			   (WHEN (NULL LIST)
+			     (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1
+				     "A dot was read before any list was accumulated.")
+			     (GO A))
+			   (GO RDOT))
+			  (T (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1
+			       "The special token ~S was read in the middle of the list ~:S."
+			       THING
+			       LIST))))
+		   (T
+		    (RPLACD END-OF-LIST (SETQ END-OF-LIST (NCONS-IN-AREA THING READ-AREA)))
+		    (GO A)))
+	RDOT (MULTIPLE-VALUE (THING TYPE) (XR-READ-THING STREAM))
+	     (WHEN (EQ TYPE 'SPECIAL-TOKEN)
+	       (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1
+		       "The special token ~S was read after a dot."
+		       THING)
+	       (GO RDOT))
+	     (WHEN (EQ TYPE 'READER-MACRO)
+	       (LET ((XR-LIST-SO-FAR ':AFTER-DOT)
 		     (XR-SPLICE-P NIL)
 		     VALUES)
 		 (SETQ VALUES (INVOKE-READER-MACRO THING STREAM))
-		 (COND ((EQ XR-SPLICE-P 'MISSING-CLOSEPAREN)
-			;; This means that the reader macro was (
-			;; and it was unhappy about being at column 0
-			;; inside another column 0 list.
-			;; Pretend we saw a ).
-			(AND XR-CORRESPONDENCE-FLAG
-			     (SETF (CAR CORRESPONDENCE-ENTRY) LIST)
-			     (SETF (CADDR CORRESPONDENCE-ENTRY)
-				   (NREVERSE (CADDR CORRESPONDENCE-ENTRY))))
-			(RETURN LIST 'LIST))
-		       (XR-SPLICE-P
-			(SETQ LIST XR-LIST-SO-FAR)
-			(AND XR-CORRESPONDENCE-FLAG
-			     (SETF (CADDR CORRESPONDENCE-ENTRY)
-				   (FIRSTN (LENGTH LIST)
-					   (CADDR CORRESPONDENCE-ENTRY))))
-			(SETQ END-OF-LIST (IF (ATOM LIST) (LOCF LIST) (LAST LIST))))
-		       (VALUES
-			(SETF (CDR END-OF-LIST) (SETQ VALUES (COPY-LIST VALUES READ-AREA)))
-			(SETQ END-OF-LIST (LAST VALUES))
-			(WHEN XR-CORRESPONDENCE-FLAG
-			  (SETQ XR-CORRESPONDENCE
-				`(,(CAR VALUES) ,BP NIL . ,XR-CORRESPONDENCE))))))
-	       (GO A))
-	      ((EQ TYPE 'SPECIAL-TOKEN)
-	       (COND ((EQ THING 'CLOSE)
-		      (AND XR-CORRESPONDENCE-FLAG
-			   (SETF (CAR CORRESPONDENCE-ENTRY) LIST)
-			   (SETF (CADDR CORRESPONDENCE-ENTRY)
-				 (NREVERSE (CADDR CORRESPONDENCE-ENTRY))))
-		      (RETURN LIST 'LIST))
-		     ((EQ THING 'EOF)
-		      (OR (AND READ-CHECK-INDENTATION MISSING-CLOSEPAREN-REPORTED)
-			  (SIGNAL-PROCEED-CASE (() 'SYS:READ-LIST-END-OF-FILE
-						   "End of file on ~S in the middle of the list ~:S."
-						   STREAM LIST)
-			    (:NO-ACTION
-			     (IF READ-CHECK-INDENTATION
-				 (SETQ MISSING-CLOSEPAREN-REPORTED T)))))
-		      (RETURN LIST 'LIST))
-		     (*READ-SUPPRESS* NIL)
-		     ((EQ THING 'CONSING-DOT)
-		      (WHEN (NULL LIST)
-			(CERROR :NO-ACTION NIL 'SYS:READ-ERROR-1
-				"A dot was read before any list was accumulated.")
-			(GO A))
-		      (GO RDOT))
-		     (T (CERROR :NO-ACTION NIL 'SYS:READ-ERROR-1
-				"The special token ~S was read in the middle of the list ~:S."
-				THING
-				LIST))))
-	      (T
-	       (SETF (CDR END-OF-LIST) (SETQ END-OF-LIST (NCONS-IN-AREA THING READ-AREA)))
-	       (GO A)))
-     RDOT
-	(MULTIPLE-VALUE (THING TYPE) (XR-READ-THING STREAM))
-	(WHEN (EQ TYPE 'SPECIAL-TOKEN)
-	  (CERROR :NO-ACTION NIL 'SYS:READ-ERROR-1
-		  "The special token ~S was read after a dot."
-		  THING)
-	  (GO RDOT))
-	(WHEN (EQ TYPE 'READER-MACRO)
-	  (LET ((XR-LIST-SO-FAR :AFTER-DOT)
-		(XR-SPLICE-P NIL)
-		VALUES)
-	    (SETQ VALUES (INVOKE-READER-MACRO THING STREAM))
-	    (WHEN XR-SPLICE-P
-	      (SETQ LIST XR-LIST-SO-FAR)
-	      (GO RDOT))
-	    (WHEN (NULL VALUES)
-	      (GO RDOT))
-	    (SETQ THING (CAR VALUES))))
-	(SETF (CDR END-OF-LIST) THING)
-     RDOT-1
-	(MULTIPLE-VALUE (THING TYPE) (XR-READ-THING STREAM))
-	(COND ((AND (EQ THING 'CLOSE) (EQ TYPE 'SPECIAL-TOKEN))
-	       (AND XR-CORRESPONDENCE-FLAG
-		    (SETF (CAR CORRESPONDENCE-ENTRY) LIST)
-		    (SETF (CADDR CORRESPONDENCE-ENTRY)
-			  (NREVERSE (CADDR CORRESPONDENCE-ENTRY))))
-	       (RETURN LIST 'LIST))
-	      ((EQ TYPE 'READER-MACRO)
-	       (LET ((XR-LIST-SO-FAR :AFTER-DOT)
-		     (XR-SPLICE-P NIL)
-		     VALUES)
-		 (SETQ VALUES (INVOKE-READER-MACRO THING STREAM))
-		 (WHEN (OR XR-SPLICE-P (NULL VALUES))
-		   (GO RDOT-1)))
-	       (CERROR :NO-ACTION NIL 'SYS:READ-ERROR-1
-		       "~S was read instead of a close paren (returned by a reader macro)."
-		       THING))
-	      (T (CERROR :NO-ACTION NIL 'SYS:READ-ERROR-1
-			 "~S was read instead of a close paren."
-			 THING)))
-	;; Here only if error condition gets handled.
-	(SETF (CDR END-OF-LIST) (LIST (CDR END-OF-LIST) THING))
-	(SETQ END-OF-LIST (LAST END-OF-LIST))
-	(GO A)))
+		 (WHEN XR-SPLICE-P
+		   (SETQ LIST XR-LIST-SO-FAR)
+		   (GO RDOT))
+		 (WHEN (NULL VALUES)
+		   (GO RDOT))
+		 (SETQ THING (CAR VALUES))))
+	     (RPLACD END-OF-LIST THING)
+      RDOT-1 (MULTIPLE-VALUE (THING TYPE) (XR-READ-THING STREAM))
+	     (COND ((AND (EQ THING 'CLOSE) (EQ TYPE 'SPECIAL-TOKEN))
+		    (AND XR-CORRESPONDENCE-FLAG
+			 (RPLACA CORRESPONDENCE-ENTRY LIST)
+				(SETF (CADDR CORRESPONDENCE-ENTRY)
+				      (NREVERSE (CADDR CORRESPONDENCE-ENTRY))))
+		    (RETURN LIST 'LIST))
+		   ((EQ TYPE 'READER-MACRO)
+		    (LET ((XR-LIST-SO-FAR ':AFTER-DOT)
+			  (XR-SPLICE-P NIL)
+			  VALUES)
+		      (SETQ VALUES (INVOKE-READER-MACRO THING STREAM))
+		      (WHEN (OR XR-SPLICE-P (NULL VALUES))
+			(GO RDOT-1)))
+		    (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1
+		      "~S was read instead of a close paren (returned by a reader macro)."
+		      THING))
+		   (T (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1
+			"~S was read instead of a close paren."
+			THING)))
+	     ;; Here only if error condition gets handled.
+	     (RPLACD END-OF-LIST (LIST (CDR END-OF-LIST) THING))
+	     (SETQ END-OF-LIST (LAST END-OF-LIST))
+	     (GO A)))
 
 (DEFUN (MULTI-DOT STANDARD-READ-FUNCTION) (STREAM STRING)
-  (DECLARE (IGNORE STREAM))
-  (CERROR :NO-ACTION NIL 'READ-ERROR-1
+  STREAM
+  (CERROR ':NO-ACTION NIL 'READ-ERROR-1
 	  "~S was encountered on input by the reader." STRING)
   (VALUES NIL 'SYMBOL))
 
@@ -880,13 +843,13 @@ RECURSIVE-P should be supplied non-NIL when this is called from a reader macro."
 (DEFPROP SC-SYMBOL XR-READ-SYMBOL STANDARD-READ-FUNCTION)
 (DEFPROP POTENTIAL-NUMBER XR-READ-SYMBOL STANDARD-READ-FUNCTION)
 (DEFUN XR-READ-SYMBOL (STREAM STRING)
-  (DECLARE (IGNORE STREAM))			;ignored, doesn't do any additional reading
+  STREAM					;ignored, doesn't do any additional reading
   (LET (R)
     (LET-IF (VARIABLE-BOUNDP *PACKAGE*)
 	    ((*PACKAGE* *PACKAGE*))
       (WHEN (VARIABLE-BOUNDP *PACKAGE*)
 	(UNLESS (OR *PACKAGE* *READ-SUPPRESS*)
-	  (CERROR :NO-ACTION NIL 'SYS:READ-ERROR-1
+	  (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1
 		  "*PACKAGE* is now NIL, and symbol ~S has no package prefix." string)
 	  (SETQ *PACKAGE* PKG-USER-PACKAGE)))
       (IF *READ-SUPPRESS*
@@ -896,19 +859,21 @@ RECURSIVE-P should be supplied non-NIL when this is called from a reader macro."
 	(AND S (NEQ *PACKAGE* (SYMBOL-PACKAGE R)) (SETQ R S)))
       (VALUES R 'SYMBOL))))
 
-(DEFUN (MACRO-CHAR STANDARD-READ-FUNCTION) (STREAM SHOULD-BE-NIL LAST-CHAR &AUX TEM)
-  (DECLARE (IGNORE STREAM SHOULD-BE-NIL))
-  (IF (SETQ TEM (ASSQ LAST-CHAR (RDTBL-MACRO-ALIST *READTABLE*)))
-      (IF (AND (CONSP (CDR TEM)) (EQ (CADR TEM) 'XR-CLOSEPAREN-MACRO))
-	  (VALUES 'CLOSE 'SPECIAL-TOKEN)
-	  (VALUES (CDR TEM) 'READER-MACRO))
-    (CERROR :NO-ACTION NIL 'SYS:READ-ERROR-1
-	    "No reader macro definition found for the character ~C." LAST-CHAR)))
+(DEFUN (MACRO-CHAR STANDARD-READ-FUNCTION) (STREAM SHOULD-BE-NIL LAST-CHAR)
+  STREAM					;ignored, doesn't do any additional reading
+  SHOULD-BE-NIL					;ignored, no string
+  (PROG (TEM)
+	(COND ((SETQ TEM (ASSQ LAST-CHAR (RDTBL-MACRO-ALIST *READTABLE*)))
+	       (IF (AND (CONSP (CDR TEM)) (EQ (CADR TEM) 'XR-CLOSEPAREN-MACRO))
+		   (RETURN 'CLOSE 'SPECIAL-TOKEN))
+	       (RETURN (CDR TEM) 'READER-MACRO))
+	      (T (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1
+			 "No reader macro definition found for the character ~C." LAST-CHAR)))))
 
 ;;; FOO: switches us to the package associated with the string "FOO"
 ;;; FOO:: is Common Lisp for "allow internal symbols", but we always do that.
 (DEFUN (PACKAGE-PREFIX STANDARD-READ-FUNCTION) (STREAM STRING LAST-CH)
-  (DECLARE (IGNORE LAST-CH))
+  LAST-CH					;ignored
   (PROG (THING PK
 	 ;; Help un-screw the user if *PACKAGE* gets set to NIL.
 	 (*PACKAGE* (OR *PACKAGE* PKG-USER-PACKAGE))
@@ -961,19 +926,20 @@ RECURSIVE-P should be supplied non-NIL when this is called from a reader macro."
 		     (IF READ-COLON-ALLOW-INTERNALS
 			 'READ-PACKAGE-PREFIX-INTERN
 		       'READ-PACKAGE-PREFIX-EXTERNAL-INTERN)) |#))
-	  (SETQ THING (INTERNAL-READ STREAM T NIL T))
+	  (SETQ THING (READ STREAM))
 	  ;; Don't use symbol substitution if a package is explicitly specified!
-	  (WHEN (SYMBOLP THING) (SETQ THING (INTERN THING *PACKAGE*))))
+	  (AND (SYMBOLP THING) (SETQ THING (INTERN THING *PACKAGE*))))
 	(RETURN THING (TYPE-OF THING) T)))	;T means we already did RETURN-READ-STRING
 
 (DEFUN READ-PACKAGE-PREFIX-EXTERNAL-INTERN (STRING)
   (MULTIPLE-VALUE-BIND (SYM FLAG PKG)
       (FIND-EXTERNAL-SYMBOL STRING)
     (UNLESS FLAG
-      (CERROR :NO-ACTION NIL 'SYS:READ-ERROR-1
+      (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1
 	      "Reference to nonexistent external symbol ~S in package ~A with a colon prefix."
 	      STRING *PACKAGE*)
-      (SETF (VALUES SYM FLAG PKG) (INTERN STRING PKG-KEYWORD-PACKAGE)))
+      (SETF (VALUES SYM FLAG PKG)
+	    (INTERN STRING PKG-KEYWORD-PACKAGE)))
     (VALUES SYM FLAG PKG)))
 
 ;;; Used instead of INTERN when reading inside a colon prefix,
@@ -985,14 +951,14 @@ RECURSIVE-P should be supplied non-NIL when this is called from a reader macro."
 	      (PKG-READ-LOCK-P *PACKAGE*))
 	  (FIND-SYMBOL STRING)
 	(INTERN STRING))
-    (WHEN (EQ FLAG :INTERNAL)
-      (CERROR :NO-ACTION NIL 'SYS:READ-ERROR-1
+    (WHEN (EQ FLAG ':INTERNAL)
+      (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1
 	      "Reference to internal symbol ~S in package ~A with a colon prefix."
 	      SYM *PACKAGE*))
     (UNLESS (OR FLAG (NOT (OR (AND (PKG-AUTO-EXPORT-P *PACKAGE*)
 				   (PACKAGE-USED-BY-LIST *PACKAGE*))
 			      (PKG-READ-LOCK-P *PACKAGE*))))
-      (CERROR :NO-ACTION NIL 'SYS:READ-ERROR-1
+      (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1
 	      "Package ~A is ~:[autoexporting~;read-locked~]; READ cannot make a symbol ~S there."
 	      (PACKAGE-NAME *PACKAGE*) (PKG-READ-LOCK-P *PACKAGE*) STRING)
       (SETF (VALUES SYM FLAG PKG)
@@ -1002,18 +968,18 @@ RECURSIVE-P should be supplied non-NIL when this is called from a reader macro."
 ;;; FOO#: is like FOO: but ignores local nicknames.
 ;;; Just #: means make uninterned symbol.
 (DEFUN (SHARP-PACKAGE-PREFIX STANDARD-READ-FUNCTION) (STREAM STRING LAST-CH)
-  (DECLARE (IGNORE LAST-CH))
+  LAST-CH ;ignored
   (PROG (THING TYPE PK
 	 ;; Help un-screw the user if *PACKAGE* gets set to NIL.
 	 (*PACKAGE* (OR *PACKAGE* PKG-USER-PACKAGE))
 	 (PKG-NAME (SUBSTRING STRING 0 (1- (LENGTH STRING)))))
 	;; Try to find the package.
 	(UNLESS
-	  ;;don't tvy to find packages if we're not interning -- eg #+slime (dis:foo)
+	  ;;don't tvy to find packages if we're not interning -- eg +slime (dis:foo)
 	  (OR *READ-SUPPRESS*
 	      (SETQ PK (FIND-PACKAGE PKG-NAME NIL)))
 	  ;; Package not found.
-	  (CERROR :NO-ACTION NIL 'SYS:READ-ERROR-1
+	  (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1
 		  "Package ~S does not exist." PKG-NAME))
 	(UNLESS PK
 	  (SETQ PK PKG-USER-PACKAGE))
@@ -1028,20 +994,20 @@ RECURSIVE-P should be supplied non-NIL when this is called from a reader macro."
 		       'READ-INTERN-SOFT)
 		      (T 'INTERN))))
 	  (MULTIPLE-VALUE (THING TYPE)
-	    (INTERNAL-READ STREAM T NIL T)))
+	    (READ STREAM)))
 	(RETURN-ARRAY PKG-NAME)
 	(RETURN THING TYPE T)))			;T means we already did RETURN-READ-STRING.
 
 ;;; "Intern" function used within #: prefixes that specify uninterned symbols.
 (DEFUN READ-UNINTERNED-SYMBOL (STRING)
-  (VALUES (MAKE-SYMBOL STRING T) NIL T))	;Last value T avoids error in XR-READ-SYMBOL.
+  (VALUES (MAKE-SYMBOL STRING) NIL T))		;Last value T avoids error in XR-READ-SYMBOL.
 
 ;;; Used for interning in auto-exporting packages.
 (DEFUN READ-INTERN-SOFT (STRING)
   (MULTIPLE-VALUE-BIND (SYM FLAG PKG)
       (FIND-SYMBOL STRING)
     (UNLESS FLAG
-      (CERROR :NO-ACTION NIL 'SYS:READ-ERROR-1
+      (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1
 	      "Package ~A is ~:[autoexporting~;read-locked~]; READ cannot make a symbol ~S there."
 	      (PACKAGE-NAME *PACKAGE*) (PKG-READ-LOCK-P *PACKAGE*) STRING)
       (SETF (VALUES SYM FLAG PKG)
@@ -1055,98 +1021,98 @@ RECURSIVE-P should be supplied non-NIL when this is called from a reader macro."
 ;;; value will equal the "length" argument if it got to the end of the string.
 ;;; it takes a base as well.
 (DEFUN XR-READ-FIXNUM-INTERNAL (STRING II LEN &OPTIONAL (IBS *READ-BASE*)
-				&AUX (SIGN 1) (NUM 0) CH)
-  (SETQ CH (CHAR STRING II))
+				&AUX (SIGN 1) (NUM 0) CH (SECONDVAL LEN))
+  (SETQ CH (AREF STRING II))
   (COND ((= CH #/+)
 	 (INCF II))
 	((= CH #/-)
 	 (INCF II)
 	 (SETQ SIGN -1)))
-  (DO ((I II (1+ I)))
-      (( I LEN)
-       (VALUES (* SIGN NUM) LEN))
-    (SETQ CH (CHAR STRING I))
-    (COND (( #/0 CH #/9)
-	   (SETQ NUM (+ (* NUM IBS) (- CH #/0))))
-	  ((= CH #/.)
-	   (COND ((= IBS 10.)
-		  (RETURN (* SIGN NUM) (1+ I)))
-		 (T
-		  ;; Start from beginning, but base ten this time.
-		  (SETQ IBS 10.)
-		  (SETQ NUM 0)
-		  (SETQ I (- II 1)))))
-	  (( #/A CH #/Z)
-	   (SETQ NUM (+ (* NUM IBS) (- CH (- #/A 10.)))))
-	  (( #/a CH #/z)
-	   (SETQ NUM (+ (* NUM IBS) (- CH (- #/a 10.)))))
-	  (T (RETURN (* SIGN NUM) I)))))
+  (VALUES
+    (DO ((I II (1+ I)))
+	(( I LEN)
+	 (* SIGN NUM))
+      (SETQ CH (AREF STRING I))
+      (COND (( #/0 CH #/9)
+	     (SETQ NUM (+ (* NUM IBS) (- CH #/0))))
+	    ((= CH #/.)
+	     (COND ((= IBS 10.)
+		    (SETQ SECONDVAL (1+ I))
+		    (RETURN (* SIGN NUM)))
+		   (T
+		    (SETQ IBS 10.)
+		    (SETQ NUM 0)
+		    (DECF I))))
+	    ((NOT (OR (< CH #/A) (> CH #/Z)))
+	     (SETQ NUM (+ (* NUM IBS) (- CH (- #/A 10.)))))
+	    ((NOT (OR (< CH #/a) (> CH #/z)))
+	     (SETQ NUM (+ (* NUM IBS) (- CH (- #/a 10.)))))
+	    (T (SETQ SECONDVAL I)
+	       (RETURN (* SIGN NUM)))))
+     SECONDVAL))
 
 ;; This function takes a string which represents a fixnum (and a stream
 ;; which it doesn't use), and returns the fixnum.  It ASSUMES that the string
 ;; follows the format of the standard readtable.
 (DEFPROP FIXNUM XR-READ-FIXNUM STANDARD-READ-FUNCTION)
 (DEFUN XR-READ-FIXNUM (STREAM STRING &AUX NUM LEN I)
-  (DECLARE (IGNORE STREAM))
+  STREAM ;ignored, doesn't do any additional reading
   (UNLESS (AND (FIXNUMP *READ-BASE*)	;If it were a flonum, confusing things would happen
 	       ( 2 *READ-BASE* 36.))
-    (CERROR :NO-ACTION NIL NIL "~S bad value for *READ-BASE*.  Has been reset to 10."
-	    (PROG1 *READ-BASE* (SETQ *READ-BASE* 10.))))
+    (CERROR ':NO-ACTION NIL NIL "~S bad value for *READ-BASE*.  Has been reset to 8."
+	    (PROG1 *READ-BASE* (SETQ *READ-BASE* 8))))
   (SETQ LEN (ARRAY-ACTIVE-LENGTH STRING))
-  (MULTIPLE-VALUE-SETQ (NUM I)
+  (MULTIPLE-VALUE (NUM I)
     (XR-READ-FIXNUM-INTERNAL STRING 0 LEN))
   (VALUES
     (IF (= I LEN)
 	NUM
       (LET ((NUM2 (XR-READ-FIXNUM-INTERNAL STRING (1+ I) LEN)))
-	(IF (= (CHAR STRING I) #/_)
+	(IF (= (AREF STRING I) #/_)
 	    (ASH NUM NUM2)
 	  (* NUM (^ *READ-BASE* NUM2)))))
     'FIXNUM))
 
 (DEFMACRO SKIP-CHAR ()
-  `(PROGN (DECF COUNT)
+  '(PROGN (DECF COUNT)
 	  (INCF INDEX)))
 
-(DEFVAR POWERS-OF-10f0-TABLE :UNBOUND
-  "Vector which indexed by I contains (^ 10. I) as a single-float.")
-(DEFVAR NEGATIVE-POWERS-OF-10f0-TABLE :UNBOUND
-  "Vector which indexed by i contains (- (^ 10. I)) as a single-float.")
-(DEFVAR POWERS-OF-10f0-TABLE-LENGTH 308.)
+(DEFVAR XR-POWER-TABLE :UNBOUND
+  "Array which indexed by I contains (^ 10. I) as a flonum.")
 
 (DEFUN XR-READ-FLONUM (STRING SFL-P &AUX (POWER-10 0) (INDEX 0) (POSITIVE T)
                                          (HIGH-PART 0) (LOW-PART 0) (NDIGITS 12.)
                                          COUNT CHAR STRING-LENGTH)
   (DECLARE (SPECIAL HIGH-PART LOW-PART NDIGITS INDEX COUNT POWER-10))
-  (SETQ COUNT (LENGTH STRING)
+  (SETQ COUNT (STRING-LENGTH STRING)
 	STRING-LENGTH COUNT)
-  (SETQ CHAR (CHAR STRING INDEX))
+  (SETQ CHAR (AREF STRING INDEX))
   ;; CHECK FOR PLUS OR MINUS
   (WHEN (OR (= CHAR #/+) (= CHAR #/-))
     (SKIP-CHAR)
     (SETQ POSITIVE (= CHAR #/+)))
   ;; skip leading zeros
   (DO ()
-      (( (CHAR STRING INDEX) #/0))
+      (( (AREF STRING INDEX) #/0))
     (SKIP-CHAR))
-  (COND ((= (CHAR STRING INDEX) #/.)		;If we hit a point, keep stripping 0's
+  (COND ((= (AREF STRING INDEX) #/.)		;If we hit a point, keep stripping 0's
 	 (SKIP-CHAR)
 	 (DO ()
 	     ((OR (< COUNT 2)			;Leave one digit at least
-		  (NOT (= (CHAR STRING INDEX) #/0))))	;Or non-zero digit
+		  (NOT (= (AREF STRING INDEX) #/0))))	;Or non-zero digit
 	   (SKIP-CHAR)
 	   (INCF POWER-10))
 	 (XR-ACCUMULATE-DIGITS STRING T))
 	;; Accumulate digits up to the point or exponent (these are free)
 	(T (XR-ACCUMULATE-DIGITS STRING NIL)
-	   (WHEN (= (CHAR STRING INDEX) #/. )
+	   (WHEN (= (AREF STRING INDEX) #/. )
 	     (SKIP-CHAR)
 	     ;; Skip trailing zeros after the point.  This avoids having a
 	     ;; one in the lsb of 2.0 due to dividing 20. by 10.
-	     (LET ((IDX (STRING-SEARCH-NOT-SET '(#/0) STRING INDEX)))
+	     (LET ((IDX (STRING-SEARCH-NOT-SET '(#/0) STRING INDEX)))
 	       (COND ((NULL IDX) (SETQ COUNT 0))	;Nothing but zeros there
-		     ((NOT (MEMQ (CHAR STRING IDX) '(#/1 #/2 #/3 #/4 #/5
-						     #/6 #/7 #/8 #/9)))
+		     ((NOT (MEMQ (AREF STRING IDX) '(#/1 #/2 #/3 #/4 #/5
+						     #/6 #/7 #/8 #/9)))
 		      (SETQ INDEX IDX		;Not digits there except zeros
 			    COUNT (- STRING-LENGTH INDEX)))
 		     (T				;Real digits present, scan normally
@@ -1161,12 +1127,12 @@ RECURSIVE-P should be supplied non-NIL when this is called from a reader macro."
 					       10.))))
   (LET ((NUM (IF SFL-P (SMALL-FLOAT (XR-FLONUM-CONS HIGH-PART LOW-PART POWER-10))
 	       (XR-FLONUM-CONS HIGH-PART LOW-PART POWER-10))))
-    (IF POSITIVE NUM (- NUM))))
+    (COND (POSITIVE NUM) (T (- NUM)))))
 
 (DEFUN XR-ACCUMULATE-DIGITS (STRING POST-DECIMAL &AUX CHAR)
   (DECLARE (SPECIAL HIGH-PART LOW-PART NDIGITS INDEX COUNT POWER-10))
   (DO () ((= COUNT 0))
-    (SETQ CHAR (CHAR STRING INDEX))
+    (SETQ CHAR (AREF STRING INDEX))
     (UNLESS ( #/0 CHAR #/9)
       (RETURN NIL))
     (IF ( NDIGITS 0)
@@ -1177,11 +1143,12 @@ RECURSIVE-P should be supplied non-NIL when this is called from a reader macro."
       (WHEN (MINUSP LOW-PART)			;Carried into sign-bit
 	(INCF HIGH-PART)
 	(SETQ LOW-PART (LOGAND LOW-PART MOST-POSITIVE-FIXNUM)))
-      (SETQ LOW-PART (%POINTER-PLUS LOW-PART (- CHAR #/0)))
+      (SETQ LOW-PART (%MAKE-POINTER-OFFSET
+		       DTP-FIX LOW-PART (- CHAR #/0)))
       (WHEN (MINUSP LOW-PART)			;Carried into sign-bit
 	(INCF HIGH-PART)
-	(SETQ LOW-PART (LOGAND LOW-PART MOST-POSITIVE-FIXNUM)))
-      (WHEN POST-DECIMAL (INCF POWER-10)))
+	(SETQ LOW-PART (LOGAND LOW-PART MOST-POSITIVE-FIXNUM))))
+      (WHEN POST-DECIMAL (INCF POWER-10))
     (SKIP-CHAR)
     (DECF NDIGITS)))
 
@@ -1198,28 +1165,22 @@ RECURSIVE-P should be supplied non-NIL when this is called from a reader macro."
   ;; This check detects things grossly out of range.  Numbers almost out of range
   ;; can still get floating-point overflow errors in the reader when multiplying
   ;; the mantissa by the power of 10
-  (IF ( POWER POWERS-OF-10F0-TABLE-LENGTH)
-      (PROGN (CERROR :NO-ACTION NIL 'SYS:READ-ERROR-1
+  (IF (> POWER 307.)
+      (PROGN (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1
 		     "~D is larger than the maximum allowed exponent." POWER)
 	     1)
-    (AREF POWERS-OF-10F0-TABLE POWER)))
+    (AREF XR-POWER-TABLE POWER)))
 
 ;;; Make a table of powers of 10 without accumulated roundoff error,
 ;;; by doing integer arithmetic and then floating.  Thus each table entry
 ;;; is the closest rounded flonum to that power of ten.
 ;;; It didn't used to work this way because there didn't use to be bignums.
 (DEFUN XR-TABLE-SETUP ()
-  (SETQ POWERS-OF-10F0-TABLE (MAKE-ARRAY POWERS-OF-10F0-TABLE-LENGTH
-					 :TYPE 'ART-FLOAT :AREA CONTROL-TABLES))
-  (SETQ NEGATIVE-POWERS-OF-10F0-TABLE (MAKE-ARRAY POWERS-OF-10F0-TABLE-LENGTH
-					 :TYPE 'ART-FLOAT :AREA CONTROL-TABLES))
+  (SETQ XR-POWER-TABLE (MAKE-ARRAY 308. ':TYPE 'ART-FLOAT ':AREA CONTROL-TABLES))
   (DO ((EXPT 0 (1+ EXPT))
-       (POWER 1. (* POWER 10.))
-       (FLOAT))
-      (( EXPT POWERS-OF-10F0-TABLE-LENGTH))
-    (SETQ FLOAT (FLOAT POWER))
-    (SETF (AREF POWERS-OF-10F0-TABLE EXPT) FLOAT
-	  (AREF NEGATIVE-POWERS-OF-10F0-TABLE EXPT) (- FLOAT))))
+       (POWER 1 (* POWER 10.)))
+      ((= EXPT 308.))
+    (SETF (AREF XR-POWER-TABLE EXPT) (FLOAT POWER))))
 
 (XR-TABLE-SETUP)
 
@@ -1231,16 +1192,16 @@ uses /"S/", /"F/", /"L/" or /"D/" then that specifies the type explicitly
 and this default is not used.")
 
 (DEFUN (FLOAT STANDARD-READ-FUNCTION) (STREAM STRING)
-  (DECLARE (IGNORE STREAM))			;doesn't do any additional reading
-  (XR-READ-FLONUM STRING (EQ *READ-DEFAULT-FLOAT-FORMAT* 'SHORT-FLOAT)))
+   STREAM ;ignored, doesn't do any additional reading
+   (XR-READ-FLONUM STRING (EQ *READ-DEFAULT-FLOAT-FORMAT* 'SHORT-FLOAT)))
 
 (DEFUN (SINGLE-FLOAT STANDARD-READ-FUNCTION) (STREAM STRING)
-  (DECLARE (IGNORE STREAM))			;doesn't do any additional reading
-  (XR-READ-FLONUM STRING NIL))
+   STREAM ;ignored, doesn't do any additional reading
+   (XR-READ-FLONUM STRING NIL))
 
 (DEFUN (SHORT-FLOAT STANDARD-READ-FUNCTION) (STREAM STRING)
-  (DECLARE (IGNORE STREAM))			;doesn't do any additional reading
-  (XR-READ-FLONUM STRING T))
+   STREAM ;ignored, doesn't do any additional reading
+   (XR-READ-FLONUM STRING T))
 
 ;;;; Standard reader macros:
 (DEFUN XR-QUOTE-MACRO (STREAM IGNORE)
@@ -1248,7 +1209,7 @@ and this default is not used.")
 
 (DEFUN XR-COMMENT-MACRO (STREAM IGNORE)
   (SETQ XR-XRTYI-LAST-CHAR #/NEWLINE)
-  (LOOP AS CH = (SEND STREAM :TYI)
+  (LOOP AS CH = (SEND STREAM ':TYI)
 	WHILE (AND CH ( CH #/NEWLINE))
 	FINALLY (RETURN)))
 
@@ -1256,23 +1217,23 @@ and this default is not used.")
   (VALUES (XR-READ-LIST STREAM NIL #/()))
 
 (DEFUN XR-DOUBLEQUOTE-MACRO (STREAM MATCH)
-  (LET* (CH NUM REAL-CH (I 0) (LEN #o100)
+  (LET* (CH NUM REAL-CH (I 0) (LEN 100)
 	 (STRING (MAKE-ARRAY LEN ':TYPE ART-STRING))
 	 ;; Should have ':AREA READ-AREA, but leave this out for now because the
 	 ;; compiler thinks it can use COPYTREE to copy forms out of the temp area.
 	 (TEM (RDTBL-SLASH-CODE *READTABLE*)))
     (DO-FOREVER
-      (MULTIPLE-VALUE-SETQ (CH NUM REAL-CH) (XR-XRTYI STREAM NIL NIL T))
+      (MULTIPLE-VALUE (CH NUM REAL-CH) (XR-XRTYI STREAM NIL NIL T))
       (COND ((NULL CH)
 	     (CERROR ':NO-ACTION NIL 'SYS:READ-STRING-END-OF-FILE
 		     "EOF on ~S in the middle of a string."
 		     STREAM STRING)
 	     (RETURN ""))
-	    ((AND (= (LDB (CHAR-CODE REAL-CH)) MATCH)
+	    ((AND (= (LDB %%CH-CHAR REAL-CH) MATCH)
 		  (NOT (= NUM TEM)))
 	     (ADJUST-ARRAY-SIZE STRING I)
 	     (RETURN STRING))
-	    (T (SETF (CHAR STRING I) (CHAR-CODE REAL-CH))
+	    (T (SETF (AREF STRING I) (CHAR-CODE REAL-CH))
 	       (INCF I)
 	       (WHEN (= I LEN)
 		 (INCF LEN 32.)
@@ -1408,11 +1369,11 @@ and this default is not used.")
 		       " /",./" right after a /"`/": `,.~S." THING)))
 	(RETURN (CONS 'PROGN
 		      (NREVERSE
-			(EVAL1 `(LET (ACCUM)
-				  (DO ,(CAR **BACKQUOTE-REPEAT-VARIABLE-LISTS**)
-				      ((NULL ,(CAAAR **BACKQUOTE-REPEAT-VARIABLE-LISTS**))
-				       ACCUM)
-				    (PUSH ,(BACKQUOTIFY-1 FLAG THING) ACCUM)))))))))
+			(EVAL `(LET (ACCUM)
+				 (DO ,(CAR **BACKQUOTE-REPEAT-VARIABLE-LISTS**)
+				     ((NULL ,(CAAAR **BACKQUOTE-REPEAT-VARIABLE-LISTS**))
+				      ACCUM)
+				   (PUSH ,(BACKQUOTIFY-1 FLAG THING) ACCUM)))))))))
 
 (DEFUN XR-COMMA-MACRO (STREAM IGNORE)
   (OR **BACKQUOTE-REPEAT-VARIABLE-LISTS**
@@ -1421,7 +1382,7 @@ and this default is not used.")
   (PROG (C)
 	(SETF (VALUES NIL NIL C) (XR-XRTYI STREAM NIL T))
 	(OR (= C #/@) (= C #/.)
-	    (SEND STREAM :UNTYI C))
+	    (SEND STREAM ':UNTYI C))
 	(LET ((COMMA-ARG
 		(LET ((**BACKQUOTE-REPEAT-VARIABLE-LISTS**
 			(CDR **BACKQUOTE-REPEAT-VARIABLE-LISTS**)))
@@ -1569,12 +1530,12 @@ FILE-ATTRIBUTE-BINDINGS makes a binding for this from the Cold-load attribute.")
   (IF FILE-IN-COLD-LOAD
       (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1
 	      "#, cannot be used in files in the cold load."))
-  (IF (AND (BOUNDP 'COMPILER::QC-FILE-READ-IN-PROGRESS) COMPILER::QC-FILE-READ-IN-PROGRESS)
-      (CONS-IN-AREA COMPILER::EVAL-AT-LOAD-TIME-MARKER (INTERNAL-READ STREAM T NIL T)
+  (IF (AND (BOUNDP 'COMPILER:QC-FILE-READ-IN-PROGRESS) COMPILER:QC-FILE-READ-IN-PROGRESS)
+      (CONS-IN-AREA COMPILER:EVAL-AT-LOAD-TIME-MARKER (INTERNAL-READ STREAM T NIL T)
 		    READ-AREA)
     (VALUES (IF *READ-SUPPRESS*
 		(PROGN (INTERNAL-READ STREAM T NIL T) NIL)
-	      (EVAL1 (INTERNAL-READ STREAM T NIL T))))))
+	      (EVAL (INTERNAL-READ STREAM T NIL T))))))
 
 (DEFUN XR-#/:-MACRO (STREAM IGNORE IGNORE)
   (LET ((READ-INTERN-FUNCTION 'READ-UNINTERNED-SYMBOL))
@@ -1584,8 +1545,8 @@ FILE-ATTRIBUTE-BINDINGS makes a binding for this from the Cold-load attribute.")
 		     &OPTIONAL (LENGTH (UNLESS *READ-SUPPRESS* XR-SHARP-ARGUMENT)))
   (XR-XRUNTYI STREAM #/( 0)
   (LET* ((ELEMENTS (INTERNAL-READ STREAM T NIL T))
-	 (VECTOR (MAKE-ARRAY (OR LENGTH (LENGTH ELEMENTS))
-			     :INITIAL-ELEMENT (CAR (LAST ELEMENTS)))))
+	 (VECTOR (MAKE-SEQUENCE 'VECTOR (OR LENGTH (LENGTH ELEMENTS))
+				:INITIAL-ELEMENT (CAR (LAST ELEMENTS)))))
     (IF (AND LENGTH (PLUSP LENGTH) (NULL ELEMENTS))
 	(CERROR ':NO-ACTION NIL 'READ-ERROR-1
 		"The construct #~D() is illegal; at least one element must be given."
@@ -1600,29 +1561,29 @@ FILE-ATTRIBUTE-BINDINGS makes a binding for this from the Cold-load attribute.")
 		    &AUX BIT-VECTOR LAST-ELEMENT-READ)
   (IF *READ-SUPPRESS*
       (PROGN (INTERNAL-READ STREAM T NIL T) NIL)
-    (SETQ BIT-VECTOR (MAKE-ARRAY (OR LENGTH 8) :TYPE 'ART-1B :FILL-POINTER 0))
+    (SETQ BIT-VECTOR (MAKE-ARRAY (OR LENGTH 10) ':TYPE 'ART-1B ':LEADER-LIST '(0)))
     (DO (CHAR INDEX ERROR-REPORTED) (())
       (SETF (VALUES CHAR INDEX) (XR-XRTYI STREAM NIL T))
-      (CASE CHAR
+      (SELECTOR CHAR CHAR-EQUAL
 	((#/0 #/1)
 	 (SETQ LAST-ELEMENT-READ (- CHAR #/0))
 	 (IF LENGTH
 	     (UNLESS (OR (ARRAY-PUSH BIT-VECTOR LAST-ELEMENT-READ)
 			 ERROR-REPORTED)
-	       (CERROR :NO-ACTION NIL 'READ-ERROR-1
+	       (CERROR ':NO-ACTION NIL 'READ-ERROR-1
 		       "Number of data bits exceeds specified length in #* bit vector construct.")
 	       (SETQ ERROR-REPORTED T))
-	   (VECTOR-PUSH-EXTEND LAST-ELEMENT-READ BIT-VECTOR)))
+	   (ARRAY-PUSH-EXTEND BIT-VECTOR LAST-ELEMENT-READ)))
 	(T
 	 (IF (AND LENGTH (PLUSP LENGTH) (ZEROP (FILL-POINTER BIT-VECTOR)))
-	     (CERROR :NO-ACTION NIL 'READ-ERROR-1
+	     (CERROR ':NO-ACTION NIL 'READ-ERROR-1
 		     "The construct #~D* is illegal; at least one bit must be given."
 		     LENGTH))
 	 (AND LENGTH
 	      ;; ARRAY-PUSH returns () when the fill pointer is at the end of the array.
 	      (LOOP WHILE (ARRAY-PUSH BIT-VECTOR LAST-ELEMENT-READ)))
 	 (XR-XRUNTYI STREAM CHAR INDEX)
-	 (LET ((NVEC (MAKE-ARRAY (LENGTH BIT-VECTOR) :TYPE ART-1B)))
+	 (LET ((NVEC (MAKE-ARRAY (LENGTH BIT-VECTOR) ':TYPE ART-1B)))
 	   (COPY-ARRAY-CONTENTS BIT-VECTOR NVEC)
 	   (RETURN NVEC)))))))
 
@@ -1635,7 +1596,7 @@ FILE-ATTRIBUTE-BINDINGS makes a binding for this from the Cold-load attribute.")
 	       (STUFF SEQUENCES (ELT STUFF 0)))
 	      ((= DIM RANK))
 	    (PUSH (LENGTH STUFF) DIMENSIONS))
-	  (VALUES (MAKE-ARRAY (NREVERSE DIMENSIONS) :INITIAL-CONTENTS SEQUENCES)))
+	  (VALUES (MAKE-ARRAY (NREVERSE DIMENSIONS) ':INITIAL-CONTENTS SEQUENCES)))
       (IF (EQ RANK 0)
 	  (VALUES (MAKE-ARRAY NIL ':INITIAL-ELEMENT (INTERNAL-READ STREAM T NIL T)))
 	(CERROR ':NO-ACTION NIL 'READ-ERROR-1
@@ -1713,50 +1674,58 @@ FILE-ATTRIBUTE-BINDINGS makes a binding for this from the Cold-load attribute.")
 	    (FIND-ANY-THINGS-1 THINGS (CDR TREE)))
       (MEMQ TREE THINGS))))			; TREE is an atom
 
-(DEFUN XR-#=-MACRO (STREAM IGNORE &OPTIONAL (LABEL XR-SHARP-ARGUMENT)
-		    &AUX LABEL-BINDING THING)
+(DEFUN XR-#=-MACRO (STREAM IGNORE &OPTIONAL (LABEL XR-SHARP-ARGUMENT) &AUX THING)
   (COND
     (*READ-SUPPRESS*
      (VALUES))
     ((NOT LABEL)
-     (CERROR :NO-ACTION NIL 'SYS:READ-ERROR-1 "No argument (label number) to #= given."))
-    (T
-     (LET ((XR-LABEL-BINDINGS XR-LABEL-BINDINGS))
-       (IF (NOT (WITHOUT-INTERRUPTS
-		  (SETQ LABEL-BINDING (ASSQ LABEL XR-LABEL-BINDINGS))
-		  (UNLESS LABEL-BINDING
-		    (PUSH (SETQ LABEL-BINDING (LIST LABEL 0 NIL)) XR-LABEL-BINDINGS))))
-	   ;; The label is already defined, but we can't tell what it is yet.
-	   (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1
-		   "Label ~S already defined in this expression." LABEL)
-	 (SETF (CDDR LABEL-BINDING) (LOCF (CAR LABEL-BINDING)))
-	 (SETQ THING (INTERNAL-READ STREAM T NIL T))
-	 (LOOP DO
-	       (IF (ZEROP (CADR LABEL-BINDING)) (RETURN-FROM XR-#=-MACRO THING))
-	       (SETQ THING (NSUBST-EQ-SAFE 
-
-	 (NSUBST-EQ-SAFE THING (CDR LABEL-BINDING) THING)	; Substitute for `self'
-
-       THING))))
+     (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1 "No argument (label number) to #= given."))
+    ((ASSQ LABEL XR-LABEL-BINDINGS)
+     ; The label is already defined, but we can't tell what it is yet.
+     (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1
+	     "Label ~S already defined in this expression." LABEL))
+    (T ; Go for it and BIND
+     (PUSH (LIST LABEL (NCONS NIL))		; Allocate a slot
+	   XR-LABEL-BINDINGS)
+     (LET ((LABEL-BINDING (ASSQ LABEL XR-LABEL-BINDINGS)))
+       (IF (NULL LABEL-BINDING)
+	   (FERROR 'SYS:READ-ERROR-1 "Internal error in #= after reading in label's value.")
+	 ;; The preceding line should never happen.  By writing into the slot
+	 ;; will RPLACD, we also cause other places that referred to the label
+	 ;; to get the value, too.
+	 (SETF (CONTENTS (CDR LABEL-BINDING)) (SETQ THING (INTERNAL-READ STREAM T NIL T)))
+	 ;; If THING has no bindings in it, we can make the binding of THING itself instead of
+	 ;; a locative
+	 (IF (NOT (CONSP THING))
+	     ;; Replace locative with object
+	     (SETF (CDR LABEL-BINDING) (CONTENTS (CDR LABEL-BINDING)))
+	   ;; If there are no bindings as locatives in it
+	   ;; Now we examine the list
+	   (NSUBST-EQ-SAFE THING (CDR LABEL-BINDING) THING)	; Substitute for `self'
+           (SETF (CDR LABEL-BINDING) (CONTENTS (CDR LABEL-BINDING)))
+	   ;; Catch the CDR - why does this happen ?
+	   (LET ((LAST-CONS (NTHCDR (1- (LENGTH THING)) THING)))
+	     (IF (LOCATIVEP (CDR LAST-CONS))
+		 (SETF (CDR LAST-CONS) (CONTENTS (CDR LAST-CONS))))))
+	 ; Replace locative with object
+	 THING)))))
 
 
 (DEFUN XR-##-MACRO (STREAM IGNORE &OPTIONAL (LABEL XR-SHARP-ARGUMENT))
-  (DECLARE (IGNORE STREAM))
-  (COND (*READ-SUPPRESS* NIL)
-	((NOT LABEL)
-	 (CERROR :NO-ACTION NIL 'SYS:READ-ERROR-1 "No argument (label number) to ## given."))
-	((WITHOUT-INTERRUPTS
-	   (LET ((LABEL-BINDING (ASSQ LABEL XR-LABEL-BINDINGS)))
-	     (WHEN LABEL-BINDING
-	       (INCF (CADR LABEL-BINDING))
-	       LABEL-BINDING))))
-	(T (CERROR :NO-ACTION NIL 'SYS:READ-ERROR-1 "The ##-label ~S is undefined." LABEL))))
-
+  STREAM ; Not used, we never actually do a READ
+  (COND
+    (*READ-SUPPRESS* NIL)
+    ((NOT LABEL)
+     (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1 "No argument (label number) to ## given."))
+    ((NULL (ASSQ LABEL XR-LABEL-BINDINGS))
+     (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1 "The ##-label ~S is undefined." LABEL))
+    (T
+     (CADR (ASSQ LABEL XR-LABEL-BINDINGS)))))
 
 (DEFUN XR-#.-MACRO (STREAM IGNORE &OPTIONAL IGNORE)
   (VALUES (IF *READ-SUPPRESS*
 	      (PROGN (INTERNAL-READ STREAM T NIL T) NIL)
-	    (EVAL1 (INTERNAL-READ STREAM T NIL T)))))
+	    (EVAL (INTERNAL-READ STREAM T NIL T)))))
 
 (DEFUN XR-#-MACRO (STREAM IGNORE &OPTIONAL ARG)
   (XR-XRTYI STREAM NIL T)			;Skip the / that follows.
@@ -1804,7 +1773,7 @@ FILE-ATTRIBUTE-BINDINGS makes a binding for this from the Cold-load attribute.")
 	    WITH TEM = NIL
 	    FOR START FIRST 0 THEN (1+ HYPHEN-POS)
 	    FOR 1+PREV-HYPHEN-POS = 0 THEN (1+ HYPHEN-POS)
-	    FOR HYPHEN-POS = (OR (STRING-SEARCH-CHAR #/- STRING START END) END)
+	    FOR HYPHEN-POS = (OR (STRING-SEARCH-CHAR #/- STRING START END) END)
 	    DO (LET ((LEN (- HYPHEN-POS 1+PREV-HYPHEN-POS)))
 		 (COND ((OR (XR-STR-CMP "CTRL")
 			    (XR-STR-CMP "CONTROL"))
@@ -1825,19 +1794,19 @@ FILE-ATTRIBUTE-BINDINGS makes a binding for this from the Cold-load attribute.")
 			    (XR-STR-CMP "SH"))
 			(SETQ SHIFT-FLAG T))
 		       ((= 1+PREV-HYPHEN-POS (1- END))
-			(RETURN (GREEKIFY-CHARACTER (CHAR STRING 1+PREV-HYPHEN-POS)
+			(RETURN (GREEKIFY-CHARACTER (AREF STRING 1+PREV-HYPHEN-POS)
 						    GREEK-FLAG TOP-FLAG SHIFT-FLAG
 						    CHAR)))
 		       ((= 1+PREV-HYPHEN-POS (1- HYPHEN-POS))
-			(LET ((TEM (ASSQ (CHAR-UPCASE (CHAR-CODE (CHAR STRING
-								       1+PREV-HYPHEN-POS)))
-					 '((#/C . %%KBD-CONTROL)
-					   (#/M . %%KBD-META)
-					   (#/H . %%KBD-HYPER)
-					   (#/S . %%KBD-SUPER)))))
+			(LET ((TEM (ASSQ (CHAR-UPCASE (LDB %%CH-CHAR (AREF STRING
+									   1+PREV-HYPHEN-POS)))
+					 '((#/C . %%KBD-CONTROL)
+					   (#/M . %%KBD-META)
+					   (#/H . %%KBD-HYPER)
+					   (#/S . %%KBD-SUPER)))))
 			  (IF (NULL TEM)
 			      (RETURN NIL)
-			    (SETQ CHAR (%LOGDPB 1 (SYMBOL-VALUE (CDR TEM)) CHAR)))))
+			    (SETQ CHAR (%LOGDPB 1 (SYMEVAL (CDR TEM)) CHAR)))))
 		       ;; See if we have a name of a special character "Return", "SP" etc.
 		       ((SETQ TEM
 			      (DOLIST (ELEM XR-SPECIAL-CHARACTER-NAMES)
@@ -1858,7 +1827,7 @@ FILE-ATTRIBUTE-BINDINGS makes a binding for this from the Cold-load attribute.")
   (COND ((AND TOP-FLAG GREEK-FLAG) NIL)
 	(GREEK-FLAG
 	 (LET* ((GREEK-CHAR
-		  (DOTIMES (I #o200)
+		  (DOTIMES (I 200)
 		    (AND (OR (= START-CHAR (AREF KBD-NEW-TABLE 0 I))
 			     (= START-CHAR (AREF KBD-NEW-TABLE 1 I)))
 			 (IF SHIFT-FLAG
@@ -1868,14 +1837,14 @@ FILE-ATTRIBUTE-BINDINGS makes a binding for this from the Cold-load attribute.")
 		(NOT (BIT-TEST (LSH 1 15.) GREEK-CHAR))
 		(LOGIOR METABITS GREEK-CHAR))))
 	((AND SHIFT-FLAG
-	      ( #/A (CHAR-CODE START-CHAR) #/Z))
+	      ( #/A (LDB %%KBD-CHAR START-CHAR) #/Z))
 	 ;; Shift on a letter lowercasifies.
 	 (LOGIOR METABITS (CHAR-DOWNCASE START-CHAR)))
 	;; Otherwise SHIFT is only allowed with GREEK.
 	(SHIFT-FLAG NIL)
 	(TOP-FLAG
 	 (LET* ((TOP-CHAR
-		  (DOTIMES (I #o200)
+		  (DOTIMES (I 200)
 		    (AND (= START-CHAR (AREF KBD-NEW-TABLE 1 I))
 			 (RETURN (AREF KBD-NEW-TABLE 2 I)))
 		    (AND (= START-CHAR (AREF KBD-NEW-TABLE 0 I))
@@ -1918,50 +1887,47 @@ FILE-ATTRIBUTE-BINDINGS makes a binding for this from the Cold-load attribute.")
   (IF *READ-SUPPRESS*
       (PROGN (READ-DELIMITED-LIST #/ STREAM T) NIL)
     (LET* ((FLAVOR-NAME
-	     (INTERNAL-READ STREAM T NIL T))
+	     (LET ((*PACKAGE* PKG-USER-PACKAGE)) (INTERNAL-READ STREAM T NIL T)))
 	   (INSTANCE
 	     (LET ((HANDLER (OR (GET FLAVOR-NAME 'READ-INSTANCE)
-				(GET-FLAVOR-HANDLER-FOR FLAVOR-NAME :READ-INSTANCE)))
+				(GET-FLAVOR-HANDLER-FOR FLAVOR-NAME ':READ-INSTANCE)))
 		   (SELF NIL))
-	       (FUNCALL HANDLER :READ-INSTANCE FLAVOR-NAME STREAM)))
+	       (FUNCALL HANDLER ':READ-INSTANCE FLAVOR-NAME STREAM)))
 	   (CHAR (TYI STREAM)))
       ;; Make sure that the read-instance function read as much as it was supposed to.
       (IF (EQ CHAR #/)
 	  INSTANCE
-	(SEND STREAM :UNTYI CHAR)
-	(CERROR :NO-ACTION NIL 'SYS:READ-ERROR-1
+	(SEND STREAM ':UNTYI CHAR)
+	(CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1
 		"Malformatted #~S... encountered during READ." FLAVOR-NAME)))))
 
 (DEFUN XR-#/|-MACRO (STREAM IGNORE &OPTIONAL IGNORE)
   (PROG ((N 0))
 	(GO HOME)
-     SHARP
-	(CASE (SEND STREAM :TYI)
+  SHARP (SELECTQ (SEND STREAM ':TYI)
 	  (#/# (GO SHARP))
 	  (#/| (INCF N))
-	  (#// (SEND STREAM :TYI))
-	  ((NIL) (GO BARF)))
-     HOME
-	(CASE (SEND STREAM :TYI)
+	  (#// (SEND STREAM ':TYI))
+	  (NIL (GO BARF)))
+   HOME (SELECTQ (SEND STREAM ':TYI)
 	  (#/| (GO BAR))
 	  (#/# (GO SHARP))
-	  (#// (SEND STREAM :TYI)
+	  (#// (SEND STREAM ':TYI)
 	       (GO HOME))
-	  ((NIL) (GO BARF))
+	  (NIL (GO BARF))
 	  (T (GO HOME)))
-     BAR
-	(CASE (SEND STREAM :TYI)
-	  (#/# (IF (ZEROP N) (RETURN)
-		 (DECF N)
-		 (GO HOME)))
+    BAR (SELECTQ (FUNCALL STREAM ':TYI)
+	  (#/# (COND ((ZEROP N)
+		      (RETURN))
+		     (T
+		      (DECF N)
+		      (GO HOME))))
 	  (#/| (GO BAR))
-	  (#// (SEND STREAM :TYI)
+	  (#// (SEND STREAM ':TYI)
 	       (GO HOME))
-	  ((NIL) (GO BARF))
+	  (NIL (GO BARF))
 	  (T (GO HOME)))
-     BARF
-	(CERROR :NO-ACTION NIL 'SYS:READ-ERROR-1
-		"The end of file was reached while reading a #/| comment.")))
+   BARF (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1 "The end of file was reached while reading a #/| comment.")))
 
 ;;;  Read-time conditionalization macros
 ;;;  <feature-form> ::= <symbol-or-number> | (NOT <feature-form>)
@@ -2024,16 +1990,14 @@ FILE-ATTRIBUTE-BINDINGS makes a binding for this from the Cold-load attribute.")
 	  ((NUMBERP FEATURE)
 	   (MEMBER FEATURE *FEATURES*))
 	  ((ATOM FEATURE)
-	   (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1
-		   "Unknown form ~S in #+ or #- feature list." FEATURE))
+	   (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1 "Unknown form ~S in #+ or #- feature list." FEATURE))
 	  ((EQ (CAR FEATURE) ':NOT)
 	   (NOT (XR-FEATURE-PRESENT (CADR FEATURE))))
 	  ((EQ (CAR FEATURE) ':AND)
 	   (EVERY (CDR FEATURE) #'XR-FEATURE-PRESENT))
 	  ((EQ (CAR FEATURE) ':OR)
 	   (SOME (CDR FEATURE) #'XR-FEATURE-PRESENT))
-	  (T (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1
-		     "Unknown form ~S in #+ or #- feature list." FEATURE))))
+	  (T (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1 "Unknown form ~S in #+ or #- feature list." FEATURE))))
 
 ;;;; Common Lisp syntax-setting functions.
 
@@ -2045,9 +2009,6 @@ the character syntax that can be copied, while other aspects
 are supposed to be immutable for a particular character.
 This function contains hair to copy only the mutable part of the syntax.
 To copy all aspects of the syntax, use COPY-SYNTAX."
-; character lossage
-  (IF (CHARACTERP TO-CHAR) (SETQ TO-CHAR (CHAR-INT TO-CHAR)))
-  (IF (CHARACTERP FROM-CHAR) (SETQ FROM-CHAR (CHAR-INT FROM-CHAR)))
   (LET ((BITS (RDTBL-BITS FROM-READTABLE FROM-CHAR))
 	(CODE (RDTBL-CODE FROM-READTABLE FROM-CHAR))
 	(FROM-AENTRY (ASSQ FROM-CHAR (RDTBL-MACRO-ALIST FROM-READTABLE)))
@@ -2092,7 +2053,7 @@ To copy all aspects of the syntax, use COPY-SYNTAX."
     (SETF (RDTBL-MACRO-ALIST TO-READTABLE)
 	  (DELQ TO-AENTRY (RDTBL-MACRO-ALIST TO-READTABLE)))
     (IF FROM-AENTRY
-	(PUSH (COPY-TREE FROM-AENTRY) (RDTBL-MACRO-ALIST TO-READTABLE)))))
+	(PUSH (COPYTREE FROM-AENTRY) (RDTBL-MACRO-ALIST TO-READTABLE)))))
 
 (DEFUN SET-MACRO-CHARACTER (CHAR FUNCTION &OPTIONAL NON-TERMINATING-P
 			    (A-READTABLE *READTABLE*))
@@ -2111,14 +2072,13 @@ The function can examine the list of input so far at the current level
 A function can also hairily mung the list so far.
 To do this, modify XR-LIST-SO-FAR and return the modified list as
  the only value, after setting the special variable XR-SPLICE-P to T."
-; character lossage
-  (IF (CHARACTERP CHAR) (SETQ CHAR (CHAR-INT CHAR)))
   (LET ((SYNTAX (GETF (RDTBL-PLIST A-READTABLE)
 		      (IF NON-TERMINATING-P 'NON-TERMINTING-MACRO 'MACRO))))
-    (UNLESS (AND (CONSP SYNTAX)
-		 (FIXNUMP (CAR SYNTAX))
-		 (FIXNUMP (CDR SYNTAX)))
-      (FERROR NIL "No saved syntax found for defining macro characters."))
+    (OR (AND (CONSP SYNTAX)
+	     (FIXNUMP (CAR SYNTAX))
+	     (FIXNUMP (CDR SYNTAX)))
+	(FERROR NIL
+		"No saved syntax found for defining macro characters."))
     (SETF (RDTBL-BITS A-READTABLE CHAR) (CAR SYNTAX))
     (SETF (RDTBL-CODE A-READTABLE CHAR) (CDR SYNTAX))
     (LET ((X (ASSQ CHAR (RDTBL-MACRO-ALIST A-READTABLE))))
@@ -2133,8 +2093,6 @@ To do this, modify XR-LIST-SO-FAR and return the modified list as
 Value is NIL if CHAR is not a macro character.
 Second value is non-NIL if CHAR does not terminate symbols."
   (DECLARE (VALUES FUNCTION NON-TERMINATING-P))
-;character lossage
-  (IF (CHARACTERP CHAR) (SETQ CHAR (CHAR-INT CHAR)))
   (LET* ((AENTRY (ASSQ CHAR (RDTBL-MACRO-ALIST A-READTABLE))))
     (VALUES (CADR AENTRY)
 	    (CADDR AENTRY))))
@@ -2153,9 +2111,6 @@ DISP-CHAR must be a dispatch macro character, such as made by MAKE-DISPATCH-MACR
 FUNCTION is the function to be run.  It will receive three arguments:
  the input stream, the sub-character dispatched on, and the numeric argument
  that followed the dispatch character (or NIL if no numeric argument)."
-;character lossage
-  (IF (CHARACTERP DISP-CHAR) (SETQ DISP-CHAR (CHAR-INT DISP-CHAR)))
-  (IF (CHARACTERP SUB-CHAR) (SETQ SUB-CHAR (CHAR-INT SUB-CHAR)))
   (LET* ((AENTRY (ASSQ DISP-CHAR (RDTBL-MACRO-ALIST A-READTABLE)))
 	 (SUBAENTRY (ASSQ (CHAR-UPCASE SUB-CHAR) (CDDDR AENTRY))))
     (UNLESS AENTRY
@@ -2170,8 +2125,6 @@ FUNCTION is the function to be run.  It will receive three arguments:
   "Return the function run by SUB-CHAR when encountered after DISP-CHAR.
 DISP-CHAR must be a dispatch macro character, such as made by MAKE-DISPATCH-MACRO-CHARACTER.
 Value is NIL if SUB-CHAR is not defined (as a subcase of DISP-CHAR)."
-  (IF (CHARACTERP DISP-CHAR) (SETQ DISP-CHAR (CHAR-INT DISP-CHAR)))
-  (IF (CHARACTERP SUB-CHAR) (SETQ SUB-CHAR (CHAR-INT SUB-CHAR)))
   (LET* ((AENTRY (ASSQ DISP-CHAR (RDTBL-MACRO-ALIST A-READTABLE)))
 	 (SUBAENTRY (ASSQ (CHAR-UPCASE SUB-CHAR) (CDDDR AENTRY))))
     (UNLESS AENTRY
@@ -2192,9 +2145,6 @@ Value is NIL if SUB-CHAR is not defined (as a subcase of DISP-CHAR)."
 All aspects of the syntax are copied, including macro definition if any.
 However, the meaning as a subdispatch of any dispatch macro characters
 is not affected; that is recorded separately under those dispatch macros."
-; character lossage
-  (IF (CHARACTERP TO-CHAR) (SETQ TO-CHAR (CHAR-INT TO-CHAR)))
-  (IF (CHARACTERP FROM-CHAR) (SETQ FROM-CHAR (CHAR-INT FROM-CHAR)))
   (LET ((FROM-AENTRY (ASSQ FROM-CHAR (RDTBL-MACRO-ALIST FROM-READTABLE)))
 	(TO-AENTRY (ASSQ TO-CHAR (RDTBL-MACRO-ALIST TO-READTABLE))))
     (SET-SYNTAX-BITS TO-CHAR
@@ -2203,7 +2153,7 @@ is not affected; that is recorded separately under those dispatch macros."
     (SETF (RDTBL-MACRO-ALIST TO-READTABLE)
 	  (DELQ TO-AENTRY (RDTBL-MACRO-ALIST TO-READTABLE)))
     (IF FROM-AENTRY
-	(PUSH (COPY-TREE FROM-AENTRY) (RDTBL-MACRO-ALIST TO-READTABLE))))
+	(PUSH (COPYTREE FROM-AENTRY) (RDTBL-MACRO-ALIST TO-READTABLE))))
   T)
 
 (DEFUN SET-CHARACTER-TRANSLATION (CHAR VALUE &OPTIONAL (A-READTABLE *READTABLE*))
@@ -2235,7 +2185,7 @@ and encapsulates it into a closure that will obey the new conventions.
 You should actually convert to using SET-DISPATCH-MACRO-CHARACTER with
 a function that obeys the new conventions, which are usually easier anyway."
   (SET-DISPATCH-MACRO-CHARACTER
-    #/# CHAR
+    #/# CHAR
     (LET-CLOSED ((MACRO-FUNCTION FUNCTION))
       #'(LAMBDA (STREAM IGNORE XR-SHARP-ARGUMENT)
 	  (MULTIPLE-VALUE-BIND (THING NIL SPLICEP)
@@ -2248,12 +2198,13 @@ a function that obeys the new conventions, which are usually easier anyway."
 
 (DEFUN SET-SYNTAX-FROM-DESCRIPTION (CHAR DESCRIPTION &OPTIONAL (A-READTABLE *READTABLE*))
   "Set the syntax of CHAR in A-READTABLE according to DESCRIPTION.
-DESCRIPTION is a symbol defined in the readtable, such as SINGLE, SLASH, WHITESPACE."
+DESCRIPTION is a keyword defined in the readtable, such as SINGLE, SLASH, WHITESPACE."
   (LET ((SYNTAX (GETF (RDTBL-PLIST A-READTABLE) DESCRIPTION)))
     (OR (AND (CONSP SYNTAX)
 	     (FIXNUMP (CAR SYNTAX))
 	     (FIXNUMP (CDR SYNTAX)))
-	(FERROR NIL "No syntax of description: ~A found." DESCRIPTION))
+	(FERROR NIL
+		"No syntax of description: ~A found." DESCRIPTION))
     (SETF (RDTBL-BITS A-READTABLE CHAR) (CAR SYNTAX))
     (SETF (RDTBL-CODE A-READTABLE CHAR) (CDR SYNTAX))))
 
@@ -2268,6 +2219,7 @@ DESCRIPTION is a symbol defined in the readtable, such as SINGLE, SLASH, WHITESP
 
 ;;; Returns a copy of the readtable
 ;;; or copys the readtable into another readtable (and returns that)
+; not patched in 98.
 (DEFUN COPY-READTABLE (&OPTIONAL (A-READTABLE *READTABLE*) (ANOTHER-READTABLE NIL))
   "Copy a readtable into another readtable, or make a new readtable.
 With two arguments, copies the first into the second.
@@ -2281,8 +2233,8 @@ If the first argument is explicitly supplied as NIL,
 	(L (ARRAY-LEADER-LENGTH A-READTABLE)))
     (LET ((NEW-READTABLE (OR ANOTHER-READTABLE
 			     (MAKE-ARRAY (LIST X Y)
-					 :TYPE 'ART-16B
-					 :LEADER-LENGTH L))))
+					 ':TYPE 'ART-16B
+					 ':LEADER-LENGTH L))))
       (DOTIMES (I X)
 	(DOTIMES (J Y)
 	  (SETF (AREF NEW-READTABLE I J) (AREF A-READTABLE I J))))
@@ -2296,61 +2248,16 @@ If the first argument is explicitly supplied as NIL,
       (AND (NAMED-STRUCTURE-P A-READTABLE)
 	   (MAKE-ARRAY-INTO-NAMED-STRUCTURE NEW-READTABLE))
       (SETF (RDTBL-NAMES NEW-READTABLE) NIL)
-;      (UNLESS ANOTHER-READTABLE		;old readtable presumably already there
+;      (UNLESS ANOTHER-READTABLE			;old readtable presumably already there
 ;	(PUSH NEW-READTABLE *ALL-READTABLES*))
       NEW-READTABLE)))
 
-(defun find-readtable-named (name &optional create-p &aux (rdtbl *readtable*))
-  "Find or possibly create a readtable named NAME
-If there is a readtable which has a name STRING-EQUAL it, we return that readtable.
-Otherwise, we may create such a readtable, depending on CREATE-P.
-Possible values of CREATE-P:
- NIL or :ERROR means get an error,
- :FIND means return NIL,
- :ASK means ask whether to create a readtable named NAME which is a copy of the current
-   readtable, and returns it if so.
- T means create the readtable (a copy of *READTABLE*) and return it."
-  (cond ((readtablep name)
-	 name)
-	((null name) *readtable*)
-	(t
-	 (setq name (string name))
-	 (unless (dolist (r *all-readtables*)
-		   (when (sys:member-equalp name (rdtbl-names r))
-		     (return (setq rdtbl r))))
-	   (ecase create-p
-	     (:find nil)
-	     (:ask
-	      (if (fquery format:yes-or-no-p-options
-			  "~&Readtable ~S not found. Create a copy of ~A and name it ~A? "
-			  name *readtable* name)
-		  (progn (setq rdtbl (copy-readtable))
-			 (setf (rdtbl-names rdtbl) (list name)))
-		(cerror "Proceed, once you have defined the readtable"
-			"Please define a readtable named /"~A/" and then continue." name)
-		(find-readtable-named name :error)))
-	     ((t)
-	      (setq rdtbl (copy-readtable rdtbl))
-	      (setf (rdtbl-names rdtbl) (list name)))
-	     ((nil :error)
-	      (multiple-cerror 'readtable-not-found
-			       (:readtable-name name)
-			       ("Cannot find a readtable named ~S" name)
-		((format nil "Create it, using a copy of ~A" *readtable*)
-		 (setq rdtbl (copy-readtable rdtbl))
-		 (setf (rdtbl-names rdtbl) (list name)))
-		((format nil "Use ~A" rdtbl))
-		("Try again to find the readtable"
-		 (find-readtable-named name create-p))
-		("Supply the name of a different readtable to use"
-		 (setq rdtbl (find-readtable-named 
-			       (let ((*query-io* *debug-io*))
-				 (prompt-and-read :string-trim
-						  "Name of readtable to use instead: "))
-			       :error))))))
-	   (if (rdtbl-names rdtbl)
-	       (pushnew rdtbl *all-readtables* :test #'eq)))
-	 rdtbl)))
+; not patched in 98.
+(DEFUN FIND-READTABLE-NAMED (NAME)
+  (SETQ NAME (STRING NAME))
+  (DOLIST (RDTBL *ALL-READTABLES*)
+    (WHEN (SYS:MEMBER-EQUALP NAME (RDTBL-NAMES RDTBL))
+      (RETURN RDTBL))))
 
 ;;; MacLisp compatible (sort of) setsyntax:
 
@@ -2384,12 +2291,9 @@ a symbol  The syntax of the character is changed t be the same as that
           of its print name.  If MORE-MAGIC is a fixnum, CHAR is
           translated to that character." 
   ;; Convert MacLisp character object (a symbol) to Lispm character object (a fixnum).
-;character lossage
-  (SETQ CHAR (CHAR-INT (COERCE CHAR 'CHARACTER)))
-  (IF (CHARACTERP MAGIC) (SETQ MAGIC (CHAR-INT MAGIC)))
-  (IF (CHARACTERP MORE-MAGIC) (SETQ MORE-MAGIC (CHAR-INT MORE-MAGIC)))
+  (SETQ CHAR (CHARACTER CHAR))
   ;; Keywords being used, so disable package feature.
-  (IF (SYMBOLP MAGIC) (SETQ MAGIC (INTERN (SYMBOL-NAME MAGIC) PKG-KEYWORD-PACKAGE)))
+  (IF (SYMBOLP MAGIC) (SETQ MAGIC (INTERN (GET-PNAME MAGIC) PKG-KEYWORD-PACKAGE)))
   (COND ((EQ MAGIC ':MACRO)
 	 ;; MacLisp reader macros get invoked on zero arguments.
 	 (SET-SYNTAX-MACRO-CHAR CHAR
@@ -2424,8 +2328,7 @@ a symbol  The syntax of the character is changed t be the same as that
 		  (NULL (CDR LST)))
 	     (VALUES (CAR LST) NIL NIL)
 	   (FERROR NIL
-		   "A SPLICING macro defined with SETSYNTAX attempted to return ~S
- in the context: ~S." LST LIST-SO-FAR)))
+		   "A SPLICING macro defined with SETSYNTAX attempted to return ~S~% in the context: ~S." LST LIST-SO-FAR)))
 	(T
 	 (VALUES (NCONC LIST-SO-FAR LST) NIL T))))
 
@@ -2434,15 +2337,15 @@ a symbol  The syntax of the character is changed t be the same as that
 (DEFUN SETSYNTAX-SHARP-MACRO (CHAR TYPE FUN &OPTIONAL (RDTBL *READTABLE*))
   "Exists only for MACLISP compatibility.  Use SET-SYNTAX-#-MACRO-CHAR
 instead."
-  (SETQ CHAR (CHAR-UPCASE (CHAR-INT (COERCE CHAR 'CHARACTER))))
-  (AND (SYMBOLP TYPE) (SETQ TYPE (INTERN (SYMBOL-NAME TYPE) PKG-KEYWORD-PACKAGE)))
+  (SETQ CHAR (CHAR-UPCASE (CHARACTER CHAR)))
+  (AND (SYMBOLP TYPE) (SETQ TYPE (INTERN (GET-PNAME TYPE) "")))
   (LET ((SETSYNTAX-SHARP-MACRO-FUNCTION FUN)
 	(SETSYNTAX-SHARP-MACRO-CHARACTER
-	  (CASE TYPE
+	  (SELECTQ TYPE
 	    ((:PEEK-MACRO :PEEK-SPLICING) CHAR)
 	    ((:MACRO :SPLICING) NIL))))
     (DECLARE (SPECIAL SETSYNTAX-SHARP-MACRO-FUNCTION SETSYNTAX-SHARP-MACRO-CHARACTER))
-    (LET ((F (CASE TYPE
+    (LET ((F (SELECTQ TYPE
 	       ((:MACRO :PEEK-MACRO)
 		(CLOSURE '(SETSYNTAX-SHARP-MACRO-FUNCTION
 			    SETSYNTAX-SHARP-MACRO-CHARACTER)
@@ -2458,16 +2361,16 @@ instead."
   CHAR)
 
 (DEFUN SETSYNTAX-SHARP-MACRO-1 (LIST-SO-FAR *STANDARD-INPUT*)
-  (DECLARE (SPECIAL SETSYNTAX-SHARP-MACRO-FUNCTION SETSYNTAX-SHARP-MACRO-CHARACTER)
-	   (IGNORE LIST-SO-FAR))
+  (DECLARE (SPECIAL SETSYNTAX-SHARP-MACRO-FUNCTION SETSYNTAX-SHARP-MACRO-CHARACTER))
+  LIST-SO-FAR	;Ignored
   (OR (NULL SETSYNTAX-SHARP-MACRO-CHARACTER)
-      (SEND *STANDARD-INPUT* :UNTYI SETSYNTAX-SHARP-MACRO-CHARACTER))
+      (SEND *STANDARD-INPUT* ':UNTYI SETSYNTAX-SHARP-MACRO-CHARACTER))
   (FUNCALL SETSYNTAX-SHARP-MACRO-FUNCTION XR-SHARP-ARGUMENT))
 
 (DEFUN SETSYNTAX-SHARP-MACRO-2 (LIST-SO-FAR *STANDARD-INPUT* &AUX LST)
   (DECLARE (SPECIAL SETSYNTAX-SHARP-MACRO-FUNCTION SETSYNTAX-SHARP-MACRO-CHARACTER))
   (OR (NULL SETSYNTAX-SHARP-MACRO-CHARACTER)
-      (SEND *STANDARD-INPUT* :UNTYI SETSYNTAX-SHARP-MACRO-CHARACTER))
+      (FUNCALL *STANDARD-INPUT* ':UNTYI SETSYNTAX-SHARP-MACRO-CHARACTER))
   (SETQ LST (FUNCALL SETSYNTAX-SHARP-MACRO-FUNCTION XR-SHARP-ARGUMENT))
   (COND ((NULL LST)
 	 (VALUES LIST-SO-FAR NIL T))
@@ -2477,6 +2380,6 @@ instead."
 	     (VALUES (CAR LST) NIL NIL)
 	   (FERROR NIL
 		   "A SPLICING sharp macro defined with SETSYNTAX-SHARP-MACRO attempted
-  to return ~S in the context: ~S." LST LIST-SO-FAR)))
+to return ~S in the context: ~S." LST LIST-SO-FAR)))
 	(T
 	 (VALUES (NCONC LIST-SO-FAR LST) NIL T))))
