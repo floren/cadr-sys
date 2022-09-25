@@ -684,7 +684,6 @@
   (LET ((*READ-BASE* 8) (*PRINT-BASE* 8)
 	(*NOPOINT T) (*PRINT-RADIX* NIL) (*READTABLE* SI:INITIAL-READTABLE))
     (WITH-OPEN-FILE (OUTPUT-FILE FN :direction :output :characters t :if-exists :supersede)
-      (format output-file "; -*- Mode:LISP; Base:8; Readtable:ZL -*-~2%")
       (format output-file "(~S ~S ~S)~%"
 	      'setq 'microcode-error-table-version-number version-number)
       (format output-file "(~S ~S '(" 'setq 'microcode-error-table)
@@ -696,7 +695,6 @@
   (LET ((*READ-BASE* 8) (*PRINT-BASE* 8)
 	(*NOPOINT T) (*PRINT-RADIX* NIL) (*READTABLE* SI:INITIAL-READTABLE))
     (WITH-OPEN-FILE (OUTPUT-FILE FN :DIRECTION :OUTPUT :CHARACTERS T :IF-EXISTS :SUPERSEDE)
-      (format output-file "; -*- Mode:LISP; Base:8; Readtable:ZL -*-~2%")
       (PRINT 'LOCATIONS-USED OUTPUT-FILE)
       (PRINT (LIST 'A-MEM (MAX A-MEM-LOC A-CONSTANT-LOC)) OUTPUT-FILE)
       (PRINT (LIST 'M-MEM (MAX M-MEM-LOC M-CONSTANT-LOC)) OUTPUT-FILE)
