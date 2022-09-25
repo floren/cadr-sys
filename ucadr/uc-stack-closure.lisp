@@ -695,24 +695,17 @@ XLOAD-FROM-HIGHER-CONTEXT-2
 ;Check explicitly for an EVCP there pointing to the pdl buffer.
 ;This is faster than transporting the usual way because we still avoid
 ;going through the page fault handler.
-;#+cadr	((M-1) Q-DATA-TYPE MD)
-;#+cadr	(JUMP-NOT-EQUAL M-1 (A-CONSTANT (EVAL DTP-EXTERNAL-VALUE-CELL-POINTER))
-;			    XLOAD-FROM-HIGHER-CONTEXT-3)
-;#+lambda(jump-data-type-not-equal md
-;		 (a-constant (byte-value q-data-type dtp-external-value-cell-pointer))
-;	   xload-from-higher-context-3)
-	(check-data-type-jump-not-equal md m-1 dtp-external-value-cell-pointer
-		 xload-from-higher-context-3)
+	((M-1) Q-DATA-TYPE MD)
+	(JUMP-NOT-EQUAL M-1 (A-CONSTANT (EVAL DTP-EXTERNAL-VALUE-CELL-POINTER))
+			    XLOAD-FROM-HIGHER-CONTEXT-3)
 	((M-1) Q-POINTER MD)
-;see pdl-fetch for description of this hack
-  ;****
-	(jump-greater-or-equal m-1 a-qlpdlh xload-from-higher-context-3)
 	((PDL-INDEX M-2) SUB M-1 A-PDL-BUFFER-VIRTUAL-ADDRESS)
-	(JUMP-NOT-EQUAL PDL-INDEX a-2 XLOAD-FROM-HIGHER-CONTEXT-3)
+	(JUMP-NOT-EQUAL PDL-INDEX M-2 XLOAD-FROM-HIGHER-CONTEXT-3)
 ;It is an EVCP and does point into the pdl buffer.
-	((PDL-INDEX) ADD PDL-INDEX A-PDL-BUFFER-HEAD)
-        (popj-after-next (vma) q-pointer md)
-       ((m-t md) q-typed-pointer pdl-index-indirect)	;may not need to store into MD
+	(POPJ-AFTER-NEXT
+	 (M-T) DPB C-PDL-BUFFER-INDEX Q-POINTER
+	       (A-CONSTANT (BYTE-VALUE Q-DATA-TYPE DTP-LOCATIVE)))
+       ((VMA) DPB MD Q-POINTER VMA)
 
 ;Not an EVCP or doesn't point to pdl buffer.  Do regular transport.
 ;Do this even if EVCP not pointing to pdl buffer, in case it points to oldspace.
