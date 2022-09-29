@@ -796,7 +796,7 @@ When it is up again, please call BRING-UP-SERVER."  (si:get-site-option ':sys-ho
   ;; Random initializations.
 
 
-(DEFVAR *FILE-SERVER-FILE-HOST*  (SI:PARSE-HOST "mit-mc")
+(DEFVAR *FILE-SERVER-FILE-HOST*  (SI:PARSE-HOST "mit-oz")
 	"THIS SHOULD BE A SITE VARIABLE....")
 
   ;; Allow typeout to continue past the end of screen without hanging.
