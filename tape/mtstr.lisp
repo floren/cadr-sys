@@ -483,7 +483,7 @@ In most cases, you should use something like CONDITION-BIND.")
 		  (IF (EQ (GET (LOCF PLIST) ':TYPE)
 			  ':UNSPECIFIC)
 		      (LET ((FPLIST (FILE-READ-ATTRIBUTE-LIST NIL DEFAULTS-FROM-STREAM)))
-			(PUT-ON-ALTERNATING-LIST
+			(SI::PUT-ON-ALTERNATING-LIST
 			  (COND ((EQ (GET (LOCF FPLIST) ':MODE)
 				     ':LISP)
 				 "LISP")
