@@ -826,10 +826,10 @@ if you happen to run LMFILE on a host not normally recorded as running it."
   (setq lfs-host
 	(or (dolist (host *pathname-host-list*)
 	      ;; Accept any host of the right kind that is for this machine.
-	      (and (typep host 'lmfile-chaos-host)
+	      (and (typep host 'lmfile-host)
 		   (eq (send host ':chaos-address) chaos:my-address)
 		   (return host)))
-	    (add-lmfile-chaos-host name chaos:my-address name))))
+	    (add-lmfile-host name chaos:my-address name))))
 
 (defun add-this-lfs-host ()
   (add-lfs-host (send si:local-host ':name)))
