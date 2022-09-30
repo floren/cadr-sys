@@ -10,7 +10,7 @@
 ;; Here are the parameters you might want to change.
 
 ;; Acceleration of ships' engines, in units per cycle per cycle.
-(DEFVAR SHIP-ACCELERATION (TRUNC (* 40. UPD) CPS #|CPS|#))
+(DEFVAR SHIP-ACCELERATION (TRUNCATE (* 40. UPD) CPS #|CPS|#))
 ;; Angular velocity of ships' turning.
 (DEFVAR SHIP-TURNING-RATE .50)
 
@@ -20,7 +20,7 @@
 ;; Number of cycles between firings
 (DEFVAR TORP-RELOAD-TIME (FIX (* .6 CPS)))
 ;; Velocity of torp relative to ship that fires it, in units per cycle.
-(DEFVAR TORP-VELOCITY (TRUNC (* 100. UPD) CPS))
+(DEFVAR TORP-VELOCITY (TRUNCATE (* 100. UPD) CPS))
 ;; Collision radius of a torpedo.
 (DEFVAR TORP-RADIUS (* 3 UPD))
 ;; Collision radius of a ship.
@@ -56,7 +56,7 @@
 ;; Acceleration due to the sun at 10 units away,
 ;; in units per cycle per cycle.
 ;; The numeric parameter is the acceleration at 10 dots in dots per second per second.
-(DEFVAR MASS-OF-SUN (TRUNC (* 2000. UPD UPD UPD) CPS #|CPS|#))
+(DEFVAR MASS-OF-SUN (TRUNCATE (* 2000. UPD UPD UPD) CPS #|CPS|#))
 
 ;; Radius of sun for collision purposes, in units
 (DEFVAR SUN-RADIUS (* 8 UPD))
@@ -69,7 +69,7 @@
 (DEFVAR HYPERSPACE-DEATH-PROBABILITY .12)
 ;; Magnitude of velocity which ships have on return from hyperspace.
 ;; The direction of the velocity is random, but its magnitude is this parameter.
-(DEFVAR HYPERSPACE-VELOCITY (TRUNC (* 150. UPD) CPS))
+(DEFVAR HYPERSPACE-VELOCITY (TRUNCATE (* 150. UPD) CPS))
 
 ;; These variables are not interesting for the user to set.
 
