@@ -823,7 +823,7 @@ Furthermore, a * at the end of one of those strings matches anything."
       (LET ((HOST (GET PLIST :HOST))
 	    (AT (IF (MEMQ FORMAT '(:SHORT :HOST)) #/@ #/@ #|| " at " ||# )))
 	(IF (AND HOST *QUOTE-HOSTS-FOR-XMAILR*)
-	    (SETQ STRING (STRING-APPEND STRING AT #/ (CAR HOST) #/))
+	    (SETQ STRING (STRING-APPEND STRING AT #/ÿ (CAR HOST) #/ÿ))
 	  (DO ((HS HOST (CDR HS)))
 	      ((NULL HS))
 	    (SETQ STRING (STRING-APPEND STRING (IF (CDR HS) "%" AT) (CAR HS))))))
