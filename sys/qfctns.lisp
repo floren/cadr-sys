@@ -396,7 +396,7 @@ followed by STARTING-TAIL."
     (DO ((P AL (CDR P)))
 	((ATOM P) AL)
       (IF (CONSP (CAR P))			;Then recopy the assoc cells.
-	  (SETF (car P) (CONS (CAAR P) (CDAR P))))))))
+	  (SETF (car P) (CONS (CAAR P) (CDAR P)))))))
 (DEFF COPY-ALIST #'COPYALIST)
 
 ;;; (SUBST NIL NIL ...) is such an ugly language idiom...
@@ -826,7 +826,8 @@ The args passed to PRED are the ITEM followed by the cdr from the list."
     	(SETQ IN-LIST (CDR IN-LIST))
         (GO L)))
 
-;; Note that new compiled code never uses this, as it is rewritten into member-equal. So there(DEFUN MEMBER (ITEM IN-LIST)
+;; Note that new compiled code never uses this, as it is rewritten into member-equal. So there
+(DEFUN MEMBER (ITEM IN-LIST)
   "Return non-NIL if IN-LIST has an element EQUAL to ITEM.
 The value is actually the link of IN-LIST whose CAR is that element."
   (COND ((OR (FIXNUMP ITEM)
@@ -1368,7 +1369,7 @@ but arrays, entities, instances and stack groups are not."
 	     T)
 	    (T
 	     ;; stack-closures don't have any predefined way to work with typep
-	     (EQ (%DATA-TYPE X #.DTP-STACK-CLOSURE)))))))
+	     (EQ (%DATA-TYPE X) #.DTP-STACK-CLOSURE))))))
 
 (DEFUN MACRO-FUNCTION (FSPEC &OPTIONAL ENVIRONMENT &AUX DEF)
   "If FSPEC has a function definition which is a macro, return the expander function; else NIL."
