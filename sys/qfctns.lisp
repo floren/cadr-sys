@@ -78,9 +78,9 @@ is a call to the macro FIRST."
   (DECLARE (ARGLIST &QUOTE FUNCTION-SPEC LAMBDA-LIST &REST BODY))
   (OR (SYMBOLP FUNCTION-SPEC) (SETQ FUNCTION-SPEC (STANDARDIZE-FUNCTION-SPEC FUNCTION-SPEC)))
   (AND UNDO-DECLARATIONS-FLAG
-       (COMPILER:FUNCTION-REFERENCED-P FUNCTION-SPEC)
-       (COMPILER:WARN 'MACRO-USED-BEFORE-DEFINED ':IMPOSSIBLE
-		      "The macro ~S was used before it was defined" FUNCTION-SPEC))
+       (COMPILER::FUNCTION-REFERENCED-P FUNCTION-SPEC)
+       (COMPILER::WARN 'MACRO-USED-BEFORE-DEFINED :IMPOSSIBLE
+		       "The macro ~S was used before it was defined" FUNCTION-SPEC))
   (SETQ DEF (PROCESS-DEFUN-BODY FUNCTION-SPEC DEF))
   (SETQ DEF (CONS 'MACRO DEF))
   ;; Put macro definition where it belongs (don't really define it if compiling)
@@ -98,9 +98,9 @@ If found in a file being compiled, this definition will be in effect
 during compilation as well as when the compiled file is loaded.
 That is how DEFF-MACRO differs from DEFF."
   (AND UNDO-DECLARATIONS-FLAG
-       (COMPILER:FUNCTION-REFERENCED-P FUNCTION)
-       (COMPILER:WARN 'MACRO-USED-BEFORE-DEFINED ':IMPOSSIBLE
-		      "The macro ~S was used before it was defined" FUNCTION))
+       (COMPILER::FUNCTION-REFERENCED-P FUNCTION)
+       (COMPILER::WARN 'MACRO-USED-BEFORE-DEFINED :IMPOSSIBLE
+		       "The macro ~S was used before it was defined" FUNCTION))
   ;; Put macro definition where it belongs (don't really define it if compiling)
   (COND ((AND (BOUNDP 'UNDO-DECLARATIONS-FLAG) UNDO-DECLARATIONS-FLAG)
 	 (WHEN (EQ (CAR-SAFE FUNCTION) ':PROPERTY)
@@ -129,9 +129,9 @@ into the function's body."
 (DEFUN DEFSUBST-1 (SYMBOL DEF)
   (OR (SYMBOLP SYMBOL) (SETQ SYMBOL (STANDARDIZE-FUNCTION-SPEC SYMBOL)))
   (AND UNDO-DECLARATIONS-FLAG
-       (COMPILER:FUNCTION-REFERENCED-P SYMBOL)
-       (COMPILER:WARN 'MACRO-USED-BEFORE-DEFINED ':IMPOSSIBLE
-		      "The defsubst ~S was used before it was defined" SYMBOL))
+       (COMPILER::FUNCTION-REFERENCED-P SYMBOL)
+       (COMPILER::WARN 'MACRO-USED-BEFORE-DEFINED :IMPOSSIBLE
+		       "The defsubst ~S was used before it was defined" SYMBOL))
   ;; Convert body into NAMED-SUBST, hacking declarations
   (SETQ DEF (CONS 'NAMED-SUBST (CDR (PROCESS-DEFUN-BODY SYMBOL DEF T))))
   (DO ((PTR (CADDR DEF) (CDR PTR)))
@@ -153,9 +153,9 @@ into the function's body."
 				     (REMQ ELT (CADDR DEF))
 				     (CDDDR DEF)))))
 	     (IF UNDO-DECLARATIONS-FLAG
-		 (COMPILER:WARN 'BAD-DEFSUBST-KEYWORDS ':IMPOSSIBLE
-				"The defsubst ~S uses the lambda-list keyword ~S"
-				SYMBOL ELT)
+		 (COMPILER::WARN 'BAD-DEFSUBST-KEYWORDS ':IMPOSSIBLE
+				 "The defsubst ~S uses the lambda-list keyword ~S"
+				 SYMBOL ELT)
 	       (FERROR NIL "The defsubst ~S uses the lambda-list keyword ~S"
 		       SYMBOL ELT))))))
   ;; Put macro definition where it belongs (don't really define it if compiling)
@@ -376,12 +376,12 @@ followed by STARTING-TAIL."
 	(DO ((L1 LIST (CDR L1))
 	     (L2 NEWLIST (CDR L2)))
 	    ((ATOM L1)
-	     (COND (DOTTED
-		    (RPLACA L2 L1)
-		    (WITHOUT-INTERRUPTS
-		      (%P-DPB-OFFSET CDR-ERROR %%Q-CDR-CODE L2 0)
-		      (%P-DPB-OFFSET CDR-NORMAL %%Q-CDR-CODE L2 -1)))))
-	  (RPLACA L2 (CAR L1)))
+	     (WHEN DOTTED
+	       (SETF (CAR L2) L1)
+	       (WITHOUT-INTERRUPTS
+		 (%P-DPB-OFFSET CDR-ERROR %%Q-CDR-CODE L2 0)
+		 (%P-DPB-OFFSET CDR-NORMAL %%Q-CDR-CODE L2 -1))))
+	  (SETF (CAR L2) (CAR L1)))
 	NEWLIST))))
 (DEFF COPY-LIST #'COPYLIST)
 
@@ -391,12 +391,12 @@ followed by STARTING-TAIL."
 
 (DEFUN COPYALIST (AL &OPTIONAL (DEFAULT-CONS-AREA DEFAULT-CONS-AREA))
   "Copy top two levels of list structure.  Dotted pair termination of list will be copied"
-  (COND ((ATOM AL) AL)
-	(T (SETQ AL (APPEND AL (CDR (LAST AL))))	;Recopy the top level.
-	   (DO ((P AL (CDR P)))
-	       ((ATOM P) AL)
-	     (COND ((CONSP (CAR P))		;Then recopy the assoc cells.
-		    (RPLACA P (CONS (CAAR P) (CDAR P)))))))))
+  (IF (ATOM AL) AL
+    (SETQ AL (APPEND AL (CDR (LAST AL))))	;Recopy the top level.
+    (DO ((P AL (CDR P)))
+	((ATOM P) AL)
+      (IF (CONSP (CAR P))			;Then recopy the assoc cells.
+	  (SETF (car P) (CONS (CAAR P) (CDAR P))))))))
 (DEFF COPY-ALIST #'COPYALIST)
 
 ;;; (SUBST NIL NIL ...) is such an ugly language idiom...
@@ -602,7 +602,7 @@ to point to the following argument."
 (DEFUN *NCONC (A B)
   (IF (ATOM A)
       B
-    (RPLACD (LAST A) B)
+    (SETF (CDR (LAST A)) B)
     A))
 
 (DEFUN NBUTLAST (LIST &OPTIONAL (N 1))
@@ -617,7 +617,7 @@ to point to the following argument."
   "Return a circular list whose elements are ARGS (over and over again)."
   (WHEN ARGS
     (SETQ TEM (COPYLIST* ARGS))
-    (RPLACD (LAST TEM) TEM)
+    (SETF (CDR (LAST TEM)) TEM)
     TEM))
 
 ;;;; List searching functions.
@@ -705,6 +705,7 @@ This is a remnant of Lisp 1.5"
   (OR (ASSQ ITEM IN-LIST)
       (APPLY ELSE NIL)))
 
+;; Note that new compiled code never uses this, as it is rewritten into assoc-equal. So there
 (DEFUN ASSOC (ITEM IN-LIST)
   "Return the first element of IN-LIST whose CAR is EQUAL to ITEM."
   (PROG ()
@@ -825,7 +826,7 @@ The args passed to PRED are the ITEM followed by the cdr from the list."
     	(SETQ IN-LIST (CDR IN-LIST))
         (GO L)))
 
-(DEFUN MEMBER (ITEM IN-LIST)
+;; Note that new compiled code never uses this, as it is rewritten into member-equal. So there(DEFUN MEMBER (ITEM IN-LIST)
   "Return non-NIL if IN-LIST has an element EQUAL to ITEM.
 The value is actually the link of IN-LIST whose CAR is that element."
   (COND ((OR (FIXNUMP ITEM)
@@ -1023,7 +1024,7 @@ The args passed to PRED are ITEM followed by the element of LIST."
      R  (RETURN LIST)))
 
 ;;; This copies only as much as it needs to in order to avoid bashing the original list
-(DEFUN REMOVE (ITEM LIST &OPTIONAL (TIMES MOST-POSITIVE-FIXNUM))
+(DEFUN GLOBAL:REMOVE (ITEM LIST &OPTIONAL (TIMES MOST-POSITIVE-FIXNUM))
   "Return a list like LIST except that elements EQUAL to ITEM are missing.
 TIMES controls how many such elements are missing;
 after that many have been eliminated, the rest are left alone."
@@ -1326,68 +1327,89 @@ within ENVIRONMENT or gloablly), or NIL if it does not have a macro definition"
 	 (EQ (CAR-SAFE (SETQ TEM (SYMBOL-FUNCTION SYMBOL))) 'MACRO)
 	 TEM)))
 
-(DEFCONST FUNCTION-START-SYMBOLS
-	  '(LAMBDA SUBST CLI:SUBST NAMED-LAMBDA NAMED-SUBST CURRY-BEFORE CURRY-AFTER)
+(DEFPARAMETER FUNCTION-START-SYMBOLS
+	      '(LAMBDA SUBST CLI:SUBST NAMED-LAMBDA NAMED-SUBST CURRY-BEFORE CURRY-AFTER)
   "A list starting with one of these symbols can be a function.")
 
+(DEFPARAMETER *COMMON-LISP-ONE-TRUE-AND-ONLY-OFFICIAL-SPECIAL-FORMS*
+	      '(BLOCK CATCH COMPILER-LET DECLARE EVAL-WHEN FLET FUNCTION GO
+	        IF LABELS LET LET* MACROLET MULTIPLE-VALUE-CALL MULTIPLE-VALUE-PROG1 PROGN
+		PROGV QUOTE RETURN-FROM SETQ TAGBODY THE THROW UNWIND-PROTECT)
+  "So decree the Gang of Five")
+
 (DEFUN FUNCTIONP (X &OPTIONAL ALLOW-SPECIAL-FORMS)
-  "T if X is a function.  ALLOW-SPECIAL-FORMS=T says count special forms as functions.
+  "T if X is a /"function/".
+ALLOW-SPECIAL-FORMS says count special forms and macros as functions.
 Closures and select-methods are considered functions,
 but arrays, entities, instances and stack groups are not."
-  (PROG ()
+  (TAGBODY
      LOOP
-	(RETURN (CASE (%DATA-TYPE X)
-		  ((#.DTP-FEF-POINTER #.DTP-U-ENTRY)
-		   (OR ALLOW-SPECIAL-FORMS
-		       (NOT (BIT-TEST (LOGIOR %ARG-DESC-QUOTED-REST %ARG-DESC-FEF-QUOTE-HAIR)
-				      (%ARGS-INFO X)))))
-		  ((#.DTP-LIST)
-		   (COND ((EQ (CAR X) 'LAMBDA)
-			  (OR ALLOW-SPECIAL-FORMS (NOT (MEMQ '&QUOTE (CADR X)))))
-			 ((EQ (CAR X) 'NAMED-LAMBDA)
-			  (OR ALLOW-SPECIAL-FORMS (NOT (MEMQ '&QUOTE (CADDR X)))))
-			 ((MEMQ (CAR X) '(SUBST CLI:SUBST NAMED-SUBST
-					  CURRY-BEFORE CURRY-AFTER)) T)
-			 ((EQ (CAR X) 'MACRO) ALLOW-SPECIAL-FORMS)
-			 ((LAMBDA-MACRO-CALL-P X)
-			  (SETQ X (LAMBDA-MACRO-EXPAND X))
-			  (GO LOOP))))
-		  ((#.DTP-SELECT-METHOD #.DTP-CLOSURE #.DTP-STACK-CLOSURE) T)
-		  ((#.DTP-SYMBOL)
-		   (COND ((NOT (FBOUNDP X)) NIL)
-			 ((ARRAYP (SETQ X (FSYMEVAL X))))
-			 (T (GO LOOP))))))))
+	(RETURN-FROM FUNCTIONP
+	  (TYPECASE X
+	    ((OR COMPILED-FUNCTION MICROCODE-FUNCTION)
+	     (OR ALLOW-SPECIAL-FORMS
+		 (NOT (BIT-TEST (LOGIOR %ARG-DESC-QUOTED-REST %ARG-DESC-FEF-QUOTE-HAIR)
+				(%ARGS-INFO X)))))
+	    (CONS
+	     (COND ((MEMQ (CAR X) '(LAMBDA NAMED-LAMBDA))
+		    (OR ALLOW-SPECIAL-FORMS (NOT (MEMQ '&QUOTE (CADR X)))))
+		   ((MEMQ (CAR X) '(SUBST CLI:SUBST NAMED-SUBST CURRY-BEFORE CURRY-AFTER))
+		    T)
+		   ((EQ (CAR X) 'MACRO)
+		    ALLOW-SPECIAL-FORMS)
+		   ((LAMBDA-MACRO-CALL-P X)
+		    (SETQ X (LAMBDA-MACRO-EXPAND X))
+		    (GO LOOP))))
+	    (SYMBOL
+	     (COND ((NOT (FBOUNDP X)) NIL)
+		   ((ARRAYP (SETQ X (SYMBOL-FUNCTION X))) T)	;what a crock
+		   (T (GO LOOP))))
+	    ((OR SELECT CLOSURE)
+	     T)
+	    (T
+	     ;; stack-closures don't have any predefined way to work with typep
+	     (EQ (%DATA-TYPE X #.DTP-STACK-CLOSURE)))))))
 
-(DEFUN MACRO-FUNCTION (FSPEC)
+(DEFUN MACRO-FUNCTION (FSPEC &OPTIONAL ENVIRONMENT &AUX DEF)
   "If FSPEC has a function definition which is a macro, return the expander function; else NIL."
-  (COND ((FDEFINEDP FSPEC)
-	 (LET ((DEF (FDEFINITION FSPEC)))
-	   (COND ((EQ (CAR-SAFE DEF) 'MACRO)
-		  (CDR DEF))
-		 ((AND (SYMBOLP FSPEC)
-		       (CDR (GET FSPEC 'ALTERNATE-MACRO-DEFINITION))))
-		 ((SYMBOLP DEF)
-		  (MACRO-FUNCTION DEF))
-		 (T NIL))))
+  (COND ((AND (SYMBOLP FSPEC) (SETQ DEF (FSYMEVAL-IN-ENVIRONMENT FSPEC ENVIRONMENT NIL)))
+	 (IF (SYMBOLP DEF) (MACRO-FUNCTION DEF ENVIRONMENT)
+	   (IF (EQ (CAR-SAFE DEF) 'MACRO)
+	       (CDR DEF))))
+	((FDEFINEDP FSPEC)
+	 (SETQ DEF (FDEFINITION FSPEC))
+	 (COND ((EQ (CAR-SAFE DEF) 'MACRO)
+		(CDR DEF))
+	       ((AND (SYMBOLP FSPEC)
+		     (CDR (GET FSPEC 'ALTERNATE-MACRO-DEFINITION))))
+	       ((SYMBOLP DEF)
+		(MACRO-FUNCTION DEF))
+	       (T NIL)))
 	((SYMBOLP FSPEC)
 	 (CDR (GET FSPEC 'ALTERNATE-MACRO-DEFINITION)))
 	(T NIL)))
 
 ;;; Used by SETF of MACRO-FUNCTION
 (DEFUN SET-MACRO-FUNCTION (FSPEC DEFINITION)
-  (FDEFINE FSPEC (CONS 'MACRO DEFINITION) NIL))
+  (FDEFINE (IF (SPECIAL-FORM-P FSPEC)
+	       `(:PROPERTY ,FSPEC ALTERNATE-MACRO-DEFINITION)
+	       FSPEC)
+	   (CONS 'MACRO DEFINITION) NIL))
 
 ;;; This can't do the right thing all the time. -- it only checks for &QUOTE and macros
-(DEFUN SPECIAL-FORM-P (SYMBOL &AUX ARGLIST)
-  "T if SYMBOL has a function definition taking unevaluated arguments."
-  (AND (FBOUNDP SYMBOL)
-       (AND (NEQ (CAR-SAFE (FSYMEVAL SYMBOL)) 'MACRO)
-	    (CONSP (SETQ ARGLIST (ARGLIST SYMBOL 'COMPILE)))
-	    (MEMQ '&QUOTE ARGLIST)
-	    T)))
+(DEFUN SPECIAL-FORM-P (SYMBOL &OPTIONAL ENVIRONMENT &AUX ARGLIST)
+  "T if SYMBOL has a function definition taking unevaluated arguments.
+This does not include macros. To test for them, use MACRO-FUNCTION."
+  (IF (FSYMEVAL-IN-ENVIRONMENT SYMBOL ENVIRONMENT NIL)
+      NIL					;we don't allow (flet ((foo (... &quote ...)
+    (OR (MEMQ SYMBOL *COMMON-LISP-ONE-TRUE-AND-ONLY-OFFICIAL-SPECIAL-FORMS*)
+	(AND (FBOUNDP SYMBOL)
+	     (NEQ (CAR-SAFE (SYMBOL-FUNCTION SYMBOL)) 'MACRO)
+	     (CONSP (SETQ ARGLIST (ARGLIST SYMBOL 'COMPILE)))
+	     (MEMQ '&QUOTE ARGLIST)
+	     T))))
 
-(DEFUN FUNCTION-NAME (FUNCTION &OPTIONAL
-		      RETURN-FLAVOR-NAMES-FLAG)
+(DEFUN FUNCTION-NAME (FUNCTION &OPTIONAL RETURN-FLAVOR-NAMES-FLAG)
   "Return FUNCTION's name, if known.  Otherwise return FUNCTION.
 RETURN-FLAVOR-NAMES-FLAG, if T, says that if FUNCTION is a flavor instance
 then the flavor name should be returned.  Otherwise FUNCTION is returned.
@@ -1462,7 +1484,7 @@ The second value is T if a name was known."
 	(VALIDATE-FUNCTION-SPEC T)
 	(FDEFINE (PUTPROP SYMBOL ARG1 'LAMBDA-MACRO))
 	((FDEFINITION FDEFINEDP) (GET SYMBOL 'LAMBDA-MACRO))
-	(FDEFINITION-LOCATION (LOCF (GET SYMBOL 'LAMBDA-MACRO)))	;Not perfect, but close
+	(FDEFINITION-LOCATION (LOCF (GET SYMBOL 'LAMBDA-MACRO)));Not perfect, but close
 	(FUNDEFINE (REMPROP SYMBOL 'LAMBDA-MACRO))
 	(OTHERWISE (FUNCTION-SPEC-DEFAULT-HANDLER FUNCTION FUNCTION-SPEC ARG1 ARG2))))))
 
@@ -1472,14 +1494,14 @@ SYMBOL may be a symbol, an instance supporting the :PROPERTY-LIST operation,
 or a locative or cons cell whose cdr is the property list."
   (IF (SYMBOLP SYMBOL)
       (CAR (PROPERTY-CELL-LOCATION SYMBOL))
-    (IF (TYPEP SYMBOL ':INSTANCE)
+    (IF (TYPEP SYMBOL 'INSTANCE)
 	(SEND SYMBOL ':PROPERTY-LIST)
       (CDR SYMBOL))))
 (DEFF SYMBOL-PLIST #'PLIST)
 
 ;; Some things going into system 99 seem to still refer to this.
 ;; It can probably be flushed when the following system is made.
-(DEFCONST SYMBOL-PACKAGE-OFFSET 4)
+;(DEFCONST SYMBOL-PACKAGE-OFFSET 4)
 
 ;This is now microcoded.
 ;(DEFSUBST PACKAGE-CELL-LOCATION (SYMBOL)
@@ -1918,11 +1940,11 @@ same Lisp world ever return the same value."
 
 (DEFUN MACLISP-MAKE-STRING (CHARL &OPTIONAL AREA &AUX PNAME)
   (LET ((%INHIBIT-READ-ONLY T))
-    (SETQ PNAME (MAKE-ARRAY (LENGTH CHARL) ':AREA AREA ':TYPE 'ART-STRING))
+    (SETQ PNAME (MAKE-STRING (LENGTH CHARL) :AREA AREA))
     (DO ((I 0 (1+ I))
 	 (L CHARL (CDR L)))
 	((NULL L))
-      (AS-1 (CHARACTER (CAR L)) PNAME I))
+      (SETF (CHAR PNAME I) (CLI:CHARACTER (CAR L))))
     PNAME))
 
 (DEFUN GETCHARN (S N)
@@ -2149,7 +2171,7 @@ of the existing size.  VECTOR must have a fill pointer."
 A new array is created and the old one is forwarded; the value is the new one.
 Any elements of the old array that are within the bounds of the new one
 are copied.  The leader if any is also copied."
-    (PROG ()
+  (PROG ()
         (CHECK-TYPE ARRAY ARRAY)
 	;; Extend or truncate the supplied list of dimensions.
 	;; Omitted dimensions are left unchanged.
@@ -2170,42 +2192,40 @@ are copied.  The leader if any is also copied."
              (N (OR (ARRAY-LEADER-LENGTH ARRAY) 0) (1- N)))
             ((ZEROP N))
 	  (SETF (ARRAY-LEADER NEW-ARRAY I) (ARRAY-LEADER ARRAY I)))
-
+	
 	;; Check for zero-size array, which the code below doesn't handle correctly
 	(AND (DO ((L DIMENSIONS (CDR L)) (L1 OLD-DIMS (CDR L1))) ((NULL L) NIL)
 	       (AND (OR (ZEROP (CAR L)) (ZEROP (CAR L1)))
 		    (RETURN T)))
 	     (GO DONE))
-
+	
 	;; Create a vector of fixnums to use as subscripts to step thru the arrays.
 	(SETQ INDEX NIL)
 	(DO ((L DIMENSIONS (CDR L))) ((NULL L))
-	   (SETQ INDEX (CONS 0 INDEX)))
-
+	  (SETQ INDEX (CONS 0 INDEX)))
+	
         ;; Make the first increment of INDEX bring us to element 0 0 0 0..
         (RPLACA INDEX -1)
-
-	LOOP
 	
+     LOOP
 	;; Increment the vector of subscripts INDEX.
         ;; Go to DONE if we have exhausted all elements that need copying.
 	(DO ((I INDEX (CDR I))
 	     (O OLD-DIMS (CDR O))
 	     (N DIMENSIONS (CDR N)))
 	    ((NULL I) (GO DONE))
-	   ;; Increment one index
-	   (INCF (CAR I))
-	   ;; and decide whether to "carry" to the next one.
-	   (IF (OR ( (CAR I) (CAR O))
-		   ( (CAR I) (CAR N)))
-	       (SETF (CAR I) 0)
-	     (RETURN NIL)))
-
+	  ;; Increment one index
+	  (INCF (CAR I))
+	  ;; and decide whether to "carry" to the next one.
+	  (IF (OR ( (CAR I) (CAR O))
+		  ( (CAR I) (CAR N)))
+	      (SETF (CAR I) 0)
+	    (RETURN NIL)))
+	
 	(APPLY #'ASET (APPLY #'AREF ARRAY INDEX) NEW-ARRAY INDEX)
 	(GO LOOP)
-
-	DONE
-
+	
+     DONE
 	;; The contents have been copied.  Copy a few random things.
 	(%P-DPB (%P-LDB %%ARRAY-NAMED-STRUCTURE-FLAG ARRAY)
 		%%ARRAY-NAMED-STRUCTURE-FLAG NEW-ARRAY)
@@ -2294,7 +2314,7 @@ Either EVAL-WHEN or PROCLAIM should be used instead."
   DECLARATIONS
   'DECLARE)
 
-;;; PROCLAIM is now in SYS: EVAL
+;;; PROCLAIM is now in SYS; EVAL
 
 ;;; This definition assumes we are evalling.
 ;;; COMPILE-DRIVER takes care of compiling and loading.
@@ -2527,28 +2547,6 @@ The third value is NIL, SUBST or MACRO."
     (MICROCODE-FUNCTION
      (MICRO-CODE-ENTRY-ARGLIST-AREA (%POINTER FUNCTION)))
     (T (FERROR NIL "~S is not a function" FUNCTION))))
-
-;;; Note: :ARGLIST will be canonicalized into ARGLIST at compile time,
-;;; but in the mean time it will still appear in QFASL files.
-;(DEFUN DEBUG-INFO-ARGLIST (DEBUG-INFO)
-;  (LET ((AL (CDR (OR (ASSQ 'ARGLIST DEBUG-INFO)
-;		     (ASSQ ':ARGLIST DEBUG-INFO)))))
-;    ;;Take this check out someday after everything recompiled
-;    (IF (OR (ATOM AL) (ATOM (CAR AL)) (CDR AL))
-;	AL					;New format
-;      (CAR AL))))				;Old format
-
-;;; Note: :VALUES, RETURN-LIST and :RETURN-LIST
-;;; will be canonicalized into VALUES at compile time,
-;;; but in the mean time they will still appear in QFASL files.
-;(DEFUN DEBUG-INFO-VALUES (DEBUG-INFO)
-;  (LET ((RL (OR (CDR (ASSQ 'RETURN-LIST DEBUG-INFO))
-;		(CDR (ASSQ ':RETURN-LIST DEBUG-INFO))
-;		(CDR (ASSQ 'VALUES DEBUG-INFO))
-;		(CDR (ASSQ ':VALUES DEBUG-INFO)))))
-;    ;;Take this check out someday after everything recompiled
-;    (IF (ATOM (CAR RL)) RL			;New format
-;      (CAR RL))))				;Old format
 
 ;;; Given an EVCP (with a data type of DTP-LOCATIVE, presumably),
 ;;; return the symbol or function spec whose value or function cell it points to,
@@ -2801,11 +2799,6 @@ is used to invoke the expander function."
 		       (PUSH (CAR MACRO-CALL) MACROS-EXPANDED))
 		  (VALUES (FUNCALL *MACROEXPAND-HOOK* 'SUBST-EXPAND-1 MACRO-CALL) T))
 		 (T MACRO-CALL)))
-	  ((SETQ TM (OPEN-CODE-P (CAR MACRO-CALL)))
-	   (AND RECORD-MACROS-EXPANDED
-		(NOT (MEMQ (CAR MACRO-CALL) MACROS-EXPANDED))
-		(PUSH (CAR MACRO-CALL) MACROS-EXPANDED))
-	   (VALUES (CONS TM (CDR MACRO-CALL)) T))
 	  (T MACRO-CALL))))
 
 ;;; Push a random declaration on for the duration of a file being compiled.
@@ -2857,10 +2850,10 @@ a local declaration.  If it is encapsulated, unencapsulate it."
 (DEFUN SUBST-EXPAND-1 (FORM)
   (LET ((SUBST (CAR FORM))
 	SIMPLE-SUBSTITUTION-OK)
-    (DO () (())
+    (DO-FOREVER
       (COND ((SYMBOLP SUBST)
 	     (SETQ SUBST (DECLARED-DEFINITION SUBST)))
-	    ((TYPEP SUBST ':COMPILED-FUNCTION)
+	    ((TYPEP SUBST 'COMPILED-FUNCTION)
 	     (LET ((DI (DEBUGGING-INFO SUBST)))
 	       (SETQ SIMPLE-SUBSTITUTION-OK
 		     (NOT (ASSQ ':NO-SIMPLE-SUBSTITUTION DI)))
