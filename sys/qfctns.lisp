@@ -206,7 +206,7 @@ This is used for DEFSUBST."
 		     ,VARS . ,BODY))))
 
 ;;; Note: APPLY-LAMBDA duplicates some of this code for speed.
-(DEFUN EXTRACT-DECLARATIONS (BODY &OPTIONAL DECLS DOC-STRING-VALID-P &AUX DOCUMENTATION)
+(DEFUN EXTRACT-DECLARATIONS (BODY &OPTIONAL DECLS DOC-STRING-VALID-P ENVIRONMENT &AUX DOC)
   "Extract declarations and documentation string from BODY and return them.
 The first value is what is left of BODY after any doc string and decls are removed.
 It is BODY missing some number of its initial elements.
@@ -220,25 +220,29 @@ The third value is the doc string found in BODY, if there was one.
 However, doc strings are only processed if DOC-STRING-VALID-P is non-NIL."
   (DECLARE (VALUES BODY DECLARATIONS DOC-STRING))
   (DO-FOREVER
-    (LET (EXPANDED-FORM)
+    (LET (FORM)
       ;; Macro-expand the form, but don't worry if we get an error.
       ;; In that case, we will not see it as a declaration,
       ;; it will get macroexpanded again, and generate a warning then.
-      (IGNORE-ERRORS
-	(SETQ EXPANDED-FORM (MACROEXPAND (CAR BODY))))
+      (SETQ FORM (IGNORE-ERRORS
+		   (MACROEXPAND (CAR BODY) ENVIRONMENT)))
       (COND ((AND DOC-STRING-VALID-P
-		  (STRINGP EXPANDED-FORM))
+		  (STRINGP FORM))
 		  ;; We skip any number of strings, but use only the first.
-		  (OR DOCUMENTATION (SETQ DOCUMENTATION EXPANDED-FORM))
+		  (OR DOC (SETQ DOC FORM))
 		  ;; If the string is the last thing in the body,
 		  ;; don't flush it, since it needs to be the return value.
 		  (OR (CDR BODY) (RETURN)))
-	    ((EQ (CAR-SAFE EXPANDED-FORM) 'DECLARE)
-	     ;; We allow any number of DECLAREs, and process them all.
-	     (SETQ DECLS (APPEND (CDR EXPANDED-FORM) DECLS)))
+	    ((EQ (CAR-SAFE FORM) 'DECLARE)
+	     ;; hack the documentation declaration specially
+	     (COND ((EQ (CADR-SAFE FORM) 'DOCUMENTATION)
+		    (SETQ DOC (AND DOC-STRING-VALID-P (OR DOC (CADR-SAFE (CADR FORM))))))
+		   ((CDR FORM)
+		    ;; We allow any number of DECLAREs, and process them all.
+		    (SETQ DECLS (APPEND (CDR FORM) DECLS)))))
 	    (T (RETURN)))
       (POP BODY)))
-  (VALUES BODY DECLS DOCUMENTATION))
+  (VALUES BODY DECLS DOC))
 
 ;;; Used as the value of *MACROEXPAND-HOOK* to make all macros displace.
 (defun automatic-displace (expander-function original-form)
