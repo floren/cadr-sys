@@ -175,7 +175,7 @@
 The correct size is enough to record enough boxes of size BOX-X-SIZE
 by BOX-Y-SIZE to fill up the window.
 Also sets WINDOW-X-SIZE and WINDOW-Y-SIZE to the size values."
-  (DECLARE :SELF-FLAVOR GRID-MIXIN)
+  (DECLARE (:SELF-FLAVOR GRID-MIXIN))
   (OR ARRAY-TYPE (SETQ ARRAY-TYPE (ARRAY-TYPE WINDOW-ARRAY)))
   (LET ((LAST-ROW-OF-DOTS
 	 (IF (AND (> BOX-X-SIZE MIN-BOX-SIZE)
