@@ -241,7 +241,7 @@ more than one element in the third value, the STOREVARS."
 		form))
     (values tempvars argforms storevars storeform accessform)))
 
-(defmacro define-setf-method (access-function lambda-list &body body)
+(defmacro define-setf-method (&environment env access-function lambda-list &body body)
   "General way to define how to SETF forms starting with ACCESS-FUNCTION.
 This form defines a macro which will be invoked by GET-SETF-METHOD-MULTIPLE-VALUE.
 The LAMBDA-LIST is matched, DEFMACRO-style, against the form to be SETF'd.
@@ -260,15 +260,17 @@ A trivial example would be
 	    `(SYS:SETCAR ,(FIRST TEMPVARS) ,STOREVAR)
 	    `(CAR ,(FIRST TEMPVARS)))))
 which is equivalent to (DEFSETF CAR SETCAR)."
-  (multiple-value-bind (nil nil doc-string)
-      (extract-declarations body nil t)
+  (multiple-value-bind (real decls doc-string)
+      (extract-declarations body nil t env)
     `(progn
        (set-documentation ',access-function 'setf ,doc-string)
        (defmacro (:property ,access-function setf-method) ,lambda-list
-	 (declare (function-parent ,access-function define-setf-method))
-	 . ,body))))
+	 (declare (function-parent ,access-function define-setf-method)
+		  (documentation . ,doc-string)
+		  . ,decls)
+	 . ,real))))
 
-(defmacro defsetf (access-function &optional arg1 arg2 &body body)
+(defmacro defsetf (&environment env access-function &optional arg1 arg2 &body body)
   "Define a SETF expander for ACCESS-FUNCTION.
 DEFSETF has three forms:
 
@@ -319,7 +321,7 @@ The third form is to prohibit SETF:
 			    . ,body)
 			  `(,',access-function . ,tempvars))))))
       (multiple-value-bind (nil decls doc-string)
-	  (extract-declarations body nil t)
+	  (extract-declarations body nil t env)
 	`(define-setf-method ,access-function ,arg1
 	   (declare . ,decls)
 	   ,doc-string
