@@ -548,16 +548,16 @@ so that color 17 is just darker than BASE."
 (DEFUN COLOR-DRAW-LINE (X1 Y1 X2 Y2
 			&OPTIONAL (COLOR 17) (ALU TV:ALU-SETA) (SCREEN COLOR-SCREEN))
   "Draw a line from X1, Y1 to X2, Y2 in color COLOR."
-    (AND (> X1 X2) (SWAPF X1 X2) (SWAPF Y1 Y2))
+    (WHEN (> X1 X2) (SWAPF X1 X2) (SWAPF Y1 Y2))
     (TV:PREPARE-SHEET (SCREEN)
       (LET ((DX (- X2 X1))
 	    (DY (- Y2 Y1))
 	    (PIXEL-ARRAY (TV:SHEET-SCREEN-ARRAY COLOR-SCREEN)))
 	(LET ((DIR-Y (IF (MINUSP DY) -1 1))
 	      (DY (ABS DY)))
-	  (COND ((ZEROP DY) (RECTANGLE X1 Y1 (- X2 X1) 1 COLOR ALU))
+	  (COND ((ZEROP DY) (RECTANGLE X1 Y1 (- X2 X1) 1 COLOR ALU SCREEN))
 		((ZEROP DX) (RECTANGLE X1 (MIN Y1 Y2) 1 (- (MAX Y1 Y2) (MIN Y1 Y2))
-				       COLOR ALU))
+				       COLOR ALU SCREEN))
 		((> DX DY)			;X IS LARGER STEP
 		 (DO ((X1 X1 (1+ X1))
 		      (REM (TRUNCATE DY 2) (+ REM DY)))
