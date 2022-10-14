@@ -341,6 +341,15 @@ This includes keyword symbols, and lists starting with QUOTE."
 	     (get form 'system-constant)))
 	(t t)))
 
+(defun self-evaluating-p (form)
+  "T if FORM always evaluates to itself."
+  (cond ((consp form)
+	 (eq (car form) 'quote))
+	((symbolp form)
+	 (or (null form) (eq form t)
+	     (keywordp form)))
+	(t t)))
+
 (defmacro gobble-declarations-from-body ((vars-env-var caller-body-exp) &body macro-body)
   `(with-stack-list* (,vars-env-var nil *interpreter-variable-environment*)
      (when (eq (caar-safe ,caller-body-exp) 'declare)
