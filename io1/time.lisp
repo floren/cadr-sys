@@ -1,4 +1,4 @@
-;;; Date and time routines -*- Mode:LISP; Package:TIME; BASE:8 -*-
+;;; Date and time routines -*- Mode:LISP; Package:TIME; Readtable:T; Base:10 -*-
 ;;;	** (c) Copyright 1980 Massachusetts Institute of Technology **
 
 ;;; Note: days and months are kept one-based throughout, as much as possible.
@@ -9,6 +9,18 @@
 ;; this should probably have variable which is the initial-year, 
 ;; in case we want more precision.
 
+
+(DEFINE-SITE-VARIABLE *TIMEZONE* :TIMEZONE "The timezone.")
+
+;; these should probably be site variables too
+(DEFVAR *DAYLIGHT-SAVINGS-TIME-P-FUNCTION* 'DAYLIGHT-SAVINGS-TIME-IN-NORTH-AMERICA-P
+  "A function, which when applied to arguments of seconds minutes hours day month year,
+will return T if daylight savings time is in effect in the local timezonew at that time.")
+
+(DEFVAR *DEFAULT-DATE-PRINT-MODE* :MM//DD//YY	;perhaps site variable?
+  "Defines the default way to print the date. Possible values include:
+:DD//MM//YY :MM//DD//YY :DD-MM-YY :DD-MMM-YY :|DD MMM YY| :DDMMMYY :YYMMDD :YYMMMDD
+ and similar keywords with YYYY instead of YY.")
 
 (DEFUN MICROSECOND-TIME (&AUX (INHIBIT-SCHEDULING-FLAG T))
   "Return the current value of the microsecond clock (a bignum).
@@ -34,7 +46,8 @@ There are 32. bits of data, so the value wraps around every few hours."
      (LET ((TIME (COMPILER:%MICROSECOND-TIME)))
        (VALUES (LDB #o0027 TIME) (LDB #o2711 TIME))))))
 
-(DEFCONST INTERNAL-TIME-UNITS-PER-SECOND 60. "60 60ths of a second in a second.")
+(DEFCONST INTERNAL-TIME-UNITS-PER-SECOND 60.
+  "60 60ths of a second in a second.")
 
 (DEFVAR HIGH-TIME-BITS 0
   "Number of times (TIME) has wrapped around since booting.")
@@ -56,198 +69,12 @@ Each this changes from T to NIL, (TIME) has wrapped around once.")
     (DPB HIGH-TIME-BITS (BYTE 23. 23.) (LDB (BYTE 23. 0) TIME-DIFF))))
 
 
-;;;; This is code to read and initialize the LAMBDA's battery clock.
-
-(defconst rtc-address-register-multibus-address #x1c124)
-(defconst rtc-data-register-multibus-address #x1c120)
-
-(defun read-rtc-reg (adr)
-  (if-in-lambda 
-    (%nubus-write #xff rtc-address-register-multibus-address adr)
-    (ldb #o0010 (%nubus-read #xff rtc-data-register-multibus-address))))
-
-(defun write-rtc-reg (adr data)
-  (if-in-lambda
-    (%nubus-write #xff rtc-address-register-multibus-address adr)
-    (%nubus-write #xff rtc-data-register-multibus-address data)))
-
-;;; 0-15 used by clock chip
-;;; 16,17 time zone
-;;; 20 34 validation string.  "time is good"  for this version.
-;;; 35 speed.  source cycles*8+execute cycles
-;;; last-boot-by  0 unknown, 1 SDU dribble, 2 SDU via serial, 3 SDU via chaos, 4 CADR via debug.
-;;; 36 rg-slot
-;;; 37 tv-slot
-;;; 40 prime-memory slot
-;;; sdu serial port availability to LAMBDA. bit 1 port A, bit 2 port B.
-;;; 41 ether exists.  bit 0, 3com ethernet board in usual place, bit 1 exelan board, etc.
-;;; 42 magtape exists.   1 cipher streamer, 2 buffered cipher, 3 Kennedy,
-;;; disk exists bitcode.  bit 0 unit 0 exists, bit 1 unit 1, etc.
-;;; disk number to boot from.
-;;; multibus serial card code.  0 none, 1 systec
-
-(defvar rtc-array (IF-IN-LAMBDA (make-array 64.)))
-
-(defconst rtc-seconds 0)
-(defconst rtc-seconds-alarm 1)
-(defconst rtc-minutes 2)
-(defconst rtc-minutes-alarm 3)
-(defconst rtc-hours 4)
-(defconst rtc-hours-alram 5)
-(defconst rtc-day-of-week 6)
-(defconst rtc-date 7)
-(defconst rtc-month #o10)
-(defconst rtc-year #o11)
-(defconst rtc-reg-a #o12)
-(defconst rtc-reg-b #o13)
-(defconst rtc-reg-c #o14)
-(defconst rtc-reg-d #o15)
-(defconst rtc-time-zone-low #o16)		;not maintained by chip
-(defconst rtc-time-zone-hi #o17)		;not maintained by chip
-;;; the rtc-cookie is written into the CMOS ram in the clock chip.  If the battery
-;;; ever fails, the string will get trashed, so we wont believe the time.
-(defconst rtc-cookie-start #o20)
-(defconst rtc-cookie "time is good")
-
-;;; Bits in reg-a
-(defconst %%rtc-update-bit #o0701)
-
-;;; Bits in reg-b
-(defconst %%rtc-set-mode #o0701)
-(defconst %%rtc-binary-mode #o0201)
-(defconst %%rtc-24-hour-mode #o0101)
-(defconst %%rtc-daylight-savings-enable #o0001)
-
-;;; Bits in reg-d
-(defconst %%rtc-valid-bit #o0701)
-
-(defun read-rtc-chip ()
-  (when (bit-test %%rtc-update-bit (read-rtc-reg rtc-reg-a))
-    (process-sleep 2)
-    (when (bit-test %%rtc-update-bit (read-rtc-reg rtc-reg-a))
-      (format *error-output* "~&Warning: update bit on clock chip seems to be stuck.")))
-  (dotimes (i 64.)
-    (aset (read-rtc-reg i) rtc-array i)))
-
-(defun write-rtc-chip ()
-  (dotimes (i 64.)
-    (write-rtc-reg i (aref rtc-array i))))
-
-;(defun print-rtc ()
-;  (read-rtc-chip)
-;  (dotimes (i 64.)
-;    (if (zerop (logand i 7)) (fresh-line))
-;    (format t "~16,2r " (aref rtc-array i))))
-
-;;;the chip turns off this bit if the battery ever dies
-;;; this would be nice, but the SDU touches it before we get a chance to ...
-;(defun rtc-valid-p ()
-;  (bit-test %%rtc-valid-bit (read-rtc-reg rtc-reg-d)))
-
-(defun rtc-valid-p ()
-  (let ((s (with-output-to-string (str)
-	     (dotimes (i (string-length rtc-cookie))
-	       (send str ':tyo (aref rtc-array (+ rtc-cookie-start i)))))))
-    (string= s rtc-cookie)))
-
-(defvar lambda-number-of-source-cycles nil)
-(defvar lambda-number-of-execute-cycles nil)
-(defvar lambda-rg-slot-number nil)
-(defvar lambda-tv-slot-number nil)
-(defvar lambda-prime-memory-slot-number nil)
-(defvar lambda-ethernet-configuration-mask nil)
-(defvar lambda-magtape-configuration-mask nil)
-
-(defun get-lambda-configuration-from-rtc-chip ()
-  (unless (rtc-valid-p)
-    (ferror nil "cmos ram configuration information not set up"))
-  (read-rtc-chip)
-  (setq lambda-number-of-source-cycles (ldb #o0303 (aref rtc-array #o35)))
-  (setq lambda-number-of-execute-cycles (ldb #o0003 (aref rtc-array #o35)))
-  (setq lambda-rg-slot-number (aref rtc-array #o36))
-  (setq lambda-tv-slot-number (aref rtc-array #o37))
-  (setq lambda-prime-memory-slot-number (aref rtc-array #o40))
-  (setq lambda-ethernet-configuration-mask (aref rtc-array #o41))
-  (setq lambda-magtape-configuration-mask (aref rtc-array #o42))
-  (WHEN (or (not (member lambda-number-of-source-cycles '(1 2 3)))
-	    (not (member lambda-number-of-execute-cycles '(1 2 3)))
-	    (< lambda-rg-slot-number 0)
-	    (> lambda-rg-slot-number #o14)
-	    (< lambda-tv-slot-number 0)
-	    (> lambda-tv-slot-number #o14)
-	    (< lambda-prime-memory-slot-number 0)
-	    (> lambda-prime-memory-slot-number #o14))
-    (ferror nil "bad data in cmos configuration ram")))
-
-(defun rtc-get-universal-time ()
-  (read-rtc-chip)
-  (cond ((rtc-valid-p)
-	 (let ((tz (// (dpb (aref rtc-array rtc-time-zone-hi)
-			    #o1010
-			    (aref rtc-array rtc-time-zone-low))
-		       60.)))
-	   (unless (= tz time:*timezone*)
-	     (format *error-output* "~&warning: timezone in rtc chip is wrong")))
-	 (time:encode-universal-time
-	   (aref rtc-array rtc-seconds)
-	   (aref rtc-array rtc-minutes)
-	   (aref rtc-array rtc-hours)
-	   (aref rtc-array rtc-date)
-	   (aref rtc-array rtc-month)
-	   (+ (aref rtc-array rtc-year) 1900.)))
-	(t nil)))
-
-;(defun print-rtc-array ()
-;  (format t "~d//~d//~d ~d:~d:~d"
-;	  (aref rtc-array rtc-month)
-;	  (aref rtc-array rtc-date)
-;	  (aref rtc-array rtc-year)
-;	  (aref rtc-array rtc-hours)
-;	  (aref rtc-array rtc-minutes)
-;	  (aref rtc-array rtc-seconds)))
-
-(defun rtc-set-universal-time (ut)
-  (read-rtc-chip)
-  (write-rtc-reg rtc-reg-b (logior (dpb 1 %%rtc-set-mode 0)
-				   (dpb 1 %%rtc-binary-mode 0)
-				   (dpb 1 %%rtc-24-hour-mode 0)
-				   (dpb 1 %%rtc-daylight-savings-enable 0)))
-  (multiple-value-bind (seconds minutes hours date month year day-of-week daylight-savings-p)
-      (time:decode-universal-time ut)
-    (aset seconds rtc-array rtc-seconds)
-    (aset minutes rtc-array rtc-minutes)
-    (aset (if daylight-savings-p
-	      (1+ hours)
-	    hours) 
-	  rtc-array rtc-hours)
-    (aset date rtc-array rtc-date)
-    (aset month rtc-array rtc-month)
-    (aset (- year 1900.) rtc-array rtc-year)
-    (aset (if (= day-of-week 6)
-	      1
-	    (+ day-of-week 2)) rtc-array rtc-day-of-week))
-  (aset (ldb #o0010 (* time:*timezone* 60.)) rtc-array rtc-time-zone-low)
-  (aset (ldb #o1010 (* time:*timezone* 60.)) rtc-array rtc-time-zone-hi)
-  (dotimes (i (string-length rtc-cookie))
-    (aset (aref rtc-cookie i) rtc-array (+ i rtc-cookie-start)))
-  (write-rtc-chip)
-  ;;start time ticking
-  (write-rtc-reg rtc-reg-b (logior (dpb 1 %%rtc-binary-mode 0)
-				   (dpb 1 %%rtc-24-hour-mode 0)
-				   (dpb 1 %%rtc-daylight-savings-enable 0)))
-; (read-rtc-reg rtc-reg-d) ; reading this reg sets the valid bit
-  t)
-
-
 ;;;; Conversion routines, universal time is seconds since 1-jan-00 00:00-GMT
 
-(DEFINE-SITE-VARIABLE *TIMEZONE* :TIMEZONE "The timezone.")
-
-
 (DEFVAR *CUMULATIVE-MONTH-DAYS-TABLE*
-	(MAKE-ARRAY 13. ':TYPE 'ART-16B
-		        ':INITIAL-CONTENTS '#10r(0   0   31  59  90  120 151
-					             181 212 243 273 304 334))
+	(MAKE-ARRAY 13. :TYPE 'ART-16B
+		        :INITIAL-CONTENTS '#10r(0 0   31  59  90  120 151
+						  181 212 243 273 304 334))
   "One-based array of cumulative days per month.")
 
 ;;; Takes Univeral Time (seconds since 1/1/1900) as a 32-bit number
@@ -266,7 +93,9 @@ DAY and MONTH are origin-1.  DAY-OF-THE-WEEK = 0 for Monday."
     ;;Otherwise, decode the time and THEN daylight-adjust it.
     (MULTIPLE-VALUE (SECS MINUTES HOURS DAY MONTH YEAR DAY-OF-THE-WEEK)
       (DECODE-UNIVERSAL-TIME-WITHOUT-DST UNIVERSAL-TIME *TIMEZONE*))
-    (AND (SETQ DAYLIGHT-SAVINGS-TIME-P (DAYLIGHT-SAVINGS-TIME-P HOURS DAY MONTH YEAR))
+    (AND (SETQ DAYLIGHT-SAVINGS-TIME-P
+	       (FUNCALL *DAYLIGHT-SAVINGS-TIME-P-FUNCTION*
+			SECS MINUTES HOURS DAY MONTH YEAR))
 	 ;; See if it's daylight savings time, time-zone number gets smaller if so.
 	 (MULTIPLE-VALUE (SECS MINUTES HOURS DAY MONTH YEAR DAY-OF-THE-WEEK)
 	   (DECODE-UNIVERSAL-TIME-WITHOUT-DST UNIVERSAL-TIME (1- *TIMEZONE*)))))
@@ -274,8 +103,7 @@ DAY and MONTH are origin-1.  DAY-OF-THE-WEEK = 0 for Monday."
 	  (OR TIMEZONE *TIMEZONE*)))
 
 (DEFUN DECODE-UNIVERSAL-TIME-WITHOUT-DST (UNIVERSAL-TIME &OPTIONAL (TIMEZONE *TIMEZONE*)
-							&AUX X SECS MINUTES HOURS
-							 DAY MONTH YEAR)
+					  &AUX X SECS MINUTES HOURS DAY MONTH YEAR)
   "Like DECODE-UNIVERSAL-TIME, but always uses standard time.
 Even if the time is one at which daylight savings time would be in effect,
 the hour and date are computed as for standard time."
@@ -309,9 +137,43 @@ the hour and date are computed as for standard time."
 	SECS (\ SECS 60.))
   (VALUES SECS MINUTES HOURS DAY MONTH YEAR (\ X 7) TIMEZONE))
 
-;;;; Domain-dependent knowledge
-(DEFUN DAYLIGHT-SAVINGS-TIME-P (HOURS DAY MONTH YEAR)
+(DEFUN DAYLIGHT-SAVINGS-TIME-P (&REST ARGS)
+  "T if daylight savings time would be in effect at specified time in the local timezone."
+  (DECLARE (ARGLIST HOURS DAY MONTH YEAR))
+  (APPLY *DAYLIGHT-SAVINGS-TIME-P-FUNCTION* 0 0 ARGS))
+
+(DEFUN YYYY-YY (YEAR CURRENT-YEAR)
+  (IF (= (TRUNCATE (+ YEAR 50.) 100.) (TRUNCATE (+ CURRENT-YEAR 50.) 100.))
+      (MOD YEAR 100.)
+    YEAR))
+
+ (DEFUN ENCODE-UNIVERSAL-TIME (SECONDS MINUTES HOURS DAY MONTH YEAR
+			      &OPTIONAL TIMEZONE &AUX TEM)
+  "Given a time, return a universal-time encoding of it.
+A universal-time is the number of seconds since 1-Jan-1900 00:00-GMT (a bignum)."
+  (IF (< YEAR 100.)
+      (LET ((CURRENT-YEAR (NTH-VALUE 5 (GET-DECODED-TIME))))
+	;; In case called during startup or during DISK-SAVE.
+	(UNLESS CURRENT-YEAR
+	  (SETQ CURRENT-YEAR 2000.))
+	(SETQ YEAR
+	      (+ CURRENT-YEAR
+		 (- (MOD (+ 50. (- YEAR (\ CURRENT-YEAR 100.))) 100.) 50.)))))
+  (SETQ YEAR (- YEAR 1900.))
+  (OR TIMEZONE
+      (SETQ TIMEZONE (IF (DAYLIGHT-SAVINGS-TIME-P HOURS DAY MONTH YEAR)
+			 (1- *TIMEZONE*) *TIMEZONE*)))
+  (SETQ TEM (+ (1- DAY) (AREF *CUMULATIVE-MONTH-DAYS-TABLE* MONTH)
+	       (FLOOR (1- YEAR) 4) (* YEAR 365.)))	;Number of days since 1-Jan-1900.
+  (AND (> MONTH 2) (LEAP-YEAR-P YEAR)
+       (SETQ TEM (1+ TEM)))				;After 29-Feb in a leap year.
+  (+ SECONDS (* 60. MINUTES) (* 3600. HOURS) (* TEM (* 60. 60. 24.)) (* TIMEZONE 3600.)))
+
+
+;;;; domain-dependent knowledge
+(DEFUN DAYLIGHT-SAVINGS-TIME-IN-NORTH-AMERICA-P (SECONDS MINUTES HOURS DAY MONTH YEAR)
   "T if daylight savings time would be in effect at specified time in North America."
+  (DECLARE (IGNORE SECONDS MINUTES))
   (COND ((OR (< MONTH 4)		;Standard time if before 2 am last Sunday in April
 	     (AND (= MONTH 4)
 		  (LET ((LSA (LAST-SUNDAY-IN-APRIL YEAR)))
@@ -343,28 +205,6 @@ the hour and date are computed as for standard time."
 	(FEB29 (IF (LEAP-YEAR-P YEAR) 1 0)))
     (LET ((DOW-APRIL-30 (\ (+ DOW-BEG-YEAR 119. FEB29) 7)))
       (- 30. DOW-APRIL-30))))
-
-(DEFUN ENCODE-UNIVERSAL-TIME (SECONDS MINUTES HOURS DAY MONTH YEAR
-			      &OPTIONAL TIMEZONE &AUX TEM)
-  "Given a time, return a universal-time encoding of it.
-A universal-time is the number of seconds since 1-Jan-1900 00:00-GMT (a bignum)."
-  (IF (< YEAR 100.)
-      (LET ((CURRENT-YEAR (NTH-VALUE 5 (GET-DECODED-TIME))))
-	;; In case called during startup or during DISK-SAVE.
-	(UNLESS CURRENT-YEAR
-	  (SETQ CURRENT-YEAR 2000.))
-	(SETQ YEAR
-	      (+ CURRENT-YEAR
-		 (- (MOD (+ 50. (- YEAR (\ CURRENT-YEAR 100.))) 100.) 50.)))))
-  (SETQ YEAR (- YEAR 1900.))
-  (OR TIMEZONE
-      (SETQ TIMEZONE (IF (DAYLIGHT-SAVINGS-TIME-P HOURS DAY MONTH YEAR)
-			 (1- *TIMEZONE*) *TIMEZONE*)))
-  (SETQ TEM (+ (1- DAY) (AREF *CUMULATIVE-MONTH-DAYS-TABLE* MONTH)
-	       (FLOOR (1- YEAR) 4) (* YEAR 365.)))	;Number of days since 1-Jan-1900.
-  (AND (> MONTH 2) (LEAP-YEAR-P YEAR)
-       (SETQ TEM (1+ TEM)))				;After 29-Feb in a leap year.
-  (+ SECONDS (* 60. MINUTES) (* 3600. HOURS) (* TEM (* 60. 60. 24.)) (* TIMEZONE 3600.)))
 
 ;;;; Maintenance functions
 
@@ -405,7 +245,7 @@ and, failing that, the luser who happens to be around."
 	  (RETURN-FROM INITIALIZE-TIMEBASE NIL)))
       (CONDITION-CASE (ERROR)
 	  (SETQ UT (PARSE-UNIVERSAL-TIME UT 0 NIL T 0))
-	(ERROR (SEND ERROR ':REPORT *QUERY-IO*)
+	(ERROR (SEND ERROR :REPORT *QUERY-IO*)
 	       (GO STRING)))
    GIVE-IT-A-SHOT
       (COND ((NOT (Y-OR-N-P (FORMAT NIL "Time is ~A, OK? " (PRINT-UNIVERSAL-DATE UT NIL))))
@@ -424,7 +264,7 @@ and, failing that, the luser who happens to be around."
 			 *LAST-TIME-DAY* *LAST-TIME-MONTH* *LAST-TIME-YEAR*
 			 *LAST-TIME-DAY-OF-THE-WEEK* *LAST-TIME-DAYLIGHT-SAVINGS-P*)
 	  (DECODE-UNIVERSAL-TIME UT))
-	(if-in-lambda (rtc-set-universal-time ut))
+	(IF-IN-LAMBDA (RTC-SET-UNIVERSAL-TIME UT))
 	(RETURN-FROM INITIALIZE-TIMEBASE T))))
 
 (DEFUN SET-LOCAL-TIME (&OPTIONAL NEW-TIME)
@@ -568,7 +408,7 @@ Returns NIL if the time is not known (during startup or DISK-SAVE)."
 
 (DEFUN GET-UNIVERSAL-TIME ()
   "Return the current time as a universal-time.
-A universal-time is the number of seconds since 1/1/00 00:00-GMT (a bignum)."
+A universal-time is the number of seconds since 01-Jan-1900 00:00-GMT (a bignum)"
   (UPDATE-TIMEBASE)
   (ENCODE-UNIVERSAL-TIME *LAST-TIME-SECONDS* *LAST-TIME-MINUTES* *LAST-TIME-HOURS*
 			 *LAST-TIME-DAY* *LAST-TIME-MONTH* *LAST-TIME-YEAR*
@@ -576,20 +416,28 @@ A universal-time is the number of seconds since 1/1/00 00:00-GMT (a bignum)."
 			     (1- *TIMEZONE*) *TIMEZONE*)))
 
 
-(DEFVAR *DEFAULT-DATE-PRINT-MODE* ':MM//DD//YY	;perhaps site variable?
-  "Defines the default way to print the date. Possible values include:
-:DD//MM//YY :MM//DD//YY :DD-MM-YY :DD-MMM-YY :|DD MMM YY| :DDMMMYY :YYMMDD :YYMMMDD")
-
-;;;args to format: DAY MONTH MONTH-STRING DONT-PRINT-YEAR-P YEAR
-;;;		   0   1     2            3                 4
+;;;args to format: DAY MONTH MONTH-STRING DONT-PRINT-YEAR-P YEAR2 YEAR4
+;;;		   0   1     2            3                 4	  5
 (DEFPROP :DD//MM//YY "~D//~2,'0D~*~:[//~2,'0D~]" DATE-FORMAT)		;27/10{/66}
+(DEFPROP :DD//MM//YYYY "~D//~2,'0D~*~:[//~*~D~]" DATE-FORMAT)		;27/10{/1966}
 (DEFPROP :MM//DD//YY "~*~D//~0@*~2,'0D~2*~:[//~2,'0D~]" DATE-FORMAT)	;10/27{/66}
+(DEFPROP :MM//DD//YYYY "~*~D//~0@*~2,'0D~2*~:[//~*~D~]" DATE-FORMAT)	;10/27{/1966}
 (DEFPROP :DD-MM-YY "~D-~2,'0D~*~:[-~2,'0D~]" DATE-FORMAT)		;27-10{-66}
+(DEFPROP :DD-MM-YYYY "~D-~2,'0D~*~:[-~*~D~]" DATE-FORMAT)		;27-10{-1966}
 (DEFPROP :DD-MMM-YY "~D-~*~A~:[-~2,'0D~]" DATE-FORMAT)			;27-Oct{-66}
+(DEFPROP :DD-MMM-YYYY "~D-~*~A~:[-~*~D~]" DATE-FORMAT)			;27-Oct{-1966}
 (DEFPROP :DD/ MMM/ YY "~D ~*~A~:[ ~2,'0D~]" DATE-FORMAT)		;27 Oct{ 66}
+(DEFPROP :DD/ MMM/ YYYY "~D ~*~A~:[ ~*~D~]" DATE-FORMAT)		;27 Oct{ 1966}
 (DEFPROP :DDMMMYY "~D~*~A~:[~2,'0D~]" DATE-FORMAT)			;27Oct{66}
+(DEFPROP :DDMMMYYYY "~D~*~A~:[~*~D~]" DATE-FORMAT)			;27Oct{1966}
 (DEFPROP :YYMMDD "~4*~2,'0D~1@*~2,'0D~0@*~2,'0D" DATE-FORMAT)		;661027
+(DEFPROP :YYYYMMDD "~5*~2,'0D~1@*~2,'0D~0@*~2,'0D" DATE-FORMAT)		;19661027
 (DEFPROP :YYMMMDD "~3*~:[~2,'0D~]~2@*~A~0@*~2,'0D" DATE-FORMAT)		;{66}Oct27
+(DEFPROP :YYYYMMMDD "~3*~:[~*~D~]~2@*~A~0@*~2,'0D" DATE-FORMAT)		;{1966}Oct27
+(DEFPROP :YY-MMM-DD "~3*~:[~2,'0D-~]~2@*~A-~0@*~2,'0D" DATE-FORMAT)	;{66-}Oct-27
+(DEFPROP :YYYY-MMM-DD "~3*~:[~*~D-~]~2@*~A-~0@*~2,'0D" DATE-FORMAT)	;{1966-}Oct-27
+(DEFPROP :YY-MM-DD "~3*~:[~2,'0D-~]~1@*~A-~0@*~2,'0D" DATE-FORMAT)	;{66-}10-27
+(DEFPROP :YYYY-MM-DD "~3*~:[~*~D-~]~1@*~A-~0@*~2,'0D" DATE-FORMAT)	;{1966-}10-27
 
 (DEFUN PRINT-CURRENT-TIME (&OPTIONAL (STREAM *STANDARD-OUTPUT*)
 				     (DATE-PRINT-MODE *DEFAULT-DATE-PRINT-MODE*))
@@ -599,10 +447,9 @@ A universal-time is the number of seconds since 1/1/00 00:00-GMT (a bignum)."
 	   (GET-TIME)
          (PRINT-TIME SECONDS MINUTES HOURS DAY MONTH YEAR STREAM DATE-PRINT-MODE))))
 
-(DEFUN PRINT-UNIVERSAL-TIME (UT
-			     &OPTIONAL (STREAM *STANDARD-OUTPUT*)
-			     TIMEZONE
-			     (DATE-PRINT-MODE *DEFAULT-DATE-PRINT-MODE*))
+(DEFUN PRINT-UNIVERSAL-TIME (UT &OPTIONAL (STREAM *STANDARD-OUTPUT*)
+					  TIMEZONE
+					  (DATE-PRINT-MODE *DEFAULT-DATE-PRINT-MODE*))
   "Print the universal-time UT on STREAM, interpreting for time zone TIMEZONE.
 TIMEZONE is the number of hours earlier than GMT."
   ;;Let DECODE-UNIVERSAL-TIME default the timezone if wanted, as that fcn
@@ -616,11 +463,11 @@ TIMEZONE is the number of hours earlier than GMT."
 			     (DATE-PRINT-MODE *DEFAULT-DATE-PRINT-MODE*)) 
   "Print time specified on STREAM using date format DATE-PRINT-MODE.
 If STREAM is NIL, construct and return a string."
-  (WITH-STACK-LIST (DATE-MODE-ARGS DAY MONTH (MONTH-STRING MONTH ':SHORT)
-				       NIL (MOD YEAR 100.))
+  (WITH-STACK-LIST (DATE-MODE-ARGS DAY MONTH (MONTH-STRING MONTH :SHORT)
+				   NIL (YYYY-YY YEAR (NTH-VALUE 5 (GET-DECODED-TIME))) YEAR)
     (FORMAT STREAM "~? ~2,'0D:~2,'0D:~2,'0D"
 	    (OR (GET DATE-PRINT-MODE 'DATE-FORMAT)
-		(FERROR NIL "Bad type of DATE-PRINT-MODE: ~s" DATE-PRINT-MODE))
+		(FERROR NIL "Bad type of DATE-PRINT-MODE: ~S" DATE-PRINT-MODE))
 	    DATE-MODE-ARGS
 	    HOURS MINUTES SECONDS)))
 
@@ -646,7 +493,7 @@ If STREAM is NIL, construct and return a string."
   (SETQ MONTH (MONTH-STRING MONTH)
 	DAY-OF-THE-WEEK (DAY-OF-THE-WEEK-STRING DAY-OF-THE-WEEK))
   (FORMAT STREAM
-	  "~A the ~:R of ~A, ~D/; ~D:~2,'0D:~2,'0D ~A"
+	  "~A the ~:R of ~A, ~D; ~D:~2,'0D:~2,'0D ~A"
 	  DAY-OF-THE-WEEK DAY MONTH YEAR (1+ (\ (+ HOURS 11.) 12.)) MINUTES SECONDS
 	  (COND ((AND (ZEROP SECONDS)
 		      (ZEROP MINUTES)
@@ -667,11 +514,11 @@ If STREAM is NIL, construct and return a string."
 	(DECODE-UNIVERSAL-TIME REF-UT)
       ;; If not same day, print month and day numerically
       (IF (OR ( DAY REF-DAY) ( MONTH REF-MONTH) ( YEAR REF-YEAR))
-	  (WITH-STACK-LIST (DATE-MODE-ARGS DAY MONTH (MONTH-STRING MONTH ':SHORT)
-					   (= YEAR REF-YEAR) (MOD YEAR 100.))
+	  (WITH-STACK-LIST (DATE-MODE-ARGS DAY MONTH (MONTH-STRING MONTH :SHORT)
+					   (= YEAR REF-YEAR) (YYYY-YY YEAR REF-YEAR) YEAR)
 	    (FORMAT STREAM "~? ~2,'0D:~2,'0D"
 		    (OR (GET DATE-PRINT-MODE 'DATE-FORMAT)
-			(FERROR NIL "Bad type-of DATE-PRINT-MODE: ~s" DATE-PRINT-MODE))
+			(FERROR NIL "Bad type-of DATE-PRINT-MODE: ~S" DATE-PRINT-MODE))
 		    DATE-MODE-ARGS
 		    HOURS MINUTES))
 	;; Always print hours colon minutes, even if same as now
@@ -760,9 +607,9 @@ If STREAM is NIL, construct and return a string."
 			     ("Sun" "Sunday" NIL "Dimanche" "Sonntag" "Domenica"))
 	"The list of the days of the week in short, long, medium, French, German, Italian." )
 
-(DEFUN DAY-OF-THE-WEEK-STRING (DAY-OF-THE-WEEK &OPTIONAL (MODE ':LONG) &AUX STRINGS)
+(DEFUN DAY-OF-THE-WEEK-STRING (DAY-OF-THE-WEEK &OPTIONAL (MODE :LONG) &AUX STRINGS)
   (SETQ STRINGS (NTH DAY-OF-THE-WEEK *DAYS-OF-THE-WEEK*))
-  (SELECTQ MODE
+  (CASE MODE
     (:SHORT (FIRST STRINGS))
     (:LONG (SECOND STRINGS))
     (:MEDIUM (OR (THIRD STRINGS) (FIRST STRINGS)))
@@ -795,9 +642,9 @@ If STREAM is NIL, construct and return a string."
 		   ("Dec" "December" "Decem" "Decembre" "XII" "Dezember" "Dicembre"))
   "List of names lists of names of months: short, long, medium, French, Roman, German, Italian")
 
-(DEFUN MONTH-STRING (MONTH &OPTIONAL (MODE ':LONG) &AUX STRINGS)
+(DEFUN MONTH-STRING (MONTH &OPTIONAL (MODE :LONG) &AUX STRINGS)
   (SETQ STRINGS (NTH (1- MONTH) *MONTHS*))
-  (SELECTQ MODE
+  (CASE MODE
     (:SHORT (FIRST STRINGS))
     (:LONG (SECOND STRINGS))
     (:MEDIUM (OR (THIRD STRINGS) (FIRST STRINGS)))
@@ -842,8 +689,8 @@ If STREAM is NIL, construct and return a string."
   "Return a string describing timezone TIMEZONE, optionally for daylight savings time.
 Defaults are our own timezone, and DST if it is now in effect."
   (IF DAYLIGHT-SAVINGS-P
-      (THIRD (ASSOC (1- TIMEZONE) *TIMEZONES*))
-    (SECOND (ASSOC TIMEZONE *TIMEZONES*))))
+      (THIRD (ASSQ (1- TIMEZONE) *TIMEZONES*))
+      (SECOND (ASSQ TIMEZONE *TIMEZONES*))))
 
 ;;;; Date and time parsing
 
@@ -874,3 +721,185 @@ by centuries until it is within 50 years of the present."
 	  (INITIALIZE-TIMEBASE))
   '(:WARM :NOW))
 
+
+;;;; This is code to read and initialize the LAMBDA's battery clock.
+
+(defconst rtc-address-register-multibus-address #x1c124)
+(defconst rtc-data-register-multibus-address #x1c120)
+
+(defun read-rtc-reg (adr)
+  (if-in-lambda 
+    (%nubus-write #xff rtc-address-register-multibus-address adr)
+    (ldb #o0010 (%nubus-read #xff rtc-data-register-multibus-address))))
+
+(defun write-rtc-reg (adr data)
+  (if-in-lambda
+    (%nubus-write #xff rtc-address-register-multibus-address adr)
+    (%nubus-write #xff rtc-data-register-multibus-address data)))
+
+;;; 0-15 used by clock chip
+;;; 16,17 time zone
+;;; 20 34 validation string.  "time is good"  for this version.
+;;; 35 speed.  source cycles*8+execute cycles
+;;; last-boot-by  0 unknown, 1 SDU dribble, 2 SDU via serial, 3 SDU via chaos, 4 CADR via debug.
+;;; 36 rg-slot
+;;; 37 tv-slot
+;;; 40 prime-memory slot
+;;; sdu serial port availability to LAMBDA. bit 1 port A, bit 2 port B.
+;;; 41 ether exists.  bit 0, 3com ethernet board in usual place, bit 1 exelan board, etc.
+;;; 42 magtape exists.   1 cipher streamer, 2 buffered cipher, 3 Kennedy,
+;;; disk exists bitcode.  bit 0 unit 0 exists, bit 1 unit 1, etc.
+;;; disk number to boot from.
+;;; multibus serial card code.  0 none, 1 systec
+
+(defvar rtc-array (IF-IN-LAMBDA (make-array 64.)))
+
+(defconst rtc-seconds 0)
+(defconst rtc-seconds-alarm 1)
+(defconst rtc-minutes 2)
+(defconst rtc-minutes-alarm 3)
+(defconst rtc-hours 4)
+(defconst rtc-hours-alram 5)
+(defconst rtc-day-of-week 6)
+(defconst rtc-date 7)
+(defconst rtc-month #o10)
+(defconst rtc-year #o11)
+(defconst rtc-reg-a #o12)
+(defconst rtc-reg-b #o13)
+(defconst rtc-reg-c #o14)
+(defconst rtc-reg-d #o15)
+(defconst rtc-time-zone-low #o16)		;not maintained by chip
+(defconst rtc-time-zone-hi #o17)		;not maintained by chip
+;;; the rtc-cookie is written into the CMOS ram in the clock chip.  If the battery
+;;; ever fails, the string will get trashed, so we wont believe the time.
+(defconst rtc-cookie-start #o20)
+(defconst rtc-cookie "time is good")
+
+;;; Bits in reg-a
+(defconst %%rtc-update-bit #o0701)
+
+;;; Bits in reg-b
+(defconst %%rtc-set-mode #o0701)
+(defconst %%rtc-binary-mode #o0201)
+(defconst %%rtc-24-hour-mode #o0101)
+(defconst %%rtc-daylight-savings-enable #o0001)
+
+;;; Bits in reg-d
+(defconst %%rtc-valid-bit #o0701)
+
+(defun read-rtc-chip ()
+  (when (bit-test %%rtc-update-bit (read-rtc-reg rtc-reg-a))
+    (process-sleep 2)
+    (when (bit-test %%rtc-update-bit (read-rtc-reg rtc-reg-a))
+      (format *error-output* "~&Warning: update bit on clock chip seems to be stuck.")))
+  (dotimes (i 64.)
+    (aset (read-rtc-reg i) rtc-array i)))
+
+(defun write-rtc-chip ()
+  (dotimes (i 64.)
+    (write-rtc-reg i (aref rtc-array i))))
+
+;(defun print-rtc ()
+;  (read-rtc-chip)
+;  (dotimes (i 64.)
+;    (if (zerop (logand i 7)) (fresh-line))
+;    (format t "~16,2r " (aref rtc-array i))))
+
+;;;the chip turns off this bit if the battery ever dies
+;;; this would be nice, but the SDU touches it before we get a chance to ...
+;(defun rtc-valid-p ()
+;  (bit-test %%rtc-valid-bit (read-rtc-reg rtc-reg-d)))
+
+(defun rtc-valid-p ()
+  (let ((s (with-output-to-string (str)
+	     (dotimes (i (string-length rtc-cookie))
+	       (send str :tyo (aref rtc-array (+ rtc-cookie-start i)))))))
+    (string= s rtc-cookie)))
+
+(defvar lambda-number-of-source-cycles nil)
+(defvar lambda-number-of-execute-cycles nil)
+(defvar lambda-rg-slot-number nil)
+(defvar lambda-tv-slot-number nil)
+(defvar lambda-prime-memory-slot-number nil)
+(defvar lambda-ethernet-configuration-mask nil)
+(defvar lambda-magtape-configuration-mask nil)
+
+(defun get-lambda-configuration-from-rtc-chip ()
+  (unless (rtc-valid-p)
+    (ferror nil "cmos ram configuration information not set up"))
+  (read-rtc-chip)
+  (setq lambda-number-of-source-cycles (ldb #o0303 (aref rtc-array #o35)))
+  (setq lambda-number-of-execute-cycles (ldb #o0003 (aref rtc-array #o35)))
+  (setq lambda-rg-slot-number (aref rtc-array #o36))
+  (setq lambda-tv-slot-number (aref rtc-array #o37))
+  (setq lambda-prime-memory-slot-number (aref rtc-array #o40))
+  (setq lambda-ethernet-configuration-mask (aref rtc-array #o41))
+  (setq lambda-magtape-configuration-mask (aref rtc-array #o42))
+  (WHEN (or (not (member lambda-number-of-source-cycles '(1 2 3)))
+	    (not (member lambda-number-of-execute-cycles '(1 2 3)))
+	    (< lambda-rg-slot-number 0)
+	    (> lambda-rg-slot-number #o14)
+	    (< lambda-tv-slot-number 0)
+	    (> lambda-tv-slot-number #o14)
+	    (< lambda-prime-memory-slot-number 0)
+	    (> lambda-prime-memory-slot-number #o14))
+    (ferror nil "bad data in cmos configuration ram")))
+
+(defun rtc-get-universal-time ()
+  (read-rtc-chip)
+  (cond ((rtc-valid-p)
+	 (let ((tz (// (dpb (aref rtc-array rtc-time-zone-hi)
+			    #o1010
+			    (aref rtc-array rtc-time-zone-low))
+		       60.)))
+	   (unless (= tz time:*timezone*)
+	     (format *error-output* "~&warning: timezone in rtc chip is wrong")))
+	 (time:encode-universal-time
+	   (aref rtc-array rtc-seconds)
+	   (aref rtc-array rtc-minutes)
+	   (aref rtc-array rtc-hours)
+	   (aref rtc-array rtc-date)
+	   (aref rtc-array rtc-month)
+	   (+ (aref rtc-array rtc-year) 1900.)))
+	(t nil)))
+
+;(defun print-rtc-array ()
+;  (format t "~d//~d//~d ~d:~d:~d"
+;	  (aref rtc-array rtc-month)
+;	  (aref rtc-array rtc-date)
+;	  (aref rtc-array rtc-year)
+;	  (aref rtc-array rtc-hours)
+;	  (aref rtc-array rtc-minutes)
+;	  (aref rtc-array rtc-seconds)))
+
+(defun rtc-set-universal-time (ut)
+  (read-rtc-chip)
+  (write-rtc-reg rtc-reg-b (logior (dpb 1 %%rtc-set-mode 0)
+				   (dpb 1 %%rtc-binary-mode 0)
+				   (dpb 1 %%rtc-24-hour-mode 0)
+				   (dpb 1 %%rtc-daylight-savings-enable 0)))
+  (multiple-value-bind (seconds minutes hours date month year day-of-week daylight-savings-p)
+      (time:decode-universal-time ut)
+    (aset seconds rtc-array rtc-seconds)
+    (aset minutes rtc-array rtc-minutes)
+    (aset (if daylight-savings-p
+	      (1+ hours)
+	    hours) 
+	  rtc-array rtc-hours)
+    (aset date rtc-array rtc-date)
+    (aset month rtc-array rtc-month)
+    (aset (- year 1900.) rtc-array rtc-year)
+    (aset (if (= day-of-week 6)
+	      1
+	    (+ day-of-week 2)) rtc-array rtc-day-of-week))
+  (aset (ldb #o0010 (* time:*timezone* 60.)) rtc-array rtc-time-zone-low)
+  (aset (ldb #o1010 (* time:*timezone* 60.)) rtc-array rtc-time-zone-hi)
+  (dotimes (i (string-length rtc-cookie))
+    (aset (aref rtc-cookie i) rtc-array (+ i rtc-cookie-start)))
+  (write-rtc-chip)
+  ;;start time ticking
+  (write-rtc-reg rtc-reg-b (logior (dpb 1 %%rtc-binary-mode 0)
+				   (dpb 1 %%rtc-24-hour-mode 0)
+				   (dpb 1 %%rtc-daylight-savings-enable 0)))
+; (read-rtc-reg rtc-reg-d) ; reading this reg sets the valid bit
+  t)
