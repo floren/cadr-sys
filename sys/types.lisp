@@ -356,7 +356,7 @@ then the value is a type specifier describing OBJECT."
 			   (multiple-value-setq (nil dependencies)
 			     (apply tem record-dependencies dependencies
 				    typespec (cdr typespec))))
-			  ((memq (car typespec *standard-system-type-specifiers*))
+			  ((memq (car typespec) *standard-system-type-specifiers*)
 			   (throw 'invalid-type-specifier
 				    ;; Yow! Can I reimplement lisp primitives using FORMAT?
 				  "The type specifier ~1{~S~:} may not be used with /"arguments/""))
@@ -1366,8 +1366,9 @@ Any real number can be coerced to any floating point number type."
 			    (setq *standard-system-type-specifiers*
 				  (cons ',name *standard-system-type-specifiers*))))))
     (cond ((null cruft))			;just defining it
-	  ((symbolp cruft)
-	   (push `(putprop ',name ',cruft 'type-alias-for) returns))
+	  ((and (null (cdr cruft))
+		(symbolp (car cruft)))
+	   (push `(putprop ',name ',(car cruft) 'type-alias-for) returns))
 	  (t
 	   (dolist (c cruft)
 	     (flet ((frob (y)
@@ -1713,7 +1714,7 @@ Any real number can be coerced to any floating point number type."
 	    `(simple-array bit (,size))))
 
 (define-system-type structure
-  (predicate (not (null (named-structure-p object))))
+  (predicate (object) (not (null (named-structure-p object))))
   (optimizer (expression)
 	     `(not (null (named-structure-p ,(cadr expression))))))
 (define-system-type named-structure structure)
@@ -1758,7 +1759,7 @@ Any real number can be coerced to any floating point number type."
 
 
 (define-system-type number
-  (predicate number)
+  (predicate numberp)
   (subtypes rational integer fixnum bignum ratio complex real non-complex-number
 	    float short-float single-float))
 
@@ -1781,7 +1782,7 @@ Any real number can be coerced to any floating point number type."
 					     '(float small-float single-float
 						     double-float long-float))
 				 `(typep (%complex-real-part ,object) ',type))))))))
-  (subtype-predicate (type1 type2 dependencies)
+  (subtypep-predicate (type1 type2 dependencies)
 		     (multiple-value-bind (tem tem1 dependencies)
 			 (subtypep-1 (cadr type1) (cadr type2) dependencies)
 		       (values tem tem1 dependencies)))
@@ -1803,9 +1804,9 @@ Any real number can be coerced to any floating point number type."
 		 (values (if (memq subtype '(t * non-complex-number))
 			     'complex
 			   (multiple-value-setq (type dependencies)
-			     (type-canonicalize-1 element-type
+			     (type-canonicalize-1 subtype
 						  record-dependencies dependencies))
-			   (if (equal type element-type)
+			   (if (equal type subtype)
 			       typespec
 			     `(complex ,type)))
 			 dependencies)))
@@ -1881,7 +1882,7 @@ Any real number can be coerced to any floating point number type."
   (subtypes integer ratio bignum fixnum))
 
 (define-system-type ratio
-  (predicate rationp))
+  (predicate ratiop))
 
 (define-system-type integer
   (predicate (object &optional (low '*) (high '*))
@@ -1935,7 +1936,7 @@ Any real number can be coerced to any floating point number type."
 		'(integer #.most-negative-fixnum #.most-positive-fixnum)
 	      `(integer ,(if (eq low '*) most-negative-fixnum low)
 			,(if (eq high '*) most-positive-fixnum high))))
-  (optimizer optimizer (expression &optional (low '*) (high '*))
+  (optimizer (expression &optional (low '*) (high '*))
 	     (if (and (neq low '*)
 		      (neq high '*)
 		      (< (- (if (consp high) (1- (car high)) high)
