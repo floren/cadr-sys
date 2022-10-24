@@ -19,7 +19,8 @@
 ;;; extra wired page all the time for the keyboard buffer.
 
 ;;; SI:GET-UNIBUS-CHANNEL interrupt-vector CSR-address CSR-bits data-address n-data-words
-;;;	&optional output-turnoff-unibus-address output-turnoff-data
+;;;	&optional output-turnoff-unibus-address output-turnoff-data CSR-clear-bits
+;;;	CSR-set-bits
 ;;;	n-data-words can be 1 or 2 (the number of 16-bit words at the data-address)
 ;;;	The two optional arguments are for output channels; they are the
 ;;;	arguments to a %UNIBUS-WRITE to be issued if the device interrupts and
@@ -42,7 +43,7 @@
 (DEFUN GET-UNIBUS-CHANNEL (INTERRUPT-VECTOR CSR-ADDRESS CSR-BITS DATA-ADDRESS N-DATA-REGS
 			   BUFFER-SIZE
 			   &OPTIONAL OUTPUT-TURNOFF-UNIBUS-ADDRESS OUTPUT-TURNOFF-DATA
-			   TIME-STAMPED
+			   TIME-STAMPED CSR-CLEAR-BITS CSR-SET-BITS	;**
 			   &AUX CHAN)
   "Allocate a unibus channel for interrupt-driven hardware i//o.
 INTERRUPT-VECTOR is the unibus interrupt vector of the device you want to use.
@@ -55,6 +56,8 @@ N-DATA-REGS is the number of data registers in the device; normally 1,
  but may be 2 meaning read 32 bits of data from two consecutive registers.
 BUFFER-SIZE is the size of array to use, in pages.
  The buffer space is almost equal to the number of words.
+CSR-CLEAR-BITS and CSR-SET-BITS are bits to be cleared and set at the beginning 
+and end of the interrupt processing respectively.
 
 For output channels, OUTPUT-TURNOFF-DATA and OUTPUT-TURNOFF-UNIBUS-ADDRESS
 specify how to turn off output interrupts when the buffer is empty.
@@ -87,6 +90,12 @@ saying when to output that word."
 	 (%P-DPB-OFFSET 1 %%UNIBUS-CSR-OUTPUT CHAN %UNIBUS-CHANNEL-CSR-BITS)))	;Output 
   (IF TIME-STAMPED
       (%P-DPB-OFFSET 1 %%UNIBUS-CSR-TIMESTAMPED CHAN %UNIBUS-CHANNEL-CSR-BITS))
+  (WHEN CSR-CLEAR-BITS				;**
+    (%P-DPB-OFFSET 1 %%UNIBUS-CSR-CLEAR-BITS-P CHAN %UNIBUS-CHANNEL-CSR-BITS)	;**
+    (%P-DPB-OFFSET CSR-CLEAR-BITS %%Q-POINTER CHAN %UNIBUS-CHANNEL-CSR-CLEAR-BITS))	;**
+  (WHEN CSR-SET-BITS				;**
+    (%P-DPB-OFFSET 1 %%UNIBUS-CSR-SET-BITS-P CHAN %UNIBUS-CHANNEL-CSR-BITS)	;**
+    (%P-DPB-OFFSET CSR-SET-BITS %%Q-POINTER CHAN %UNIBUS-CHANNEL-CSR-SET-BITS))	;**
   (LET ((BUFFER-START (+ (%POINTER CHAN) 20)) ;leave room for expansion
 	(BUFFER-END (+ (%POINTER CHAN) (* BUFFER-SIZE PAGE-SIZE))))
     (%P-DPB-OFFSET BUFFER-START %%Q-POINTER CHAN %UNIBUS-CHANNEL-BUFFER-START)
@@ -191,7 +200,9 @@ UNIBUS-CHANNEL-ADVANCE, then call this again."
   (without-INTERRUPTS
     (do ((x (%pointer (system-communication-area %sys-com-unibus-interrupt-list))
 	    (%p-ldb %%q-pointer (+ x %unibus-channel-link)))
-	 (p nil x))
+	 (p nil x)
+	 (*print-base* 8)
+	 (*print-radix* t))
 	((zerop x))
      (format t "~%channel at ~s: vector ~s, csr adr ~s, csr bits ~s, data adr ~s"
 	     x
