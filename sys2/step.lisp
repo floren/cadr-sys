@@ -1,6 +1,4 @@
-;;; -*- Mode:LISP; Package:SYSTEM-INTERNALS; Base:8; Lowercase:T; Readtable:CL -*-
-
-;Note: This is a commonlisp file!
+;;; -*- Mode:LISP; Package:SYSTEM-INTERNALS; Readtable:T; Lowercase:T; Base:8 -*-
 
 ;;; Ultra-simple stepper for lisp-machine.
 ;;; Wins with multiple values
@@ -39,11 +37,11 @@
   "List of values just computed.  May be changed in a breakpoint.")
 
 (defvar	*step-auto* nil)
-;if non NIL, simulate cntrl-n at step-cmdr.
+;if non NIL, simulate ctrl-n at step-cmdr.
 ; normal printout produced unless NO-PRINT.
 ;  User's program can turn on auto mode by
-;  (si:*step-auto-on &optional (mode 'no-print))
-; and (si:*step-auto-off) to reable stepping.
+;  (si:step-auto-on &optional (mode 'no-print))
+; and (si:step-auto-off) to reable stepping.
 
 ;;; Main entry point.
 (defun step (form &optional *step-auto* &aux (*step-level* -1) (*step-max* 0)
@@ -66,11 +64,10 @@ Type the Help key when you are in the stepper for a list of stepper commands."
   (step-evalhook form environment))
   
 ;;; Check for macros, they are treated specially.
-(defun step-macro-p (form)
+(defun step-macro-form-p (form environment)
   (and (consp form)
        (symbolp (car form))
-       (fboundp (car form))
-       (eq (car-safe (symbol-function (car form))) 'macro)))
+       (sys:macro-in-environment-p (car form) environment)))
 
 (defun step-auto-on (&optional (mode 'no-print))
   (setq *step-auto* mode))
@@ -79,13 +76,13 @@ Type the Help key when you are in the stepper for a list of stepper commands."
   (setq *step-auto* nil))
 
 ;;; Print a form, suitably indented, marked, and truncated to one line.
-(defun step-print-form (form level apply-p)
-  (cli:terpri)
+(defun step-print-form (form level apply-p environment)
+  (terpri)
   (do ((n (* 2 level) (1- n)))
       ((= n 0))
     (write-char #\sp))
   (write-char (cond (apply-p #\)
-		    ((step-macro-p form) #\)
+		    ((step-macro-form-p form environment) #\)
 		    (t #\)))
   (write-char #\sp)
   (if apply-p
@@ -97,53 +94,53 @@ Type the Help key when you are in the stepper for a list of stepper commands."
 ;;; Print whatever is necessary, read a command, set special variables
 ;;; and return how to proceed:  eval (just eval), evalhook (recurse), more options later.
 ;;; If calling for eval, *step-values* is nil, otherwise calling for return.
-(defun step-cmdr (form values print-form-p &optional apply-p)
+(defun step-cmdr (form values print-form-p apply-p environment)
   (declare (special apply-p))
   (prog (ch ch1
 	 (*standard-input* *query-io*)
 	 (*standard-output* *query-io*))
-	(if step-auto
-	    (if (eq step-auto 'no-print)
+	(if *step-auto*
+	    (if (eq *step-auto* 'no-print)
 		(progn (setq *step-max* (1+ *step-level*)) (return 'evalhook))))
 	(and print-form-p
-	     (step-print-form form *step-level* apply-p))
+	     (step-print-form form *step-level* apply-p environment))
      pv (do ((l values (cdr l))
 	     (ch #\ #\))
 	    ((null l))
 	  (terpri-if-insufficient-space 80.)
 	  (write-char #\sp) (write-char ch) (write-char #\sp)
 	  (print-truncated (car l) 98.))	;Several windows lose if this is 100.
-     rd (setq ch1 (if step-auto #\c-N (read-char *standard-input*)))
+     rd (setq ch1 (if *step-auto* #\c-N (read-char *standard-input*)))
 	(setq ch (char-upcase ch1))
-	(cond ((eq ch #\call) (break "for CALL key."))
-	      ((eq ch #\sp) (setq *step-max* *step-level*) (return 'eval))
-	      ((eq ch #\c-U) (setq *step-max* (max 0 (1- *step-level*))) (return 'eval))
-	      ((eq ch #\c-N) (setq *step-max* (1+ *step-level*)) (return 'evalhook))
-	      ((eq ch #\c-X) (setq *step-max* -1) (return 'eval))
-	      ((and (eq ch #\c-A)
+	(cond ((= ch #\call) (break "from stepper."))
+	      ((= ch #\sp) (setq *step-max* *step-level*) (return 'eval))
+	      ((= ch #\c-U) (setq *step-max* (max 0 (1- *step-level*))) (return 'eval))
+	      ((= ch #\c-N) (setq *step-max* (1+ *step-level*)) (return 'evalhook))
+	      ((= ch #\c-X) (setq *step-max* -1) (return 'eval))
+	      ((and (= ch #\c-A)
 		    (not apply-p))
 	       (setq *step-max* (1+ *step-level*)) (return 'applyhook))
-	      ((eq ch #\c-B)
+	      ((= ch #\c-B)
 	       (break)
 	       (setq ch 0)
-	       (setf (cli:aref *step-array* *step-level*) *step-form*)
-	       (setf (cli:aref *step-apply-p-array* *step-level*) apply-p)
+	       (setf (aref *step-array* *step-level*) *step-form*)
+	       (setf (aref *step-apply-p-array* *step-level*) apply-p)
 	       (go redis1))
-	      ((eq ch #\c-E)
+	      ((= ch #\c-E)
 	       (ed)
 	       (setq ch 10.)
 	       (go redisplay))
-	      ((memq ch '(#\Clear-Screen #\c-L))
+	      ((or (= ch #\Clear-Screen) (= ch #\c-L))
 	       (setq ch 10.)
 	       (go redisplay))
-	      ((eq ch #\m-L)
+	      ((= ch #\m-L)
 	       (setq ch 10.)
 	       (go redis1))
-	      ((eq ch #\c-m-L)
+	      ((= ch #\c-m-L)
 	       (setq ch *step-level*)
 	       (go redisplay))
-	      ((or (eq ch #\c-G) (eq ch #\c-T))
-	       (setq ch (if (eq ch #\c-G) #'grind-top-level #'print))
+	      ((or (= ch #\c-G) (= ch #\c-T))
+	       (setq ch (if (= ch #\c-G) #'grind-top-level #'print))
 	       (cond ((null values) (funcall ch form))
 		     ((do ((l values (cdr l)))
 			  ((null l))
@@ -151,7 +148,7 @@ Type the Help key when you are in the stepper for a list of stepper commands."
 	       (go rd))
 	      ((= (char-code ch) (char-code #\HELP))
 	       (sys:with-help-stream (help-str :label "Stepper help")
-		 (cli:terpri help-str)
+		 (terpri help-str)
 		 (princ
 		   (if (null *step-values*)
 		       (if apply-p
@@ -162,7 +159,7 @@ Type the Help key when you are in the stepper for a list of stepper commands."
 and are about to return the above values."
 			   "You have evaluated a form and are about to return the above values."))
 		   help-str)
-		 (cli:terpri help-str)
+		 (terpri help-str)
 		 (princ
 "Commands are single characters, usually control, which don't echo:
 
@@ -197,7 +194,7 @@ Magic flags preceding output:
 	       ;; No need to redisplay if with-help-stream used a separate window.
 	       (if (typep *terminal-io* 'tv:sheet) (go rd))
 	       (go redis1))
-	      ((zerop (char-bits char))
+	      ((zerop (char-bits ch1))
 	       (unread-char ch1)
 	       (catch-error-restart ((sys:abort error) "Back to STEP command level.")
 		 (print
@@ -209,7 +206,7 @@ Magic flags preceding output:
 		       (when (eq flag ':full-rubout)
 			 (go rd))
 		       sexp))))
-	       (cli:terpri)
+	       (terpri)
 	       (setq ch 0)
 	       (go redis1))
 	      (t
@@ -220,7 +217,7 @@ Magic flags preceding output:
      redis1 
 	(do ((i (max 0 (- *step-level* ch)) (1+ i)))
 	    ((> i *step-level*))
-	  (step-print-form (cli:aref *step-array* i) i (cli:aref *step-apply-p-array* i)))
+	  (step-print-form (aref *step-array* i) i (aref *step-apply-p-array* i) environment))
 	(go pv)))
 
 ;;; This is evalhooked in in place of EVAL.  Works by calling step-cmdr
@@ -236,16 +233,16 @@ Magic flags preceding output:
 	  (when ( *step-level* (array-length *step-array*))
 	    (adjust-array-size *step-array* (+ #o100 *step-level*))
 	    (adjust-array-size *step-apply-p-array* (+ #o100 *step-level*)))
-       mc (setf (cli:aref *step-array* *step-level*) *step-form*)
-	  (setf (cli:aref *step-apply-p-array* *step-level*) nil)
+       mc (setf (aref *step-array* *step-level*) *step-form*)
+	  (setf (aref *step-apply-p-array* *step-level*) nil)
 	  (cond ((atom *step-form*)
 		 (setq *step-values* (list (eval1 *step-form*)))
 		 (setq tem 'atom)
 		 (go rl))
 		(( *step-level* *step-max*)
-		 (setq tem (step-cmdr *step-form* nil t)))
+		 (setq tem (step-cmdr *step-form* nil t nil environment)))
 		(t (setq tem 'eval)))
-	  (cond ((step-macro-p *step-form*)
+	  (cond ((step-macro-form-p *step-form* environment)
 		 (setq *step-form* (macroexpand-1 *step-form* environment))
 		 (go mc))
 		((eq tem 'eval)
@@ -260,7 +257,7 @@ Magic flags preceding output:
 		((ferror nil "Unknown function ~S" tem)))
        rl (setq *step-value* (setq val (car *step-values*)))
 	  (if ( *step-level* *step-max*)
-	      (setq tem (step-cmdr *step-form* *step-values* (neq tem 'eval)))
+	      (setq tem (step-cmdr *step-form* *step-values* (neq tem 'eval) nil environment))
 	    (setq tem 'eval))
 	  (and (neq *step-value* val) (return-from step-evalhook *step-value*))
        rt (if (null (cdr *step-values*))
@@ -279,10 +276,10 @@ Magic flags preceding output:
 	  (when ( *step-level* (array-length *step-array*))
 	    (adjust-array-size *step-array* (+ #o100 *step-level*))
 	    (adjust-array-size *step-apply-p-array* (+ #o100 *step-level*)))
-       mc (setf (cli:aref *step-array* *step-level*) *step-form*)
-	  (setf (cli:aref *step-apply-p-array* *step-level*) t)
+       mc (setf (aref *step-array* *step-level*) *step-form*)
+	  (setf (aref *step-apply-p-array* *step-level*) t)
 	  (if ( *step-level* *step-max*)
-	      (setq tem (step-cmdr *step-form* nil t t))
+	      (setq tem (step-cmdr *step-form* nil t t environment))
 	      (setq tem 'eval))
 	  (cond ((eq tem 'eval)
 		 (setq *step-values*
@@ -295,7 +292,7 @@ Magic flags preceding output:
 		((ferror nil "Unknown function ~S" tem)))
        rl (setq *step-value* (setq val (car *step-values*)))
 	  (if ( *step-level* *step-max*)
-	      (setq tem (step-cmdr *step-form* *step-values* (neq tem 'eval) t))
+	      (setq tem (step-cmdr *step-form* *step-values* (neq tem 'eval) t environment))
 	      (setq tem 'eval))
 	  (when (neq *step-value* val)
 	    (return-from step-applyhook *step-value*))
@@ -312,7 +309,7 @@ Magic flags preceding output:
 (defun terpri-if-insufficient-space (percent-width)
   (let ((x (truncate (* percent-width (send *standard-output* :inside-size)) 100.)))
     (and ( (send *standard-output* :read-cursorpos :pixel) x)
-	 (cli:terpri))))
+	 (terpri))))
 
 (defun print-truncated (sexp percent-width)
   (let ((print-truncated (truncate (* percent-width (send *standard-output* :inside-size))
