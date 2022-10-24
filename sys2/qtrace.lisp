@@ -216,7 +216,7 @@ With nno args returns a list of all funnction-specs traced."
  (WHEN EXTRAS-2
    (PRINC "  ////" *TRACE-OUTPUT*)
    (DOLIST (E EXTRAS-2)
-     (WRITE-CHAR #/SP *TRACE-OUTPUT*))
+     (WRITE-CHAR #/SP *TRACE-OUTPUT*)
      (PRIN1 (EVAL E) *TRACE-OUTPUT*)))
  (PRINC ")" *TRACE-OUTPUT*))
 
