@@ -20,18 +20,22 @@ which points to a cell containing some more of the alist."
 		 (LOCF (COMTAB-EXTENDED-COMMANDS CI))))))
   (COMTAB-EXTENDED-COMMANDS COMTAB))
 
-(DEFUN COMMAND-LOOKUP (CHAR COMTAB &OPTIONAL NO-INDIRECTION-P)
+;; not patched in 99 -- see 99.12
+(DEFUN COMMAND-LOOKUP (CHAR COMTAB &OPTIONAL NO-ALIASES NO-INDIRECTION)
   "Return the command in COMTAB has for character CHAR.
-NO-INDIRECTION-P means do not follow indirections stored
-in elements of COMTAB; return the list instead of looking
-at the character the list specifies.
+NO-ALIASES means do not follow aliases (such as #\c-h-A => #\c-sh-A)
+ Instead, return a list of the CHAR-BITS and the CHAR-CODE of the character
+ for which it is an alias.
+NO-INDIRECTION means only for a command associated with CHAR in COMTAB itself;
+ ie the COMTAB-INDIRECT-TO of COMTAB is not followed.
 The second value is the comtab the command was found in.
 This will be COMTAB or a comtab that COMTAB indirects to."
   (DECLARE (VALUES COMMAND COMTAB))
-  (IF (CHARACTERP CHAR) (SETQ CHAR (CHAR-INT CHAR)))
-  (DO ((CTB COMTAB) (CH CHAR)
-       (KEYBOARD-ARRAY) (COMMAND))
-      (NIL)
+;character lossage
+  (IF (FIXNUMP CHAR) (SETQ CHAR (INT-CHAR CHAR)))
+  (DO ((CTB COMTAB (COMTAB-INDIRECT-TO CTB))
+       (CH CHAR) KEYBOARD-ARRAY COMMAND)
+      ((NULL CTB) NIL)
     (SETQ KEYBOARD-ARRAY (COMTAB-KEYBOARD-ARRAY CTB)
 	  COMMAND (COND ((NOT (ARRAYP KEYBOARD-ARRAY))
 			 (CDR (ASSQ CH KEYBOARD-ARRAY)))
@@ -43,12 +47,13 @@ This will be COMTAB or a comtab that COMTAB indirects to."
 				   (CHAR-BITS CH))))
 			(T
 			 (AREF KEYBOARD-ARRAY (CHAR-CODE CH) (CHAR-BITS CH)))))
-    (IF (OR (NOT (CONSP COMMAND)) NO-INDIRECTION-P)
-	(AND (OR COMMAND (NULL (SETQ CTB (COMTAB-INDIRECT-TO CTB))))
-	     (RETURN COMMAND CTB))
-      (SETQ CTB COMTAB
-	    CH (CHAR-INT (MAKE-CHAR (SECOND COMMAND) (FIRST COMMAND)))))))
+    (COND ((AND (CONSP COMMAND) (NOT NO-ALIASES))
+	   (RETURN (COMMAND-LOOKUP (MAKE-CHAR (CADR COMMAND) (CAR COMMAND))
+				   CTB NO-ALIASES NO-INDIRECTION)))
+	  (COMMAND (RETURN (VALUES COMMAND CTB)))
+	  (NO-INDIRECTION (RETURN NIL)))))
 
+;; not patched in 99 -- see 99.12
 (DEFUN COMMAND-STORE (COMMAND CHAR COMTAB &AUX KEYBOARD-ARRAY)
   "Store COMMAND into COMTAB for character CHAR."
 ;character lossage
@@ -85,13 +90,13 @@ It is used only in error reporting."
 ;character lossage
   (IF (NUMBERP CHAR) (SETQ CHAR (INT-CHAR CHAR)))
   (LET (HOOK-SUCCESS)
-    (*CATCH 'COMMAND-EXECUTE
+    (CATCH 'COMMAND-EXECUTE
       (DOLIST (HOOK HOOK-LIST)
 	(FUNCALL HOOK CHAR))
       (SETQ HOOK-SUCCESS T))
     (IF HOOK-SUCCESS
 	(COND ((MEMQ COMMAND '(NIL :UNDEFINED))
-	       (SEND *STANDARD-INPUT* ':CLEAR-INPUT)	;More randomness may follow
+	       (SEND *STANDARD-INPUT* :CLEAR-INPUT)	;More randomness may follow
 	       (BARF "~:[~:@C ~;~*~]~:@C is not a defined key.~A"
 		     (NOT PREFIX-CHAR) PREFIX-CHAR CHAR
 		     (OR (CDR (ASSQ CHAR *ILLEGAL-COMMAND-BARF-STRING-ALIST*)) "")))
@@ -242,7 +247,7 @@ However, commands that are already defined are not clobbered."
     ;; Indirect things like Tab to things like control-I
     (DOLIST (CHAR '(#/CR #/LF #/TAB #/BS #/FF #/VT))
       (WHEN (NULL (AREF ARRAY CHAR 0))
-	(SETF (AREF ARRAY CHAR 0)) (LIST 1 (- CHAR #o100))))
+	(SETF (AREF ARRAY CHAR 0) (LIST 1 (- CHAR #o100)))))
     ;; Indirect all meta things through the corresponding non-meta thing
     (DO ((I 2 (1+ I))) ((= I 4))
       (DOTIMES (CHAR (ARRAY-DIMENSION ARRAY 0))
@@ -309,7 +314,7 @@ COMMAND-LIST's elements are symbols (commands) or conses whose cars are commands
      (LET ((I (STRING-MATCH "MOUSE" NAME)))
        (IF (NULL I)
 	   ;; The name does not start with MOUSE.
-	   (LET ((CHAR1 (CLI:AREF NAME 0)))
+	   (LET ((CHAR1 (CHAR NAME 0)))
 	     (LET ((X (ASSQ CHAR1 '((#/ . 0) (#/ . 1) (#/ . 2) (#/ . 3)))))
 	       (IF (NULL X)
 		   CHAR1
@@ -343,7 +348,7 @@ COMMAND-LIST's elements are symbols (commands) or conses whose cars are commands
 (DEFUN FORMAT-ARGUMENT (ARG-P ARG)
   "Return a string representing numeric argument status according to ARG-P and ARG.
 ARG-P should be a value of *NUMERIC-ARG-P* and ARG a value of *NUMERIC-ARG*."
-  (SELECTQ ARG-P
+  (CASE ARG-P
     (NIL "")
     (:SIGN (IF (MINUSP ARG) "-" "+"))
     (:DIGITS (FORMAT NIL "~D" ARG))
@@ -375,9 +380,7 @@ The value is a cons of a string (command name) and symbol (the command itself)."
 				    #'(LAMBDA (X)
 					(PRINT-DOC ':FULL (CDR X)))))
 
-(DEFCOM COM-ANY-EXTENDED-COMMAND "Execute any loaded zwei command, even if not assigned.
-This command allows you to use extended commands that are not
-present in the current comtab." ()
+(DEFCOM COM-ANY-EXTENDED-COMMAND DOCUMENT-ANY-EXTENDED-COMMAND ()
   (LET ((FROM-META-X (EQ *MINI-BUFFER-COMMAND-IN-PROGRESS* 'COM-EXTENDED-COMMAND))
 	(INITIAL-COMPLETE NIL))
     (WHEN FROM-META-X
@@ -399,13 +402,24 @@ present in the current comtab." ()
 			 (FORMAT-ARGUMENT *NUMERIC-ARG-P* *NUMERIC-ARG*))
 		 INITIAL-COMPLETE)))
       (COND (FROM-META-X
-	     (*THROW 'RETURN-FROM-COMMAND-LOOP ANS))
+	     (THROW 'RETURN-FROM-COMMAND-LOOP ANS))
 	    ((EQUAL ANS "")
 	     (BEEP)
 	     DIS-NONE)
 	    (T
 	     (LET ((*CURRENT-COMMAND* (CDR ANS)))
 	       (FUNCALL *CURRENT-COMMAND*)))))))
+
+(DEFUN DOCUMENT-ANY-EXTENDED-COMMAND (COMMAND CHAR OP)
+  (COND ((EQ OP ':NAME) "a prefix for any Zmacs extended commands")
+	((MEMQ OP '(:FULL :SHORT))
+	 (FORMAT T "May be used to access commands not present in the current comtab~%")
+	 (FORMAT T "Completing reads and executes a command from the mini buffer.~%")
+	 (WHEN (EQ OP ':FULL)
+	   (SETQ COMMAND (GET-ANY-EXTENDED-COMMAND "Type a command to document:"))
+	   (UNLESS (EQUAL COMMAND "")
+	     (FORMAT T "~:C ~A is implemented by ~S:~%" CHAR (CAR COMMAND) (CDR COMMAND))
+	     (PRINT-DOC OP (CDR COMMAND) CHAR))))))
 
 (DEFUN GET-ANY-EXTENDED-COMMAND (PROMPT &OPTIONAL INITIAL-COMPLETE)
   "Read an extended command name from the mini buffer, printing PROMPT.
@@ -427,7 +441,7 @@ THE-COMTAB is used to look up the subcommands of the prefix command."
 (DEFUN MAKE-EXTENDED-COMMAND-INTERNAL (&AUX (PREFIX-CHAR *LAST-COMMAND-CHAR*))
   (DECLARE (SPECIAL COMTAB))
   (WITHOUT-IO-BUFFER-OUTPUT-FUNCTION
-    (LET ((CHAR (INPUT-WITH-PROMPTS *STANDARD-INPUT* ':MOUSE-OR-KBD-TYI)))
+    (LET ((CHAR (INPUT-WITH-PROMPTS *STANDARD-INPUT* :MOUSE-OR-KBD-TYI)))
       (AND (TV:CHAR-MOUSE-P CHAR) (BARF))
       (SETQ *LAST-COMMAND-CHAR* CHAR)))
   (SETQ *CURRENT-COMMAND* (COMMAND-LOOKUP *LAST-COMMAND-CHAR* COMTAB))
@@ -450,7 +464,7 @@ THE-COMTAB is used to look up the subcommands of the prefix command."
 (DEFCONST PROMPT-TIMEOUT 40.
   "Time in 60'ths to wait before deciding to start displaying argument prompts.")
 
-(DEFUN MAKE-PROMPT-ARRAY () (MAKE-ARRAY 5 ':LEADER-LIST '(0 NIL)))
+(DEFUN MAKE-PROMPT-ARRAY () (MAKE-ARRAY 5 :LEADER-LIST '(0 NIL)))
 
 (DEFUN CLEAR-PROMPTS ()
   "Get rid of any argument prompts, and say that we are not printing them."
@@ -481,10 +495,10 @@ or for processing a ? which is ignored except for printing help."
   "Start displaying argument prompts if no input arrives for a while."
   (IF (PROMPTS-PRINTED PROMPT-ARRAY)
       NIL
-    (SEND *STANDARD-INPUT* ':WAIT-FOR-INPUT-WITH-TIMEOUT PROMPT-TIMEOUT)
-    (COND ((NOT (SEND *STANDARD-INPUT* ':LISTEN))
-	   (SETF (PROMPTS-PRINTED PROMPT-ARRAY) T)
-	   (PRINT-PROMPTS)))))
+    (SEND *STANDARD-INPUT* :WAIT-FOR-INPUT-WITH-TIMEOUT PROMPT-TIMEOUT)
+    (UNLESS (SEND *STANDARD-INPUT* :LISTEN)
+      (SETF (PROMPTS-PRINTED PROMPT-ARRAY) T)
+      (PRINT-PROMPTS))))
 
 (DEFUN ALWAYS-DISPLAY-PROMPTS ()
   "Unconditionally start displaying the prompts."
@@ -494,13 +508,13 @@ or for processing a ? which is ignored except for printing help."
 (DEFUN PRINT-PROMPTS ()
   "Display all the argument prompts that are in PROMPT-ARRAY."
   (LET ((LEN (ARRAY-ACTIVE-LENGTH PROMPT-ARRAY)))
-    (SEND *QUERY-IO* ':CLEAR-SCREEN)
-    (SEND *QUERY-IO* ':FRESH-LINE)
+    (SEND *QUERY-IO* :CLEAR-WINDOW)
+    (SEND *QUERY-IO* :FRESH-LINE)
     (DOTIMES (I LEN)
       (TYPEIN-LINE-CHAR-OR-STRING (AREF PROMPT-ARRAY I))
       (OR (STRINGP (AREF PROMPT-ARRAY I))
 	  (TYPEIN-LINE-CHAR-OR-STRING " ")))
-    (SEND *QUERY-IO* ':MAKE-COMPLETE)))
+    (SEND *QUERY-IO* :MAKE-COMPLETE)))
 
 (DEFUN INPUT-WITH-PROMPTS (FUNCTION &REST ARGS &AUX CH)
   "Read an input character, maintaining and possibly printing the argument prompts.
@@ -512,7 +526,7 @@ The character read is added to the prompts, and printed if appropriate."
       (TYPEIN-LINE-ACTIVATE
 	(SETQ CH (APPLY FUNCTION ARGS)))
     (SETQ CH (APPLY FUNCTION ARGS)))
-  (OR (CONSP CH) (ADD-PROMPT CH))
+  (UNLESS (CONSP CH) (ADD-PROMPT CH))
   CH)
 
 (DEFUN GET-PREFIX-COMMAND-COMTAB (X)
@@ -538,12 +552,11 @@ The character read is added to the prompts, and printed if appropriate."
     #'(LAMBDA ()
 	(LET ((MAC (GET SYMBOL 'MACRO-STREAM-MACRO)))
 	  (OR MAC (BARF "The macro ~A is not defined." SYMBOL))
-	  (OR (MEMQ ':MACRO-EXECUTE (SEND *STANDARD-INPUT* ':WHICH-OPERATIONS))
+	  (OR (MEMQ :MACRO-EXECUTE (SEND *STANDARD-INPUT* :WHICH-OPERATIONS))
 	      (BARF "The input stream does not support macros."))
 	  (AND MOVE-TO-MOUSE-P
 	       (MOVE-BP (POINT) (MOUSE-BP *WINDOW* *MOUSE-X* *MOUSE-Y*)))
-	  (SEND *STANDARD-INPUT* ':MACRO-EXECUTE MAC
-		(AND *NUMERIC-ARG-P* *NUMERIC-ARG*))
+	  (SEND *STANDARD-INPUT* :MACRO-EXECUTE MAC (AND *NUMERIC-ARG-P* *NUMERIC-ARG*))
 	  DIS-NONE))))
 
 (DEFUN MOUSE-MACRO-COMMAND-LAST-COMMAND (COMMAND)
@@ -562,7 +575,7 @@ The character read is added to the prompts, and printed if appropriate."
       (COMMAND-LOOKUP CHAR COMTAB)
     (EQ COMTAB-FOUND-IN COMTAB-FOUND-IN-COMPARISON)))
 
-;;; bug -- this does not hack mouse commands yet. foo.
+;;>> bug -- this does not hack mouse commands yet. foo.
 (DEFUN KEY-FOR-COMMAND (COMMAND &OPTIONAL (COMTAB *COMTAB*)
 			STARTING-CHAR STARTING-COMTAB
 			SUGGESTED-CHAR &AUX TEM)
@@ -643,8 +656,8 @@ by suggesting the place where the command standardly goes."
 		   ((AND (EQ THIS-COM 'COM-DOCUMENTATION)
 			 (IN-THIS-COMTAB-P COMTAB (MAKE-CHAR CH BITS) CTB)
 			 (SETQ TEM (RASSQ COMMAND *COM-DOCUMENTATION-ALIST*)))
+		    (SETQ CH (MAKE-CHAR CH BITS))
 		    (RETURN-FROM FOUND
-		      (SETQ CH (MAKE-CHAR CH BITS))
 		      (FORMAT NIL "~:@C ~:@C" CH (CAR TEM))
 		      CH
 		      CTB))
@@ -654,8 +667,8 @@ by suggesting the place where the command standardly goes."
 			       (KEY-FOR-COMMAND COMMAND
 						(GET-PREFIX-COMMAND-COMTAB THIS-COM)))
 			 (IN-THIS-COMTAB-P COMTAB (MAKE-CHAR CH BITS) CTB))
+		    (SETQ CH (MAKE-CHAR CH BITS))
 		    (RETURN-FROM FOUND
-		      (SETQ CH (MAKE-CHAR CH BITS))
 		      (FORMAT NIL "~:@C ~A" CH TEM)
 		      CH
 		      CTB))))))))))
@@ -671,10 +684,12 @@ This may be CHAR itself, if it is not indirect."
 ;;;; The command loop.
 
 (DEFMETHOD (DISPLAYER :AROUND :EDIT) (CONT MT ARGS &OPTIONAL EDITOR-CLOSURE-1 &REST IGNORE)
-  MT	; Let the continuation find its own mapping table.
-  	; It saves hair, and the time is insignificant here.
+  ;; Let the continuation find its own mapping table.
+  ;; It saves hair, and the time is insignificant here.
+  (DECLARE (IGNORE MT))
   (APPLY (OR EDITOR-CLOSURE-1 EDITOR-CLOSURE) CONT ARGS))
 
+;character lossage
 (DEFCONST EDITOR-INTERCEPTED-CHARACTERS
 	  '((#/ABORT EDITOR-INTERCEPT-ABORT)
 	    (#/M-ABORT EDITOR-INTERCEPT-ABORT-ALL)
@@ -692,7 +707,7 @@ This may be CHAR itself, if it is not indirect."
 	TYPEOUT-SELECTED
 	(PROGN
 	  ;; Don't flush the typeout window if this is a recursive Break.
-	  (SEND *STANDARD-OUTPUT* ':SEND-IF-HANDLES ':MAKE-COMPLETE)
+	  (SEND *STANDARD-OUTPUT* :SEND-IF-HANDLES :MAKE-COMPLETE)
 	  (REDISPLAY-ALL-WINDOWS))))
   (VALUES CHAR T))
 
@@ -706,30 +721,30 @@ This may be CHAR itself, if it is not indirect."
     (OR *INSIDE-BREAK*
 	TYPEOUT-SELECTED
 	(PROGN
-	  (SEND *STANDARD-OUTPUT* ':MAKE-COMPLETE)
+	  (SEND *STANDARD-OUTPUT* :MAKE-COMPLETE)
 	  (REDISPLAY-ALL-WINDOWS))))
   (VALUES CHAR T))
 
 (DEFUN EDITOR-INTERCEPT-ABORT-ALL (CHAR &REST IGNORE)
-  (SEND *QUERY-IO* ':SEND-IF-HANDLES ':MAKE-COMPLETE)
+  (SEND *QUERY-IO* :SEND-IF-HANDLES :MAKE-COMPLETE)
   (TV:KBD-INTERCEPT-ABORT-ALL CHAR))
 
 (DEFUN EDITOR-INTERCEPT-ABORT (CHAR &REST IGNORE)
-  (SEND *QUERY-IO* ':SEND-IF-HANDLES ':MAKE-COMPLETE)
+  (SEND *QUERY-IO* :SEND-IF-HANDLES :MAKE-COMPLETE)
   (TV:KBD-INTERCEPT-ABORT CHAR))
 
 ;;; This is the function that does the actual work
 (DEFMETHOD (WINDOW :EDIT) (&OPTIONAL IGNORE (*COMTAB* *COMTAB*)
 			   (*MODE-LINE-LIST* *MODE-LINE-LIST*)
-			   &OPTIONAL (TOP-LEVEL-P (SEND SELF ':TOP-LEVEL-P))
+			   &OPTIONAL (TOP-LEVEL-P (SEND SELF :TOP-LEVEL-P))
 			   &AUX
 			   (PROMPT-ARRAY (MAKE-PROMPT-ARRAY))
 			   (TV:KBD-INTERCEPTED-CHARACTERS EDITOR-INTERCEPTED-CHARACTERS))
-  (TV:PROCESS-TYPEAHEAD (SEND SELF ':IO-BUFFER)
+  (TV:PROCESS-TYPEAHEAD (SEND SELF :IO-BUFFER)
 			#'(LAMBDA (CH)
 			    (COND ((ATOM CH) CH)
 				  ((EQ (CAR CH) 'SELECT-WINDOW)
-				   (APPLY #'PROCESS-SPECIAL-COMMAND CH)
+				   (LEXPR-SEND SELF :PROCESS-SPECIAL-COMMAND CH)
 				   NIL)
 				  ((MEMQ (CAR CH) '(CONFIGURATION-CHANGED REDISPLAY))
 				   NIL)
@@ -737,22 +752,22 @@ This may be CHAR itself, if it is not indirect."
   (UNWIND-PROTECT
     (PROGN
       (SEND (WINDOW-SHEET *WINDOW*)	;Don't expose yet, but on first redisplay
-	    ':START-DELAYED-SELECT)
+	    :START-DELAYED-SELECT)
       (SETQ *WINDOW-LIST* (FRAME-EXPOSED-WINDOWS))
       (REDISPLAY-MODE-LINE)		;Do this once since may change size
       ;; Flush any typeout hiding this window.
-      (IF (SEND (WINDOW-SHEET *WINDOW*) ':EXPOSED-P)
+      (IF (SEND (WINDOW-SHEET *WINDOW*) :EXPOSED-P)
 	  (PREPARE-WINDOW-FOR-REDISPLAY *WINDOW*))
-      (*CATCH 'RETURN-FROM-COMMAND-LOOP
-	(*CATCH (IF (EQ TOP-LEVEL-P T) 'EXIT-TOP-LEVEL 'EXIT-CONTROL-R)
+      (CATCH 'RETURN-FROM-COMMAND-LOOP
+	(CATCH (IF (EQ TOP-LEVEL-P T) 'EXIT-TOP-LEVEL 'EXIT-CONTROL-R)
 	  (DO-FOREVER
 	    (UNLESS
 	      (CATCH-ERROR-RESTART ((SYS:ABORT ERROR)
 				    (IF TOP-LEVEL-P
 					"Return to top level editor command loop."
 				      "Return to editor command loop."))
-		(*CATCH 'ZWEI-COMMAND-LOOP
-		  (*CATCH (IF (EQ TOP-LEVEL-P T) 'TOP-LEVEL 'DUMMY-TAG)
+		(CATCH 'ZWEI-COMMAND-LOOP
+		  (CATCH (IF (EQ TOP-LEVEL-P T) 'TOP-LEVEL 'DUMMY-TAG)
 		    (PROG (CH)
 			  (SETQ *LAST-COMMAND-TYPE* *CURRENT-COMMAND-TYPE*
 				*CURRENT-COMMAND-TYPE* NIL
@@ -763,18 +778,18 @@ This may be CHAR itself, if it is not indirect."
 				*MINI-BUFFER-COMMAND* NIL)
 			  (CLEAR-PROMPTS)
 			  (REDISPLAY-ALL-WINDOWS)
-			  (SEND *TYPEIN-WINDOW* ':COMMAND-LOOP-REDISPLAY)
+			  (SEND *TYPEIN-WINDOW* :COMMAND-LOOP-REDISPLAY)
 			  (SETQ *CENTERING-FRACTION* *CENTER-FRACTION*)
 		       UNREAL-COMMAND		;arguments loop back here
 			  (LET ((*EDITOR-IDLE* TOP-LEVEL-P))
 			    (WITHOUT-IO-BUFFER-OUTPUT-FUNCTION
-			      (SETQ CH (INPUT-WITH-PROMPTS STANDARD-INPUT ':ANY-TYI))))
+			      (SETQ CH (INPUT-WITH-PROMPTS STANDARD-INPUT :ANY-TYI))))
 			  (TYPECASE CH
 			    (NULL		;If EOF, return
 			     (RETURN NIL))
 			    (CONS		;Handle mouse, etc
 			     (SETQ *LAST-COMMAND-CHAR* CH)
-			     (COND ((NOT (APPLY 'PROCESS-SPECIAL-COMMAND CH))
+			     (COND ((NOT (LEXPR-SEND SELF :PROCESS-SPECIAL-COMMAND CH))
 				    ;; Here to NOT flush typeout!
 				    ;; First redisplay any windows not covered by typeout.
 				    (REDISPLAY-ALL-WINDOWS NIL NIL)
@@ -785,11 +800,11 @@ This may be CHAR itself, if it is not indirect."
 				    ;; Aside from that, we do the same redisplay-related
 				    ;; things that real commands do.
 				    (CHECK-FOR-TYPEOUT-WINDOW-TYPEOUT T)
-				    (SEND *TYPEOUT-WINDOW* ':MAKE-COMPLETE)
+				    (SEND *TYPEOUT-WINDOW* :MAKE-COMPLETE)
 				    (REDISPLAY-ALL-WINDOWS)
 				    (GO UNREAL-COMMAND))))
 			    ((OR NUMBER CHARACTER)	;Keyboard or mouse character
-			     (WHEN (EQ ':ARGUMENT (PROCESS-COMMAND-CHAR CH))
+			     (WHEN (EQ :ARGUMENT (SEND SELF :PROCESS-COMMAND-CHAR CH))
 			       (INCF *NUMERIC-ARG-N-DIGITS*)
 			       (REDISPLAY-ALL-WINDOWS NIL NIL)
 			       ;; If there is typeout, the windows under it
@@ -804,13 +819,19 @@ This may be CHAR itself, if it is not indirect."
 			  (LET ((*EDITOR-IDLE* TOP-LEVEL-P))
 			    (CHECK-FOR-TYPEOUT-WINDOW-TYPEOUT))))
 		  T))
-	      (SEND *STANDARD-INPUT* ':SEND-IF-HANDLES ':MACRO-ERROR))
+	      (SEND *STANDARD-INPUT* :SEND-IF-HANDLES :MACRO-ERROR))
 	    ;; If we Z from BREAK or an error, and after every command,
 	    ;; say it is ok to flush the typeout window.
-	    (SEND *TYPEOUT-WINDOW* ':MAKE-COMPLETE)
+	    (SEND *TYPEOUT-WINDOW* :MAKE-COMPLETE)
 	    (WHEN *MINI-BUFFER-COMMAND*
 	      (MINI-BUFFER-RING-PUSH *MINI-BUFFER-COMMAND*))))))
-    (SEND (WINDOW-SHEET *WINDOW*) ':FLUSH-DELAYED-SELECT)))
+    (SEND (WINDOW-SHEET *WINDOW*) :FLUSH-DELAYED-SELECT)))
+
+(DEFMETHOD (WINDOW :PROCESS-COMMAND-CHAR) (CH)
+  (PROCESS-COMMAND-CHAR CH))
+
+(DEFMETHOD (WINDOW :PROCESS-SPECIAL-COMMAND) (&REST ARGS)
+  (APPLY #'PROCESS-SPECIAL-COMMAND ARGS))
 
 (DEFUN PROCESS-COMMAND-CHAR (CH &AUX VALUE LINE INDEX)
   "Process the character CH as an editor command.
@@ -824,7 +845,7 @@ CH should be a keyboard character or mouse character, not a list."
     (MULTIPLE-VALUE (VALUE LINE INDEX)
       (COMMAND-EXECUTE *CURRENT-COMMAND* *LAST-COMMAND-CHAR* NIL *COMMAND-HOOK*))
     ;; This command is creating the argument to a subsequent command.
-    (COND ((EQ VALUE ':ARGUMENT)
+    (COND ((EQ VALUE :ARGUMENT)
 	   VALUE)
 	  (T
 	   ;; If the mark is not being preserved, make it go away.
@@ -857,7 +878,7 @@ CH should be a keyboard character or mouse character, not a list."
   (SCROLL (WINDOW NLINES TYPE)
     (IF (EQ TYPE ':RELATIVE)
 	(RECENTER-WINDOW-RELATIVE WINDOW NLINES)
-	(RECENTER-WINDOW WINDOW ':START
+	(RECENTER-WINDOW WINDOW :START
 			 (FORWARD-LINE (INTERVAL-FIRST-BP (WINDOW-INTERVAL WINDOW))
 				       NLINES T)))
     (UNLESS (EQ WINDOW *WINDOW*)
@@ -871,8 +892,7 @@ CH should be a keyboard character or mouse character, not a list."
 	  (TV:MOUSE-CALL-SYSTEM-MENU))
       (DECF *MOUSE-X* (TV:SHEET-INSIDE-LEFT (WINDOW-SHEET WINDOW)))
       (DECF *MOUSE-Y* (TV:SHEET-INSIDE-TOP (WINDOW-SHEET WINDOW)))
-      (AND (MEMQ ':RECORD (SEND *STANDARD-INPUT* ':WHICH-OPERATIONS))
-	   (SEND *STANDARD-INPUT* ':RECORD CH))
+      (AND (SEND *STANDARD-INPUT* :SEND-IF-HANDLES :RECORD CH))
       (IF *MOUSE-HOOK*
 	  (FUNCALL *MOUSE-HOOK* WINDOW CH *MOUSE-X* *MOUSE-Y*)
 	(IF (NEQ WINDOW *WINDOW*)		;Given in another window,
@@ -890,7 +910,7 @@ CH should be a keyboard character or mouse character, not a list."
      (NOT (APPLY FUNCTION ARGS)))))
 
 (DEFUN UNKNOWN-SPECIAL-COMMAND (TYPE &REST REST)
-  REST						;Not needed
+  (DECLARE (IGNORE REST))			;not needed
   (CERROR T NIL 'UNKNOWN-SPECIAL-COMMAND "~S is not a valid special editor command" TYPE))
 
 (DEFUN TYI-WITH-SCROLLING (&OPTIONAL MOUSE-OR-KBD-TYI-P ANY-TYI-P)
@@ -901,7 +921,7 @@ ANY-TYI-P non-NIL says return anything but scroll commands;
 Otherwise MOUSE-OR-KBD-TYI-P non-NIL says return mouse characters;
 otherwise ignore them."
   (DO-FOREVER
-    (LET ((CH (SEND *STANDARD-INPUT* ':ANY-TYI)))
+    (LET ((CH (SEND *STANDARD-INPUT* :ANY-TYI)))
       (COND ((NUMBERP CH)
 	     (RETURN CH CH))
 	    ((ATOM CH))
@@ -924,39 +944,39 @@ otherwise ignore them."
   "If the typeout window is incomplete, wait until an input character is available.
 WAIT-IF-EXPOSED non-NIL says do so if typeout window is exposed
 even if it is not incomplete."
-  (COND ((SEND *STANDARD-OUTPUT* ':SEND-IF-HANDLES ':NEVER-FLUSH-TYPEOUT))
+  (COND ((SEND *STANDARD-OUTPUT* :SEND-IF-HANDLES :NEVER-FLUSH-TYPEOUT))
 	((IF WAIT-IF-EXPOSED
-	     (SEND *STANDARD-OUTPUT* ':EXPOSED-P)
+	     (SEND *STANDARD-OUTPUT* :EXPOSED-P)
 	   (TYPEOUT-WINDOW-INCOMPLETE-P STANDARD-OUTPUT))
 	 (WITHOUT-IO-BUFFER-OUTPUT-FUNCTION
-	   (DO ((CHAR (SEND *STANDARD-INPUT* ':ANY-TYI) (SEND *STANDARD-INPUT* ':ANY-TYI)))
+	   (DO ((CHAR (SEND *STANDARD-INPUT* :ANY-TYI) (SEND *STANDARD-INPUT* :ANY-TYI)))
 	       ((NOT (AND (CONSP CHAR)
 			  ;; Ignore requests to select current window
 			  (EQ (FIRST CHAR) 'SELECT-WINDOW)
 			  (EQ (SECOND CHAR) *WINDOW*)))
-		(OR (EQ CHAR #/SPACE)
+		(OR (EQ CHAR (CHAR-INT #/SPACE))
 		    ;; If it's not a space, unread it.  That will
 		    ;; prevent immediate redisplay.
-		    (SEND *STANDARD-INPUT* ':UNTYI CHAR))))))))
+		    (SEND *STANDARD-INPUT* :UNTYI CHAR))))))))
 
 (DEFUN CONTROL-R (&AUX (COMTAB *COMTAB*))
   "Do a recursive edit on the same buffer."
   (UNLESS (EQ COMTAB *CONTROL-R-COMTAB*)
     (SET-COMTAB-INDIRECTION *CONTROL-R-COMTAB* COMTAB)
     (SETQ COMTAB *CONTROL-R-COMTAB*))
-  (SEND *WINDOW* ':EDIT NIL COMTAB `("[" ,@*MODE-LINE-LIST* "]") NIL))
+  (SEND *WINDOW* :EDIT NIL COMTAB `("[" ,@*MODE-LINE-LIST* "]") NIL))
 
 (DEFUN RECURSIVE-EDIT (INTERVAL MODE &OPTIONAL POINT
 				     &AUX (WINDOW (CREATE-OVERLYING-WINDOW *WINDOW*)))
   "Do a recursive edit on INTERVAL in MODE, starting at POINT.
 MODE is a string to put in the mode line.
 Uses another ZWEI window which overlies the selected one."
-  (SEND WINDOW ':SET-INTERVAL INTERVAL)
+  (SEND WINDOW :SET-INTERVAL INTERVAL)
   (AND POINT (MOVE-BP (WINDOW-POINT WINDOW) POINT))
   (TEMPORARY-WINDOW-SELECT (WINDOW)
     (BIND-MODE-LINE `("[" ,MODE "]")
       (LET ((*COMTAB* *RECURSIVE-EDIT-COMTAB*))
-	(SEND WINDOW ':EDIT)))))
+	(SEND WINDOW :EDIT)))))
 
 (DEFUN BARF (&OPTIONAL CTL-STRING &REST ARGS &AUX TEM1 TEM2)
   "Report an error to the editor user.  Throws to the command loop.
@@ -966,16 +986,16 @@ Signals the condition ZWEI:BARF, passing along the args to BARF."
 	 (MUST-REDISPLAY *WINDOW* DIS-TEXT)	;May have altered the text before erring
 	 (IF (EH:CONDITION-NAME-HANDLED-P 'BARF)
 	     (MULTIPLE-VALUE (TEM1 TEM2)
-	       (APPLY 'SIGNAL 'BARF CTL-STRING ARGS)))
+	       (APPLY #'SIGNAL 'BARF CTL-STRING ARGS)))
 	 (IF TEM1 TEM2
-	   (AND (SEND *STANDARD-INPUT* ':SEND-IF-HANDLES ':MACRO-ERROR)
+	   (AND (SEND *STANDARD-INPUT* :SEND-IF-HANDLES :MACRO-ERROR)
 		(FORMAT *QUERY-IO* "~&Keyboard macro terminated by error."))
 	   (BEEP NIL *QUERY-IO*)
 	   (WHEN CTL-STRING
-	     (SEND *QUERY-IO* ':FRESH-LINE)
-	     (APPLY 'FORMAT *QUERY-IO* CTL-STRING ARGS))
-	   (*THROW 'ZWEI-COMMAND-LOOP T)))
-	(T (APPLY 'FERROR 'BARF-ERROR CTL-STRING ARGS))))
+	     (SEND *QUERY-IO* :FRESH-LINE)
+	     (APPLY #'FORMAT *QUERY-IO* CTL-STRING ARGS))
+	   (THROW 'ZWEI-COMMAND-LOOP T)))
+	(T (APPLY #'FERROR 'BARF-ERROR CTL-STRING ARGS))))
 
 (DEFSIGNAL BARF-ERROR (FERROR BARF) ()
   "Error signaled when ZWEI:BARF is called and *WINDOW* is NIL (not really inside editor).")
@@ -1381,7 +1401,7 @@ The format of SPECS is like the second arg to SET-COMTAB."
   (DO ((SPECS SPECS (CDR SPECS))
        (SPEC)
        (I 0)
-       (TABLE (MAKE-ARRAY #o400 ':TYPE 'ART-4B)))
+       (TABLE (MAKE-ARRAY #o400 :TYPE 'ART-4B)))
       ((NULL SPECS)
        (IF (NOT (= I #o400))
 	   (FERROR NIL "Wrong number (~S) of elements in the specs" I))
