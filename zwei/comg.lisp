@@ -9,22 +9,28 @@
     (BARF "This stream does not support macros")
     NIL))
 
-(DEFCOM COM-SET-KEY "Install a specified function on a specified key.
-If the key is currently holding a command prefix (like Control-X), it will ask
-you for another character, so that you can redefine Control-X commands.  However,
-with a numeric argument, it will assume you want to redefine Control-X itself,
-and will not ask for another character." ()
+(DEFCOM COM-SET-KEY "Install a specified editor command on a specified character.
+Two-character sequences starting with prefixes such as Control-X are also allowed;
+however, a numeric argument means to regard the prefix character itself as the
+character to be redefined." ()
   (LET ((COMMAND (COMPLETING-READ-FROM-MINI-BUFFER "Command to install" *COMMAND-ALIST*)))
     (UNLESS (LISTP COMMAND) (BARF))
     (INSTALL-COMMAND-INTERNAL (CDR COMMAND))))
 
-(DEFCOM COM-INSTALL-COMMAND "Install a specified function on a specified key.
+(DEFCOM COM-DEFINE-CHARACTER "Install a specified editor command on a specified character.
+Two-character sequences starting with prefixes such as Control-X are also allowed;
+however, a numeric argument means to regard the prefix character itself as the
+character to be redefined." ()
+  (LET ((COMMAND (COMPLETING-READ-FROM-MINI-BUFFER "Command to install" *COMMAND-ALIST*)))
+    (UNLESS (LISTP COMMAND) (BARF))
+    (INSTALL-COMMAND-INTERNAL (CDR COMMAND))))
+
+(DEFCOM COM-INSTALL-COMMAND "Install a specified function on a specified editor command character.
 The name of the function is read from the mini-buffer (the top of the kill ring
 contains the name of the current defun), and a character from the echo area.
-If the key is currently holding a command prefix (like Control-X), it will ask
-you for another character, so that you can redefine Control-X commands.  However,
-with a numeric argument, it will assume you want to redefine Control-X itself,
-and will not ask for another character." ()
+Two-character sequences starting with prefixes such as Control-X are also allowed;
+however, a numeric argument means to regard the prefix character itself as the
+character to be redefined." ()
     (DO (NAME) (NIL)
       (SETQ NAME (READ-FUNCTION-NAME "Name of function to install"
 				     (RELEVANT-FUNCTION-NAME (POINT)) NIL 'ALWAYS-READ))
@@ -46,7 +52,9 @@ and will not ask for another character." ()
 	"Like Install Macro, but moves the mouse to where clicked first." ()
   (COM-INSTALL-MACRO-INTERNAL T))
 
-(DEFCOM COM-DEINSTALL-MACRO "Deinstall a keyboard macro" ()
+(DEFCOM COM-UNDEFINE-CHARACTER "Remove the editor command definition of a character.
+Reads the key to undefine using the echo area.
+Two-character sequences starting with Control-X are also allowed." ()
   (INSTALL-COMMAND-INTERNAL NIL NIL T))
 
 (DEFUN COM-INSTALL-MACRO-INTERNAL (MOUSE-P)
@@ -80,13 +88,23 @@ and will not ask for another character." ()
 		  (NOT *NUMERIC-ARG-P*))
 	     (SETQ COMTAB (SYMEVAL-IN-CLOSURE OLD-COMMAND 'COMTAB)))
 	    ((Y-OR-N-P "Install command ~S on~{ ~:@C~}? " COMMAND (REVERSE KEY-LIST))
-	     (AND DEINSTALL-P
-		  (SETQ COMMAND (MOUSE-MACRO-COMMAND-LAST-COMMAND
-				  (COMMAND-LOOKUP KEY COMTAB))))
-	     (AND REMEMBER-OLD-P
-		  (SET-MOUSE-MACRO-COMMAND-LAST-COMMAND COMMAND
-							(COMMAND-LOOKUP KEY COMTAB)))
-	     (COMMAND-STORE COMMAND KEY COMTAB)
+	     ;; Now we know the key sequence, so decide which comtab to really start from.
+	     
+	     (DO ((COMTAB (SYMEVAL (FQUERY '(:CHOICES (((*ZMACS-COMTAB* "Zmacs") #/Z)
+						       ((*STANDARD-COMTAB* "All Zwei editors") #/A)
+						       ((*COMTAB* "Just this window") #/W #/T))
+						      :TYPE :TYI)
+					   "Define for Zmacs, all editors, or just this window? ")))
+		  (KEYS KEY-LIST (CDR KEY-LIST)))
+		 ((NULL (CDR KEY-LIST))
+		  (AND DEINSTALL-P
+		       (SETQ COMMAND (MOUSE-MACRO-COMMAND-LAST-COMMAND
+				       (COMMAND-LOOKUP KEY COMTAB))))
+		  (AND REMEMBER-OLD-P
+		       (SET-MOUSE-MACRO-COMMAND-LAST-COMMAND COMMAND
+							     (COMMAND-LOOKUP KEY COMTAB)))
+		  (COMMAND-STORE COMMAND KEY COMTAB))
+	       (SETQ COMTAB (SYMEVAL-IN-CLOSURE OLD-COMMAND 'COMTAB)))
 	     (FORMAT *QUERY-IO* "~&Installed.")
 	     (RETURN NIL))
 	    (T (FORMAT *QUERY-IO* "~&Not installed.")
@@ -94,31 +112,31 @@ and will not ask for another character." ()
   DIS-NONE)
 
 ;;; EMACS compatible macro commands
-(DEFCOM COM-START-KBD-MACRO "Begin defining a keyboard macro.
+(DEFCOM COM-START-KEYBOARD-MACRO "Begin defining a keyboard macro.
 A numeric argument means append to the previous keyboard macro." ()
   (ASSURE-MACRO-STREAM :MACRO-PUSH)
   (SEND *STANDARD-INPUT* :MACRO-PUSH (+ 2 *NUMERIC-ARG-N-DIGITS*)
 	(AND *NUMERIC-ARG-P* (SEND *STANDARD-INPUT* :MACRO-PREVIOUS-ARRAY)))
   DIS-NONE)
 
-(DEFCOM COM-END-KBD-MACRO "Terminate the definition of a keyboard macro" ()
+(DEFCOM COM-END-KEYBOARD-MACRO "Terminate the definition of a keyboard macro" ()
   (ASSURE-MACRO-STREAM :MACRO-POP)
   (*CATCH 'MACRO-LOOP				;In case no macro running
      (SEND *STANDARD-INPUT* :MACRO-POP (+ 2 *NUMERIC-ARG-N-DIGITS*)
 	   (AND (NOT (ZEROP *NUMERIC-ARG*)) *NUMERIC-ARG*)))
   DIS-NONE)
 
-(DEFCOM COM-CALL-LAST-KBD-MACRO "Repeat the last keyboard macro" ()
+(DEFCOM COM-CALL-LAST-KEYBOARD-MACRO "Repeat the last keyboard macro" ()
   (ASSURE-MACRO-STREAM :MACRO-EXECUTE)
   (SEND *STANDARD-INPUT* :MACRO-EXECUTE NIL (AND (NOT (ZEROP *NUMERIC-ARG*)) *NUMERIC-ARG*))
   DIS-NONE)
 
-(DEFCOM COM-KBD-MACRO-QUERY "Interactive keyboard macro" ()
+(DEFCOM COM-KEYBOARD-MACRO-QUERY "Interactive keyboard macro" ()
   (ASSURE-MACRO-STREAM :MACRO-QUERY)
   (SEND *STANDARD-INPUT* :MACRO-QUERY (+ 2 *NUMERIC-ARG-N-DIGITS*))
   DIS-NONE)
 
-(DEFCOM COM-VIEW-KBD-MACRO "Typeout the specified keyboard macro.
+(DEFCOM COM-VIEW-KEYBOARD-MACRO "Typeout the specified keyboard macro.
 The macro should be a /"permanent/" macro, that has a name.
 The name of the macro is read from the mini-buffer.
 Just Return means the last one defined, even if temporary." ()
@@ -143,7 +161,7 @@ Just Return means the last one defined, even if temporary." ()
 	      CH)))
   DIS-NONE)
 
-(DEFCOM COM-NAME-LAST-KBD-MACRO "Make the last temporary macro permanent.
+(DEFCOM COM-NAME-LAST-KEYBOARD-MACRO "Make the last temporary macro permanent.
 The new name for the macro is read from the mini-buffer." ()
   (ASSURE-MACRO-STREAM :MACRO-PREVIOUS-ARRAY)
   (LET* ((MAC (OR (SEND *STANDARD-INPUT* :MACRO-PREVIOUS-ARRAY)
@@ -154,12 +172,12 @@ The new name for the macro is read from the mini-buffer." ()
   DIS-NONE)
 
 ;;; Sorting commands
-(DEFCOM COM-SORT-LINES "Sort the region alphabetically by lines" ()
+(DEFCOM COM-SORT-LINES "Sort the region alphabetically by lines." ()
   (REGION (BP1 BP2)
     (SORT-LINES-INTERVAL #'STRING-LESSP BP1 BP2 T))
   DIS-TEXT)
 
-(DEFCOM COM-SORT-PARAGRAPHS "Sort the region alphabetically by paragraphs" ()
+(DEFCOM COM-SORT-PARAGRAPHS "Sort the region alphabetically by paragraphs." ()
   (REGION (BP1 BP2)
     (SORT-INTERVAL-FUNCTIONS #'FORWARD-OVER-BLANK-OR-TEXT-JUSTIFIER-LINES
 			     #'(LAMBDA (BP) (FORWARD-PARAGRAPH BP 1 T))
@@ -168,107 +186,103 @@ The new name for the macro is read from the mini-buffer." ()
 			     BP1 BP2 T))
   DIS-TEXT)
 
-(DEFVAR *MAKE-KBD-MACRO-MOVER-COMTAB*)
+(DEFCOM COM-SORT-PAGES
+  "Sort the region alphabetically by pages.
+A page separator is inserted at the end of the region if there
+was not already one there.  For proper results, you may wish to
+have an empty line at the beginning of the region, to match the
+empty line usually placed at the start of pages." ()
+  (REGION (BP1 BP2)
+    (WITH-UNDO-SAVE ("Sort" BP1 BP2 T)
+      (LET ((NEWDELIM (BEG-LINE-P BP2)))
+	(IF NEWDELIM
+	    (INSERT-MOVING BP2 (CAR *PAGE-DELIMITER-LIST*)))
+	(SORT-INTERVAL-FUNCTIONS #'(LAMBDA (BP)
+				     (LOOP
+				       WHILE
+				       (AND (NOT (BP-= BP (INTERVAL-LAST-BP *INTERVAL*)))
+					    (OR (MEMQ (BP-CHAR BP) *PAGE-DELIMITER-LIST*)
+						(END-LINE-P BP)))
+				       DO
+				       (IBP BP))
+				     BP)
+				 #'(LAMBDA (BP) (FORWARD-PAGE BP 1 T))
+				 #'(LAMBDA (BP) BP)
+				 #'INTERVAL-WITH-SORT-INTERVAL-LESSP
+				 BP1 BP2 T)
+	;; If originally was no separator at the end, make it so again.
+	(IF NEWDELIM
+	    (REGION (BP3 BP4)
+	      (DELETE-INTERVAL (FORWARD-CHAR BP4 -1) BP4))))))
+  DIS-TEXT)
+
+(DEFVAR *MAKE-KEYBOARD-MACRO-MOVER-COMTAB*)
 
 ;;; This returns a function which takes a BP and returns a resultant BP after performing
-;;; the given kbd-macro operation.
-(DEFUN MAKE-KBD-MACRO-MOVER (PROMPT)
+;;; the given keyboard-macro operation.
+(DEFUN MAKE-KEYBOARD-MACRO-MOVER (PROMPT)
   "Returns a function which takes a BP, moves, and returns a BP.
 The function is defined to perform the ZWEI commands that you type
-while MAKE-KBD-MACRO-MOVER is running.  Prompts with PROMPT."
-  (COM-START-KBD-MACRO)
+while MAKE-KEYBOARD-MACRO-MOVER is running.  Prompts with PROMPT."
+  (COM-START-KEYBOARD-MACRO)
   (FORMAT *QUERY-IO* "~&Defining a keyboard macro to ~A~@[; type ~A to finish it~]"
-	  PROMPT (KEY-FOR-COMMAND 'COM-END-KBD-MACRO))
+	  PROMPT (KEY-FOR-COMMAND 'COM-END-KEYBOARD-MACRO))
   (LET ((MACRO-ERROR-HOOK #'(LAMBDA ()
-			      (*THROW 'EXIT-MAKE-KBD-MACRO-MOVER :MACRO-ERROR)))
+			      (*THROW 'EXIT-MAKE-KEYBOARD-MACRO-MOVER :MACRO-ERROR)))
 	(MACRO-POP-HOOK #'(LAMBDA ()
-			    (*THROW 'EXIT-MAKE-KBD-MACRO-MOVER T))))
-    (AND (EQ (*CATCH 'EXIT-MAKE-KBD-MACRO-MOVER
+			    (*THROW 'EXIT-MAKE-KEYBOARD-MACRO-MOVER T))))
+    (AND (EQ (*CATCH 'EXIT-MAKE-KEYBOARD-MACRO-MOVER
 	       (SEND SELF :EDIT))
 	     :MACRO-ERROR)
 	 (*THROW 'ZWEI-COMMAND-LOOP T)))
-  (COND ((NOT (BOUNDP '*MAKE-KBD-MACRO-MOVER-COMTAB*))
-	 (SETQ *MAKE-KBD-MACRO-MOVER-COMTAB* (CREATE-SPARSE-COMTAB 'MACRO-MOVER-COMTAB))
-	 (SETF (COMTAB-KEYBOARD-ARRAY *MAKE-KBD-MACRO-MOVER-COMTAB*)
-	       '((-1 . COM-EXIT-KBD-MACRO-MOVER)))))
-  (SET-COMTAB-INDIRECTION *MAKE-KBD-MACRO-MOVER-COMTAB* *COMTAB*)
+  (COND ((NOT (BOUNDP '*MAKE-KEYBOARD-MACRO-MOVER-COMTAB*))
+	 (SETQ *MAKE-KEYBOARD-MACRO-MOVER-COMTAB* (CREATE-SPARSE-COMTAB 'MACRO-MOVER-COMTAB))
+	 (SETF (COMTAB-KEYBOARD-ARRAY *MAKE-KEYBOARD-MACRO-MOVER-COMTAB*)
+	       '((-1 . COM-EXIT-KEYBOARD-MACRO-MOVER)))))
+  (SET-COMTAB-INDIRECTION *MAKE-KEYBOARD-MACRO-MOVER-COMTAB* *COMTAB*)
   (LET-CLOSED ((OLD-MACRO-PREVIOUS-ARRAY (SEND *STANDARD-INPUT* :MACRO-PREVIOUS-ARRAY)))
     (ARRAY-PUSH-EXTEND OLD-MACRO-PREVIOUS-ARRAY -1)
     (SETF (MACRO-LENGTH OLD-MACRO-PREVIOUS-ARRAY)
 	  (1- (MACRO-POSITION OLD-MACRO-PREVIOUS-ARRAY)))
     #'(LAMBDA (BP &AUX (POINT (POINT)) OLD-POINT
-	       (MACRO-ERROR-HOOK #'(LAMBDA () (*THROW 'EXIT-KBD-MACRO-MOVER :MACRO-ERROR))))
+	       (MACRO-ERROR-HOOK #'(LAMBDA () (*THROW 'EXIT-KEYBOARD-MACRO-MOVER :MACRO-ERROR))))
 	(SETQ OLD-POINT (COPY-BP POINT :NORMAL))
 	(MOVE-BP (POINT) BP)
 	(UNWIND-PROTECT
 	  (PROGN
 	    (SEND *STANDARD-INPUT* :MACRO-EXECUTE OLD-MACRO-PREVIOUS-ARRAY 1)
-	    (AND (EQ (*CATCH 'EXIT-KBD-MACRO-MOVER
-		       (SEND *WINDOW* :EDIT NIL *MAKE-KBD-MACRO-MOVER-COMTAB*))
+	    (AND (EQ (*CATCH 'EXIT-KEYBOARD-MACRO-MOVER
+		       (SEND *WINDOW* :EDIT NIL *MAKE-KEYBOARD-MACRO-MOVER-COMTAB*))
 		     :MACRO-ERROR)
 		 (*THROW 'ZWEI-COMMAND-LOOP T))
 	    (COPY-BP POINT))
 	  (MOVE-BP (POINT) OLD-POINT)
 	  (FLUSH-BP OLD-POINT)))))
 
-(DEFUN COM-EXIT-KBD-MACRO-MOVER ()
-  (*THROW 'EXIT-KBD-MACRO-MOVER T))
+(DEFUN COM-EXIT-KEYBOARD-MACRO-MOVER ()
+  (*THROW 'EXIT-KEYBOARD-MACRO-MOVER T))
 
 (DEFCOM COM-SORT-VIA-KEYBOARD-MACROS "Sort the region alphabetically.
-Keyboard macros are read to move to the various part of the region to be sorted." ()
+You are prompted to enter three keyboard macros.
+ one that moves from the beginning of a sort record to the start of its key,
+ one that moves from the start of the key to the end of the key,
+ one that moves from the end of the key to the end of the containing record.E
+End each macro with C-X ).
+These macros are used to divide the region up into records and find their sort keys.
+Then the records are rearranged to put their sort keys in alphabetical order." ()
   (REGION (BP1 BP2)
     (WITH-BP (FIRST-BP BP1 :NORMAL)
       (WITH-BP (LAST-BP BP2 :MOVES)
 	(SETF (WINDOW-MARK-P *WINDOW*) NIL)
 	(MOVE-BP (POINT) FIRST-BP)
 	(MUST-REDISPLAY *WINDOW* DIS-BPS)
-	(LET ((MOVE-TO-KEY-MACRO (MAKE-KBD-MACRO-MOVER "move to the start of the sort key"))
-	      (MOVE-OVER-KEY-MACRO (MAKE-KBD-MACRO-MOVER "move over the sort key"))
-	      (MOVE-TO-NEXT-MACRO (MAKE-KBD-MACRO-MOVER "move to the end of the record")))
+	(LET ((MOVE-TO-KEY-MACRO (MAKE-KEYBOARD-MACRO-MOVER "move to the start of the sort key"))
+	      (MOVE-OVER-KEY-MACRO (MAKE-KEYBOARD-MACRO-MOVER "move over the sort key"))
+	      (MOVE-TO-NEXT-MACRO (MAKE-KEYBOARD-MACRO-MOVER "move to the end of the record")))
 	  (SORT-INTERVAL-FUNCTIONS MOVE-TO-KEY-MACRO MOVE-OVER-KEY-MACRO MOVE-TO-NEXT-MACRO
 				   #'INTERVAL-WITH-SORT-INTERVAL-LESSP FIRST-BP LAST-BP T)))))
   DIS-TEXT)
 
-(DEFCOM COM-DESCRIBE-CLASS "Describe the specified class." ()
-  (LET ((CLASS (COMPLETING-READ-FROM-MINI-BUFFER
-		 "Describe class:"
-		 (MAPCAR #'(LAMBDA (X)
-			     (SETQ X (<- X :CLASS-SYMBOL))
-			     (CONS (FORMAT NIL "~S" X) X))
-			 (CONS OBJECT-CLASS (SI:ALL-SUBCLASSES-OF-CLASS OBJECT-CLASS)))
-		 NIL NIL "You are typing the name of a class, to be described.")))
-    (AND (ATOM CLASS) (BARF))
-    (DESCRIBE-CLASS-INTERNAL (CDR CLASS)))
-  DIS-NONE)
-
-(DEFUN DESCRIBE-CLASS-INTERNAL (CLASS)
-  (OR (AND (SYMBOLP CLASS) (BOUNDP CLASS)
-	   (ENTITYP (SETQ CLASS (SYMEVAL CLASS))))
-      (BARF "~S is not a class" CLASS))
-  (FORMAT T "~&Instance variables of ~A:~%"
-	  (SYMEVAL-IN-CLOSURE CLASS :NAME))
-  (SEND *STANDARD-OUTPUT* :ITEM-LIST NIL (SYMEVAL-IN-CLOSURE CLASS 'SI:INSTANCE-PATTERN))
-  (DO ((SYM (SYMEVAL-IN-CLOSURE CLASS 'SI:CLASS-METHOD-SYMBOL))
-       (METHS NIL)
-       (CL)
-       (ML))
-      ((EQ SYM 'SI:UNCLAIMED-MESSAGE))
-    (SETQ CL (SYMEVAL SYM)
-	  ML (%MAKE-POINTER DTP-LIST (FSYMEVAL SYM)))
-    (FORMAT T "~2%Methods~:[ as a subclass~] of ~A:~%" (EQ CL CLASS)
-	    (SYMEVAL-IN-CLOSURE CL :NAME))
-    (DO ((L ML (CDR L))
-	 (M)
-	 (LL NIL))
-	((ATOM L)
-	 (SEND *STANDARD-OUTPUT* :ITEM-LIST 'FUNCTION-NAME (NREVERSE LL))
-	 (SETQ SYM L
-	       METHS (APPEND ML METHS))
-	 (RPLACD (LAST METHS) NIL))
-      (OR (ASSQ (CAR (SETQ M (CAR L))) METHS)
-	  (PUSH M LL))))
-  NIL)
-
 (DEFUN READ-FLAVOR-NAME (PROMPT HELP)
   "Reads a flavor name using the mini buffer, prompting with PROMPT.
 HELP is a string to print to say what the flavor name is for."
