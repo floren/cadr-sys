@@ -1,6 +1,8 @@
-;;; -*- Mode:LISP; Package:ZWEI; Base:8 -*-
+;;; -*- Mode:LISP; Package:ZWEI; Readtable:T; Base:10 -*-
 ;;; ** (c) Copyright 1980 Massachusetts Institute of Technology **
 ;;;  This file contains basic text manipulation functions for ZWEI. 
+
+;>> this file is full of kludgey wired-in knowledge about art-strings and art-fat-strings.
 
 ;;; This file provides the following functions:
 ;;; INSERT INSERT-INTERVAL DELETE-INTERVAL COPY-INTERVAL
@@ -8,8 +10,8 @@
 ;;; Internal function for inserting and deleting.
 (DEFUN SET-LINE-LENGTH (LINE LENGTH)
   (LET ((CURRENT-SIZE (ARRAY-LENGTH LINE)))
-    (COND ((> LENGTH CURRENT-SIZE)
-	   (ADJUST-ARRAY-SIZE LINE (MAX LENGTH (FIX (* (MAX CURRENT-SIZE 30.) 1.3s0))))))
+    (WHEN (> LENGTH CURRENT-SIZE)
+      (ADJUST-ARRAY-SIZE LINE (MAX LENGTH (FIX (* (MAX CURRENT-SIZE 30.) 1.3s0)))))
     (SETF (LINE-LENGTH LINE) LENGTH)))
 
 ;;; Change the type of an array, used to turn ordinary lines into 16-bit ones
@@ -22,13 +24,25 @@ ARRAY-TYPE should be ART-STRING or ART-FAT-STRING."
 
 ;;; Make something into a string
 (DEFUN ASSURE-STRING (STRING)
-  "Coerce STRING into a string, or a fat-string if given a number >= 400"
+  "Coerce STRING into a string, or a fat-string if given a number >= CHAR-CODE-LIMIT"
+;character lossage
+  (IF (CHARACTERP STRING) (SETQ STRING (CHAR-INT STRING)))
   (COND ((ARRAYP STRING) STRING)
-	((AND (NUMBERP STRING) ( STRING 400))
-	 (LET ((NEW-STRING (MAKE-ARRAY 1 ':TYPE 'ART-FAT-STRING)))
-	   (ASET STRING NEW-STRING 0)
+	((AND (NUMBERP STRING) ( STRING CHAR-CODE-LIMIT))
+	 (LET ((NEW-STRING (MAKE-ARRAY 1 :TYPE 'ART-FAT-STRING)))
+	   (SETF (CHAR NEW-STRING 0) STRING)
 	   NEW-STRING))
 	(T (STRING STRING))))
+
+;>> this should be a little smarter about line breaks.
+;>> If we insert a newline at position two of a line, perhaps a
+;>> better strategy than leaving the old line with just one character in it
+;>> and consing up a whole new array for the n-2 characters left, would be to
+;>> put the short part of the line in a new, shorter string and shift the rest
+;>> of the line backwards. I should do some metering.
+;>> For example, we --REALLY-- lose big doing something like replacing all the
+;>> linefeeds in a file with newlines when the file had no linebreaks in it
+;>> originally -- can get this sort of lossage cftping of un*x hosts, etc
 
 ;;; Insert the STRING at the BP.
 (DEFUN INSERT (BP STRING &OPTIONAL (START 0) END
@@ -44,9 +58,11 @@ The value is a BP pointing after the inserted text."
   (SETQ LINE (BP-LINE BP)
 	INDEX (BP-INDEX BP)
 	LINE-LENGTH (LINE-LENGTH LINE))
-  (COND ((STRINGP STRING)
+;character lossage
+  (IF (FIXNUMP STRING) (SETQ STRING (INT-CHAR STRING)))
+  (COND ((ARRAYP STRING)
 	 (OR END (SETQ END (ARRAY-ACTIVE-LENGTH STRING)))
-	 (SETQ FIRST-NEWLINE (%STRING-SEARCH-CHAR #\CR STRING START END))
+	 (SETQ FIRST-NEWLINE (%STRING-SEARCH-CHAR #/NEWLINE STRING START END))
 	 (COND ((NULL FIRST-NEWLINE)
 		;; The string doesn't have any newlines in it.
 		(INSERT-WITHIN-LINE LINE INDEX STRING START END))
@@ -54,15 +70,15 @@ The value is a BP pointing after the inserted text."
 		;; First, construct the "last" line, which is made up of the last
 		;; line of the STRING followed by the part of LINE after INDEX.
 		;; The copy the first line of STRING into LINE.
-		(LET* ((LAST-NEWLINE (STRING-REVERSE-SEARCH-CHAR #\CR STRING
+		(LET* ((LAST-NEWLINE (STRING-REVERSE-SEARCH-CHAR #/NEWLINE STRING
 								 END START))
 		       (ARRAY-TYPE (IF (EQ (ARRAY-TYPE STRING) 'ART-FAT-STRING)
 				       'ART-FAT-STRING (ARRAY-TYPE LINE)))
 		       (LCHARS (- END LAST-NEWLINE 1)))
 		  (COND ((AND (= LAST-NEWLINE (1- END))
 			      (ZEROP INDEX))
-			 ;;Inserting stuff ending with CR at front of line
-			 ;;implies we can just shove down the old line
+			 ;; Inserting stuff ending with CR at front of line
+			 ;; implies we can just shove down the old line
 			 (SETQ LAST-LINE LINE)
 			 ;; But then we can't use it as the first line.
 			 (SETQ FIRST-LINE (CREATE-LINE ARRAY-TYPE
@@ -122,7 +138,7 @@ The value is a BP pointing after the inserted text."
 			   (SETF (LINE-NEXT PREV-LINE) LAST-LINE)
 			   (SETF (LINE-PREVIOUS LAST-LINE) PREV-LINE)
 			   (RETURN NIL)))
-		    (SETQ NEWLINE (%STRING-SEARCH-CHAR #\CR STRING
+		    (SETQ NEWLINE (%STRING-SEARCH-CHAR #/NEWLINE STRING
 						       (1+ PREV-NEWLINE) END))
 		    (LET ((LENGTH (- NEWLINE PREV-NEWLINE 1)))
 		      (SETQ THIS-LINE (CREATE-LINE (ARRAY-TYPE STRING) LENGTH (BP-NODE BP)))
@@ -132,7 +148,8 @@ The value is a BP pointing after the inserted text."
 		      (SETF (LINE-PREVIOUS THIS-LINE) PREV-LINE)))
 		  (CREATE-BP LAST-LINE LCHARS)))))
 	;; These are for INSERT of a non-string
-	((EQ STRING #\CR)
+	((EQ STRING #/NEWLINE)
+	 ;; Breaking a line.
 	 (COND ((ZEROP INDEX)
 		;; Shove down the old line if inserting a CR at its front
 		(SETQ FIRST-LINE (CREATE-LINE 'ART-STRING 0 (BP-NODE BP)))
@@ -174,37 +191,37 @@ The value is a BP pointing after the inserted text."
 			   (MOVE-BP BP LAST-LINE (- I INDEX))))))
 		(CREATE-BP LAST-LINE 0))))
 	;; Insert ordinary character -- code simplified from INSERT-WITHIN-LINE
-	((FIXP STRING)
-	 (AND (GET (LOCF (LINE-PLIST LINE)) ':DIAGRAM) (BARF "Diagram line"))
+	((CHARACTERP STRING)
+	 (AND (GETF (LINE-PLIST LINE) ':DIAGRAM) (BARF "Diagram line"))
 	 (SET-LINE-LENGTH LINE (1+ LINE-LENGTH))
-	 (IF (AND ( STRING 400)
+	 (IF (AND ( STRING CHAR-CODE-LIMIT)
 		  (NEQ (ARRAY-TYPE LINE) 'ART-FAT-STRING))
 	     (SET-LINE-ARRAY-TYPE LINE 'ART-FAT-STRING))
 	 ;; Move the characters ahead of the inserting forward.
 	 (DO ((LF (1- LINE-LENGTH) (1- LF))
 	      (LT LINE-LENGTH (1- LT)))
 	     ((< LF INDEX))
-	   (ASET (AREF LINE LF) LINE LT))
+	   (SETF (CHAR LINE LT) (CHAR LINE LF)))
 	 ;; Insert the new characters into the line.
-	 (ASET STRING LINE INDEX)
+	 (SETF (CHAR LINE INDEX) STRING)
 	 ;; Relocate buffer pointers.
 	 (DOLIST (BP (LINE-BP-LIST LINE))
 	   (LET ((I (BP-INDEX BP)))
-	     (COND ((OR (> I INDEX)
-			(AND (= I INDEX)
-			     (EQ (BP-STATUS BP) ':MOVES)))
-		    (SETF (BP-INDEX BP) (1+ I))))))
+	     (IF (OR (> I INDEX)
+		     (AND (= I INDEX)
+			  (EQ (BP-STATUS BP) ':MOVES)))
+		 (SETF (BP-INDEX BP) (1+ I)))))
 	 (MUNG-LINE LINE)
 	 (CREATE-BP LINE (1+ INDEX)))
 	;; Inserting something random
 	(T (INSERT BP (STRING STRING) START END))))
 
-(DEFUN INSERT-MOVING (BP STRING)
+(DEFUN INSERT-MOVING (BP STRING &OPTIONAL (START 0) END)
   "Insert STRING at BP, and relocate BP to point after the inserted text.
 STRING can be a string or a character.
 The value is a temporary buffer pointer also pointing after the inserted text
 but not EQ to BP."
-  (LET ((NBP (INSERT BP STRING)))
+  (LET ((NBP (INSERT BP STRING START END)))
     (MOVE-BP BP NBP)
     NBP))
 
@@ -276,20 +293,20 @@ The value is a BP pointing after the inserted text."
 	       (SET-LINE-LENGTH AT-LINE (+ AT-INDEX (- FROM-LINE-LENGTH FROM-INDEX)))
 	       (DO ((FF FROM-INDEX (1+ FF))
 		    (AT AT-INDEX (1+ AT))
-		    (16B-P (EQ (ARRAY-TYPE AT-LINE) 'ART-FAT-STRING))
+		    (FATP (EQ (ARRAY-TYPE AT-LINE) 'ART-FAT-STRING))
 		    (CH))
 		   (( FF FROM-LINE-LENGTH))
-		 (COND ((NOT (OR (< (SETQ CH (AREF FROM-LINE FF)) 400) 16B-P))
-			(SET-LINE-ARRAY-TYPE AT-LINE 'ART-FAT-STRING)
-			(SETQ 16B-P T)))
-		 (ASET CH AT-LINE AT))
+		 (UNLESS (OR (< (SETQ CH (CHAR FROM-LINE FF)) CHAR-CODE-LIMIT) FATP)
+		   (SET-LINE-ARRAY-TYPE AT-LINE 'ART-FAT-STRING)
+		   (SETQ FATP T))
+		 (SETF (CHAR AT-LINE AT) CH))
 	       ;; Relocate buffer pointers.
 	       (DOLIST (BP (LINE-BP-LIST AT-LINE))
 		 (LET ((I (BP-INDEX BP)))
-		   (COND ((OR (> I AT-INDEX)
-			      (AND (= I AT-INDEX)
-				   (EQ (BP-STATUS BP) ':MOVES)))
-			  (MOVE-BP BP LAST-LINE (+ (- I AT-INDEX) TO-INDEX))))))))
+		   (IF (OR (> I AT-INDEX)
+			   (AND (= I AT-INDEX)
+				(EQ (BP-STATUS BP) ':MOVES)))
+		       (MOVE-BP BP LAST-LINE (+ (- I AT-INDEX) TO-INDEX)))))))
 	(DO ((PREV-LINE FIRST-LINE THIS-LINE)
 	     (THIS-LINE)
 	     (NODE (BP-NODE AT-BP))
@@ -320,13 +337,14 @@ BP is left pointing before the inserted text, unless it is of type :MOVES.
 The value is a BP pointing after the inserted text."
   (IF (OR (STRINGP THING) (NUMBERP THING) (SYMBOLP THING))
       (INSERT BP THING)
-      ;; This is a kludge, to prevent getting bad data into the mini-buffer
-      ;; there may be a more general solution, i am not sure.
-      (AND (EQ (BP-TOP-LEVEL-NODE BP) *INTERVAL*)
-	   (NULL (SEND *WINDOW* ':FONT-ALIST))
-	   (DO LINE (BP-LINE (INTERVAL-FIRST-BP THING)) (LINE-NEXT LINE) (NULL LINE)
-	     (SET-LINE-ARRAY-TYPE LINE 'ART-STRING)))
-      (INSERT-INTERVAL BP THING NIL T)))
+    ;; This is a kludge, to prevent getting bad data into the mini-buffer
+    ;; there may be a more general solution, i am not sure.
+    (AND (EQ (BP-TOP-LEVEL-NODE BP) *INTERVAL*)
+	 (NULL (SEND *WINDOW* :FONT-ALIST))
+	 (DO ((LINE (BP-LINE (INTERVAL-FIRST-BP THING)) (LINE-NEXT LINE)))
+	     ((NULL LINE))
+	   (SET-LINE-ARRAY-TYPE LINE 'ART-STRING)))
+    (INSERT-INTERVAL BP THING NIL T)))
 
 ;;; Delete the text between FROM-BP and TO-BP.  FROM-BP and TO-BP must be in order.
 ;;; Return a BP to the place from which text was deleted.
@@ -353,7 +371,7 @@ will be modified by this operation."
 		    (DO ((FL TO-INDEX (1+ FL))
 			 (TL FROM-INDEX (1+ TL)))
 			(( FL LINE-LENGTH))
-		      (ASET (AREF FROM-LINE FL) FROM-LINE TL))
+		      (SETF (CHAR FROM-LINE TL) (CHAR FROM-LINE FL)))
 		    (SET-LINE-LENGTH FROM-LINE (- LINE-LENGTH NDEL))
 		    ;; Relocate buffer pointers.
 		    (DOLIST (BP (LINE-BP-LIST FROM-LINE))
@@ -369,7 +387,7 @@ will be modified by this operation."
 		  ;; If deleting all of from-line and none of to-line,
 		  ;; we don't need to touch to-line at all.
 		  (SETQ KEPT-LINE TO-LINE)
-		  (PUTPROP (LOCF (LINE-PLIST TO-LINE)) (TICK) 'PRECEDING-LINES-DELETED-TICK)
+		  (SETF (GETF (LINE-PLIST TO-LINE) 'PRECEDING-LINES-DELETED-TICK) (TICK))
 		  (SETF (LINE-TICK FROM-LINE) 'DELETED))
 		 (T
 		  ;; Copy characters from end of TO-LINE to replace end of FROM-LINE.
@@ -382,13 +400,13 @@ will be modified by this operation."
 		    (SET-LINE-LENGTH FROM-LINE (+ FROM-INDEX (- TO-LENGTH TO-INDEX)))
 		    (DO ((FTL TO-INDEX (1+ FTL))
 			 (TFL FROM-INDEX (1+ TFL))
-			 (16B-P (EQ (ARRAY-TYPE FROM-LINE) 'ART-FAT-STRING))
+			 (FATP (EQ (ARRAY-TYPE FROM-LINE) 'ART-FAT-STRING))
 			 (CH))
 			(( FTL TO-LENGTH))
-		      (COND ((NOT (OR (< (SETQ CH (AREF TO-LINE FTL)) 400) 16B-P))
-			     (SET-LINE-ARRAY-TYPE FROM-LINE 'ART-FAT-STRING)
-			     (SETQ 16B-P T)))
-		      (ASET CH FROM-LINE TFL)))))
+		      (UNLESS (OR (< (SETQ CH (CHAR TO-LINE FTL)) CHAR-CODE-LIMIT) FATP)
+			(SET-LINE-ARRAY-TYPE FROM-LINE 'ART-FAT-STRING)
+			(SETQ FATP T))
+		      (SETF (CHAR FROM-LINE TFL) CH)))))
 	   ;; Relocate BPs on the FROM-LINE.
 	   (DOLIST (BP (LINE-BP-LIST FROM-LINE))
 	     (MOVE-BP BP KEPT-LINE (MIN (BP-INDEX BP) FROM-INDEX)))
@@ -416,7 +434,7 @@ will be modified by this operation."
 
 ;;; This is an internal function of INSERT and INSERT-INTERVAL
 (DEFUN INSERT-WITHIN-LINE (LINE INDEX STRING FROM TO)
-  (AND (GET (LOCF (LINE-PLIST LINE)) ':DIAGRAM) (BARF "Diagram line"))
+  (AND (GETF (LINE-PLIST LINE) ':DIAGRAM) (BARF "Diagram line"))
   (COND ((EQ STRING LINE)
 	 (SETQ STRING (SUBSTRING STRING FROM TO)
 	       TO (- TO FROM)
@@ -431,16 +449,16 @@ will be modified by this operation."
       (DO ((LF (1- LINE-LENGTH) (1- LF))
 	   (LT (1- NEW-LINE-LENGTH) (1- LT)))
 	  ((< LF INDEX))
-	(ASET (AREF LINE LF) LINE LT))
+	(SETF (CHAR LINE LT) (CHAR LINE LF)))
       ;; Insert the new characters into the line.
       (COPY-ARRAY-PORTION STRING FROM TO LINE INDEX (+ INDEX STRING-LENGTH))
       ;; Relocate buffer pointers.
       (DOLIST (BP (LINE-BP-LIST LINE))
 	(LET ((I (BP-INDEX BP)))
-	  (COND ((OR (> I INDEX)
-		     (AND (= I INDEX)
-			  (EQ (BP-STATUS BP) ':MOVES)))
-		 (SETF (BP-INDEX BP) (+ I STRING-LENGTH))))))
+	  (IF (OR (> I INDEX)
+		  (AND (= I INDEX)
+		       (EQ (BP-STATUS BP) ':MOVES)))
+	      (SETF (BP-INDEX BP) (+ I STRING-LENGTH)))))
       (MUNG-LINE LINE)
       (CREATE-BP LINE (+ INDEX STRING-LENGTH)))))
 
@@ -461,10 +479,10 @@ LINE should have a leader of the proper size.  It is actually spliced in."
   (SETF (LINE-TICK LINE) *TICK*)
   ;; Now hack the BPs
   (DOLIST (BP (LINE-BP-LIST AT-LINE))
-      (COND ((EQ (BP-STATUS BP) ':NORMAL)
-             (SETF (LINE-BP-LIST AT-LINE) (DELQ BP (LINE-BP-LIST AT-LINE)))
-             (PUSH BP (LINE-BP-LIST LINE))
-             (SETF (BP-LINE BP) LINE)))))
+    (WHEN (EQ (BP-STATUS BP) ':NORMAL)
+      (SETF (LINE-BP-LIST AT-LINE) (DELQ BP (LINE-BP-LIST AT-LINE)))
+      (PUSH BP (LINE-BP-LIST LINE))
+      (SETF (BP-LINE BP) LINE))))
 
 ;;; This is an internal function of INSERT-INTERVAL
 (DEFUN COPY-LINE (LINE NODE)
@@ -493,11 +511,11 @@ If INTO-INTERVAL is specified, it is an interval to copy the text into."
 	       (DO ((FLF FROM-INDEX (1+ FLF))
 		    (LT 0 (1+ LT)))
 		   (( LT LEN))
-		 (ASET (AREF FROM-LINE FLF) LINE LT))
+		 (SETF (CHAR LINE LT) (CHAR FROM-LINE FLF)))
 	       (AND (ZEROP FROM-INDEX) (= TO-INDEX (LINE-LENGTH FROM-LINE))
 		    (SETF (LINE-PLIST LINE) (LINE-PLIST FROM-LINE)))
-	       (SETF (INTERVAL-FIRST-BP INTO-INTERVAL) (CREATE-BP LINE 0 ':NORMAL))
-	       (SETF (INTERVAL-LAST-BP INTO-INTERVAL) (CREATE-BP LINE LEN ':MOVES)))))
+	       (SETF (INTERVAL-FIRST-BP INTO-INTERVAL) (CREATE-BP LINE 0 :NORMAL))
+	       (SETF (INTERVAL-LAST-BP INTO-INTERVAL) (CREATE-BP LINE LEN :MOVES)))))
 	  (T
 	   (LET ((FROM-LINE-LENGTH (LINE-LENGTH FROM-LINE)))
 	     (LET ((FIRST-LINE (CREATE-LINE (ARRAY-TYPE FROM-LINE)
@@ -508,12 +526,12 @@ If INTO-INTERVAL is specified, it is an interval to copy the text into."
 	       (DO ((FRF FROM-INDEX (1+ FRF))
 		    (FIT 0 (1+ FIT)))
 		   (( FRF FROM-LINE-LENGTH))
-		 (ASET (AREF FROM-LINE FRF) FIRST-LINE FIT))
+		 (SETF (CHAR FIRST-LINE FIT) (CHAR FROM-LINE FRF)))
 	       (AND (ZEROP FROM-INDEX) (SETF (LINE-PLIST FIRST-LINE) (LINE-PLIST FROM-LINE)))
 	       ;; Copy text from TO-LINE to LAST-LINE.
 	       (DO ((I 0 (1+ I)))
 		   (( I TO-INDEX))
-		 (ASET (AREF TO-LINE I) LAST-LINE I))
+		 (SETF (CHAR LAST-LINE I) (CHAR TO-LINE I)))
 	       (AND (= TO-INDEX (LINE-LENGTH TO-LINE))
 		    (SETF (LINE-PLIST LAST-LINE) (LINE-PLIST TO-LINE)))
 	       (DO ((PREV-LINE FIRST-LINE THIS-LINE)
@@ -543,38 +561,38 @@ as a pair of BPs that delimit the interval."
 	(TO-INDEX (BP-INDEX TO-BP))
 	STRING)
     (SETQ STRING (MAKE-ARRAY (COUNT-CHARS FROM-BP TO-BP)
-			     ':TYPE (IF REMOVE-FONTS-P ART-STRING (ARRAY-TYPE FROM-LINE))))
+			     :TYPE (IF REMOVE-FONTS-P ART-STRING (ARRAY-TYPE FROM-LINE))))
     (COND ((EQ FROM-LINE TO-LINE)
 	   ;; Within a line.  Copy the characters.
 	   (DO ((LF FROM-INDEX (1+ LF))
 		(ST 0 (1+ ST)))
 	       (( LF TO-INDEX))
-	     (ASET (AREF FROM-LINE LF) STRING ST)))
+	     (SETF (CHAR STRING ST) (CHAR FROM-LINE LF))))
 	  (T
 	   (LET ((ST 0))
 	     ;; Copy from the first line.
 	     (DO ((FLF FROM-INDEX (1+ FLF))
 		  (LEN (LINE-LENGTH FROM-LINE)))
 		 (( FLF LEN))
-	       (ASET (AREF FROM-LINE FLF) STRING ST)
-	       (SETQ ST (1+ ST)))
-	     (ASET #\CR STRING ST)
-	     (SETQ ST (1+ ST))
+	       (SETF (CHAR STRING ST) (CHAR FROM-LINE FLF))
+	       (INCF ST))
+	     (SETF (CHAR STRING ST) #/NEWLINE)
+	     (INCF ST)
 	     ;; Copy from intermediate lines.
 	     (DO ((LINE (LINE-NEXT FROM-LINE) (LINE-NEXT LINE)))
 		 ((EQ LINE TO-LINE))
 	       (DO ((LF 0 (1+ LF))
 		    (LEN (LINE-LENGTH LINE)))
 		   (( LF LEN))
-		 (ASET (AREF LINE LF) STRING ST)
-		 (SETQ ST (1+ ST)))
-	       (ASET #\CR STRING ST)
-	       (SETQ ST (1+ ST)))
+		 (SETF (CHAR STRING ST) (CHAR LINE LF))
+		 (INCF ST))
+	       (SETF (CHAR STRING ST) #/NEWLINE)
+	       (INCF ST))
 	     ;; Copy from the last line.
 	     (DO ((TLF 0 (1+ TLF)))
 		 (( TLF TO-INDEX))
-	       (ASET (AREF TO-LINE TLF) STRING ST)
-	       (SETQ ST (1+ ST))))))
+	       (SETF (CHAR STRING ST) (CHAR TO-LINE TLF))
+	       (INCF ST)))))
     STRING))
 
 ;;;Insert n copies of a character
@@ -582,9 +600,8 @@ as a pair of BPs that delimit the interval."
   "Insert N copies of CHAR at BP.
 BP is left pointing before the inserted text, unless it is of type :MOVES.
 The value is a BP pointing after the inserted text."
-  (SETQ STRING (MAKE-ARRAY N
-			   ':TYPE (IF (LDB-TEST %%CH-FONT CHAR)
-				      'ART-FAT-STRING
-				      'ART-STRING)))
-  (DOTIMES (I N) (ASET CHAR STRING I))
+  (SETQ STRING (MAKE-ARRAY N :TYPE (IF (ZEROP (CHAR-BITS CHAR))
+				      'ART-STRING
+				      'ART-FAT-STRING)
+			     :INITIAL-ELEMENT CHAR))
   (PROG1 (INSERT BP STRING) (RETURN-ARRAY STRING)))
