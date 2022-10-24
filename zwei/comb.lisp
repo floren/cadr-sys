@@ -279,9 +279,9 @@ A sentence also starts after a blank line." ()
   DIS-NONE)
 
 ;;; The standard c-X abort command.
-(DEFCOM COM-PREFIX-ABORT "Abort typing this prefix command." (KM)
-  (SEND *STANDARD-INPUT* :SEND-IF-HANDLES :MACRO-ERROR)
-  DIS-NONE)
+(DEFCOM COM-PREFIX-ABORT
+  "Same as just Abort." (KM)
+  (FUNCALL (COMMAND-LOOKUP #/ABORT *COMTAB*)))
 
 (DEFCOM COM-INDENT-FOR-COMMENT "Move to or create comment.
 Finds start of existing comments or creates one at end of current line.
@@ -398,16 +398,20 @@ In that case, you might want to ignore the comment starter even if there is one.
 			   (STRING-LENGTH LINE)))))))
     (RETURN START-START-INDEX START-END-INDEX INSIDE-STRING)))
 
-(DEFCOM COM-KILL-COMMENT "Delete any comment on the current line." ()
-  (LET ((LEN (LINE-LENGTH (BP-LINE (POINT)))))
-    (KILL-COMMENT (BP-LINE (POINT)))
-    (OR (= LEN (LINE-LENGTH (BP-LINE (POINT))))
-	(MOVE-BP (POINT) (END-LINE (POINT)))))
+(DEFCOM COM-KILL-COMMENT "Delete any comment on the current line.
+If region exists, kill all comments in region." ()
+  (IF (WINDOW-MARK-P *WINDOW*)
+      (COM-KILL-COMMENTS-IN-REGION)
+    (LET ((LEN (LINE-LENGTH (BP-LINE (POINT)))))
+      (KILL-COMMENT (BP-LINE (POINT)))
+      (OR (= LEN (LINE-LENGTH (BP-LINE (POINT))))
+	  (MOVE-BP (POINT) (END-LINE (POINT))))))
   DIS-TEXT)
 
-(DEFCOM COM-UNCOMMENT-REGION "Delete any comments within the region." ()
+; this command used to be misnamed uncomment-region
+(DEFCOM COM-KILL-COMMENTS-IN-REGION "Delete any comments within the region." ()
   (REGION (BP1 BP2)
-    (WITH-UNDO-SAVE ("Uncomment region" BP1 BP2 T)
+    (WITH-UNDO-SAVE ("Kill Comments" BP1 BP2 T)
       (REGION-LINES (START-LINE STOP-LINE)
 	(DO ((LINE START-LINE (LINE-NEXT LINE)))
 	    ((EQ LINE STOP-LINE))
@@ -539,12 +543,13 @@ Point stays the same.  A positive argument means to adjust rather than fill." ()
     (FILL-INTERVAL BP1 BP2 T (AND *NUMERIC-ARG-P* (PLUSP *NUMERIC-ARG*))))
   DIS-TEXT)
 
-(DEFCOM COM-SET-FILL-PREFIX "Define Fill Prefix from the current line.
+(DEFCOM COM-SET-FILL-PREFIX
+  "Define Fill Prefix from the current line.
 All of the current line up to point becomes the Fill Prefix.
 When there is a non-empty fill prefix, any line that fails to start
 with the fill prefix is considered a separator of paragraphs.
 Fill Region assumes that each non-blank line starts with the prefix
-(which is ignored for filling purposes).  To stop using a Fill Prefix, do
+/(which is ignored for filling purposes).  To stop using a Fill Prefix, do
 a Set Fill Prefix at the beginning of a line." () 
   (SETQ *FILL-PREFIX* (SUBSTRING (BP-LINE (POINT)) 0 (BP-INDEX (POINT))))
   (FORMAT *QUERY-IO* "~&Fill prefix = ~S" *FILL-PREFIX*)
