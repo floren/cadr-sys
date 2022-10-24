@@ -55,7 +55,7 @@ and find the correct directory.  Value is NIL if PATHNAME's directory
 does not have its contents listed in the DIRED buffer.
 Second value is the proper level for a line inserted for this pathname
 /(or NIL if the first value is NIL)."
-  (DECLARE (RETURN-LIST BP LEVEL))
+  (DECLARE (VALUES BP LEVEL))
   (LET ((DIR-LINE (DIRED-PATHNAME-DIRECTORY-LINE PATHNAME)))
     (AND DIR-LINE
 	 (LET ((LEVEL (OR (DIRED-LINE-LEVEL DIR-LINE) -1)))
@@ -89,70 +89,69 @@ Second value is the proper level for a line inserted for this pathname
 	   (RETURN (AND (GETF (LINE-PLIST LINE) 'CONTENTS-PRESENT)
 			LINE))))))
 
-; character lossage
 (DEFMAJOR COM-DIRED-MODE DIRED-MODE "Dired" "Setup for editing a directory" ()
   (PROGN (LET ((PATHNAME (SEND *INTERVAL* :PATHNAME)))
 	   (SETQ *DIRED-PATHNAME-NAME* (AND PATHNAME (STRING PATHNAME)))))
-  (SET-COMTAB *MODE-COMTAB* '(#/SP COM-DOWN-REAL-LINE
-			      #/! COM-DIRED-NEXT-UNDUMPED
-			      #/@ COM-DIRED-COMPLEMENT-DONT-DELETE
-			      #/# COM-DIRED-COMPLEMENT-DONT-SUPERSEDE
-			      #/$ COM-DIRED-COMPLEMENT-NO-REAP-FLAG
-			      #/. COM-DIRED-CHANGE-FILE-PROPERTIES
-			      #/, COM-DIRED-PRINT-FILE-ATTRIBUTES
-			      #/= COM-DIRED-SRCCOM
-			      #/? COM-DIRED-DOCUMENTATION
-			      #/HELP COM-DIRED-DOCUMENTATION
-			      #/A COM-DIRED-APPLY-FUNCTION
-			      #/a (0 #/A)
-			      #/C COM-DIRED-COPY
-			      #/c (0 #/C)
-			      #/D COM-DIRED-DELETE
-			      #/d (0 #/D)
-			      #/C-D COM-DIRED-DELETE
-			      #/E COM-DIRED-EDIT-FILE
-			      #/e (0 #/E)
-			      #/C-SH-E COM-DIRED-EDIT-FILE-TWO-WINDOWS
-			      #/F COM-DIRED-FIND-FILE
-			      #/f (0 #/F)
-			      #/H COM-DIRED-AUTOMATIC
-			      #/h (0 #/H)
-			      #/K COM-DIRED-DELETE
-			      #/k (0 #/K)
-			      #/C-K COM-DIRED-DELETE
-			      #/L COM-DIRED-LOAD-FILE
-			      #/l (0 #/L)
-			      #/N COM-DIRED-NEXT-HOG
-			      #/n (0 #/N)
-			      #/P COM-DIRED-PRINT-FILE
-			      #/p (0 #/P)
-			      #/Q COM-DIRED-EXIT
-			      #/q (0 #/Q)
-			      #/R COM-DIRED-RENAME
-			      #/r (0 #/R)
-			      #/S COM-DIRED-SUBDIRECTORY
-			      #/s (0 #/S)
-			      #/U COM-DIRED-UNDELETE
-			      #/u (0 #/U)
-			      #/V COM-DIRED-VIEW-FILE
-			      #/v (0 #/V)
-			      #/X COM-DIRED-EXECUTE
-			      #/x (0 #/X)
-			      #/1 COM-NUMBERS
-			      #/2 COM-NUMBERS
-			      #/3 COM-NUMBERS
-			      #/4 COM-NUMBERS
-			      #/5 COM-NUMBERS
-			      #/6 COM-NUMBERS
-			      #/7 COM-NUMBERS
-			      #/8 COM-NUMBERS
-			      #/9 COM-NUMBERS
-			      #/0 COM-NUMBERS
-			      #/< COM-DIRED-EDIT-SUPERIOR-DIRECTORY
-			      #/RUBOUT COM-DIRED-REVERSE-UNDELETE
-			      #/ABORT COM-DIRED-ABORT
-			      #/END COM-DIRED-EXIT
-			      #/MOUSE-3-1 COM-DIRED-MOUSE-MENU)
+  (SET-COMTAB *MODE-COMTAB* '(#/SP COM-DOWN-REAL-LINE
+			      #/! COM-DIRED-NEXT-UNDUMPED
+			      #/@ COM-DIRED-COMPLEMENT-DONT-DELETE
+			      #/# COM-DIRED-COMPLEMENT-DONT-SUPERSEDE
+			      #/$ COM-DIRED-COMPLEMENT-NO-REAP-FLAG
+			      #/. COM-DIRED-CHANGE-FILE-PROPERTIES
+			      #/, COM-DIRED-PRINT-FILE-ATTRIBUTES
+			      #/= COM-DIRED-SRCCOM
+			      #/? COM-DIRED-DOCUMENTATION
+			      #/HELP COM-DIRED-DOCUMENTATION
+			      #/A COM-DIRED-APPLY-FUNCTION
+			      #/a (0 #/A)
+			      #/C COM-DIRED-COPY
+			      #/c (0 #/C)
+			      #/D COM-DIRED-DELETE
+			      #/d (0 #/D)
+			      #/C-D COM-DIRED-DELETE
+			      #/E COM-DIRED-EDIT-FILE
+			      #/e (0 #/E)
+			      #/C-SH-E COM-DIRED-EDIT-FILE-TWO-WINDOWS
+			      #/F COM-DIRED-FIND-FILE
+			      #/f (0 #/F)
+			      #/H COM-DIRED-AUTOMATIC
+			      #/h (0 #/H)
+			      #/K COM-DIRED-DELETE
+			      #/k (0 #/K)
+			      #/C-K COM-DIRED-DELETE
+			      #/L COM-DIRED-LOAD-FILE
+			      #/l (0 #/L)
+			      #/N COM-DIRED-NEXT-HOG
+			      #/n (0 #/N)
+			      #/P COM-DIRED-PRINT-FILE
+			      #/p (0 #/P)
+			      #/Q COM-DIRED-EXIT
+			      #/q (0 #/Q)
+			      #/R COM-DIRED-RENAME
+			      #/r (0 #/R)
+			      #/S COM-DIRED-SUBDIRECTORY
+			      #/s (0 #/S)
+			      #/U COM-DIRED-UNDELETE
+			      #/u (0 #/U)
+			      #/V COM-DIRED-VIEW-FILE
+			      #/v (0 #/V)
+			      #/X COM-DIRED-EXECUTE
+			      #/x (0 #/X)
+			      #/1 COM-NUMBERS
+			      #/2 COM-NUMBERS
+			      #/3 COM-NUMBERS
+			      #/4 COM-NUMBERS
+			      #/5 COM-NUMBERS
+			      #/6 COM-NUMBERS
+			      #/7 COM-NUMBERS
+			      #/8 COM-NUMBERS
+			      #/9 COM-NUMBERS
+			      #/0 COM-NUMBERS
+			      #/< COM-DIRED-EDIT-SUPERIOR-DIRECTORY
+			      #/RUBOUT COM-DIRED-REVERSE-UNDELETE
+			      #/ABORT COM-DIRED-ABORT
+			      #/END COM-DIRED-EXIT
+			      #/MOUSE-3-1 COM-DIRED-MOUSE-MENU)
 	      '(("Automatic" . COM-DIRED-AUTOMATIC)
 		("Automatic All Files" . COM-DIRED-AUTOMATIC-ALL)
 		("Sort Increasing Reference Date"
@@ -178,7 +177,6 @@ Second value is the proper level for a line inserted for this pathname
   (AND (EQ BUFFER *INTERVAL*)
        (DIRED-LINE-PATHNAME (BP-LINE (POINT)))))
 
-
 (DEFCOM COM-DIRED "Edit a directory.
 For documentation on the Dired commands, enter Dired and type question-mark." ()
   (KILL-NEW-BUFFER-ON-ABORT (*INTERVAL*)
@@ -267,7 +265,7 @@ The buffer is selected unless SELECT-P is NIL."
 			      (PATHNAME-LIST
 				(OR (GET BUFFER 'PATHNAME-LIST)
 				    (LIST (BUFFER-PATHNAME BUFFER)))))
-  QUIETLY-FLAG
+  (DECLARE (IGNORE QUIETLY-FLAG))
   (WITH-READ-ONLY-SUPPRESSED (BUFFER)
     (LET ((*BATCH-UNDO-SAVE* T)
 	  OLD-POSITION-PATHNAME
@@ -328,49 +326,95 @@ The subdirectory files are indented one additional space.
 If the subdirectory contents are already present in the DIRED buffer,
 this command offers to remove them from the buffer.
 Removing them from the buffer does not delete the files!
-It only makes DIRED stop operating on them." ()
-  (DIRED-OPEN-LINE-SUBDIRECTORY (BP-LINE (POINT)))
-  DIS-TEXT)
+It only makes DIRED stop operating on them.
+
+With an argument, prompts for a wildcarded specification of files in the
+directory to insert, rather than inserting them all, which is the default. " ()
+  (let* ((line (bp-line (point)))
+	 (wild-pathname (getf (line-plist line) 'contents-present))
+	 (pathname (getf (line-plist line) ':pathname))
+	 directory wild-directory)
+    (unless (getf (line-plist line) ':directory)
+      (barf "~A is not a directory" pathname))
+    (setq directory (send pathname :pathname-as-directory)
+	  wild-directory (send directory :new-pathname :name :wild :type :wild :version :wild))
+    (cond ;; no arg and presently there => close subdir
+	  ((and wild-pathname
+		(not *numeric-arg-p*)
+		(fquery () "Remove subfiles ~A ?" wild-pathname))
+	   (dired-close-line-subdirectory line))
+	  ;; arg means selective insert of subdir, deleting old contents if present
+	  (*numeric-arg-p*
+	   (or wild-pathname (setq wild-pathname wild-directory))
+	   (setq wild-pathname (read-directory-name
+				 (format nil "Edit which subfiles of directory ~A"
+					 wild-directory)
+				 wild-pathname))
+	   (unless (send wild-directory :pathname-match wild-pathname)
+	     (format *query-io* "~&~A does not seem to specify any subfile of ~A"
+		     wild-pathname wild-directory)
+	     (beep)
+	     (if (y-or-n-p "Start a separate dired of ~A ?")
+		 (directory-edit wild-pathname t)
+	       (return-from com-dired-subdirectory dis-none)))	       
+	   (if (getf (line-plist line) 'contents-present)
+	       (dired-close-line-subdirectory line))
+	   (dired-open-line-subdirectory line wild-pathname))
+	  ;; no arg and not there => insert *.*.* subdir
+	  (t
+	   (dired-open-line-subdirectory line wild-directory))))
+  dis-text)
 
 (DEFUN DIRED-OPEN-SUBDIRECTORY (PATHNAME)
   "Add the files in the subdirectory PATHNAME to the dired buffer.
 Does nothing if that subdirectory is not itself present.
 PATHNAME should be the pathname of the file which is the subdirectory."
   (DO ((LINE (BP-LINE (INTERVAL-FIRST-BP *INTERVAL*)) (LINE-NEXT LINE))
-       (END-LINE (BP-LINE (INTERVAL-LAST-BP *INTERVAL*))))
+       (END-LINE (BP-LINE (INTERVAL-LAST-BP *INTERVAL*))) WILD-PATHNAME)
       ((EQ LINE END-LINE) NIL)
     (WHEN (EQ PATHNAME (DIRED-LINE-PATHNAME LINE))
-      (UNLESS (GETF (LINE-PLIST LINE) 'CONTENTS-PRESENT)
-	(DIRED-OPEN-LINE-SUBDIRECTORY LINE))
+      (UNLESS (SETQ WILD-PATHNAME (GETF (LINE-PLIST LINE) 'CONTENTS-PRESENT))
+	(DIRED-OPEN-LINE-SUBDIRECTORY LINE WILD-PATHNAME))
       (RETURN T))))
 
-(DEFUN DIRED-OPEN-LINE-SUBDIRECTORY (LINE)
-  (LET* ((*BATCH-UNDO-SAVE* T)
-	 (PATHNAME (SEND (DIRED-LINE-PATHNAME-OR-BARF LINE) :PATHNAME-AS-DIRECTORY))
-	 DIRECTORY)
-    (WITH-READ-ONLY-SUPPRESSED (*INTERVAL*)
-      (IF (GETF (LINE-PLIST LINE) 'CONTENTS-PRESENT)
-	  (WHEN (FQUERY NIL "Remove subfiles of ~A? "
-			(SEND PATHNAME :STRING-FOR-DIRECTORY))
-	    (SETF (GETF (LINE-PLIST LINE) 'CONTENTS-PRESENT) NIL)
-	    (DO ((LINE2 (LINE-NEXT LINE) (LINE-NEXT LINE2))
-		 (THISLEVEL (DIRED-LINE-LEVEL LINE)))
-		((LET ((LINELEVEL (DIRED-LINE-LEVEL LINE2)))
-		   (OR (NULL LINELEVEL)
-		       ( LINELEVEL THISLEVEL)))
-		 (DELETE-INTERVAL (CREATE-BP (LINE-NEXT LINE) 0)
-				  (CREATE-BP LINE2 0)
-				  T))))
-	(SETQ PATHNAME (SEND PATHNAME :NEW-PATHNAME :NAME :WILD :TYPE :WILD :VERSION :WILD))
-	(SETQ DIRECTORY (FS:DIRECTORY-LIST PATHNAME :DELETED :SORTED))
-	(SETF (GETF (LINE-PLIST LINE) 'CONTENTS-PRESENT) T)
+(DEFUN DIRED-OPEN-LINE-SUBDIRECTORY (LINE WILD-PATHNAME &AUX DIRECTORY)
+  (IF (SETQ DIRECTORY (GETF (LINE-PLIST LINE) 'CONTENTS-PRESENT))
+      (BARF "Subfiles ~A are already present" DIRECTORY)
+    (UNLESS (PATHNAMEP WILD-PATHNAME)
+      (SETQ WILD-PATHNAME (SEND (SEND (DIRED-LINE-PATHNAME-OR-BARF LINE)
+				      :PATHNAME-AS-DIRECTORY)
+				:NEW-PATHNAME :NAME :WILD :TYPE :WILD :VERSION :WILD)))
+    (SETQ DIRECTORY (FS:DIRECTORY-LIST WILD-PATHNAME :DELETED :SORTED))
+    (LET* ((*BATCH-UNDO-SAVE* T))
+      (WITH-READ-ONLY-SUPPRESSED (*INTERVAL*)
+	(SETF (GETF (LINE-PLIST LINE) 'CONTENTS-PRESENT) WILD-PATHNAME)
 	(LET ((NEXT-PLIST (LINE-PLIST (LINE-NEXT LINE)))
 	      (STREAM (INTERVAL-STREAM-INTO-BP (CREATE-BP (LINE-NEXT LINE) 0))))
 	  (DIRED-INSERT-DIRECTORY DIRECTORY STREAM
 				  (1+ (DIRED-LINE-LEVEL LINE)))
 	  ;; Restore the plist, now clobbered, of the following line.
 	  (SETF (LINE-PLIST (BP-LINE (SEND STREAM :READ-BP))) NEXT-PLIST))))))
+
+(defun dired-close-line-subdirectory (line)
+  (let* ((*batch-undo-save* t)
+	 (wild-pathname (getf (line-plist line) 'contents-present)))
+    (if (null wild-pathname)
+	(barf "No subfiles are present")
+      (with-read-only-suppressed (*interval*)
+	(setf (getf (line-plist line) 'contents-present) nil)
+	(do ((line2 (line-next line) (line-next line2))
+	     (thislevel (dired-line-level line)))
+	    ((let ((linelevel (dired-line-level line2)))
+	       (or (null linelevel)
+		   ( linelevel thislevel)))
+	     (delete-interval (create-bp (line-next line) 0)
+			      (create-bp line2 0)
+			      t)))))))
+
 
+(DEFVAR *DIRED-SUBDIRECTORY-INDENTATION* 2
+  "The number of spaces inserted in front of the files of a subdirectory in dired.")
+
 (DEFUN DIRED-INSERT-DIRECTORY (DIRECTORY STREAM LEVEL)
   "Insert into a DIRED buffer lines describing the files in DIRECTORY.
 DIRECTORY is a value returned by FS:DIRECTORY-LIST.
@@ -391,23 +435,25 @@ Returns the first inserted line that describes a file."
 				       :NEW-PATHNAME :DEVICE NIL
 				       		     ;; Get rid of the version iff this is the newest one.
 						     :VERSION (IF (GET FILE ':NEWEST) NIL
-								(SEND (CAR FILE) ':VERSION)))
+								(SEND (CAR FILE) :VERSION)))
 				 :PATHNAME-AS-DIRECTORY)
 			   :STRING-FOR-DIRECTORY)))
 	    ;; STR has the string we want to print instead of the filename.
-	    (DECLARE (SPECIAL STR))
 	    ;; Replace (CAR FILE) with a phony "pathname" that will print as that string.
 	    (WITH-STACK-LIST* (FILE1 #'(LAMBDA (&REST IGNORE) STR) (CDR FILE))
 	      (FUNCALL *DIRECTORY-SINGLE-FILE-LISTER* FILE1 STREAM)))
 	(FUNCALL *DIRECTORY-SINGLE-FILE-LISTER* FILE STREAM))
       (SETQ LINE (LINE-PREVIOUS (BP-LINE (SEND STREAM :READ-BP))))
-      (INSERT-CHARS (CREATE-BP LINE 6) #/SP LEVEL)
+      (INSERT-CHARS (CREATE-BP LINE 5) #/SPACE (* *DIRED-SUBDIRECTORY-INDENTATION* LEVEL))
       ;; Use lower-case "d" to mark already-deleted files.
-      (IF (GET FILE :DELETED)
-	  (SETF (CLI:AREF LINE 0) #/d))
+      (IF (GET FILE ':DELETED)
+	  (SETF (CHAR LINE 0) #/d))
       (OR FIRST-FILE-LINE
 	  (SETQ FIRST-FILE-LINE LINE))
-      (SETF (LINE-PLIST LINE) (LIST* 'LEVEL LEVEL :PATHNAME FILE)))))
+      (SETF (GETF (LINE-PLIST LINE) 'LEVEL) LEVEL)
+      (LOOP FOR (PROP VAL) ON (CDR FILE) BY 'CDDR
+	 DO (SETF (GETF (LINE-PLIST LINE) PROP) VAL))
+      (SETF (GETF (LINE-PLIST LINE) ':PATHNAME) (CAR FILE)))))
 
 (DEFUN DIRED-COMPUTE-GREATER-THANS (DIRECTORY)
   "This goes through a sorted list of files and puts :NEWEST properties on files."
@@ -430,7 +476,7 @@ Returns the first inserted line that describes a file."
   (WITH-READ-ONLY-SUPPRESSED (*INTERVAL*)
     (LET ((CH (IF (ZEROP (STRING-LENGTH LINE))
 		  #/SP
-		  (CLI:AREF LINE 0)))
+		  (CHAR LINE 0)))
 	  (FILE (CONS PATHNAME (CDR PLIST))))
       (SETF (LINE-LENGTH LINE) 0)
       (WITH-OUTPUT-TO-STRING (S LINE)
@@ -442,11 +488,12 @@ Returns the first inserted line that describes a file."
 ;	      (SEND S :STRING-OUT STR (1+ (STRING-SEARCH-CHAR #/: STR))))
 	  (FUNCALL *DIRECTORY-SINGLE-FILE-LISTER* FILE S))
 ;     )
-      (OR (GET FILE :DIRECTORY)
-	  ;; Eliminate the Return which the lister writes.
+      (OR (GET FILE ':DIRECTORY)
+	  ;; Eliminate the Newline which the lister writes.
 	  (DECF (LINE-LENGTH LINE)))
-      (INSERT-CHARS (CREATE-BP LINE 6) #/SP (GET FILE 'LEVEL))
-      (SETF (CLI:AREF LINE 0) CH))
+      (INSERT-CHARS (CREATE-BP LINE 5) #/SPACE
+		    (* *DIRED-SUBDIRECTORY-INDENTATION* (GET FILE 'LEVEL)))
+      (SETF (CHAR LINE 0) CH))
     (MUNG-LINE LINE)))
 
 
@@ -465,11 +512,16 @@ Returns the first inserted line that describes a file."
 	  Above commands repeat with a numeric argument,
 	  backwards if the argument is negative.	  
 	S	Insert the contents of this Subdirectory.
-	        The files in the subdirectory are indented one additional space.
-		If the subdirectory files are already inserted,
-		the S command offers to remove them from the display.
+	        The files in the subdirectory are indented ~R additional space~:P.
+		By default it inserts all the files of the subdirectory; however
+		 by giving this command a numeric argument you will be prompted
+		 for a wildcarded pathname specifying a subset of the subdirectory's
+		 contents.
+		If the subdirectory files are already inserted, then S with no
+		 argument command offers to remove them from the display.
 		Removing them from the display does NOT delete the files!
-	N	Move to the next file with more than 2 versions.
+	N	Move to the next file with more than ~D versions.
+		 (This number /"~:*~D/" is the value of ~S)
 	H	Mark excess versions of the current file for deletion.
 	Q	Exit.  You will be shown the files to be deleted and asked for
 		confirmation.  In this display /":/" means a link, /">/" means
@@ -483,12 +535,12 @@ Returns the first inserted line that describes a file."
 	$	Complement $ flag (dont-reap)
 	,	Print the attributes of a file.  For a source file, the -*- line.
 		For a QFASL file, the compilation data and what is recorded
-		of the source file's -*- line.
+		 of the source file's -*- line.
 	.	Change properties of current file.
 	E	Edit the current file, or DIRED on subdirectory.
 	F	Edit current file or subdirectory, not now, but when you exit.
 	C-Sh-E	Edit the current file in another window.  The DIRED remains visible.
-		Enters two window mode if you are in one window mode.
+		 Enters two window mode if you are in one window mode.
         <       DIRED on the superior directory of this directory.
 	V	View the current file (doesn't read it all in).
 	=	SRCCOM this file with the > version.
@@ -503,7 +555,10 @@ M-X Sort Increasing Creation Date
 M-X Sort Increasing Reference Date
 M-X Sort Increasing Size
 and their counterparts with Decreasing instead of Increasing.
-")
+"
+	  *DIRED-SUBDIRECTORY-INDENTATION*
+	  *FILE-VERSIONS-KEPT* '*FILE-VERSIONS-KEPT*
+	  )
   DIS-NONE)
 
 
@@ -539,34 +594,34 @@ and their counterparts with Decreasing instead of Increasing.
   (LET ((PN (DIRED-LINE-PATHNAME-OR-BARF (BP-LINE (POINT))))
 	PLIST CD)
     (SETQ PLIST (FS:FILE-ATTRIBUTE-LIST PN))
-    (COND ((SETQ CD (GETF PLIST :COMPILE-DATA))
-	   (FORMAT T "The file ~A was compiled by ~A on ~A ~@[(at ~A)~]~% at "
-		   PN (CAR CD) (CADR CD) (GETF (SIXTH CD) :SITE))
-	   (TIME:PRINT-UNIVERSAL-TIME (CADDR CD))
-	   (FORMAT T " in system version ~D.~D from ~A~%"
-		   (FOURTH CD) (FIFTH CD) (GETF PLIST :QFASL-SOURCE-FILE-UNIQUE-ID))
-	   (REMPROP (LOCF PLIST) :COMPILE-DATA)
-	   (REMPROP (LOCF PLIST) :QFASL-SOURCE-FILE-UNIQUE-ID)))
+    (WHEN (SETQ CD (GETF PLIST ':COMPILE-DATA))
+      (FORMAT T "The file ~A was compiled by ~A on ~A ~@[(at ~A)~]~% at "
+	      PN (CAR CD) (CADR CD) (GETF (SIXTH CD) ':SITE))
+      (TIME:PRINT-UNIVERSAL-TIME (CADDR CD))
+      (FORMAT T " in system version ~D.~D from ~A~%"
+	      (FOURTH CD) (FIFTH CD) (GETF PLIST ':QFASL-SOURCE-FILE-UNIQUE-ID))
+      (REMF PLIST ':COMPILE-DATA)
+      (REMF PLIST ':QFASL-SOURCE-FILE-UNIQUE-ID))
     (WHEN PLIST
       (FORMAT T "The attributes line of ~A looks like:~% -*-" PN)
       (DO ((PS PLIST (CDDR PS))) ((NULL PS))
-	(LET ((PROP (CAR PS)) (VAL (CADR PS)) (*PRINT-BASE* 10.))
+	(LET ((PROP (CAR PS)) (VAL (CADR PS))
+	      (*PRINT-BASE* 10.) (*PRINT-RADIX* NIL) (*NOPOINT T))	      
 	  (FORMAT T "~A: ~A; " PROP VAL)))
       (FORMAT T "-*-~%"))
     DIS-NONE))
 
 (DEFCOM COM-DIRED-DOCUMENTATION "Print various sorts of editor documentation" ()
   (LET ((*COM-DOCUMENTATION-ALIST*
-;character lossage
-	  (CONS '(#/M COM-DIRED-HELP) *COM-DOCUMENTATION-ALIST*)))
+	  (CONS '(#/M COM-DIRED-HELP) *COM-DOCUMENTATION-ALIST*)))
     (COM-DOCUMENTATION)))
   
 (DEFCOM COM-DIRED-DELETE "Mark file(s) for deletion" ()
-  (IF (NOT (GETF (LINE-PLIST (BP-LINE (POINT))) :DONT-DELETE))
+  (IF (NOT (GETF (LINE-PLIST (BP-LINE (POINT))) ':DONT-DELETE))
       (DIRED-MAP-OVER-LINES *NUMERIC-ARG* 
 			    #'(LAMBDA (LINE)
 				(MUNG-LINE LINE)
-				(SETF (CLI:AREF LINE 0)
+				(SETF (CHAR LINE 0)
 				      (IF (GETF (LINE-PLIST LINE) :DELETED) #/d #/D))))
     (BARF "This file is delete protected.  Use @ to turn of delete protection.")))
 
@@ -576,7 +631,7 @@ Can also be used to mark a deleted file for undeletion." ()
   (DIRED-MAP-OVER-LINES *NUMERIC-ARG*
 			#'(LAMBDA (LINE)
 			    (MUNG-LINE LINE)
-			    (SETF (CLI:AREF LINE 0)
+			    (SETF (CHAR LINE 0)
 				  (IF (GETF (LINE-PLIST LINE) :DELETED) #/U #/SP)))))
 
 (DEFCOM COM-DIRED-UNDELETE "Un-mark next or previous file(s) for action.
@@ -586,13 +641,12 @@ But with no arg, operates on the previous line's file
 Can also be used to mark a deleted file for undeletion." ()
   (DIRED-MAP-OVER-LINES (IF (AND (NOT *NUMERIC-ARG-P*)
 				 (OR (NOT (DIRED-LINE-PATHNAME (BP-LINE (POINT))))
-;character lossage
-				     (EQ (BP-CHAR (BEG-LINE (POINT))) #/SP)))
+				     (CHAR= (BP-CHARACTER (BEG-LINE (POINT))) #/SPACE)))
 			    -1
 			    *NUMERIC-ARG*)
 			#'(LAMBDA (LINE)
 			    (MUNG-LINE LINE)
-			    (SETF (CLI:AREF LINE 0)
+			    (SETF (CHAR LINE 0)
 				  (IF (GETF (LINE-PLIST LINE) :DELETED) #/U #/SP)))))
 
 (DEFCOM COM-DIRED-REVERSE-UNDELETE "Un-mark previous file(s) for action." ()
@@ -604,15 +658,15 @@ Can also be used to mark a deleted file for undeletion." ()
 			 #'(LAMBDA(LINE)
 			     (UNLESS (GETF (LINE-PLIST LINE) :DELETED)
 			       (MUNG-LINE LINE)
-			       (SETF (CLI:AREF LINE 0) #/F)))))
+			       (SETF (CHAR LINE 0) #/F)))))
 
 (DEFCOM COM-DIRED-PRINT-FILE "Mark a file to be printed" ()
    (DIRED-MAP-OVER-LINES *NUMERIC-ARG*
-			 #'(LAMBDA(LINE)
-			     (MUNG-LINE LINE) 
+			 #'(LAMBDA (LINE)
+			     (MUNG-LINE LINE)
 			     (UNLESS (GETF (LINE-PLIST LINE) :DELETED)
 			       (IF (DIRED-PRINTABLE-FILE-P LINE)
-				   (SETF (CLI:AREF LINE 0) #/P)
+				   (SETF (CHAR LINE 0) #/P)
 				 (BARF "Don't know how to print this type of file!"))))))
 
 (DEFCOM COM-DIRED-COPY "Copy the file on this line" ()
@@ -636,7 +690,7 @@ Can also be used to mark a deleted file for undeletion." ()
 		   (DIRED-PATHNAME-INSERTION-BP (THIRD RESULT))
 		 (COND (BP
 			(WITH-BP (SAVE-BP BP :NORMAL)
-			  (INSERT BP #/RETURN)
+			  (INSERT BP #/NEWLINE)
 			  (SETF (LINE-PLIST (BP-LINE SAVE-BP)) FILE-PLIST)
 			  (SETF (DIRED-LINE-LEVEL (BP-LINE SAVE-BP))
 				(OR LEVEL 0))
@@ -668,7 +722,7 @@ Can also be used to mark a deleted file for undeletion." ()
 	      (DIRED-PATHNAME-INSERTION-BP NEWFILE)
 	    (COND (BP
 		   (WITH-BP (SAVE-BP BP :NORMAL)
-		     (INSERT BP #/RETURN)
+		     (INSERT BP #/NEWLINE)
 		     (SETF (LINE-PLIST (BP-LINE SAVE-BP)) FILE-PLIST)
 		     (SETF (DIRED-LINE-LEVEL (BP-LINE SAVE-BP))
 			   (OR LEVEL 0))
@@ -682,7 +736,7 @@ Can also be used to mark a deleted file for undeletion." ()
 			#'(LAMBDA (LINE)
 			    (UNLESS (GETF (LINE-PLIST LINE) :DELETED)
 			      (MUNG-LINE LINE)
-			      (SETF (CLI:AREF LINE 0) #/A)))))
+			      (SETF (CHAR LINE 0) #/A)))))
 
 (DEFUN DIRED-PRINTABLE-FILE-P (LINE &AUX PLIST PATHNAME TYPE BYTE)
   "T if the file on LINE seems to be one that can be hardcopied reasonably."
@@ -693,7 +747,8 @@ Can also be used to mark a deleted file for undeletion." ()
 				     "OUTPUT")))	;others?
        (OR (EQUAL TYPE "PLT")
 	   (EQ TYPE :PRESS)
-	   (MEMQ (GET PLIST :BYTE-SIZE) '(7 8)) ;This is probably a text file, skip open
+	   ;; This is probably a text file, skip open. The NIL is for VMS, which can't tell
+	   (MEMQ (GET PLIST :BYTE-SIZE) '(7 8 NIL))
 	   (WITH-OPEN-FILE (STREAM PATHNAME :DIRECTION :INPUT :CHARACTERS NIL :BYTE-SIZE 9.)
 	     (DOTIMES (I 4) (SETQ BYTE (SEND STREAM :TYI)))
 	     (AND BYTE (NOT (BIT-TEST BYTE 1)))))))
@@ -875,8 +930,7 @@ or the numeric argument if one is supplied." ()
 	(IF BUFFER (MAKE-BUFFER-CURRENT BUFFER)
 	  (FIND-FILE PATHNAME)))
       (LET ((BLURB (KEY-FOR-COMMAND 'COM-SELECT-PREVIOUS-BUFFER
-;character lossage
-				    *COMTAB* NIL NIL #/C-M-L)))
+				    *COMTAB* NIL NIL #/C-M-L)))
 	(AND (NULL BLURB) (SETQ BLURB (KEY-FOR-COMMAND 'COM-SELECT-BUFFER))
 	     (SETQ BLURB (STRING-APPEND BLURB " Return")))
 	(AND BLURB
@@ -885,7 +939,7 @@ or the numeric argument if one is supplied." ()
 
 
 (DEFCOM COM-DIRED-EDIT-SUPERIOR-DIRECTORY
-	"Edit the superior directory of the current buffer's directory." ()
+  "Edit the superior directory of the current buffer's directory." ()
   (OR (TYPEP *WINDOW* 'ZMACS-WINDOW) (BARF))
   (LET* ((PATHNAME (SEND *INTERVAL* :PATHNAME))
 	 (DIRECTORY (SEND PATHNAME :DIRECTORY)))
@@ -909,16 +963,15 @@ or the numeric argument if one is supplied." ()
 	     (BARF "Re-enter edit command")))
     (SWITCH-WINDOWS)
     (IF DIR-P
-	(DIRECTORY-EDIT (SEND (FUNCALL PATHNAME :PATHNAME-AS-DIRECTORY) :NEW-PATHNAME
-			      						 :NAME :WILD
-									 :TYPE :WILD
-									 :VERSION :WILD))
+	(DIRECTORY-EDIT (SEND (SEND PATHNAME :PATHNAME-AS-DIRECTORY) :NEW-PATHNAME
+								     :NAME :WILD
+								     :TYPE :WILD
+								     :VERSION :WILD))
       (LET ((BUFFER (FIND-FILE-BUFFER PATHNAME)))
 	(IF BUFFER (MAKE-BUFFER-CURRENT BUFFER)
 	  (FIND-FILE PATHNAME)))
       (LET ((BLURB (KEY-FOR-COMMAND 'COM-SELECT-PREVIOUS-BUFFER
-;character lossage
-				    *COMTAB* NIL NIL #/C-M-L)))
+				    *COMTAB* NIL NIL #/C-M-L)))
 	(AND (NULL BLURB) (SETQ BLURB (KEY-FOR-COMMAND 'COM-SELECT-BUFFER))
 	     (SETQ BLURB (STRING-APPEND BLURB " Return")))
 	(AND BLURB
@@ -946,8 +999,7 @@ Displays the files to be deleted and/or printed, then asks you to confirm." ()
 (DEFUN DIRED-PROCESS-FILES ()
   "Perform all the operations requested on files in the DIRED buffer.
 Returns T if user typed E or Y or Q, NIL if user typed N."
-  (DO-NAMED DIRED-EXIT
-      ((LINE (BP-LINE (INTERVAL-FIRST-BP *INTERVAL*)) (LINE-NEXT LINE))
+  (DO ((LINE (BP-LINE (INTERVAL-FIRST-BP *INTERVAL*)) (LINE-NEXT LINE))
        (UNDELETEABLE (SEND (DIRED-BUFFER-DIRECTORY-PATHNAME *INTERVAL*) :UNDELETABLE-P))
        DELETE-FILES
        UNDELETE-FILES
@@ -962,7 +1014,7 @@ Returns T if user typed E or Y or Q, NIL if user typed N."
 	     FIND-FILES (NREVERSE FIND-FILES)
 	     PRINT-FILES (NREVERSE PRINT-FILES)
 	     APPLY-FILES (NREVERSE APPLY-FILES))
-       (*CATCH 'RETURN-TO-DIRED (PROGN	 
+       (CATCH 'RETURN-TO-DIRED (PROGN	 
 	 (COND ((OR DELETE-FILES UNDELETE-FILES FIND-FILES PRINT-FILES APPLY-FILES)
 		(AND DELETE-FILES (DIRED-PRINT-FILE-LIST DELETE-FILES "deleted"))
 		(AND UNDELETE-FILES (DIRED-PRINT-FILE-LIST UNDELETE-FILES "undeleted"))
@@ -982,7 +1034,7 @@ Returns T if user typed E or Y or Q, NIL if user typed N."
 			      (LET* ((*MINI-BUFFER-REPEATED-COMMAND* '())
 				     *DIRED-FUNCTION-TO-APPLY*)
 				(MULTIPLE-VALUE-BIND (FNSPEC STRING)
-				    (READ-FUNCTION-NAME "Function to apply:" 'QC-FILE)
+				    (READ-FUNCTION-NAME "Function to apply:" 'COMPILE-FILE)
 				  (SETQ *DIRED-FUNCTION-TO-APPLY*
 					(COND ((FDEFINEDP FNSPEC) FNSPEC)
 					      (T (CONDITION-CASE ()
@@ -993,11 +1045,15 @@ Returns T if user typed E or Y or Q, NIL if user typed N."
 						    'DIRED-APPLY-FUNCTION NIL))))
 		       (AND DELETE-FILES
 			    (DIRED-DO-FILE-LIST DELETE-FILES 'DIRED-DELETE-FILE "delete"
-						:DELETE-MULTIPLE-FILES))
+						:DELETE-MULTIPLE-FILES
+						#'(LAMBDA (LINE)
+						    (SETF (GETF (LINE-PLIST LINE) ':DELETED) T))))
 		       (AND UNDELETE-FILES
 			    (DIRED-DO-FILE-LIST UNDELETE-FILES 'DIRED-UNDELETE-FILE
 						"undelete"
-						:UNDELETE-MULTIPLE-FILES))
+						:UNDELETE-MULTIPLE-FILES
+						#'(LAMBDA (LINE)
+						    (SETF (GETF (LINE-PLIST LINE) ':DELETED) NIL))))
 		       (AND FIND-FILES
 			    (DIRED-DO-FILE-LIST FIND-FILES 'DIRED-FIND-FILE "visit"))
 		       (AND PRINT-FILES
@@ -1028,36 +1084,36 @@ Returns T if user typed E or Y or Q, NIL if user typed N."
 				    (LINE-NEXT LINE)))
 			     ((NULL (LINE-NEXT LINE)))
 			   (COND ((= (LENGTH LINE) 0))
-				 ((CHAR-EQUAL (CLI:AREF LINE 0) #/D)
+				 ((CHAR-EQUAL (CHAR LINE 0) #/D)
 				  (IF (OR (EQ QUERY-RESULT :EXPUNGE)
 					  (NOT UNDELETEABLE))
 				      (DELETE-INTERVAL (BEG-OF-LINE LINE)
 						       (BEG-OF-LINE (LINE-NEXT LINE))
 						       T)
 				    (MUNG-LINE LINE)
-				    (SETF (CLI:AREF LINE 0) #/d)))
-				 ((CHAR (CLI:AREF LINE 0) #/SP)
+				    (SETF (CHAR LINE 0) #/d)))
+				 ((CHAR (CHAR LINE 0) #/SP)
 				  (MUNG-LINE LINE)
-				  (SETF (CLI:AREF LINE 0) #/SP)))))))))
-	 (RETURN-FROM DIRED-EXIT T))))
-    (COND ((DIRED-LINE-PATHNAME LINE)
-	   (CASE (CLI:AREF LINE 0)
-	     (#/D (PUSH LINE DELETE-FILES))
-	     (#/U (PUSH LINE UNDELETE-FILES))
-	     (#/F (PUSH LINE FIND-FILES))
-	     (#/P (PUSH LINE PRINT-FILES))
-	     (#/A (PUSH LINE APPLY-FILES)))))))
+				  (SETF (CHAR LINE 0) #/SP)))))))))
+	 (RETURN-FROM DIRED-PROCESS-FILES T))))
+    (WHEN (DIRED-LINE-PATHNAME LINE)
+      (CASE (CHAR LINE 0)
+	(#/D (PUSH LINE DELETE-FILES))
+	(#/U (PUSH LINE UNDELETE-FILES))
+	(#/F (PUSH LINE FIND-FILES))
+	(#/P (PUSH LINE PRINT-FILES))
+	(#/A (PUSH LINE APPLY-FILES))))))
 
 (DEFUN DIRED-PRINT-FILE-LIST (FILES NAME)
   (FORMAT T "~&Files to be ~A" NAME)
   (WHEN *DIRED-PATHNAME-NAME* (FORMAT T  " in ~A" *DIRED-PATHNAME-NAME*))
-  (CLI:TERPRI) (CLI:TERPRI)
+  (TERPRI) (TERPRI)
   (SEND *STANDARD-OUTPUT* :ITEM-LIST NIL
 	   (MAPCAR #'(LAMBDA (LINE)
 		       (LET ((PLIST (LOCF (LINE-PLIST LINE))))
 			 (STRING-APPEND
 			   (IF (GET PLIST :DONT-REAP) #/$ #/SP)
-			   (IF (GET PLIST :NOT-BACKED-UP) #/! #/SP)
+			   (IF (GET PLIST :NOT-BACKED-UP) #/! #/SP)
 			   (IF (GET PLIST :LINK-TO) #/: #/SP)
 			   (IF (GET PLIST :NEWEST) #/> #/SP)
 			   #/SP
@@ -1100,7 +1156,7 @@ Returns T if user typed E or Y or Q, NIL if user typed N."
 				  :HELP-FUNCTION DIRED-FILE-QUERY-HELP-NO-EXPUNGE))
 		     STRING))
     ((T) T)
-    ((NIL) (*THROW 'RETURN-TO-DIRED NIL))
+    ((NIL) (THROW 'RETURN-TO-DIRED NIL))
     (:EXPUNGE :EXPUNGE)
     (:ABORT NIL)))
 
@@ -1117,15 +1173,20 @@ Returns T if user typed E or Y or Q, NIL if user typed N."
 ;;; and a second of FILES.  It should return either an error object (entire operation failed),
 ;;; NIL (entire operation successful),
 ;;; or a list of values corresponding to individual message values.
-(DEFUN DIRED-DO-FILE-LIST (FILES FUNCTION NAME &OPTIONAL MULTIPLE-FILE-MESSAGE
+(DEFUN DIRED-DO-FILE-LIST (FILES FUNCTION NAME &OPTIONAL MULTIPLE-FILE-MESSAGE AUXILIARY-FUNCTION
 			   &AUX ERR PATHS)
+;; Added AUXILIARY-FUNCTION which is called for each file in FILES when the multiple-file
+;; path is used.  This is so delete/undelete can pass in a function to update the plist
+;; on each line.  1/2/85 KHS.
   (COND ((AND MULTIPLE-FILE-MESSAGE
-	      (SEND (DIRED-LINE-PATHNAME (CAR FILES))
-		    :OPERATION-HANDLED-P MULTIPLE-FILE-MESSAGE))
-	 (SETQ PATHS (MAPCAR 'DIRED-LINE-PATHNAME FILES))
+	      (SEND (DIRED-LINE-PATHNAME (CAR FILES)) :OPERATION-HANDLED-P MULTIPLE-FILE-MESSAGE))
+	 (SETQ PATHS (MAPCAR #'DIRED-LINE-PATHNAME FILES))
 	 (SETQ ERR (SEND (CAR PATHS) MULTIPLE-FILE-MESSAGE
 			 NIL			;error-p
 			 PATHS))
+	 (AND AUXILIARY-FUNCTION
+	      (NOT (ERRORP ERR))
+	      (MAPC AUXILIARY-FUNCTION FILES))
 	 (AND NAME (ERRORP ERR)
 	      (DIRED-REPORT-ERROR NAME "files" ERR))
 	 (AND NAME (CONSP ERR)
@@ -1334,7 +1395,7 @@ With numeric argument, processes whole directory." ()
 		 (OR (GET (LOCF (LINE-PLIST LINE)) :DONT-REAP)
 		     (WITH-READ-ONLY-SUPPRESSED (*INTERVAL*)
 		        (MUNG-LINE LINE)
-			(SETF (CLI:AREF LINE 0) #/D))))))))
+			(SETF (CHAR LINE 0) #/D))))))))
   DIS-TEXT)
 
 (DEFCOM COM-DIRED-AUTOMATIC-ALL "Mark all superfluous files for deletion." ()
@@ -1423,8 +1484,8 @@ then asks for confirmation, for each filename individually."
 	  PATHNAME N-TO-KEEP)
   (REAP-DIRECTORY PATHNAME N-TO-KEEP *STANDARD-OUTPUT*))
 
-(COMPILER:MAKE-OBSOLETE DIRED-PATHNAME-LESSP "use FS:PATHNAME-LESSP")
-(DEFF DIRED-PATHNAME-LESSP 'FS:PATHNAME-LESSP)
+;(COMPILER:MAKE-OBSOLETE DIRED-PATHNAME-LESSP "use FS:PATHNAME-LESSP")
+;(DEFF DIRED-PATHNAME-LESSP 'FS:PATHNAME-LESSP)
 
 (DEFUN REAP-DIRECTORY (PATHNAME N-TO-KEEP STREAM &AUX DIRECTORY-LIST SOMETHING-DELETED)
   (SETQ DIRECTORY-LIST (FS:DIRECTORY-LIST PATHNAME :SORTED))
@@ -1528,23 +1589,21 @@ then asks for confirmation, for each filename individually."
   (SETQ CHOICES (LOOP FOR IND IN INDICATORS
 		      COLLECT (LIST IND
 				    (OR (GET IND 'PRETTY-NAME)
-					(PUTPROP IND
-						 (STRING-CAPITALIZE-WORDS (STRING-APPEND IND))
-						 'PRETTY-NAME))
-				    (DO ((L FS:*KNOWN-DIRECTORY-PROPERTIES* (CDR L)))
-					((NULL L) :SEXP)
-				      (AND (MEMQ IND (CDAR L))
-					   (RETURN (CADDR (CAAR L))))))))
-  (LET ((BASE 10.) (IBASE 10.) (*NOPOINT T))
-    (*CATCH 'ABORT
+					(SETF (GET IND 'PRETTY-NAME)
+					      (STRING-CAPITALIZE-WORDS (STRING-APPEND IND))))
+				    (DOLIST (L FS:*KNOWN-DIRECTORY-PROPERTIES* :SEXP)
+				      (AND (MEMQ IND (CDR L))
+					   (RETURN (CADDR (CAR L))))))))
+  (LET ((*READ-BASE* 10.) (*PRINT-BASE* 10.) (*NOPOINT T) (*PRINT-RADIX* NIL))
+    (CATCH 'ABORT
       (PROGV INDICATORS VALUES
 	(TV:CHOOSE-VARIABLE-VALUES CHOICES
 				   :LABEL (FORMAT NIL "Change properties for ~A" PATHNAME)
 				   :MARGIN-CHOICES '("Do It"
-						      ("Abort" (*THROW 'ABORT T))))
+						     ("Abort" (THROW 'ABORT T))))
 	(SETQ CHANGES (LOOP FOR IND IN INDICATORS
 			    FOR VAL IN VALUES
-			    AS NEW = (SYMEVAL IND)
+			    AS NEW = (SYMBOL-VALUE IND)
 			    WHEN (NOT (EQUAL NEW VAL))
 			    NCONC (LIST IND NEW))))
       (APPLY 'FS:CHANGE-FILE-PROPERTIES PATHNAME T CHANGES)
@@ -1557,18 +1616,17 @@ then asks for confirmation, for each filename individually."
 (DEFUN INITIALIZE-MAIL-CONTROL-X-COMTAB ()
   (SETQ *MAIL-CONTROL-X-COMTAB*
 	(SET-COMTAB '*MAIL-CONTROL-X-COMTAB*
-; character lossage
-		    '(#/A COM-ADD-MORE-TEXT
-		      #/C COM-ADD-CC-FIELD
-		      #/S COM-ADD-SUBJECT-FIELD
-		      #/T COM-ADD-TO-FIELD)
+		    '(#/A COM-ADD-MORE-TEXT
+		      #/C COM-ADD-CC-FIELD
+		      #/S COM-ADD-SUBJECT-FIELD
+		      #/T COM-ADD-TO-FIELD)
 		    (MAKE-COMMAND-ALIST
 		      '(COM-ADD-TO-FIELD
-			 COM-ADD-CC-FIELD
-			 COM-ADD-SUBJECT-FIELD
-			 COM-ADD-IN-REPLY-TO-FIELD
-			 COM-ADD-MORE-TEXT COM-ADD-FROM-FIELD
-			 COM-CHANGE-SUBJECT-PRONOUNS))))
+			COM-ADD-CC-FIELD
+			COM-ADD-SUBJECT-FIELD
+			COM-ADD-IN-REPLY-TO-FIELD
+			COM-ADD-MORE-TEXT COM-ADD-FROM-FIELD
+			COM-CHANGE-SUBJECT-PRONOUNS))))
   (SET-COMTAB-INDIRECTION *MAIL-CONTROL-X-COMTAB* *ZMACS-CONTROL-X-COMTAB*))
 
 ;;; Define command names now for MAKE-COMMAND-ALIST's sake.
@@ -1584,25 +1642,23 @@ then asks for confirmation, for each filename individually."
 
 ;;;; Send mail
 (DEFMINOR COM-MAIL-MODE MAIL-MODE "Mail" 1 "Setup for mailing" ()
-; character lossage
-  (SET-CHAR-SYNTAX WORD-ALPHABETIC *MODE-WORD-SYNTAX-TABLE* #/_)
-  (SET-CHAR-SYNTAX WORD-ALPHABETIC *MODE-WORD-SYNTAX-TABLE* #/')
-  (SET-CHAR-SYNTAX WORD-DELIMITER *MODE-WORD-SYNTAX-TABLE* #/.)
-  (SET-COMTAB *MODE-COMTAB* '(#/C- COM-EXIT-COM-MAIL
-			      #/END COM-EXIT-COM-MAIL
-			      #/ABORT COM-QUIT-COM-MAIL
-			      #/C-] COM-QUIT-COM-MAIL
-			      #/TAB COM-TAB-TO-TAB-STOP
-			      #/H-F COM-FORWARD-ADDRESS
-			      #/H-B COM-BACKWARD-ADDRESS
-			      #/H-K COM-KILL-ADDRESS
-			      #/H-RUBOUT COM-BACKWARD-KILL-ADDRESS
-			      #/H-T COM-EXCHANGE-ADDRESSES)
+  (SET-CHAR-SYNTAX WORD-ALPHABETIC *MODE-WORD-SYNTAX-TABLE* #/_)
+  (SET-CHAR-SYNTAX WORD-ALPHABETIC *MODE-WORD-SYNTAX-TABLE* #/')
+  (SET-CHAR-SYNTAX WORD-DELIMITER *MODE-WORD-SYNTAX-TABLE* #/.)
+  (SET-COMTAB *MODE-COMTAB* '(#/C- COM-EXIT-COM-MAIL
+			      #/END COM-EXIT-COM-MAIL
+			      #/ABORT COM-QUIT-COM-MAIL
+			      #/C-] COM-QUIT-COM-MAIL
+			      #/TAB COM-TAB-TO-TAB-STOP
+			      #/H-F COM-FORWARD-ADDRESS
+			      #/H-B COM-BACKWARD-ADDRESS
+			      #/H-K COM-KILL-ADDRESS
+			      #/H-RUBOUT COM-BACKWARD-KILL-ADDRESS
+			      #/H-T COM-EXCHANGE-ADDRESSES)
 	      (IF (VARIABLE-BOUNDP *TEMPLATE-COMMAND-ALIST*)
 		  *TEMPLATE-COMMAND-ALIST*))
   (SET-COMTAB *MODE-COMTAB*
-; character lossage
-	      (LIST #/C-X (MAKE-EXTENDED-COMMAND *MAIL-CONTROL-X-COMTAB*)))
+	      (LIST #/C-X (MAKE-EXTENDED-COMMAND *MAIL-CONTROL-X-COMTAB*)))
   (SETQ *COMMENT-START* NIL)		;Be like Text mode
   ;; This FORMAT is here to dynamically figure out how to type the character
   (SET-MODE-LINE-LIST `(,@(MODE-LINE-LIST) ,(FORMAT NIL "     ~:@C mails, ~:@C aborts"
@@ -1627,32 +1683,34 @@ Abort quits out." ()
 
 (DEFUN PARSE-BUG-ARG (WHO)
   (VALUES (STRING-APPEND "BUG-" WHO #/@ *HOST-FOR-BUG-REPORTS*)
-	  (LET ((S (FORMAT NIL "In~:[ ~A in~;~*~] ~A, on ~A:~2%"
-			       (STRING-EQUAL WHO "LISPM") WHO
+	  (LET ((S (FORMAT NIL "In~:[ ~A in~;~*~] ~A, on ~A (~A):~2%"
+			       (STRING-EQUAL WHO "CADR") WHO	;used to be BUG-LISPM
 			       (SI:SYSTEM-VERSION-INFO)
-			       SI:LOCAL-PRETTY-HOST-NAME)))
+			       SI:LOCAL-PRETTY-HOST-NAME
+			       (machine-type))))
 	    ;; Fill to fit within a 75-column line
 	    (LOOP WITH LINE-START = 0
 		  FOR START = 0 THEN (+ COMMA-POS 2)
 		  AS PREV-COMMA-POS = NIL THEN COMMA-POS
 		  AS COMMA-POS = (STRING-SEARCH ", " S START)
-		  WHEN (> (- (OR COMMA-POS (STRING-LENGTH S)) LINE-START) 72.)
-		    UNLESS (NULL PREV-COMMA-POS)
-		      DO (SETF (CLI:AREF S (1+ PREV-COMMA-POS)) #/NEWLINE)
-			 (SETQ LINE-START (+ PREV-COMMA-POS 2))
-			 (SETQ COMMA-POS PREV-COMMA-POS)
-		  UNTIL (NULL COMMA-POS))
+	       WHEN (> (- (OR COMMA-POS (STRING-LENGTH S)) LINE-START) 72.)
+	         UNLESS (NULL PREV-COMMA-POS)
+		   DO (SETF (CHAR S (1+ PREV-COMMA-POS)) #/NEWLINE)
+		      (when (> prev-comma-pos line-start)
+			(SETQ LINE-START (+ PREV-COMMA-POS 2))
+			(SETQ COMMA-POS PREV-COMMA-POS))
+	       UNTIL (NULL COMMA-POS))
 	    S)))
 
 (DEFCOM COM-BUG "Setup mail buffer for sending a bug report, arg prompts for type" ()
   (LET (WHO WHAT)
     (SETQ WHO (COMPLETING-READ-FROM-MINI-BUFFER
-		"Report bug to BUG- (default LISPM)"
+		"Report bug to BUG- (default CADR)"	;used to be BUG-LISPM
 		(SUBSET #'(LAMBDA (ELT) (NOT (EQUAL (CAR ELT) "Other")))
 			*ZMAIL-BUG-LIST*)
 		T NIL))
     (IF (CONSP WHO) (SETQ WHO (CAR WHO)))
-    (AND (EQUAL WHO "") (SETQ WHO 'LISPM))
+    (AND (EQUAL WHO "") (SETQ WHO 'CADR))	;used to be BUG-LISPM
     (MULTIPLE-VALUE (WHO WHAT)
       (PARSE-BUG-ARG WHO))
     (COM-MAIL-INTERNAL '*DEFAULT-ZMACS-BUG-TEMPLATE* WHO WHAT)))
@@ -1668,9 +1726,9 @@ Abort quits out." ()
     (DELETE-INTERVAL *INTERVAL*)
     (INSERT-MOVING (POINT) "To: ")
     (AND WHO (INSERT-MOVING (POINT) WHO))
-    (LET ((BP (INSERT (POINT) #/RETURN)))
+    (LET ((BP (INSERT (POINT) #/NEWLINE)))
       (SETQ BP (INSERT BP *MAIL-HEADER-DELIMITER*))
-      (SETQ BP (INSERT BP #/RETURN))
+      (SETQ BP (INSERT BP #/NEWLINE))
       (WHEN WHAT
 	(INSERT-MOVING BP WHAT)
 	(IF INITIAL-POSITION
@@ -1680,8 +1738,8 @@ Abort quits out." ()
     ;; If so, invoke the template.
     (AND (NEQ RE-INIT-P T)
 	 (BOUNDP RE-INIT-P)
-	 (SYMEVAL RE-INIT-P)
-	 (FUNCALL (SYMEVAL RE-INIT-P) *INTERVAL* NIL))
+	 (SYMBOL-VALUE RE-INIT-P)
+	 (FUNCALL (SYMBOL-VALUE RE-INIT-P) *INTERVAL* NIL))
     (DISCARD-UNDO-INFORMATION *INTERVAL*)
     (NOT-MODIFIED *INTERVAL*))
   DIS-TEXT)
@@ -1698,7 +1756,7 @@ Abort quits out." ()
 	     (SEND *WINDOW* :EXIT-SPECIAL-BUFFER NIL BUFFER)
 	     (KILL-BUFFER BUFFER)
 	     (IF EXIT-FLAG
-		 (*THROW 'EXIT-TOP-LEVEL NIL))
+		 (THROW 'EXIT-TOP-LEVEL NIL))
 	     DIS-TEXT))
 	  (T (FORMAT *QUERY-IO* "~&Quitting, you may continue")
 	     (IF (OR *EXITING-MAIL-EXITS-ZMACS*
@@ -1709,20 +1767,20 @@ Abort quits out." ()
 		 (FIND-COMMAND-ON-KEYS 'COM-MAIL 1 " by giving a numeric arg to ")))
 	     (PROG1 (SEND *WINDOW* :EXIT-SPECIAL-BUFFER)
 		    (IF EXIT-FLAG
-			(*THROW 'EXIT-TOP-LEVEL NIL)))))))
+			(THROW 'EXIT-TOP-LEVEL NIL)))))))
 
 (DEFCOM COM-EXIT-COM-MAIL "Actually transmits the mail." ()
   (LET* ((BP1 (INTERVAL-FIRST-BP *INTERVAL*))
-	 (BP2 (OR (SEARCH BP1 (STRING-APPEND #/RETURN
-					     *MAIL-HEADER-DELIMITER*
-					     #/RETURN))
+	 (BP2 (OR (ZWEI-SEARCH BP1 (STRING-APPEND #/NEWLINE
+						  *MAIL-HEADER-DELIMITER*
+						  #/NEWLINE))
 		  (BARF "You've messed up the buffer"))))
     ;; Call ZMail to do the actual sending in the appropriate manner for this host
     (SEND-MESSAGE BP1 (BEG-LINE BP2 -1 T) T BP2 (INTERVAL-LAST-BP *INTERVAL*) T))
   (LET ((EXIT-FLAG *EXITING-MAIL-EXITS-ZMACS*))
     (PROG1 (SEND *WINDOW* :EXIT-SPECIAL-BUFFER T)
 	   (IF EXIT-FLAG
-	       (*THROW 'EXIT-TOP-LEVEL NIL)))))
+	       (THROW 'EXIT-TOP-LEVEL NIL)))))
 
 (DEFUN ZMACS-COMPOSE-MESSAGE (WHO WHAT &OPTIONAL INITIAL-POSITION &AUX (RE-INIT-P T))
   (AND (EQ WHO T) (SETQ RE-INIT-P NIL WHO NIL))
@@ -1731,7 +1789,7 @@ Abort quits out." ()
   (SETQ *EXITING-MAIL-EXITS-ZMACS* T)
   DIS-TEXT)
 
-(DEFUN BUG (&OPTIONAL (PROGRAM 'LISPM) TEXT CALL-EDITOR-ANYWAY)
+(DEFUN BUG (&OPTIONAL (PROGRAM 'CADR) TEXT CALL-EDITOR-ANYWAY)	;used to be BUG-LISPM
   "Record a bug in PROGRAM.
 If TEXT is omitted, or CALL-EDITOR-ANYWAY is T, an editor window is used.
 CALL-EDITOR-ANYWAY can be a number; the cursor is initially positioned
@@ -1774,124 +1832,123 @@ With no arguments, you specify everything with the editor window."
 	 (ED `(MAIL ,USER ,TEXT
 		    ,(IF (NUMBERP CALL-EDITOR-ANYWAY) CALL-EDITOR-ANYWAY))))))
 
-#|;ZMACS frames are now used for the MAIL and DIRED functions.
+; ZMACS frames are now used for the MAIL and DIRED functions.
 
-(DEFVAR *MAIL-AND-DIRED-USE-ZMACS* T
-  "Non-NIL means use a ZMACS frame for the functions MAIL and DIRED.
-NIL means use a standalone mail-or-dired frame.")
+;(DEFVAR *MAIL-AND-DIRED-USE-ZMACS* T
+;  "Non-NIL means use a ZMACS frame for the functions MAIL and DIRED.
+;NIL means use a standalone mail-or-dired frame.")
 
-(DEFUN DIRED (&OPTIONAL (PATHNAME ""))
-   "Edit the directory specified in PATHNAME.
-The default is to edit the directory of the last file you tried to open.
-You use the editor to specify files to delete, rename, etc.,
-then when you exit the operations are performed.
-Type Help when inside DIRED for more info."
-  (IF *MAIL-AND-DIRED-USE-ZMACS*
-      (ED `(DIRECTORY
-	     ,(FS:MERGE-PATHNAME-DEFAULTS PATHNAME
-					  (SEND FS:LAST-FILE-OPENED :NEW-PATHNAME
-								    :NAME :WILD
-								    :TYPE :WILD
-								    :VERSION :WILD)
-					  :WILD :WILD)))
-    (USING-RESOURCE (DIRED STANDALONE-MAIL-OR-DIRED-FRAME)
-      (SEND DIRED :DIRED PATHNAME))))
+;(DEFUN DIRED (&OPTIONAL (PATHNAME ""))
+;   "Edit the directory specified in PATHNAME.
+;The default is to edit the directory of the last file you tried to open.
+;You use the editor to specify files to delete, rename, etc.,
+;then when you exit the operations are performed.
+;Type Help when inside DIRED for more info."
+;  (IF *MAIL-AND-DIRED-USE-ZMACS*
+;      (ED `(DIRECTORY
+;	     ,(FS:MERGE-PATHNAME-DEFAULTS PATHNAME
+;					  (SEND FS:LAST-FILE-OPENED :NEW-PATHNAME
+;								    :NAME :WILD
+;								    :TYPE :WILD
+;								    :VERSION :WILD)
+;					  :WILD :WILD)))
+;    (USING-RESOURCE (DIRED STANDALONE-MAIL-OR-DIRED-FRAME)
+;      (SEND DIRED :DIRED PATHNAME))))
 
-;;; Top level functions for mailing
-(DEFUN MAIL (&OPTIONAL USER TEXT CALL-EDITOR-ANYWAY)
-  "Mail the string TEXT to the user USER. 
-If TEXT is omitted, or CALL-EDITOR-ANYWAY is T, an editor window is used.
-CALL-EDITOR-ANYWAY can be a number; the cursor is initially positioned
-that many characters from the beginning of the string TEXT.
-With no arguments, you specify everything with the editor window."
-  (COND ((AND TEXT (NOT CALL-EDITOR-ANYWAY))
-	 (SEND-MESSAGE-STRING USER TEXT))
-	(*MAIL-AND-DIRED-USE-ZMACS*
-	 (ED `(MAIL ,USER ,TEXT
-		    ,(IF (NUMBERP CALL-EDITOR-ANYWAY) CALL-EDITOR-ANYWAY))))
-	(T
-	 (USING-RESOURCE (WINDOW STANDALONE-MAIL-OR-DIRED-FRAME)
-	   (SEND WINDOW :MAIL USER TEXT
-		 (IF (NUMBERP CALL-EDITOR-ANYWAY) CALL-EDITOR-ANYWAY))))))
+;;;; Top level functions for mailing
+;(DEFUN MAIL (&OPTIONAL USER TEXT CALL-EDITOR-ANYWAY)
+;  "Mail the string TEXT to the user USER. 
+;If TEXT is omitted, or CALL-EDITOR-ANYWAY is T, an editor window is used.
+;CALL-EDITOR-ANYWAY can be a number; the cursor is initially positioned
+;that many characters from the beginning of the string TEXT.
+;With no arguments, you specify everything with the editor window."
+;  (COND ((AND TEXT (NOT CALL-EDITOR-ANYWAY))
+;	 (SEND-MESSAGE-STRING USER TEXT))
+;	(*MAIL-AND-DIRED-USE-ZMACS*
+;	 (ED `(MAIL ,USER ,TEXT
+;		    ,(IF (NUMBERP CALL-EDITOR-ANYWAY) CALL-EDITOR-ANYWAY))))
+;	(T
+;	 (USING-RESOURCE (WINDOW STANDALONE-MAIL-OR-DIRED-FRAME)
+;	   (SEND WINDOW :MAIL USER TEXT
+;		 (IF (NUMBERP CALL-EDITOR-ANYWAY) CALL-EDITOR-ANYWAY))))))
 
-;;; The :BASE-TICK operation is called by the :MODIFIED-P operation on the interval.
-(DEFFLAVOR STANDALONE-MAIL-OR-DIRED-FRAME ((*DIRED-PATHNAME-NAME* NIL)
-					   BASE-TICK)
-	   (STANDALONE-EDITOR-FRAME)
-  (:SPECIAL-INSTANCE-VARIABLES *DIRED-PATHNAME-NAME*)
-  :GETTABLE-INSTANCE-VARIABLES
-  (:DOCUMENTATION :SPECIAL-PURPOSE "The editor window for the (DIRED) and (MAIL) functions"))
+;;;; The :BASE-TICK operation is called by the :MODIFIED-P operation on the interval.
+;(DEFFLAVOR STANDALONE-MAIL-OR-DIRED-FRAME ((*DIRED-PATHNAME-NAME* NIL)
+;					   BASE-TICK)
+;	   (STANDALONE-EDITOR-FRAME)
+;  (:SPECIAL-INSTANCE-VARIABLES *DIRED-PATHNAME-NAME*)
+;  :GETTABLE-INSTANCE-VARIABLES
+;  (:DOCUMENTATION :SPECIAL-PURPOSE "The editor window for the (DIRED) and (MAIL) functions"))
 
-(DEFMETHOD (STANDALONE-MAIL-OR-DIRED-FRAME :EXIT-SPECIAL-BUFFER) (&REST IGNORE)
-  (*THROW 'EXIT-TOP-LEVEL T))
+;(DEFMETHOD (STANDALONE-MAIL-OR-DIRED-FRAME :EXIT-SPECIAL-BUFFER) (&REST IGNORE)
+;  (THROW 'EXIT-TOP-LEVEL T))
 
-(DEFMETHOD (STANDALONE-MAIL-OR-DIRED-FRAME :FIND-SPECIAL-BUFFER) (&REST IGNORE))
+;(DEFMETHOD (STANDALONE-MAIL-OR-DIRED-FRAME :FIND-SPECIAL-BUFFER) (&REST IGNORE))
 
-(DEFMETHOD (STANDALONE-MAIL-OR-DIRED-FRAME :NAME-FOR-SELECTION) ()
-  (IF *DIRED-PATHNAME-NAME*
-      (FORMAT NIL "Dired: ~A" *DIRED-PATHNAME-NAME*)
-    (FORMAT NIL "Mail: ~A"
-	    (BP-LINE (INTERVAL-FIRST-BP (WINDOW-INTERVAL TV:SELECTION-SUBSTITUTE))))))
+;(DEFMETHOD (STANDALONE-MAIL-OR-DIRED-FRAME :NAME-FOR-SELECTION) ()
+;  (IF *DIRED-PATHNAME-NAME*
+;      (FORMAT NIL "Dired: ~A" *DIRED-PATHNAME-NAME*)
+;    (FORMAT NIL "Mail: ~A"
+;	    (BP-LINE (INTERVAL-FIRST-BP (WINDOW-INTERVAL TV:SELECTION-SUBSTITUTE))))))
 
-(DEFMETHOD (STANDALONE-MAIL-OR-DIRED-FRAME :SELECTABLE-WINDOWS) ()
-  (LIST (LIST (SEND SELF :NAME-FOR-SELECTION) SELF)))
+;(DEFMETHOD (STANDALONE-MAIL-OR-DIRED-FRAME :SELECTABLE-WINDOWS) ()
+;  (LIST (LIST (SEND SELF :NAME-FOR-SELECTION) SELF)))
 
-(DEFMETHOD (STANDALONE-MAIL-OR-DIRED-FRAME :DIRED) (PATHNAME)
-  (SETQ PATHNAME (FS:MERGE-PATHNAME-DEFAULTS PATHNAME
-					     (SEND FS:LAST-FILE-OPENED :NEW-PATHNAME
-								       :NAME :WILD
-								       :TYPE :WILD
-								       :VERSION :WILD)
-					     :WILD :WILD))
-  (SETQ BASE-TICK *TICK*)
-  (LET ()
-    (SYS:%USING-BINDING-INSTANCES (CLOSURE-BINDINGS EDITOR-CLOSURE))
-    (COM-DIRED-MODE)
-    (MAKE-BUFFER-READ-ONLY *INTERVAL*)
-    (DIRECTORY-EDIT-REVERT *INTERVAL* PATHNAME)
-    (MUST-REDISPLAY *WINDOW* DIS-ALL))
-  (TV:WINDOW-CALL (SELF :DEACTIVATE)
-    ;; Make sure typeout window does not come up
-    (SEND (SEND TV:SELECTION-SUBSTITUTE :TYPEOUT-WINDOW) :MAKE-COMPLETE)
-    (SEND TV:SELECTION-SUBSTITUTE :EDIT)))
+;(DEFMETHOD (STANDALONE-MAIL-OR-DIRED-FRAME :DIRED) (PATHNAME)
+;  (SETQ PATHNAME (FS:MERGE-PATHNAME-DEFAULTS PATHNAME
+;					     (SEND FS:LAST-FILE-OPENED :NEW-PATHNAME
+;								       :NAME :WILD
+;								       :TYPE :WILD
+;								       :VERSION :WILD)
+;					     :WILD :WILD))
+;  (SETQ BASE-TICK *TICK*)
+;  (LET ()
+;    (SYS:%USING-BINDING-INSTANCES (CLOSURE-BINDINGS EDITOR-CLOSURE))
+;    (COM-DIRED-MODE)
+;    (MAKE-BUFFER-READ-ONLY *INTERVAL*)
+;    (DIRECTORY-EDIT-REVERT *INTERVAL* PATHNAME)
+;    (MUST-REDISPLAY *WINDOW* DIS-ALL))
+;  (TV:WINDOW-CALL (SELF :DEACTIVATE)
+;    ;; Make sure typeout window does not come up
+;    (SEND (SEND TV:SELECTION-SUBSTITUTE :TYPEOUT-WINDOW) :MAKE-COMPLETE)
+;    (SEND TV:SELECTION-SUBSTITUTE :EDIT)))
 
-(DEFMETHOD (STANDALONE-MAIL-OR-DIRED-FRAME :MAIL)
-	   (WHO WHAT &OPTIONAL INITIAL-POSITION &AUX (RE-INIT-P T))
-  (AND (EQ WHO T) (SETQ RE-INIT-P NIL WHO NIL))
-  (IF RE-INIT-P (SETQ BASE-TICK *TICK*))
-  (SETQ *DIRED-PATHNAME-NAME* NIL)
-  (FUNCALL EDITOR-CLOSURE
-	   'COM-MAIL-INTERNAL RE-INIT-P (AND WHO (STRING WHO)) (AND WHAT (STRING WHAT))
-	   INITIAL-POSITION)
-  (SETF (WINDOW-REDISPLAY-DEGREE TV:SELECTION-SUBSTITUTE) DIS-ALL)
-  (TV:WINDOW-CALL (SELF :DEACTIVATE)
-    (SEND TV:SELECTION-SUBSTITUTE :EDIT)))
+;(DEFMETHOD (STANDALONE-MAIL-OR-DIRED-FRAME :MAIL)
+;	   (WHO WHAT &OPTIONAL INITIAL-POSITION &AUX (RE-INIT-P T))
+;  (AND (EQ WHO T) (SETQ RE-INIT-P NIL WHO NIL))
+;  (IF RE-INIT-P (SETQ BASE-TICK *TICK*))
+;  (SETQ *DIRED-PATHNAME-NAME* NIL)
+;  (FUNCALL EDITOR-CLOSURE
+;	   'COM-MAIL-INTERNAL RE-INIT-P (AND WHO (STRING WHO)) (AND WHAT (STRING WHAT))
+;	   INITIAL-POSITION)
+;  (SETF (WINDOW-REDISPLAY-DEGREE TV:SELECTION-SUBSTITUTE) DIS-ALL)
+;  (TV:WINDOW-CALL (SELF :DEACTIVATE)
+;    (SEND TV:SELECTION-SUBSTITUTE :EDIT)))
 
-(DEFWINDOW-RESOURCE STANDALONE-MAIL-OR-DIRED-FRAME ()
-	:MAKE-WINDOW (STANDALONE-MAIL-OR-DIRED-FRAME)
-	:REUSABLE-WHEN :DEACTIVATED
-	:INITIAL-COPIES 0)
+;(DEFWINDOW-RESOURCE STANDALONE-MAIL-OR-DIRED-FRAME ()
+;	:MAKE-WINDOW (STANDALONE-MAIL-OR-DIRED-FRAME)
+;	:REUSABLE-WHEN :DEACTIVATED
+;	:INITIAL-COPIES 0)
 
-(DEFUN SOURCE-COMPARE-MERGE (PATHNAME-1 PATHNAME-2 OUTPUT-PATHNAME)
-  "Merge files PATHNAME-1 and PATHNAME-2, putting output in OUTPUT-PATHNAME.
-Merging finds those sections of the files which match and those which differ,
-just like regular SOURCE-COMPARE.  The output is generated by copying the
-matching sections automatically, and asking the user which version to use
-for the differing sections.
-Type Help at the query to get an explanation of the command interface."
-  (IF *MAIL-AND-DIRED-USE-ZMACS*
-      (ED `(SOURCE-COMPARE-MERGE
-	     ,(FS:MERGE-PATHNAME-DEFAULTS PATHNAME-1)
-	     ,(FS:MERGE-PATHNAME-DEFAULTS PATHNAME-2 PATHNAME-1)
-	     ,(FS:MERGE-PATHNAME-DEFAULTS OUTPUT-PATHNAME PATHNAME-2)))
-    (USING-RESOURCE (WINDOW STANDALONE-MAIL-OR-DIRED-FRAME)
-      (TV:WINDOW-CALL ((WINDOW-FRAME WINDOW) :DEACTIVATE)
-	(SEND WINDOW :FUNCALL-EDITOR-CLOSURE
-	      'SOURCE-COMPARE-MERGE-1
-	      (FS:MERGE-PATHNAME-DEFAULTS PATHNAME-1)
-	      (FS:MERGE-PATHNAME-DEFAULTS PATHNAME-2 PATHNAME-1)
-	      (FS:MERGE-PATHNAME-DEFAULTS OUTPUT-PATHNAME PATHNAME-2))))))
-|#
+;(DEFUN SOURCE-COMPARE-MERGE (PATHNAME-1 PATHNAME-2 OUTPUT-PATHNAME)
+;  "Merge files PATHNAME-1 and PATHNAME-2, putting output in OUTPUT-PATHNAME.
+;Merging finds those sections of the files which match and those which differ,
+;just like regular SOURCE-COMPARE.  The output is generated by copying the
+;matching sections automatically, and asking the user which version to use
+;for the differing sections.
+;Type Help at the query to get an explanation of the command interface."
+;  (IF *MAIL-AND-DIRED-USE-ZMACS*
+;      (ED `(SOURCE-COMPARE-MERGE
+;	     ,(FS:MERGE-PATHNAME-DEFAULTS PATHNAME-1)
+;	     ,(FS:MERGE-PATHNAME-DEFAULTS PATHNAME-2 PATHNAME-1)
+;	     ,(FS:MERGE-PATHNAME-DEFAULTS OUTPUT-PATHNAME PATHNAME-2)))
+;    (USING-RESOURCE (WINDOW STANDALONE-MAIL-OR-DIRED-FRAME)
+;      (TV:WINDOW-CALL ((WINDOW-FRAME WINDOW) :DEACTIVATE)
+;	(SEND WINDOW :FUNCALL-EDITOR-CLOSURE
+;	      'SOURCE-COMPARE-MERGE-1
+;	      (FS:MERGE-PATHNAME-DEFAULTS PATHNAME-1)
+;	      (FS:MERGE-PATHNAME-DEFAULTS PATHNAME-2 PATHNAME-1)
+;	      (FS:MERGE-PATHNAME-DEFAULTS OUTPUT-PATHNAME PATHNAME-2))))))
 
 (DEFUN SOURCE-COMPARE-MERGE (PATHNAME-1 PATHNAME-2 OUTPUT-PATHNAME)
   "Merge files PATHNAME-1 and PATHNAME-2, putting output in OUTPUT-PATHNAME.
@@ -1922,16 +1979,16 @@ Type Help at the query to get an explanation of the command interface."
 				     NIL)
 				    (T CH))))
     (UNWIND-PROTECT
-      (PROGN
-	(SETQ FILE-1 (SRCCOM:CREATE-FILE PATHNAME-1)
-	      FILE-2 (SRCCOM:CREATE-FILE PATHNAME-2))
-	(LET ((MARKS (SRCCOM:SOURCE-COMPARE-AUTOMATIC-MERGE-RECORDING
-		       FILE-1 FILE-2 (INTERVAL-STREAM *INTERVAL*))))
-	  (SOURCE-COMPARE-MERGE-QUERY MARKS))
-	(WITH-OPEN-FILE (STREAM OUTPUT-PATHNAME '(:OUT))
-	  (STREAM-OUT-INTERVAL STREAM *INTERVAL*)
-	  (CLOSE STREAM)
-	  (SEND STREAM :TRUENAME)))
+	(PROGN
+	  (SETQ FILE-1 (SRCCOM:CREATE-FILE PATHNAME-1)
+		FILE-2 (SRCCOM:CREATE-FILE PATHNAME-2))
+	  (LET ((MARKS (SRCCOM:SOURCE-COMPARE-AUTOMATIC-MERGE-RECORDING
+			 FILE-1 FILE-2 (INTERVAL-STREAM *INTERVAL*))))
+	    (SOURCE-COMPARE-MERGE-QUERY MARKS))
+	  (WITH-OPEN-FILE (STREAM OUTPUT-PATHNAME '(:OUT))
+	    (STREAM-OUT-INTERVAL STREAM *INTERVAL*)
+	    (CLOSE STREAM)
+	    (SEND STREAM :TRUENAME)))
       (AND FILE-1 (SEND (SRCCOM:FILE-STREAM FILE-1) :CLOSE))
       (AND FILE-2 (SEND (SRCCOM:FILE-STREAM FILE-2) :CLOSE)))))
 
@@ -1939,34 +1996,33 @@ Type Help at the query to get an explanation of the command interface."
 
 (DEFMAJOR COM-EDIT-BUFFERS-MODE EDIT-BUFFERS-MODE "Edit-Buffers"
 	  "Setup for editing the list of ZMACS buffers" ()
-;character lossage
-  (SET-COMTAB *MODE-COMTAB* '(#/SP COM-DOWN-REAL-LINE
-			      #/S COM-EDIT-BUFFERS-SAVE
-			      #/s (0 #/S)
-			      #/W COM-EDIT-BUFFERS-WRITE
-			      #/w (0 #/W)
-			      #/R COM-EDIT-BUFFERS-REVERT
-			      #/r (0 #/R)
-			      #/~ COM-EDIT-BUFFERS-UNMODIFY
-			      #/K COM-EDIT-BUFFERS-DELETE
-			      #/k (0 #/K)
-			      #/D COM-EDIT-BUFFERS-DELETE
-			      #/d (0 #/D)
-			      #/. COM-EDIT-BUFFERS-SELECT
-			      #/C-K COM-EDIT-BUFFERS-DELETE
-			      #/C-D COM-EDIT-BUFFERS-DELETE
-			      #/U COM-EDIT-BUFFERS-UNDELETE
-			      #/u (0 #/U)
-			      #/N COM-EDIT-BUFFERS-NO-FILE-IO
-			      #/n (0 #/N)
-			      #/P COM-EDIT-BUFFERS-PRINT
-			      #/p (0 #/P)
-			      #/HELP COM-EDIT-BUFFERS-HELP
-			      #/RUBOUT COM-EDIT-BUFFERS-REVERSE-UNDELETE
-			      #/ABORT COM-EDIT-BUFFERS-ABORT
-			      #/END COM-EDIT-BUFFERS-EXIT
-			      #/Q COM-EDIT-BUFFERS-EXIT
-			      #/q (0 #/Q)))
+  (SET-COMTAB *MODE-COMTAB* '(#/SP COM-DOWN-REAL-LINE
+			      #/S COM-EDIT-BUFFERS-SAVE
+			      #/s (0 #/S)
+			      #/W COM-EDIT-BUFFERS-WRITE
+			      #/w (0 #/W)
+			      #/R COM-EDIT-BUFFERS-REVERT
+			      #/r (0 #/R)
+			      #/~ COM-EDIT-BUFFERS-UNMODIFY
+			      #/K COM-EDIT-BUFFERS-DELETE
+			      #/k (0 #/K)
+			      #/D COM-EDIT-BUFFERS-DELETE
+			      #/d (0 #/D)
+			      #/. COM-EDIT-BUFFERS-SELECT
+			      #/C-K COM-EDIT-BUFFERS-DELETE
+			      #/C-D COM-EDIT-BUFFERS-DELETE
+			      #/U COM-EDIT-BUFFERS-UNDELETE
+			      #/u (0 #/U)
+			      #/N COM-EDIT-BUFFERS-NO-FILE-IO
+			      #/n (0 #/N)
+			      #/P COM-EDIT-BUFFERS-PRINT
+			      #/p (0 #/P)
+			      #/HELP COM-EDIT-BUFFERS-HELP
+			      #/RUBOUT COM-EDIT-BUFFERS-REVERSE-UNDELETE
+			      #/ABORT COM-EDIT-BUFFERS-ABORT
+			      #/END COM-EDIT-BUFFERS-EXIT
+			      #/Q COM-EDIT-BUFFERS-EXIT
+			      #/q (0 #/Q)))
   (SET-MODE-LINE-LIST (APPEND (MODE-LINE-LIST) '("   End to exit, Abort to cancel"))))
 
 (DEFCOM COM-BUFFER-EDIT "Edit the list of buffers; save, kill, etc." ()
@@ -2056,18 +2112,18 @@ Also, you can request to save, write, kill or unmodify buffers.
 
 (DEFCOM COM-EDIT-BUFFERS-SELECT "Mark buffer for selection" ()
   (IF (AND (EDIT-BUFFERS-LINE-BUFFER (BP-LINE (POINT)))
-	   (CHAR (CLI:AREF (BP-LINE (POINT)) 0) #/K))
+	   (CHAR (CHAR (BP-LINE (POINT)) 0) #/K))
       (WITH-READ-ONLY-SUPPRESSED (*INTERVAL*)
 	(MUNG-LINE (BP-LINE (POINT)))
-	(SETF (CLI:AREF (BP-LINE (POINT)) 3) #/.)
+	(SETF (CHAR (BP-LINE (POINT)) 3) #/.)
 	(DO ((LINE (BP-LINE (INTERVAL-FIRST-BP *INTERVAL*)) (LINE-NEXT LINE))
 	     (LAST-LINE (BP-LINE (INTERVAL-LAST-BP *INTERVAL*))))
 	    ((EQ LINE LAST-LINE))
 	  (AND (> (LINE-LENGTH LINE) 2)
-	       (CHAR= (CLI:AREF LINE 3) #/.)
+	       (CHAR= (CHAR LINE 3) #/.)
 	       (NEQ LINE (BP-LINE (POINT)))
 	       (PROGN (MUNG-LINE LINE)
-		      (SETF (CLI:AREF LINE 3) #/SPACE)))))
+		      (SETF (CHAR LINE 3) #/SPACE)))))
     (BEEP))
   DIS-TEXT)
 
@@ -2081,11 +2137,11 @@ Also, you can request to save, write, kill or unmodify buffers.
 	   (LAST-LINE (BP-LINE (INTERVAL-LAST-BP *INTERVAL*))))
 	  ((EQ LINE LAST-LINE))
 	(IF (EQ (EDIT-BUFFERS-LINE-BUFFER LINE) BUFFER)
-	    (IF (EQ (CLI:AREF LINE 0) #/K)
+	    (IF (CHAR= (CHAR LINE 0) #/K)
 		(RETURN)
 	      (WITH-READ-ONLY-SUPPRESSED (*INTERVAL*)
 		(MUNG-LINE LINE)
-		(SETF (CLI:AREF LINE 3) #/.))
+		(SETF (CHAR LINE 3) #/.))
 	      (RETURN-FROM EDIT-BUFFERS-DEFAULT-SELECT DIS-TEXT)))))))
 
 
@@ -2093,30 +2149,30 @@ Also, you can request to save, write, kill or unmodify buffers.
   (EDIT-BUFFERS-MAP-OVER-LINES *NUMERIC-ARG* 
 			#'(LAMBDA (LINE)
 			    (MUNG-LINE LINE)
-			    (SETF (CLI:AREF LINE 0) #/K)
+			    (SETF (CHAR LINE 0) #/K)
 			    ;; If this buffer was due to be selected,
 			    ;; find some other one instead.
-			    (WHEN (CHAR= (CLI:AREF LINE 3) #/.)
-			      (SETF (CLI:AREF LINE 3) #/SP)
+			    (WHEN (CHAR= (CHAR LINE 3) #/.)
+			      (SETF (CHAR LINE 3) #/SP)
 			      (EDIT-BUFFERS-DEFAULT-SELECT))
 			    ;; If buffer modified, assume save it as well as kill.
 			    (IF (BUFFER-NEEDS-SAVING-P (EDIT-BUFFERS-LINE-BUFFER LINE))
-				(SETF (CLI:AREF LINE 1) #/S)))))
+				(SETF (CHAR LINE 1) #/S)))))
 
 (DEFCOM COM-EDIT-BUFFERS-UNDELETE "Un-mark buffer(s) for deletion.
 Also cancels any other operation requested on the buffers" ()
   (EDIT-BUFFERS-MAP-OVER-LINES (IF (AND (NOT *NUMERIC-ARG-P*)
 					(> (STRING-LENGTH (BP-LINE (POINT))) 3)
-					(EQ #/SP (CLI:AREF (BP-LINE (POINT)) 0))
-					(EQ #/SP (CLI:AREF (BP-LINE (POINT)) 1))
-					(EQ #/SP (CLI:AREF (BP-LINE (POINT)) 2)))
+					(CHAR= #/SP (CHAR (BP-LINE (POINT)) 0))
+					(CHAR= #/SP (CHAR (BP-LINE (POINT)) 1))
+					(CHAR= #/SP (CHAR (BP-LINE (POINT)) 2)))
 				   -1
 				 *NUMERIC-ARG*)
 			#'(LAMBDA (LINE)
 			    (MUNG-LINE LINE)
-			    (SETF (CLI:AREF LINE 0) #/SPACE)
-			    (SETF (CLI:AREF LINE 0) #/SPACE)
-			    (SETF (CLI:AREF LINE 0) #/SPACE))))
+			    (SETF (CHAR LINE 0) #/SPACE)
+			    (SETF (CHAR LINE 0) #/SPACE)
+			    (SETF (CHAR LINE 0) #/SPACE))))
 
 (DEFCOM COM-EDIT-BUFFERS-REVERSE-UNDELETE "Un-mark buffer(s) upwards for deletion" ()
   (SETQ *NUMERIC-ARG* (- *NUMERIC-ARG*))
@@ -2126,7 +2182,7 @@ Also cancels any other operation requested on the buffers" ()
   (EDIT-BUFFERS-MAP-OVER-LINES *NUMERIC-ARG*
 			       #'(LAMBDA (LINE)
 				   (MUNG-LINE LINE)
-				   (SETF (CLI:AREF LINE 2) #/P))))
+				   (SETF (CHAR LINE 2) #/P))))
 
 (DEFUN SET-LINE-PATHNAME (LINE OPERATION)
   (MUNG-LINE LINE)
@@ -2144,17 +2200,17 @@ Also cancels any other operation requested on the buffers" ()
 			  PATHNAME))
     (SETF (GETF (LINE-PLIST LINE) :PATHNAME)
 	  PATHNAME))
-  (SETF (CLI:AREF LINE 1) OPERATION))
+  (SETF (CHAR LINE 1) OPERATION))
 
 (DEFUN CLEAR-LINE-PATHNAME (LINE OPERATION)
   (MUNG-LINE LINE)
-  (SETF (CLI:AREF LINE 1) OPERATION)
+  (SETF (CHAR LINE 1) OPERATION)
   (SETF (LINE-LENGTH LINE) 5)
   (STRING-NCONC LINE
 		(IF (BUFFER-MODIFIED-P (EDIT-BUFFERS-LINE-BUFFER LINE))
 		    " * " "   ")
 		(BUFFER-NAME (EDIT-BUFFERS-LINE-BUFFER LINE)))
-  (REMPROP (LOCF (LINE-PLIST LINE)) 'PATHNAME))
+  (REMF (LINE-PLIST LINE) ':PATHNAME))
  
 (DEFCOM COM-EDIT-BUFFERS-SAVE "Mark buffer(s) for saving" ()
   (EDIT-BUFFERS-MAP-OVER-LINES *NUMERIC-ARG* 
@@ -2166,7 +2222,7 @@ Also cancels any other operation requested on the buffers" ()
 (DEFCOM COM-EDIT-BUFFERS-NO-FILE-IO "Mark buffer(s) not to be saved, reverted, etc." ()
   (EDIT-BUFFERS-MAP-OVER-LINES (IF (AND (NOT *NUMERIC-ARG-P*)
 					(> (STRING-LENGTH (BP-LINE (POINT))) 3)
-					(EQ #/SP (CLI:AREF (BP-LINE (POINT)) 1)))
+					(CHAR= #/SP (CHAR (BP-LINE (POINT)) 1)))
 				   -1
 				 *NUMERIC-ARG*)
 			#'(LAMBDA (LINE)
@@ -2204,7 +2260,7 @@ Displays the files to be deleted and/or printed, then asks you to confirm." ()
     (LET ((BUFFER (EDIT-BUFFERS-LINE-BUFFER LINE))
 	  (PATHNAME (GETF (LINE-PLIST LINE) :PATHNAME)))
       (COND (BUFFER
-	     (CASE (CLI:AREF LINE 1)
+	     (CASE (CHAR LINE 1)
 	       (#/S (SAVE-BUFFER BUFFER))
 	       (#/W
 		(FILE-RETRY-NEW-PATHNAME (PATHNAME FS:FILE-ERROR)
@@ -2213,13 +2269,14 @@ Displays the files to be deleted and/or printed, then asks you to confirm." ()
 		  (WRITE-FILE-INTERNAL PATHNAME BUFFER)))
 	       (#/R (REVERT-BUFFER BUFFER))
 	       (#/~ (NOT-MODIFIED BUFFER)))
-	     (WHEN (EQ (CLI:AREF LINE 2) #/P)
+	     (WHEN (CHAR= (CHAR LINE 2) #/P)
 	       (FORMAT *QUERY-IO* "~&Attempting transmission of ~A: " (BUFFER-NAME BUFFER))
 	       (PRINT-BUFFER-1 BUFFER))
-	     (IF (EQ (CLI:AREF LINE 3) #/.)
+	     (IF (CHAR= (CHAR LINE 3) #/.)
 		 (SETQ BUFFER-TO-SELECT BUFFER))
-	     (IF (EQ (CLI:AREF LINE 0) #/K)
+	     (IF (CHAR= (CHAR LINE 0) #/K)
 		 (KILL-BUFFER BUFFER T))))))
   DIS-BPS)
+
 
 
