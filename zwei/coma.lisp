@@ -76,27 +76,28 @@ the ASCII equivalent is inserted." (NM)
 	    (REM-IF #'(LAMBDA (ELT)
 			(ZEROP (CHAR-BITS (CAR ELT))))
 		    TV:KBD-INTERCEPTED-CHARACTERS)))
-      (SETQ CH (INPUT-WITH-PROMPTS *STANDARD-INPUT* ':TYI)))
-    (COND ((LDB-TEST %%KBD-CONTROL CH)
+;character lossage
+      (SETQ CH (INT-CHAR (INPUT-WITH-PROMPTS *STANDARD-INPUT* :TYI))))
+    (COND ((CHAR-BIT CH :CONTROL)
 	   (DOTIMES (I *NUMERIC-ARG*)
 	     (INSERT-MOVING (POINT) (LOGAND #o37 (CHAR-CODE CH))))
 	   DIS-TEXT)
-	  ((OR (< (SETQ CH (CHAR-UPCASE CH)) #/?) (> CH #/Z))
-	   (COND ((AND ( CH #/0) ( CH #/7))
-		  (DISCARD-LAST-PROMPT)
-		  (PRINT-PROMPTS)
-		  (SEND *QUERY-IO* ':TYO CH)
-		  (SETQ CH (- CH #/0))
-		  (DO ((I 2 (1- I))
-		       (CH1))
-		      (( I 0))
-		    (SETQ CH1 (SEND *STANDARD-INPUT* ':TYI))
-		    (COND ((AND ( CH1 #/0) ( CH1 #/7))
-			   (SEND *QUERY-IO* ':TYO CH1)
-			   (SETQ CH (+ (* CH 8) (- CH1 #/0))))
-			  (T (OR (CHAR= CH1 #/SP)
-				 (SEND *STANDARD-INPUT* ':UNTYI CH1))
-			     (RETURN NIL))))))
+	  ((OR (CHAR< (SETQ CH (CHAR-UPCASE CH)) #/?) (CHAR> CH #/Z))
+	   (WHEN (DIGIT-CHAR-P CH 8)
+	     (DISCARD-LAST-PROMPT)
+	     (PRINT-PROMPTS)
+	     (FORMAT *QUERY-IO* "~&Octal character code: ~C" CH)
+	     (SETQ CH (DIGIT-CHAR-P CH 8))
+	     (DO ((I 2 (1- I))
+		  (CH1 (FRESH-LINE *QUERY-IO*)))
+		 (( I 0))
+	       (SETQ CH1 (SEND *STANDARD-INPUT* :TYI))
+	       (COND ((DIGIT-CHAR-P CH1)
+		      (SEND *QUERY-IO* :TYO CH1)
+		      (SETQ CH (INT-CHAR (+ (* (CHAR-INT CH) 8) (DIGIT-CHAR-P CH1)))))
+		     (T (UNLESS (CHAR= CH1 #/SPACE)
+			  (SEND *STANDARD-INPUT* :UNTYI CH1))
+			(RETURN NIL)))))
 	   (LET ((*LAST-COMMAND-CHAR* CH))
 	     (COM-SELF-INSERT)))
 	  (T (COM-BEEP)))))
@@ -183,7 +184,9 @@ but the command C-X C-N sets a semipermanent goal column." (KM -R)
 This command takes the current horizontal position of the cursor
 and makes it the /"goal column/" for the default definitions of C-N and C-P.
 They try to move to the goal column in the line they move to.
-This command with a numeric argument gets rid of the goal column."
+This command with a numeric argument gets rid of the goal column.
+
+Supply a numeric argument to cancel any goal column setting."
 	(KM)
   (REPORT-COLUMN-SETTING "c-N//c-P goal column"
 			 (SETQ *PERMANENT-REAL-LINE-GOAL-XPOS* (IF *NUMERIC-ARG-P* NIL
@@ -197,12 +200,12 @@ up from the bottom." (KM)
   (OR *NUMERIC-ARG-P* (MUST-REDISPLAY *WINDOW* DIS-ALL))
   (LET ((N-PLINES (WINDOW-N-PLINES *WINDOW*)))
     (RECENTER-WINDOW *WINDOW*
-	       ':ABSOLUTE
-	       (IF *NUMERIC-ARG-P*
-		   (// (RANGE (+ *NUMERIC-ARG*
-				 (IF (MINUSP *NUMERIC-ARG*) N-PLINES 0))
-			      0 (1- N-PLINES))
-		       (SMALL-FLOAT N-PLINES))
+		     :ABSOLUTE
+		     (IF *NUMERIC-ARG-P*
+			 (// (RANGE (+ *NUMERIC-ARG*
+				       (IF (MINUSP *NUMERIC-ARG*) N-PLINES 0))
+				    0 (1- N-PLINES))
+			     (COERCE N-PLINES 'SHORT-FLOAT))
 		   *CENTER-FRACTION*)))
   DIS-NONE)
 
@@ -212,7 +215,7 @@ However, a numeric argument specifies the screen line
 to scroll point to (negative counting from the bottom)." (KM)
   (DOLIST (W (FRAME-EXPOSED-WINDOWS))
     (PREPARE-WINDOW-FOR-REDISPLAY W))
-  (SEND (SEND *WINDOW* ':ALIAS-FOR-SELECTED-WINDOWS) ':REFRESH)
+  (SEND (SEND *WINDOW* :ALIAS-FOR-SELECTED-WINDOWS) :REFRESH)
   (WHEN *NUMERIC-ARG-P*
     (COM-RECENTER-WINDOW))
   DIS-NONE)
@@ -256,7 +259,7 @@ one less than the argument." (KM)
 (DEFCOM COM-MOVE-TO-SCREEN-EDGE "Jump to top or bottom of screen.
 A numeric argument specifies the screen line to go to, negative arguments count
 up from the bottom." (KM)
-  (REDISPLAY *WINDOW* ':POINT NIL NIL T)	;Force redisplay to completion first
+  (REDISPLAY *WINDOW* :POINT NIL NIL T)		;Force redisplay to completion first
   (LET ((N-PLINES (WINDOW-N-PLINES *WINDOW*)))
     (LET ((PLINE (RANGE (IF *NUMERIC-ARG-P*
 			    (+ *NUMERIC-ARG*
@@ -316,7 +319,7 @@ from the end." (KM PUSH)
 With no U's, sets the mark at the point, and pushes point onto the point pdl.
 With one U, pops the point pdl.
 With two U's, pops the point pdl and throws it away" (KM)
-  (COND ((OR (NEQ *NUMERIC-ARG-P* ':CONTROL-U)
+  (COND ((OR (NEQ *NUMERIC-ARG-P* :CONTROL-U)
 	     ( *NUMERIC-ARG* 3))
 	 (POINT-PDL-PUSH (POINT) *WINDOW* NIL T)
 	 (MOVE-BP (MARK) (POINT))
@@ -355,7 +358,7 @@ and a negative argument rotates the other way." ()
 A numeric argument specifies the number of entries to rotate, and sets the new default." ()
   (OR (MEMQ *NUMERIC-ARG-P* '(:SIGN NIL))
       (SETQ *DEFAULT-PREVIOUS-POINT-ARG* *NUMERIC-ARG*))
-  (ROTATE-POINT-PDL *WINDOW* (IF (EQ *NUMERIC-ARG-P* ':SIGN)
+  (ROTATE-POINT-PDL *WINDOW* (IF (EQ *NUMERIC-ARG-P* :SIGN)
 				 (* *NUMERIC-ARG* *DEFAULT-PREVIOUS-POINT-ARG*)
 				 *DEFAULT-PREVIOUS-POINT-ARG*)))
 
@@ -364,19 +367,9 @@ In auto fill mode, if no numeric argument,
 fills the line before point as well as inserting a Return.
 This might cause another Return to be inserted earlier in the line." ()
   (LET ((POINT (POINT)))
-    (LET ((NEXT-LINE (LINE-NEXT (BP-LINE POINT))))
-       (COND ((AND (= (BP-INDEX POINT) (LINE-LENGTH (BP-LINE POINT)))
-		   (NOT *NUMERIC-ARG-P*)
-		   (NEQ (BP-LINE POINT) (BP-LINE (INTERVAL-LAST-BP *INTERVAL*)))
-		   (LINE-BLANK-P NEXT-LINE)
-		   (OR (EQ NEXT-LINE (BP-LINE (INTERVAL-LAST-BP *INTERVAL*)))
-		       (LINE-BLANK-P (LINE-NEXT NEXT-LINE))))
-	      (DELETE-INTERVAL (BEG-OF-LINE NEXT-LINE) (END-OF-LINE NEXT-LINE))
-	      (MOVE-BP POINT (BEG-OF-LINE NEXT-LINE)))
-	     (T
-	      (SETQ *CURRENT-COMMAND-TYPE* 'INSERT-CR)
-	      (DOTIMES (I *NUMERIC-ARG*)
-		(INSERT-MOVING POINT #/NEWLINE))))))
+    (SETQ *CURRENT-COMMAND-TYPE* 'INSERT-CR)
+    (DOTIMES (I *NUMERIC-ARG*)
+      (INSERT-MOVING POINT #/NEWLINE)))
   DIS-TEXT)
 
 (DEFCOM COM-MAKE-ROOM "Insert one or more blank lines after point." ()
@@ -396,12 +389,10 @@ old position." ()
       (INDENT-LINE BP IND)))
   DIS-TEXT)
 
-(DEFCOM COM-THIS-INDENTATION "Indent a new line to this point.
-With arg of 0, indent this line to here.
-With positive arg, make a new line indented like this one." ()
-  (LET ((BP1 (FORWARD-OVER *BLANKS* (IF (OR (NOT *NUMERIC-ARG-P*) (ZEROP *NUMERIC-ARG*))
-					(POINT) (BEG-LINE (POINT)))))
-	(BP2 (IF (ZEROP *NUMERIC-ARG*) (POINT) (INSERT-MOVING (END-LINE (POINT)) #/NEWLINE))))
+(DEFCOM COM-THIS-INDENTATION "Insert new line after this one, indent it to under point.
+With arg, indent this line to here." ()
+  (LET ((BP1 (FORWARD-OVER *BLANKS* (POINT)))
+	(BP2 (IF *NUMERIC-ARG-P* (POINT) (INSERT-MOVING (END-LINE (POINT)) #/NEWLINE))))
     (MOVE-BP (POINT) (INDENT-LINE BP2 (BP-INDENTATION BP1))))
   DIS-TEXT)
 
@@ -423,10 +414,10 @@ A numeric argument means move down a line first
 	 (OR (= (LIST-SYNTAX (BP-CHARACTER POINT)) LIST-CLOSE)
 	     (= SYNTAX-BEFORE LIST-OPEN)
 	     (AND (= SYNTAX-BEFORE LIST-SINGLE-QUOTE)
-		  (EQ (GET *MAJOR-MODE* 'EDITING-TYPE) ':LISP))
+		  (EQ (GET *MAJOR-MODE* 'EDITING-TYPE) :LISP))
 	     (PROGN
 	       (INSERT-MOVING POINT (IN-CURRENT-FONT #/SP))
-	       (AND (NEQ (GET *MAJOR-MODE* 'EDITING-TYPE) ':LISP)
+	       (AND (NEQ (GET *MAJOR-MODE* 'EDITING-TYPE) :LISP)
 ;character lossage
 		    (MEMQ CHAR-BEFORE *FILL-EXTRA-SPACE-LIST*)
 		    (INSERT-MOVING POINT (IN-CURRENT-FONT #/SP))))))))
@@ -458,8 +449,9 @@ A numeric argument means move down a line first
   DIS-NONE)
 
 (DEFCOM COM-KILL-LINE "Kill to end of line, or kill an end of line.
-Before a CRLF, delete the blank line, otherwise clear the line.
-With a numeric argument, always kills the specified number of lines." ()
+If at end of line aside from possible whitespace, kill to beginning of next line.
+Otherwise, kill up to the end of the current line.
+With a numeric argument, always kill the specified number of lines." ()
   (LET ((POINT (POINT)))
     (COND ((AND (BP-= POINT (INTERVAL-LAST-BP *INTERVAL*)) (PLUSP *NUMERIC-ARG*))
 	   (BARF "Attempt to kill past the end of the buffer."))
@@ -516,27 +508,27 @@ Killed text is placed on the kill history for retrieval" ()
 
 (DEFCOM COM-QUADRUPLE-NUMERIC-ARG "Multiply the next command's numeric argument by 4." ()
   (SETQ *NUMERIC-ARG* (* *NUMERIC-ARG* 4)
-	*NUMERIC-ARG-P* ':CONTROL-U)
-  ':ARGUMENT)
+	*NUMERIC-ARG-P* :CONTROL-U)
+  :ARGUMENT)
 
 (DEFCOM COM-NUMBERS "part of the next command's numeric argument." ()
   (LET ((FLAG NIL)
-	(DIGIT (- (LDB %%KBD-CHAR *LAST-COMMAND-CHAR*) #/0)))
+	(DIGIT (- (CHAR-CODE *LAST-COMMAND-CHAR*) #/0)))
     (COND ((< *NUMERIC-ARG* 0)
 	   (SETQ FLAG T)
 	   (SETQ *NUMERIC-ARG* (MINUS *NUMERIC-ARG*))))
     (SETQ *NUMERIC-ARG*
-	  (IF (EQ *NUMERIC-ARG-P* ':DIGITS)
+	  (IF (EQ *NUMERIC-ARG-P* :DIGITS)
 	      (+ (* 10. *NUMERIC-ARG*) DIGIT)
 	      DIGIT))
     (AND FLAG (SETQ *NUMERIC-ARG* (MINUS *NUMERIC-ARG*))))
-  (SETQ *NUMERIC-ARG-P* ':DIGITS)
-  ':ARGUMENT)
+  (SETQ *NUMERIC-ARG-P* :DIGITS)
+  :ARGUMENT)
 
 (DEFCOM COM-NEGATE-NUMERIC-ARG "Negate the next command's numeric argument." ()
   (SETQ *NUMERIC-ARG* (MINUS (ABS *NUMERIC-ARG*))
-	*NUMERIC-ARG-P* ':SIGN)
-  ':ARGUMENT)
+	*NUMERIC-ARG-P* :SIGN)
+  :ARGUMENT)
 
 (DEFCOM COM-SIMPLE-EXCHANGE-CHARACTERS
 	"Interchange the characters before and after the cursor.
@@ -610,11 +602,11 @@ and N is the numeric argument."
 	 (EXCHANGE-SUBR-2 FN N))
 	(T ;0 argument -- exchange at point & mark
 	 (REGION (BP1 BP2)
-	   (WITH-BP (BP1 (OR (FUNCALL FN BP1 1) (BARF)) ':NORMAL)
+	   (WITH-BP (BP1 (OR (FUNCALL FN BP1 1) (BARF)) :NORMAL)
 	     (OR (SETQ BP1 (FUNCALL FN BP1 -1)) (BARF))
-	     (WITH-BP (BP2 (OR (FUNCALL FN BP2 1) (BARF)) ':NORMAL)
-	       (WITH-BP (BP3 (OR (FUNCALL FN BP2 -1) (BARF)) ':NORMAL)
-		 (WITH-BP (BP4 (OR (FUNCALL FN BP1 1) (BARF)) ':NORMAL)
+	     (WITH-BP (BP2 (OR (FUNCALL FN BP2 1) (BARF)) :NORMAL)
+	       (WITH-BP (BP3 (OR (FUNCALL FN BP2 -1) (BARF)) :NORMAL)
+		 (WITH-BP (BP4 (OR (FUNCALL FN BP1 1) (BARF)) :NORMAL)
 		   (LET ((BP-< (BP-< BP1 BP3)))
 		     (WITH-UNDO-SAVE ("Exchange" (IF BP-< BP1 BP3) (IF BP-< BP2 BP4) T)
 		       (SETQ BUF1 (COPY-INTERVAL BP3 BP2 T)
@@ -633,10 +625,10 @@ and N is the numeric argument."
   (MOVE-BP (POINT) BP1)
   (WITH-UNDO-SAVE ("Exchange" BP0 (OR (FUNCALL FN BP1 N) (BARF)) T)
     (DOTIMES (I N)
-      (WITH-BP (BP1 (POINT) ':NORMAL)
-	(WITH-BP (BP2 (OR (FUNCALL FN BP1 1) (BARF)) ':NORMAL)
-	  (WITH-BP (BP3 (OR (FUNCALL FN BP2 -1) (BARF)) ':NORMAL)
-	    (WITH-BP (BP4 (OR (FUNCALL FN BP1 -1) (BARF)) ':NORMAL)
+      (WITH-BP (BP1 (POINT) :NORMAL)
+	(WITH-BP (BP2 (OR (FUNCALL FN BP1 1) (BARF)) :NORMAL)
+	  (WITH-BP (BP3 (OR (FUNCALL FN BP2 -1) (BARF)) :NORMAL)
+	    (WITH-BP (BP4 (OR (FUNCALL FN BP1 -1) (BARF)) :NORMAL)
 	      (SETQ BUF1 (COPY-INTERVAL BP3 BP2 T)
 		    BUF2 (COPY-INTERVAL BP4 BP1 T))
 	      (DELETE-INTERVAL BP3 BP2 T)
@@ -651,10 +643,10 @@ and N is the numeric argument."
   (MOVE-BP (POINT) BP1)
   (WITH-UNDO-SAVE ("Exchange" (OR (FUNCALL FN BP1 (1- N)) (BARF)) BP1 T)
     (DO ((I 0 (1- I))) (( I N))
-	(WITH-BP (BP1 (POINT) ':NORMAL)
-	  (WITH-BP (BP2 (OR (FUNCALL FN BP1 -2) (BARF)) ':NORMAL)
-	    (WITH-BP (BP3 (OR (FUNCALL FN BP2 1) (BARF)) ':NORMAL)
-	      (WITH-BP (BP4 (OR (FUNCALL FN BP1 -1) (BARF)) ':NORMAL)
+	(WITH-BP (BP1 (POINT) :NORMAL)
+	  (WITH-BP (BP2 (OR (FUNCALL FN BP1 -2) (BARF)) :NORMAL)
+	    (WITH-BP (BP3 (OR (FUNCALL FN BP2 1) (BARF)) :NORMAL)
+	      (WITH-BP (BP4 (OR (FUNCALL FN BP1 -1) (BARF)) :NORMAL)
 		(SETQ BUF1 (COPY-INTERVAL BP2 BP3 T)
 		      BUF2 (COPY-INTERVAL BP4 BP1 T))
 		(DELETE-INTERVAL BP4 BP1 T)
@@ -684,8 +676,8 @@ and N is the numeric argument."
 	(BARF "Regions are not both within single buffers"))
     ;; copy-bp's to get around macroexpansion/movingbp screw
     (WITH-UNDO-SAVE ("Exchange" (COPY-BP BP1) (COPY-BP BP4) T)
-      (WITH-BP (NBP2 (INSERT-INTERVAL BP2 BP3 BP4 T) ':NORMAL)
-	(WITH-BP (NBP4 (INSERT-INTERVAL BP4 BP1 BP2 T) ':NORMAL)
+      (WITH-BP (NBP2 (INSERT-INTERVAL BP2 BP3 BP4 T) :NORMAL)
+	(WITH-BP (NBP4 (INSERT-INTERVAL BP4 BP1 BP2 T) :NORMAL)
 	  (DELETE-INTERVAL BP1 BP2 T)
 	  (DELETE-INTERVAL BP3 BP4 T)
 	  (POINT-PDL-PUSH BP1 *WINDOW*)    
@@ -706,7 +698,7 @@ and N is the numeric argument."
 	  (( I N))
 	(SETQ END-BP (OR (FUNCALL FN START-BP 1) (BARF))
 	      START-BP (OR (FUNCALL FN END-BP -1) (BARF)))
-	(PUSH (LIST (COPY-BP START-BP ':MOVES) (COPY-BP END-BP ':NORMAL)) BP-LIST))
+	(PUSH (LIST (COPY-BP START-BP :MOVES) (COPY-BP END-BP :NORMAL)) BP-LIST))
       (WITH-UNDO-SAVE ("Reverse" BP END-BP T)
 	(DO ((I 0 (1+ I))
 	     (N (TRUNCATE N 2))
@@ -879,33 +871,32 @@ Also, if called inside of a string, moves back up out of that string." (KM)
 
 (DEFCOM COM-SHOW-LIST-START "Displays the start of the list which the point lies after." (KM)
   (LET ((BP (FORWARD-LIST (POINT) -1 NIL 0 NIL T)))
-    (COND ((NULL BP) (BARF "No list found before point."))
-	  (T (LET* ((END-BP (FORWARD-SEXP BP 1 NIL 0))
-		    (CLOSE (INT-CHAR (CHAR-CODE (BP-CHARACTER-BEFORE END-BP))))
-		    (BALANCE-LENGTH (MAX 1 (- (SEND *TYPEIN-WINDOW* ':SIZE-IN-CHARACTERS)
-					   25.))))
-	       (DO ((INDEX (BP-INDEX BP) (1+ INDEX))
-		    (OPEN))
-		   ((= (LIST-SYNTAX (SETQ OPEN (INT-CHAR (CHAR-CODE
-							    (CLI:AREF (BP-LINE BP) INDEX)))))
-		       LIST-OPEN)
-		    (TYPEIN-LINE "") ;clear line, since typein-line-more used if paren ok
-		    (UNLESS (= (SECOND (ASSQ OPEN *MATCHING-DELIMITER-LIST*)) CLOSE)
-		      (PROGN (BEEP) (TYPEIN-LINE "Non-matching parenthesis.~%")))))
-	       (DO ((STRING "" (STRING-APPEND STRING (IF (EQ CH #/RETURN) "   " CH)))
-		    (CH (BP-CH-CHARACTER BP)
+    (IF (NULL BP) (BARF "No list found before point.")
+      (LET* ((END-BP (FORWARD-SEXP BP 1 NIL 0))
+	     (CLOSE (INT-CHAR (CHAR-CODE (BP-CHARACTER-BEFORE END-BP))))
+	     (BALANCE-LENGTH (MAX 1 (- (SEND *TYPEIN-WINDOW* :SIZE-IN-CHARACTERS) 25.))))
+	(DO ((INDEX (BP-INDEX BP) (1+ INDEX))
+	     (OPEN))
+	    ((= (LIST-SYNTAX (SETQ OPEN (CHAR (BP-LINE BP) INDEX))) LIST-OPEN)
+	     (TYPEIN-LINE "")		;clear line, since typein-line-more used if paren ok
+	     (UNLESS (= (SECOND (ASSQ OPEN *MATCHING-DELIMITER-LIST*)) CLOSE)
+	       (PROGN (BEEP) (TYPEIN-LINE "Non-matching parenthesis.~%")))))
+	(DO ((STRING (MAKE-STRING 30. :FILL-POINTER 0)
+		     (STRING-NCONC STRING (IF (EQ CH #/NEWLINE) "   " CH)))
+	     (CH (BP-CH-CHARACTER BP)
 ;character lossage
-			(COND ((MEMQ (BP-CH-CHAR BP) *WHITESPACE-CHARS*)
-			       (SELECTOR CH STRING-EQUAL
-				 ((#/SP #/NEWLINE #/TAB "") "")
-				 (T (BP-CH-CHARACTER BP))))
+		 (COND ((MEMQ (BP-CH-CHAR BP) *WHITESPACE-CHARS*)
+			(COND ((AND (CHARACTERP CH)
+				    (MEM #'CHAR-EQUAL CH '(#/SP #/NEWLINE #/TAB)))
+			       "")
+			      ((EQUAL CH "") "")
 			      (T (BP-CH-CHARACTER BP))))
-		    (BP (IBP BP) (IBP BP)))
-		   ((OR (> (STRING-LENGTH STRING) BALANCE-LENGTH)
-			(BP-= BP END-BP))
-		    (TYPEIN-LINE-MORE "~a ... balances this paren"
-				      (SUBSTRING STRING
-						 0 (MIN (STRING-LENGTH STRING)
-							BALANCE-LENGTH)))))
-	       (MOVE-BP (POINT) END-BP)))))
+		       (T (BP-CH-CHARACTER BP))))
+	     (BP (IBP BP) (IBP BP)))
+	    ((OR (> (LENGTH STRING) BALANCE-LENGTH)
+		 (BP-= BP END-BP))
+	     (SETF (FILL-POINTER STRING) (MIN (FILL-POINTER STRING) BALANCE-LENGTH))
+	     (TYPEIN-LINE-MORE "~A~:[ ...~] balances this paren" STRING (BP-= BP END-BP))
+	     (RETURN-STORAGE (PROG1 STRING (SETQ STRING NIL)))))
+	(MOVE-BP (POINT) END-BP))))
   DIS-BPS)
