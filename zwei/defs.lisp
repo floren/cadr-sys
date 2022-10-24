@@ -95,12 +95,12 @@ Nonzero means the character expands abbrevs.")
 (DEFGLOBAL *HISTORIES-TO-CLEAR* NIL "List of histories to clear on saving band.")
 (DEFGLOBAL *KILL-HISTORY*
 	    (MAKE-HISTORY "kill history"
-			  ':ELEMENT-STRING-FUNCTION
+			  :ELEMENT-STRING-FUNCTION
 			  'SUMMARIZE-KILL-HISTORY-INTERVAL)
   "History of intervals of killed text.")
 (DEFGLOBAL *DEFINITION-NAME-HISTORY*
 	   (MAKE-HISTORY "definition name argument history"
-			 ':ELEMENT-STRING-FUNCTION 'PRIN1-TO-STRING)
+			 :ELEMENT-STRING-FUNCTION 'PRIN1-TO-STRING)
   "History of definition names read by READ-FUNCTION-NAME.")
 (DEFGLOBAL *PATHNAME-ARGUMENT-HISTORY*
 	   (MAKE-HISTORY "pathname argument history")
@@ -474,7 +474,7 @@ For the mode line.")
 
 (DEFUN MAKE-LIST-SYNTAX-TABLE ()
   (LET ((TABLE
-	  (MAKE-ARRAY #o400 ':TYPE ART-4B)))
+	  (MAKE-ARRAY #o400 :TYPE ART-4B)))
     (COPY-ARRAY-CONTENTS *LIST-SYNTAX-TABLE* TABLE)
     TABLE))
 
@@ -566,7 +566,7 @@ a COMMAND for each one.  A COMMAND may be any of:
             the list should have two elements, the control-meta and the char parts
             of a keystroke on the keyboard.
   Some other symbol -- A command as defined by DEFCOM."
-  (COMTAB-NAME NIL :DOCUMENTATION "Name of this comtab. A symbol.")
+  (COMTAB-NAME NIL :DOCUMENTATION "Name of this comtab. A symbol or string.")
   (COMTAB-KEYBOARD-ARRAY NIL :DOCUMENTATION "Commands gotten by typing on the keyboard.")
   (COMTAB-MOUSE-ARRAY NIL :DOCUMENTATION "Commands gotten by pushing mouse buttons.")
   (COMTAB-EXTENDED-COMMANDS NIL :DOCUMENTATION "Alist of long-named (/"m-X/") commands.")
@@ -658,14 +658,14 @@ elements are (permanent-bp . copy), where the copy is a nonrelocating bp.")
   :OUTSIDE-ACCESSIBLE-INSTANCE-VARIABLES)
 
 (DEFSUBST WINDOW-OVERPRINTING-FLAG (WINDOW)
-  (SEND WINDOW ':OVERPRINTING-FLAG))
+  (SEND WINDOW :OVERPRINTING-FLAG))
 
 ;;; Return the typeout stream associated with the given window
 (DEFSUBST WINDOW-TYPEOUT-WINDOW (WINDOW)
-  (SEND WINDOW ':TYPEOUT-WINDOW))
+  (SEND WINDOW :TYPEOUT-WINDOW))
 
 (DEFSUBST WINDOW-IO-BUFFER (WINDOW)
-  (SEND WINDOW ':IO-BUFFER))
+  (SEND WINDOW :IO-BUFFER))
 
 ;;; A displayer that is also a window-system window.
 (DEFFLAVOR WINDOW
@@ -771,8 +771,8 @@ elements are (permanent-bp . copy), where the copy is a nonrelocating bp.")
 (DEFMETHOD (INTERVAL :INIT) (IGNORE)
   (UNLESS (VARIABLE-BOUNDP FIRST-BP)
     (LET ((LINE (CREATE-LINE 'ART-STRING 0 NIL)))
-      (SETF FIRST-BP (CREATE-BP LINE 0 ':NORMAL))
-      (SETF LAST-BP (CREATE-BP LINE 0 ':MOVES))
+      (SETF FIRST-BP (CREATE-BP LINE 0 :NORMAL))
+      (SETF LAST-BP (CREATE-BP LINE 0 :MOVES))
       (SETF (LINE-NODE LINE) SELF))))
 
 (DEFFLAVOR NODE
@@ -803,7 +803,7 @@ elements are (permanent-bp . copy), where the copy is a nonrelocating bp.")
 		     UNDO-STATUS READ-ONLY-P PLIST))
 
 (DEFSUBST NODE-SPECIAL-TYPE (NODE)
-  (GET (LOCF (NODE-PROPERTY-LIST NODE)) ':SPECIAL-TYPE))
+  (GETF (NODE-PROPERTY-LIST NODE) ':SPECIAL-TYPE))
 
 (DEFSUBST NODE-UNDO-STATUS-OR-NIL (NODE)
   (IF (NEQ (NODE-UNDO-STATUS NODE) ':DONT) (NODE-UNDO-STATUS NODE)))
@@ -905,18 +905,18 @@ elements are (permanent-bp . copy), where the copy is a nonrelocating bp.")
   (DECLARE (SPECIAL *DEFAULT-MAJOR-MODE*))	;DEFVAR is in MACROS.
   (UNLESS SAVED-PACKAGE
     (SETQ SAVED-PACKAGE (PKG-FIND-PACKAGE (OR *DEFAULT-PACKAGE* *PACKAGE*))))
-  (SEND SELF ':SET-ATTRIBUTE ':MODE *DEFAULT-MAJOR-MODE*)
+  (SEND SELF :SET-ATTRIBUTE ':MODE *DEFAULT-MAJOR-MODE*)
   (LET ((LINE (BP-LINE FIRST-BP)))
     (SETQ SAVED-MAJOR-MODE (GET-FILE-MAJOR-MODE *DEFAULT-MAJOR-MODE*))
-    (SETF SAVED-POINT (CREATE-BP LINE 0 ':NORMAL))
-    (SETF SAVED-MARK (CREATE-BP LINE 0 ':NORMAL))
-    (SETF SAVED-WINDOW-START-BP (CREATE-BP LINE 0 ':NORMAL))
+    (SETF SAVED-POINT (CREATE-BP LINE 0 :NORMAL))
+    (SETF SAVED-MARK (CREATE-BP LINE 0 :NORMAL))
+    (SETF SAVED-WINDOW-START-BP (CREATE-BP LINE 0 :NORMAL))
     (SETF SAVED-MODE-LIST (STICKY-MODE-LIST))))
 
 (DEFFLAVOR INTERVAL-STREAM
 	   (**INTERVAL** *LINE* *INDEX* *LAST-LINE* *LAST-INDEX* *STOP-INDEX* (*EOF* NIL)
 	    NO-UNDO-SAVING)
-	   (SI:BIDIRECTIONAL-STREAM)
+	   (SI:BIDIRECTIONAL-CHARACTER-STREAM)
   :INITABLE-INSTANCE-VARIABLES)
 
 (DEFFLAVOR INTERVAL-STREAM-FAT
@@ -927,7 +927,7 @@ elements are (permanent-bp . copy), where the copy is a nonrelocating bp.")
 (DEFFLAVOR INTERVAL-STREAM-WITH-FONTS
 	   ((*FONT-FLAG* NIL)
 	    (**FONT** 0)
-	    (*FONT-STACK* (MAKE-ARRAY 50. ':TYPE 'ART-Q-LIST ':FILL-POINTER 0)))
+	    (*FONT-STACK* (MAKE-ARRAY 50. :TYPE 'ART-Q-LIST :FILL-POINTER 0)))
 	   (INTERVAL-STREAM)
   :INITABLE-INSTANCE-VARIABLES)
 
