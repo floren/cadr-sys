@@ -1,12 +1,13 @@
-;;; -*- Mode:LISP; Package:ZWEI; Base:8 -*-
+;;; -*- Mode:LISP; Package:ZWEI; Readtable:ZL; Base:10 -*-
 ;;; More winning Lisp Machine software patch facility.   DLW & BEE 10/24/80
 ;;; The functions in this file manage the patch files
-
+;;; Depends on defs in SYS: SYS2; PATCH
 
 (DEFVAR *PATCH-BUFFER* NIL "The buffer holding the patch file being accumulated.")
 
 (DEFVAR *PATCH-SYSTEM* NIL
-  "The system we are trying to patch.  Object of type SI:PATCH-SYSTEM")
+  "The system we are trying to patch.
+An object of type SI::PATCH-SYSTEM, or NIL if we are making a private patch.")
 
 (DEFVAR *PATCH-NUMBER* NIL
   "Minor version number of patch being made.")
@@ -14,8 +15,8 @@
 (DEFUN PATCH-VERSION-DESCRIPTION ()
   (IF *PATCH-SYSTEM*
       (FORMAT NIL "~D.~D of ~A"
-	      (SI:PATCH-VERSION *PATCH-SYSTEM*) *PATCH-NUMBER*
-	      (SI:PATCH-NAME *PATCH-SYSTEM*))
+	      (SI::PATCH-VERSION *PATCH-SYSTEM*) *PATCH-NUMBER*
+	      (SI::PATCH-NAME *PATCH-SYSTEM*))
     (BUFFER-NAME *PATCH-BUFFER*)))
 
 (DEFCOM COM-ADD-PATCH "Add the current defun or the region (if any) to the patch buffer.
@@ -42,36 +43,33 @@ patch buffer; otherwise append the current defun to the end of the patch buffer.
 
 (DEFUN VALIDATE-PATCH-BUFFER ()
   "Set *PATCH-BUFFER* to NIL if it is a killed buffer."
-  (AND *PATCH-BUFFER*
-       (NOT (MEMQ *PATCH-BUFFER* *ZMACS-BUFFER-LIST*))
-       (SETQ *PATCH-BUFFER* NIL)))
+  (UNLESS (MEMQ *PATCH-BUFFER* *ZMACS-BUFFER-LIST*)
+    (SETQ *PATCH-BUFFER* NIL)))
 
 (DEFUN ADD-PATCH-INTERVAL (BP1 BP2 IN-ORDER-P DEFUN-NAME BUFFER &AUX NEW-PATCH-BUFFER-P)
   (GET-INTERVAL BP1 BP2 IN-ORDER-P)
   (VALIDATE-PATCH-BUFFER)
   (SETQ NEW-PATCH-BUFFER-P (NULL *PATCH-BUFFER*))
   (AND NEW-PATCH-BUFFER-P (CREATE-NEW-PATCH (READ-PATCH-SYSTEM-NAME)))
-  (IF (STRINGP DEFUN-NAME)
-      (FORMAT *QUERY-IO*
-	      "~&Adding ~A to patch file ~A~:[~;~%(New patch file.)~]"
-	      DEFUN-NAME (PATCH-VERSION-DESCRIPTION) NEW-PATCH-BUFFER-P)
-    (FORMAT *QUERY-IO*
-	    "~&Adding ~S to patch file ~A~:[~;~%(New patch file.)~]"
-	    DEFUN-NAME (PATCH-VERSION-DESCRIPTION) NEW-PATCH-BUFFER-P))
+  (FORMAT *QUERY-IO*
+	  "~&Adding ~:[~S~;~A~] to patch file ~A~@[~%(New patch file)~]"
+	  (STRINGP DEFUN-NAME) DEFUN-NAME (PATCH-VERSION-DESCRIPTION) NEW-PATCH-BUFFER-P)
   (LET ((BP (INTERVAL-LAST-BP *PATCH-BUFFER*)))
     ;; Put into the patch buffer, making sure the right package and base will be used.
     (MULTIPLE-VALUE-BIND (VARS VALS)
-	(SEND BUFFER ':ATTRIBUTE-BINDINGS)
+	(SEND BUFFER :ATTRIBUTE-BINDINGS)
       (PROGV VARS VALS
-	     (INSERT BP (FORMAT NIL "~%; From file ~A~%#~DR ~A#:
-/(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE /"~:*~A/")))
-/  (COMPILER#:PATCH-SOURCE-FILE ~S
-
-"
-				(BUFFER-NAME BUFFER) *READ-BASE* *PACKAGE*
-				(WHEN (BUFFER-GENERIC-PATHNAME BUFFER)
-				  (SEND (BUFFER-GENERIC-PATHNAME BUFFER)
-					':STRING-FOR-PRINTING))))))
+	(LET ((TIME:*DEFAULT-DATE-PRINT-MODE* :DD-MMM-YY))
+	  (INSERT BP (FORMAT NIL "~%; From ~:[buffer ~A~;file ~:*~A~*~] at ~\datime\~%"
+			     (CAR-SAFE (SEND BUFFER :FILE-ID)) BUFFER (GET-UNIVERSAL-TIME))))
+	(INSERT BP (FORMAT NIL "#~DR ~A#:
+/(~S ((~S (~S ~S)))
+/  (~S ~S~2%"
+			   *READ-BASE* (PACKAGE-NAME *PACKAGE*)
+			   'COMPILER-LET '*PACKAGE* 'PKG-FIND-PACKAGE (PACKAGE-NAME *PACKAGE*)
+			   'COMPILER::PATCH-SOURCE-FILE
+			   (WHEN (BUFFER-GENERIC-PATHNAME BUFFER)
+			     (SEND (BUFFER-GENERIC-PATHNAME BUFFER) :STRING-FOR-PRINTING))))))
     (INSERT-INTERVAL BP BP1 BP2 T)
     (INSERT BP "
 ))
@@ -113,7 +111,7 @@ Do you want to switch to editing some other patch? "
 		      (PATCH-VERSION-DESCRIPTION))
 	(BARF "You cannot edit two patches at once.")))
   (SETQ *PATCH-BUFFER* NIL)
-  (CREATE-PRIVATE-PATCH-BUFFER (READ-DEFAULTED-AUX-PATHNAME "Patch file name: " ':LISP))
+  (CREATE-PRIVATE-PATCH-BUFFER (READ-DEFAULTED-AUX-PATHNAME "Patch file name: " :LISP))
   (FORMAT *QUERY-IO* "~&Beginning patch ~A."
 	  (PATCH-VERSION-DESCRIPTION))
   DIS-NONE)
@@ -126,7 +124,7 @@ made in the same system." ()
   (IF (NULL *PATCH-BUFFER*)
       (BARF "You are not now editing a patch file.")
     (WHEN *PATCH-SYSTEM*
-      (SI:ABORT-PATCH *PATCH-SYSTEM* *PATCH-NUMBER*))
+      (SI::ABORT-PATCH *PATCH-SYSTEM* *PATCH-NUMBER*))
     (FORMAT *QUERY-IO* "~&Patch ~A aborted."
 	    (PATCH-VERSION-DESCRIPTION))
     (SETQ *PATCH-BUFFER* NIL *PATCH-NUMBER* NIL *PATCH-SYSTEM* NIL))
@@ -149,7 +147,7 @@ Do you want to switch to editing some other patch? "
 	   (LET ((*READ-BASE* 10.) (*PRINT-BASE* 10.))
 	     (TYPEIN-LINE-READ "Minor version of ~A to resume constructing: "
 			       PATCH-SYSTEM))))
-    (CREATE-OLD-PATCH-BUFFER (SI:GET-PATCH-SYSTEM-NAMED PATCH-SYSTEM) PATCH-NUMBER))
+    (CREATE-OLD-PATCH-BUFFER (SI::GET-PATCH-SYSTEM-NAMED PATCH-SYSTEM) PATCH-NUMBER))
   DIS-NONE)
 
 ;;; Try to find a patchable system that this file lives in.  If it isn't
@@ -158,39 +156,39 @@ Do you want to switch to editing some other patch? "
 (DEFUN PATCHABLE-SYSTEM-OF-PATHNAME (PATHNAME)
   ;;if there wasn't a pathname, return the SYSTEM system
   (IF (NULL PATHNAME) (SI:FIND-SYSTEM-NAMED "System")
-      (LET* ((GENERIC-PATHNAME (FUNCALL PATHNAME  ':GENERIC-PATHNAME))
-	     (SYSTEMS (FUNCALL GENERIC-PATHNAME ':GET ':SYSTEMS)))
+      (LET* ((GENERIC-PATHNAME (SEND PATHNAME  :GENERIC-PATHNAME))
+	     (SYSTEMS (SEND GENERIC-PATHNAME :GET :SYSTEMS)))
 	;;if it wasn't defined as part of a system, use the SYSTEM system
 	(IF (NULL SYSTEMS) (SI:FIND-SYSTEM-NAMED "System")
-	    (SI:SYSTEM-PATCHABLE-SUPERSYSTEM (CAR SYSTEMS))))))
+	    (SI::SYSTEM-PATCHABLE-SUPERSYSTEM (CAR SYSTEMS))))))
 
 (DEFUN READ-PATCH-SYSTEM-NAME ()
   "Read and return the name of a system to patch, using the minibuffer.
 We provide completion and a default based on the selected buffer."
-  (LET* ((DEFAULT (PATCHABLE-SYSTEM-OF-PATHNAME (SEND *INTERVAL* ':PATHNAME)))
+  (LET* ((DEFAULT (PATCHABLE-SYSTEM-OF-PATHNAME (SEND *INTERVAL* :PATHNAME)))
 	 (PATCH-SYSTEM (COMPLETING-READ-FROM-MINI-BUFFER  ;a SYSTEM defstruct.
 			 (IF DEFAULT
 			     (FORMAT NIL "System to patch (default ~A)"
-				     (SI:SYSTEM-NAME DEFAULT))
+				     (SI::SYSTEM-NAME DEFAULT))
 			   "System to patch")
-			 (MAPCAR #'(LAMBDA (X) (CONS (SI:PATCH-NAME X) X))
-				 SI:PATCH-SYSTEMS-LIST))))
+			 (MAPCAR #'(LAMBDA (X) (CONS (SI::PATCH-NAME X) X))
+				 SI::PATCH-SYSTEMS-LIST))))
     (IF (STRINGP PATCH-SYSTEM)
-	(IF DEFAULT (SETQ PATCH-SYSTEM (SI:SYSTEM-NAME DEFAULT)) (BARF))
+	(IF DEFAULT (SETQ PATCH-SYSTEM (SI::SYSTEM-NAME DEFAULT)) (BARF))
       ;; Some day maybe allow creating of a patch here
       (SETQ PATCH-SYSTEM (CAR PATCH-SYSTEM)))	  ;If completed on alist, flush alist dotted pair
     PATCH-SYSTEM))
 
 (DEFUN CREATE-NEW-PATCH (PATCH-SYSTEM)
-  (LET ((PATCH-STRUCTURE (SI:GET-PATCH-SYSTEM-NAMED PATCH-SYSTEM)))
-    (CREATE-PATCH-BUFFER PATCH-STRUCTURE (SI:RESERVE-PATCH PATCH-STRUCTURE *QUERY-IO*))))
+  (LET ((PATCH-STRUCTURE (SI::GET-PATCH-SYSTEM-NAMED PATCH-SYSTEM)))
+    (CREATE-PATCH-BUFFER PATCH-STRUCTURE (SI::RESERVE-PATCH PATCH-STRUCTURE *QUERY-IO*))))
 
 (DEFUN CREATE-PATCH-BUFFER (PATCH-STRUCTURE NUMBER)
   (SETQ *PATCH-NUMBER* NUMBER)
-  (LET* ((FILENAME (SI:PATCH-SYSTEM-PATHNAME (SI:PATCH-NAME PATCH-STRUCTURE) ':PATCH-FILE
-					     (SI:PATCH-VERSION PATCH-STRUCTURE)
-					     *PATCH-NUMBER*
-					     "LISP"))
+  (LET* ((FILENAME (SI::PATCH-SYSTEM-PATHNAME (SI:PATCH-NAME PATCH-STRUCTURE) :PATCH-FILE
+					      (SI:PATCH-VERSION PATCH-STRUCTURE)
+					      *PATCH-NUMBER*
+					      :LISP))
 	 (*FIND-FILE-NOT-FOUND-IS-AN-ERROR* NIL))
     (SETQ *PATCH-BUFFER*
 	  (FIND-FILE FILENAME NIL)))	; The NIL means "don't select this buffer".
@@ -215,10 +213,10 @@ We provide completion and a default based on the selected buffer."
 ;;; Read in the existing source file for the patch, if any.
 (DEFUN CREATE-OLD-PATCH-BUFFER (PATCH-STRUCTURE NUMBER)
   (SETQ *PATCH-NUMBER* NUMBER)
-  (LET* ((FILENAME (SI:PATCH-SYSTEM-PATHNAME (SI:PATCH-NAME PATCH-STRUCTURE) ':PATCH-FILE
-					     (SI:PATCH-VERSION PATCH-STRUCTURE)
-					     *PATCH-NUMBER*
-					     "LISP")))
+  (LET* ((FILENAME (SI::PATCH-SYSTEM-PATHNAME (SI:PATCH-NAME PATCH-STRUCTURE) :PATCH-FILE
+					      (SI:PATCH-VERSION PATCH-STRUCTURE)
+					      *PATCH-NUMBER*
+					      :LISP)))
     (SETQ *PATCH-BUFFER*
 	  (FIND-FILE FILENAME NIL)))		; The NIL means "don't select this buffer".
   (INITIALIZE-PATCH-BUFFER *PATCH-BUFFER* PATCH-STRUCTURE)
@@ -229,26 +227,36 @@ We provide completion and a default based on the selected buffer."
   (IF (BP-= (INTERVAL-FIRST-BP BUFFER) (INTERVAL-LAST-BP BUFFER))
       (LET ((STREAM (INTERVAL-STREAM BUFFER)))
 	(FORMAT STREAM
-		";;; -*- Mode:Lisp; Readtable:T; Package:~A; Base:~D.; Patch-File:T -*-~%"
+;>> this readtable:zl is somewhat bogus -- perhaps we should have a readtable default as
+;>> part of the defsystem?
+;>>
+;>> In any case, we lose trying to do a m-x add patch from a buffer with one readtable
+;>> into a patch file with a another.
+;>> m-x add patch should check for a variety of incompatibilty conditions such as
+;>>  that between the patch buffer and the buffer from which the patch is being taken.
+		";;; -*- Mode:Lisp; Readtable:ZL; Package:~A; Base:~D; Patch-File:T -*-~%"
 		(OR (AND PATCH-STRUCTURE
-			 (SI:SYSTEM-PACKAGE-DEFAULT
+			 (SI::SYSTEM-PACKAGE-DEFAULT
 			   (SI:FIND-SYSTEM-NAMED
-			     (SI:PATCH-NAME PATCH-STRUCTURE))))
-		    "User")
-		(OR (SEND *INTERVAL* ':GET-ATTRIBUTE ':BASE) *READ-BASE*))
+			     (SI::PATCH-NAME PATCH-STRUCTURE))))
+		    "USER")
+		(OR (SEND *INTERVAL* :GET-ATTRIBUTE :BASE) *READ-BASE*))
 	(IF (NOT PATCH-STRUCTURE)
 	    (FORMAT STREAM ";;; Private patches made by ~A" USER-ID)
 	  (FORMAT STREAM ";;; Patch file for ~A version ~D.~D"
-		  (SI:PATCH-NAME PATCH-STRUCTURE) (SI:PATCH-VERSION PATCH-STRUCTURE)
+		  (SI::PATCH-NAME PATCH-STRUCTURE) (SI::PATCH-VERSION PATCH-STRUCTURE)
 		  *PATCH-NUMBER*))
-	(SI:WRITE-RESPONSIBILITY-COMMENT STREAM)
+	(SI::WRITE-RESPONSIBILITY-COMMENT STREAM)
 	(TERPRI STREAM)))
   (REPARSE-BUFFER-MODE-LINE BUFFER))
 
 (DEFCOM COM-FINISH-PATCH "Finish off the current patch file.
 Writes out the patch buffer, compiles it, and marks it as finished and released
 so that LOAD-PATCHES will load it.  See also Finish Patch Unreleased." ()
-  (FINISH-PATCH T)
+  (FINISH-PATCH
+    (OR *NUMERIC-ARG-P*
+	(FQUERY ()
+	   "Release this patch? (answer N if you have not completely sure that it works) ")))
   DIS-NONE)
 
 (DEFCOM COM-FINISH-PATCH-UNRELEASED "Finish off the current patch file, but don't release it.
@@ -264,35 +272,35 @@ to mark it released so that LOAD-PATCHES will normally load it." ()
   (VALIDATE-PATCH-BUFFER)
   (OR *PATCH-BUFFER*
       (BARF "There is no current patch buffer"))
-  (LET ((DESCRIPTION (TYPEIN-LINE-MULTI-LINE-READLINE "Description of changes (end with End)")))
-    (SETQ DESCRIPTION (STRING-TRIM '(#/RETURN) DESCRIPTION))
+  (LET ((DESCRIPTION (TYPEIN-LINE-MULTI-LINE-READLINE
+		       "Description of changes (end with ~C)" #/END)))
+    (SETQ DESCRIPTION (STRING-TRIM '(#/NEWLINE) DESCRIPTION))
     (LET ((BP (FORWARD-LINE (INTERVAL-FIRST-BP *PATCH-BUFFER*) 2)))
       (DO ((START 0 (1+ NEXT-LINE))
 	   NEXT-LINE)
 	  (())
-	(SETQ NEXT-LINE (STRING-SEARCH-CHAR #/RETURN DESCRIPTION START))
-	(IF (ZEROP START)
-	    (INSERT-MOVING BP ";;; Reason: ")
-	  (INSERT-MOVING BP ";;; "))
-	(INSERT-MOVING BP (SUBSTRING DESCRIPTION START NEXT-LINE))
-	(INSERT-MOVING BP #/RETURN)
+	(INSERT-MOVING BP ";;; Reason:")
+	(INSERT-MOVING BP #/NEWLINE)
+	(SETQ NEXT-LINE (STRING-SEARCH-CHAR #/NEWLINE DESCRIPTION START))
+	(INSERT-MOVING BP ";;;  ")
+	(INSERT-MOVING BP DESCRIPTION START NEXT-LINE)
+	(INSERT-MOVING BP #/NEWLINE)
 	(OR NEXT-LINE (RETURN))))
     (SAVE-BUFFER-IF-NECESSARY *PATCH-BUFFER*)
     (AND (EQ *PATCH-BUFFER* *INTERVAL*)
 	 (MUST-REDISPLAY *WINDOW* DIS-TEXT))
     (LET ((ERROR-MESSAGE (IF *PATCH-SYSTEM*
-			     (SI:CONSUMMATE-PATCH *PATCH-SYSTEM* *PATCH-NUMBER*
-						  DESCRIPTION RELEASE-FLAG)
+			     (SI::CONSUMMATE-PATCH *PATCH-SYSTEM* *PATCH-NUMBER*
+						   DESCRIPTION RELEASE-FLAG)
 			   (COMPILE-FILE (BUFFER-PATHNAME *PATCH-BUFFER*))
 			   NIL)))
       (COND ((ERRORP ERROR-MESSAGE)
 	     (BARF ERROR-MESSAGE))
 	    (T
-	     (IF (LOOP FOR BUFFER IN *ZMACS-BUFFER-LIST*
-		       THEREIS (BUFFER-NEEDS-SAVING-P BUFFER))
-		 (FORMAT *QUERY-IO* "~&Don't forget to save your files!")
-	       (FORMAT *QUERY-IO* "~&Patch completed."))
-	     (SETQ *PATCH-BUFFER* NIL))))))
+	     (FORMAT *QUERY-IO* "~&~:[Patch completed.~;Don't forget to save your files!~]"
+		     (LOOP FOR BUFFER IN *ZMACS-BUFFER-LIST*
+			   THEREIS (BUFFER-NEEDS-SAVING-P BUFFER))
+		 (FORMAT *QUERY-IO* "~&Don't forget to save your files!")))))))
 
 (DEFCOM COM-RELEASE-PATCH "Mark an already finished patch as /"released/".
 If you finish a patch with Finish Unreleased Patch, it will not
@@ -305,7 +313,7 @@ as released so users will load it." ()
 	   (LET ((*READ-BASE* 10.) (*PRINT-BASE* 10.))
 	     (TYPEIN-LINE-READ "Minor version of ~A to release: "
 			       PATCH-SYSTEM))))
-    (SI:CONSUMMATE-PATCH (SI:GET-PATCH-SYSTEM-NAMED PATCH-SYSTEM) PATCH-NUMBER NIL T T))
+    (SI::CONSUMMATE-PATCH (SI::GET-PATCH-SYSTEM-NAMED PATCH-SYSTEM) PATCH-NUMBER NIL T T))
   DIS-NONE)
 
 (DEFCOM COM-ADD-PATCH-CHANGED-SECTIONS "Offer to Add Patch for each changed section.
@@ -314,14 +322,13 @@ or that have been patched since they were last changed.
 Type P to patch all the rest of one buffer's changed sections
 with no more questions.  Questions will resume in the next buffer." ()
   (DOLIST (BUFFER *ZMACS-BUFFER-LIST*)
-    (AND (EQ (SEND BUFFER ':MAJOR-MODE)
-	     'LISP-MODE)
-	 (NOT (SEND BUFFER ':GET-ATTRIBUTE ':PATCH-FILE))
-	 (IF (EQ (ADD-PATCH-BUFFER-CHANGED-FUNCTIONS BUFFER) ':QUIT) (RETURN))))
+    (AND (EQ (SEND BUFFER :MAJOR-MODE) 'LISP-MODE)
+	 (NOT (SEND BUFFER :GET-ATTRIBUTE :PATCH-FILE))
+	 (IF (EQ (ADD-PATCH-BUFFER-CHANGED-FUNCTIONS BUFFER) :QUIT) (RETURN))))
   DIS-NONE)
 
 (DEFCOM COM-ADD-PATCH-BUFFER-CHANGED-SECTIONS
-	"Offer to Add Patch this buffer's changed sections.
+  "Offer to Add Patch this buffer's changed sections.
 Does not ask about sections that haven't been changed
 or that have been patched since they were last changed.
 Type P to patch all the rest of the changed sections with no more questions." ()
@@ -331,20 +338,22 @@ Type P to patch all the rest of the changed sections with no more questions." ()
 (DEFUN ADD-PATCH-BUFFER-CHANGED-FUNCTIONS (BUFFER)
   (LET (PROCEED-FLAG)
     (RESECTIONIZE-BUFFER BUFFER)
+    (MAKE-BUFFER-CURRENT BUFFER)
     (DOLIST (SECTION (NODE-INFERIORS BUFFER))
       (AND (TYPEP SECTION 'SECTION-NODE)
 	   (SECTION-NODE-DEFUN-LINE SECTION)
 	   (LET ((PATCH-TICK (GET SECTION 'PATCH-TICK)))
 	     (> (NODE-TICK SECTION) (OR PATCH-TICK (BUFFER-FILE-READ-TICK BUFFER))))
 	   (LET ((NAME (SECTION-NODE-NAME SECTION)))
+	     (DISPLAY-SECTION SECTION NIL T)
 	     (WHEN (OR PROCEED-FLAG
-		       (SELECTQ (FQUERY `(:CHOICES
-					   (((:PROCEED "Proceed.") #/P)
-					    ((:QUIT "Quit") #/Q)
-					    . ,FORMAT:Y-OR-N-P-CHOICES))
-					"Add ~S to patch? " NAME)
+		       (CASE (FQUERY '(:CHOICES
+					(((:PROCEED "Proceed.") #/P)
+					 ((:QUIT "Quit") #/Q #/c-G #/Abort)
+					 . #,FORMAT:;Y-OR-N-P-CHOICES))
+				     "Add ~S to patch? " NAME)
 			 (:PROCEED (SETQ PROCEED-FLAG T))
-			 (:QUIT (RETURN-FROM ADD-PATCH-BUFFER-CHANGED-FUNCTIONS ':QUIT))
+			 (:QUIT (RETURN-FROM ADD-PATCH-BUFFER-CHANGED-FUNCTIONS :QUIT))
 			 ((T) T)))
 	       (ADD-PATCH-INTERVAL SECTION NIL T NAME BUFFER))))))
   NIL)
