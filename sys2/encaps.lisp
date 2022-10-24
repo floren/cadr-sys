@@ -209,7 +209,8 @@ of FUNCTION, including pieces of advice, etc."
 				      `(:location ,(locf definition)))))
   definition)
 
-(defmacro encapsulate (function-spec outer-function-spec type body &optional extra-debugging-info)
+(defmacro encapsulate (function-spec outer-function-spec type body
+		       &optional extra-debugging-info)
   "Encapsulate the function named FUNCTION-SPEC
 with an encapsulation whose body is the value of BODY and whose type is TYPE.
 The args are all evaluated, but BODY is evaluated inside some bindings.
@@ -226,7 +227,7 @@ Within the code which constructs the body, this symbol is the value of COPY."
   `(let* ((default-cons-area background-cons-area)
 	  (copy (make-symbol (if (symbolp ,function-spec)
 				 (symbol-name ,function-spec)
-			       (format nil "~s" ,function-spec))))
+			       (format nil "~S" ,function-spec))))
 	  (defp (fdefinedp ,function-spec))
 	  (def (and defp (fdefinition ,function-spec)))
 	  (self-flavor-decl (assq ':self-flavor (debugging-info def)))
@@ -276,6 +277,10 @@ return the object supplied by SI:ENCAPSULATION's caller as the body."
 ;;; NOTE!! Each of these must have an optimizer in QCOPT.
 (deff encapsulation-let #'let)
 (deff encapsulation-list* #'list*)
+;; in case #'let or #'let* is redefined (it really has happened to me!! -- Mly)
+(add-initialization "Encapsulation technology" '(progn (fset 'encapsulation-let #'let)
+						       (fset 'encapsulation-list* #'list*))
+		    :cold)
 
 ;;; ENCAPSULATION-MACRO-DEFINITION, given a function definition,
 ;;; if it is a macro, or a symbol whose definition is a symbol whose ... is a macro,
@@ -299,99 +304,99 @@ Otherwise return nil."
 	((symbolp def)
 	 (and (fboundp def) (encapsulation-macro-definition (fdefinition def))))))
 
-(DEFUN ENCAPSULATION-LAMBDA-LIST (FUNCTION)
+(defun encapsulation-lambda-list (function)
   "Return a lambda list good for use in an encapsulation to go around FUNCTION.
 The lambda list we return is computed from FUNCTION's arglist."
-  (COND ((NULL FUNCTION)
-	 '(&REST .ARGLIST.))			;If fn is not defined, NIL is supplied to us.
+  (cond ((null function)
+	 '(&rest .arglist.))			;If fn is not defined, NIL is supplied to us.
 						;Assume a typical function, since can't know.
-	((SYMBOLP FUNCTION)
-	 (COND ((FBOUNDP FUNCTION) (ENCAPSULATION-LAMBDA-LIST (FSYMEVAL FUNCTION)))
-	       (T '(&REST .ARGLIST.))))
-	((CONSP FUNCTION)
-	 (SELECTQ (CAR FUNCTION)
-	   (LAMBDA (ENCAPSULATION-CONVERT-LAMBDA (CADR FUNCTION)))
-	   (NAMED-LAMBDA
-	    (ENCAPSULATION-CONVERT-LAMBDA (CADDR FUNCTION)))
-	   (OTHERWISE '(&REST .ARGLIST.))))
-	(T ;A compiled or microcode function
-	 (ENCAPSULATION-CONVERT-LAMBDA (ARGLIST FUNCTION T)))))
+	((symbolp function)
+	 (cond ((fboundp function) (encapsulation-lambda-list (fsymeval function)))
+	       (t '(&rest .arglist.))))
+	((consp function)
+	 (selectq (car function)
+	   (lambda (encapsulation-convert-lambda (cadr function)))
+	   (named-lambda
+	    (encapsulation-convert-lambda (caddr function)))
+	   (otherwise '(&rest .arglist.))))
+	(t ;A compiled or microcode function
+	 (encapsulation-convert-lambda (arglist function t)))))
 
-(DEFUN ENCAPSULATION-ARGLIST-CONSTRUCTOR (LAMBDA-LIST &AUX RESTARG OPTARGS SOFAR)
+(defun encapsulation-arglist-constructor (lambda-list &aux restarg optargs sofar)
   "Return an expression which would cons up the list of arguments, from LAMBDA-LIST.
 We assume that the expression we return will be evaluated inside a function
 whose lambda-list is as specified; the result of the evaluation will be
 a list of all the arguments passed to that function."
-  (SETQ RESTARG (MEMQ '&REST LAMBDA-LIST))
-  (COND (RESTARG (SETQ SOFAR (CADR RESTARG)
-		       LAMBDA-LIST (LDIFF LAMBDA-LIST RESTARG))))
-  (SETQ OPTARGS (MEMQ '&OPTIONAL LAMBDA-LIST))
-  (COND (OPTARGS (SETQ LAMBDA-LIST (LDIFF LAMBDA-LIST OPTARGS))
-		 (SETQ OPTARGS (SUBSET-NOT #'(LAMBDA (ELT) (MEMQ ELT LAMBDA-LIST-KEYWORDS))
-					   OPTARGS))
-		 (DOLIST (A (REVERSE (CDR OPTARGS)))
-		   (SETQ SOFAR
-			 `(ENCAPSULATION-CONS-IF ,(CADDR A) ,(CAR A) ,SOFAR)))))
-  (SETQ LAMBDA-LIST (SUBSET-NOT #'(LAMBDA (ELT) (MEMQ ELT LAMBDA-LIST-KEYWORDS)) LAMBDA-LIST))
-  `(LIST* ,@LAMBDA-LIST ,SOFAR))
+  (setq restarg (memq '&rest lambda-list))
+  (cond (restarg (setq sofar (cadr restarg)
+		       lambda-list (ldiff lambda-list restarg))))
+  (setq optargs (memq '&optional lambda-list))
+  (cond (optargs (setq lambda-list (ldiff lambda-list optargs))
+		 (setq optargs (subset-not #'(lambda (elt) (memq elt lambda-list-keywords))
+					   optargs))
+		 (dolist (a (reverse (cdr optargs)))
+		   (setq sofar
+			 `(encapsulation-cons-if ,(caddr a) ,(car a) ,sofar)))))
+  (setq lambda-list (subset-not #'(lambda (elt) (memq elt lambda-list-keywords)) lambda-list))
+  `(list* ,@lambda-list ,sofar))
 
-(DEFUN ENCAPSULATION-CONS-IF (CONDITION NEW-CAR TAIL)
-  (IF CONDITION (CONS NEW-CAR TAIL) TAIL))
+(defun encapsulation-cons-if (condition new-car tail)
+  (if condition (cons new-car tail) tail))
 
-(DEFUN ENCAPSULATION-CONVERT-LAMBDA (LL
-	&AUX EVARG QUARG EVOPT QUOPT EVREST QUREST)
+(defun encapsulation-convert-lambda (ll
+	&aux evarg quarg evopt quopt evrest qurest)
   ;; First determine what types of evalage and quotage are present (set above aux vars)
-  (DO ((L LL (CDR L))
-       (ITEM)
-       (OPTIONALP NIL)
-       (QUOTEP NIL)
-       (RESTP NIL))
-      ((NULL L))
-    (SETQ ITEM (CAR L))
-    (COND ((EQ ITEM '&AUX)
-	   (RETURN NIL))
-	  ((EQ ITEM '&EVAL)
-	   (SETQ QUOTEP NIL))
-	  ((EQ ITEM '&QUOTE)
-	   (SETQ QUOTEP T))
-	  ((EQ ITEM '&OPTIONAL)
-	   (SETQ OPTIONALP T))
-	  ((OR (EQ ITEM '&REST) (EQ ITEM '&KEY))
-	   (SETQ RESTP T))
-	  ((MEMQ ITEM LAMBDA-LIST-KEYWORDS))
-	  (RESTP
-	   (IF QUOTEP (SETQ QUREST T) (SETQ EVREST T))
-	   (RETURN NIL))
-	  (OPTIONALP
-	   (IF QUOTEP (SETQ QUOPT T) (SETQ EVOPT T)))
-	  (T (COND (QUOTEP (SETQ QUARG T))
-		   (T (SETQ EVARG T))))))
+  (do ((l ll (cdr l))
+       (item)
+       (optionalp nil)
+       (quotep nil)
+       (restp nil))
+      ((null l))
+    (setq item (car l))
+    (cond ((eq item '&aux)
+	   (return nil))
+	  ((eq item '&eval)
+	   (setq quotep nil))
+	  ((eq item '&quote)
+	   (setq quotep t))
+	  ((eq item '&optional)
+	   (setq optionalp t))
+	  ((or (eq item '&rest) (eq item '&key))
+	   (setq restp t))
+	  ((memq item lambda-list-keywords))
+	  (restp
+	   (if quotep (setq qurest t) (setq evrest t))
+	   (return nil))
+	  (optionalp
+	   (if quotep (setq quopt t) (setq evopt t)))
+	  (t (cond (quotep (setq quarg t))
+		   (t (setq evarg t))))))
   ;; Decide how hairy a lambda list is needed
-  (COND ((AND (NOT QUARG) (NOT QUOPT) (NOT QUREST))
-	 '(&EVAL &REST .ARGLIST.))
-	((AND (NOT EVARG) (NOT EVOPT) (NOT EVREST))
-	 '(&QUOTE &REST .ARGLIST.))
-	(T;; Need a hairy one.
-	  (NRECONC
-	    (DO ((L LL (CDR L))
-	         (LAMBDA-LIST NIL)
-		 OPTIONALP
-	         (ITEM))
-	        ((NULL L) LAMBDA-LIST)
-	      (SETQ ITEM (CAR L))
-	      (COND ((MEMQ ITEM '(&AUX &REST &KEY))
-		     (RETURN LAMBDA-LIST))
-		    ((MEMQ ITEM '(&EVAL &QUOTE))
-		     (SETQ LAMBDA-LIST (CONS ITEM LAMBDA-LIST)))
-		    ((EQ ITEM '&OPTIONAL)
-		     (OR OPTIONALP (SETQ LAMBDA-LIST (CONS ITEM LAMBDA-LIST)))
-		     (SETQ OPTIONALP T))
-		    ((MEMQ ITEM LAMBDA-LIST-KEYWORDS))
-		    (OPTIONALP
-		     (SETQ LAMBDA-LIST (CONS (LIST (GENSYM) NIL (GENSYM)) LAMBDA-LIST)))
-		    (T
-		     (SETQ LAMBDA-LIST (CONS (GENSYM) LAMBDA-LIST)))))
-	    '(&REST .ARGLIST.)))))
+  (cond ((and (not quarg) (not quopt) (not qurest))
+	 '(&eval &rest .arglist.))
+	((and (not evarg) (not evopt) (not evrest))
+	 '(&quote &rest .arglist.))
+	(t;; Need a hairy one.
+	  (nreconc
+	    (do ((l ll (cdr l))
+	         (lambda-list nil)
+		 optionalp
+	         (item))
+	        ((null l) lambda-list)
+	      (setq item (car l))
+	      (cond ((memq item '(&aux &rest &key))
+		     (return lambda-list))
+		    ((memq item '(&eval &quote))
+		     (setq lambda-list (cons item lambda-list)))
+		    ((eq item '&optional)
+		     (or optionalp (setq lambda-list (cons item lambda-list)))
+		     (setq optionalp t))
+		    ((memq item lambda-list-keywords))
+		    (optionalp
+		     (setq lambda-list (cons (list (gensym) nil (gensym)) lambda-list)))
+		    (t
+		     (setq lambda-list (cons (gensym) lambda-list)))))
+	    '(&rest .arglist.)))))
 
 ;;;; Implement RENAME-WITHIN encapsulations.
 
@@ -401,24 +406,22 @@ a list of all the arguments passed to that function."
 ;;; to the original symbol FUNCTION-TO-RENAME.
 ;;; Return the renamed function name (a symbol).
 
-(defun rename-within-add (within-function function-to-rename)
+(defun rename-within-add (within-function function-to-rename
+			  &aux (default-cons-area background-cons-area))
   "Make FUNCTION-TO-RENAME be renamed for calls inside WITHIN-FUNCTION.
 A new uninterned symbol will named ALTERED-function-to-rename-WITHIN-within-function
 will be created, defined to call FUNCTION-TO-RENAME, and put in
 place of FUNCTION-TO-RENAME wherever it is called inside WITHIN-FUCTION.
 The uninterned symbol is returned so you can redefine it."
-  (let (tem new
-	(default-cons-area background-cons-area))
-    (rename-within-init within-function)
-    (setq tem (rename-within-renamings-slot within-function))
-    (setq new (cadr (assoc function-to-rename (cadr tem))))
-    (or new (progn (setq new (make-symbol (string-append "ALTERED-" function-to-rename
-							 "-WITHIN-" within-function)))
-		   (push (list function-to-rename new)
-			 (cadr tem))
-		   (rename-within-replace-function new function-to-rename
-						   within-function)
-		   (fset new function-to-rename)))
+  (rename-within-init within-function)
+  (let* ((tem (rename-within-renamings-slot within-function))
+	 (new (cadr (assoc-equal function-to-rename (cadr tem)))))
+    (unless new
+      (setq new (make-symbol (format nil "ALTERED-~S-WITHIN-~S"
+					 function-to-rename within-function)))
+      (push (list function-to-rename new) (cadr tem))
+      (rename-within-replace-function new function-to-rename within-function)
+      (fset new function-to-rename))
     new))
 
 (defvar rename-within-functions nil
@@ -434,15 +437,14 @@ The uninterned symbol is returned so you can redefine it."
 
 (defun rename-within-init (function &aux spec1)
   (setq spec1 (unencapsulate-function-spec function 'rename-within))
-  (or (and (fdefinedp spec1)
-	   (rename-within-renamings-slot spec1))
-      (progn (push function rename-within-functions)
-	     (encapsulate spec1 function 'rename-within
-			  `(apply ,encapsulated-function arglist)
-			  (copy-tree
-			    '((renamings nil))))
-	     (if compile-encapsulations-flag
-		 (compile-encapsulations spec1 'rename-within))))
+  (unless (and (fdefinedp spec1)
+	       (rename-within-renamings-slot spec1))
+    (push function rename-within-functions)
+    (encapsulate spec1 function 'rename-within
+		 `(apply ,encapsulated-function arglist)
+		 (copy-tree '((renamings nil))))
+    (if compile-encapsulations-flag
+	(compile-encapsulations spec1 'rename-within)))
   function)
 
 ;;; Actually replace the function OLD with the function NEW
@@ -454,7 +456,7 @@ The uninterned symbol is returned so you can redefine it."
 					      '(rename-within)))
 	  (def (fdefinition spec1)))
     (cond ((consp def)
-	   (fdefine spec1 (subst new old def))
+	   (fdefine spec1 (global:subst new old def))
 	   (and (eq (car def) 'macro) (pop def))
 	   (and (not (symbolp def))
 		(setq tem (assq 'encapsulated-definition (function-debugging-info def)))
@@ -478,8 +480,8 @@ The uninterned symbol is returned so you can redefine it."
   (let ((within-function (cadr function-spec))
 	(renamed-function (caddr function-spec)))
     (and (fdefinedp within-function)
-	 (let ((entry (assoc renamed-function
-			     (cadr (rename-within-renamings-slot within-function)))))
+	 (let ((entry (assoc-equal renamed-function
+				   (cadr (rename-within-renamings-slot within-function)))))
 	   (and entry
 		(rename-within-delete within-function renamed-function (cadr entry)))))))
 
@@ -497,11 +499,12 @@ The uninterned symbol is returned so you can redefine it."
 ;;; Delete the rename-within encapsulation from WITHIN-FUNCTION.
 (defun rename-within-flush (within-function &aux def)
   (setq within-function (unencapsulate-function-spec within-function 'rename-within))
-  (setq def
-	(fdefinition (unencapsulate-function-spec within-function '(rename-within))))
-  (and (eq (car (fdefinition within-function)) 'macro)
+  (setq def (fdefinition (unencapsulate-function-spec within-function '(rename-within))))
+  (and (eq (car-safe (fdefinition within-function)) 'macro)
        (setq def (cons 'macro def)))
-  (fset within-function def)
+  ;; don't want to use fdefine, as that would record source file name.
+  ;;  So we resort to this kludge.
+  (setf (contents (fdefinition-location within-function)) def)
   (setq rename-within-functions
 	(delq within-function rename-within-functions)))
 
@@ -520,12 +523,14 @@ The uninterned symbol is returned so you can redefine it."
 	       (t
 		(assq 'renamings (function-debugging-info definition)))))))
 
-(defun (rename-within encapsulation-grind-function) (function def width real-io untyo-p)
-  def
+
+;;;; Tell the function-spec system about it
+
+(defun (:property rename-within encapsulation-grind-function)
+       (function def width real-io untyo-p)
+  (declare (ignore def))
   (dolist (entry (cadr (rename-within-renamings-slot function)))
     (grind-1 `(:within ,function ,(car entry)) width real-io untyo-p)))
-
-;;;; Tell the function-spec system about it
 
 ;;; (:WITHIN within-function renamed-function) refers to renamed-function,
 ;;;   but only as called directly from within-function.
@@ -534,31 +539,31 @@ The uninterned symbol is returned so you can redefine it."
 ;;;   as soon as an attempt is made to do anything to a function spec
 ;;;   of this form.  The function spec is from then on equivalent
 ;;;   to that uninterned symbol.
-(DEFPROP :WITHIN WITHIN-FUNCTION-SPEC-HANDLER FUNCTION-SPEC-HANDLER)
-(DEFUN WITHIN-FUNCTION-SPEC-HANDLER (FUNCTION FUNCTION-SPEC &OPTIONAL ARG1 ARG2)
-  (LET ((WITHIN-FUNCTION (SECOND FUNCTION-SPEC))
-	(RENAMED-FUNCTION (THIRD FUNCTION-SPEC)))
-    (IF (NOT (AND (= (LENGTH FUNCTION-SPEC) 3)
-		  (VALIDATE-FUNCTION-SPEC WITHIN-FUNCTION)
-		  (VALIDATE-FUNCTION-SPEC RENAMED-FUNCTION)
-		  (FDEFINEDP WITHIN-FUNCTION)))
-	(UNLESS (EQ FUNCTION 'VALIDATE-FUNCTION-SPEC)
-	  (FERROR 'SYS:INVALID-FUNCTION-SPEC
-		  "The function spec ~S is invalid." FUNCTION-SPEC))
-      (SELECTQ FUNCTION
-	(VALIDATE-FUNCTION-SPEC T)
-	(FDEFINE (IF (EQ ARG1 RENAMED-FUNCTION)
-		     (RENAME-WITHIN-MAYBE-DELETE FUNCTION-SPEC)
-		   (FSET (RENAME-WITHIN-ADD WITHIN-FUNCTION RENAMED-FUNCTION) ARG1)))
-	(FDEFINITION (LET* ((DEF (FDEFINITION WITHIN-FUNCTION))
-			    (RENAMINGSSLOT (ASSQ 'RENAMINGS (DEBUGGING-INFO DEF)))
-			    (ENTRY (CADR (ASSOC RENAMED-FUNCTION (CADR RENAMINGSSLOT)))))
-		       (IF ENTRY
-			   (FSYMEVAL ENTRY)
-			 RENAMED-FUNCTION)))
-	(FDEFINEDP T)
-	(FDEFINITION-LOCATION
-	 (LOCF (FSYMEVAL (RENAME-WITHIN-ADD WITHIN-FUNCTION RENAMED-FUNCTION))))
+(defprop :within within-function-spec-handler function-spec-handler)
+(defun within-function-spec-handler (function function-spec &optional arg1 arg2)
+  (let ((within-function (second function-spec))
+	(renamed-function (third function-spec)))
+    (if (not (and (= (length function-spec) 3)
+		  (validate-function-spec within-function)
+		  (validate-function-spec renamed-function)
+		  (fdefinedp within-function)))
+	(unless (eq function 'validate-function-spec)
+	  (ferror 'sys:invalid-function-spec
+		  "The function spec ~S is invalid." function-spec))
+      (case function
+	(validate-function-spec t)
+	(fdefine (if (eq arg1 renamed-function)
+		     (rename-within-maybe-delete function-spec)
+		   (fset (rename-within-add within-function renamed-function) arg1)))
+	(fdefinition (let* ((def (fdefinition within-function))
+			    (renamingsslot (assq 'renamings (debugging-info def)))
+			    (entry (cadr (assoc-equal renamed-function (cadr renamingsslot)))))
+		       (if entry
+			   (symbol-function entry)
+			   renamed-function)))
+	(fdefinedp t)
+	(fdefinition-location
+	 (locf (fsymeval (rename-within-add within-function renamed-function))))
 	;;--- Removes the renaming rather than renaming it to an undefined function
-	(FUNDEFINE (RENAME-WITHIN-MAYBE-DELETE FUNCTION-SPEC))
-	(OTHERWISE (FUNCTION-SPEC-DEFAULT-HANDLER FUNCTION FUNCTION-SPEC ARG1 ARG2))))))
+	(fundefine (rename-within-maybe-delete function-spec))
+	(otherwise (function-spec-default-handler function function-spec arg1 arg2))))))
