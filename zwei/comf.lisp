@@ -1,4 +1,4 @@
-;;; -*- Mode:LISP; Package:ZWEI; Base:8; Readtable:T -*-
+;;; -*- Mode:LISP; Package:ZWEI; Base:8; Readtable:ZL -*-
 ;;; Zwei commands, see ZWEI;COMA for comments 
 ;;; ** (c) Copyright 1980 Massachusetts Institute of Technology **
 
@@ -13,7 +13,7 @@ be for value, and to belong in the antecedent." ()
 	  FIXBP1 FIXBP2)
      (UNWIND-PROTECT
       (LET (COND-BP COND-TYPE UPCASE-P BP)
-        (MULTIPLE-VALUE (COND-BP COND-TYPE)
+        (MULTIPLE-VALUE-SETQ (COND-BP COND-TYPE)
 	  (FIND-CONTAINING-ATOM POINT '(COND AND OR IF)))	;Locate the COND or AND or OR
         (OR COND-BP (BARF))
         (SETQ UPCASE-P (UPPER-CASE-P (BP-CHARACTER COND-BP)))	;Remember if have to lowercase
@@ -38,7 +38,9 @@ be for value, and to belong in the antecedent." ()
                  (DOTIMES (I DEPTH) (INSERT FIXBP2 #/) ))
                  (INSERT FIXBP2 #/NEWLINE))))
         (COND ((EQ COND-TYPE 'COND)             ;Changing COND to AND or OR
-               (LET ((N (COUNT-LIST-ELEMENTS (FORWARD-LIST COND-BP -1 NIL 1))))
+               (LET* ((N (COUNT-LIST-ELEMENTS (FORWARD-LIST COND-BP -1 NIL 1)))
+		      (AFTER-COND-SYMBOL (FORWARD-SEXP COND-BP))
+		      (FIRST-CLAUSE-LENGTH (COUNT-LIST-ELEMENTS AFTER-COND-SYMBOL)))
 		 (AND (> N 3) (BARF "Too many clauses"))
 		 (AND (= N 3)
 		      (LET ((BP1 (FORWARD-SEXP COND-BP 2)) BP2 BP3)
@@ -50,10 +52,14 @@ be for value, and to belong in the antecedent." ()
 			    (BARF "Too many clauses"))
 			(SETQ BP1 (BACKWARD-OVER '(#/CR #/TAB #/SP) BP1))
 			(SETQ BP1 (FORWARD-CHAR BP1 -1))
-			(SETQ N (COUNT-LIST-ELEMENTS (FORWARD-SEXP COND-BP)))
 			(DELETE-INTERVAL BP1 BP3 T)
-			(SETQ COND-TYPE (IF (= N 1) "OR" "IF")))))
-	       (DELETE-INTERVAL COND-BP (FORWARD-WORD COND-BP) T)
+			(SETQ COND-TYPE (IF (= FIRST-CLAUSE-LENGTH 1) "OR" "IF"))))
+		 (AND (> FIRST-CLAUSE-LENGTH 2)
+		      (LET* ((BP2 (FORWARD-LIST AFTER-COND-SYMBOL 1 NIL -1 T))
+			     (BP3 (FORWARD-SEXP (FORWARD-SEXP BP2 2) -1)))
+			(INSERT BP3 "(PROGN ")
+			(INSERT (FORWARD-SEXP AFTER-COND-SYMBOL) ")")))
+		 (DELETE-INTERVAL COND-BP AFTER-COND-SYMBOL T))
 	       (AND (EQ COND-TYPE 'COND)	;Still not determined
 		    ;; Check for (COND ((NOT ...)))
 		    (LET ((BP1 (FORWARD-LIST COND-BP 1 NIL -2 T)))
@@ -153,12 +159,12 @@ The scan stops at LIMIT-BP.  Value can be LIMIT-BP."
   (ATOM-WORD-SYNTAX-BIND
    (LET (DO-BP DO-TYPE
 	BP BP1 BP2 BP3)
-    (MULTIPLE-VALUE (DO-BP DO-TYPE)
+    (MULTIPLE-VALUE-SETQ (DO-BP DO-TYPE)
       (FIND-CONTAINING-ATOM (POINT) '(DO DOTIMES DOLIST)))
     (OR DO-BP (BARF))
     (SETQ BP (FORWARD-OVER *WHITESPACE-CHARS* (FORWARD-WORD DO-BP)))
     (COND ((AND (EQ DO-TYPE 'DO)
-		(= (LIST-SYNTAX (BP-CH-CHAR BP)) LIST-OPEN))	;New style
+		(= (LIST-SYNTAX (BP-CH-CHARACTER BP)) LIST-OPEN))	;New style
 	   (OR (= (COUNT-LIST-ELEMENTS BP) 1)
 	       (BARF "Too many DO variables"))
 	   (OR (SETQ BP1 (FORWARD-SEXP BP)) (BARF))
@@ -310,55 +316,57 @@ at the mark, else at point." ()
       (SETF (NODE-TICK *INTERVAL*) OLD-TICK)))
   DIS-BPS)
 
-(DEFCOM COM-DECLARE-SPECIAL "Add the nth previous word to the last special declaration
-This is totally bogus now, due to the fact that you should use (PROCLAIM '(SPECIAL ...))
-instead since Common Lisp says that top-level DECLAREs are illegal. So foo on you." ()
-  (ATOM-WORD-SYNTAX-BIND
-    (LET (WORD)
-      (LET ((BP1 (FORWARD-WORD (POINT) (- *NUMERIC-ARG*)))
-	    BP2)
-	(OR BP1 (BARF))
-	(SETQ BP2 (FORWARD-WORD BP1 1))
-	(OR BP2 (BARF))
-	(SETQ WORD (STRING-INTERVAL BP1 BP2 T)))
-      (LET ((BP (BLOCK DECLARES
-		  (DO ((LINE (BP-LINE (POINT)) (LINE-PREVIOUS LINE))
-		       (LIMIT-LINE (BP-LINE (INTERVAL-FIRST-BP *INTERVAL*))))
-		      (NIL)
-		    (AND (STRING-EQUAL "(DECLARE " LINE 0 0 9 9)
-			 ;;Found a (DECLARE ...), look for SPECIAL in the CARs of the elements
-			 (DO ((BP1 (CREATE-BP LINE 9) (FORWARD-SEXP BP1))
-			      (BP2)
-			      (BP3))
-			     ((NULL BP1))
-			   (OR (SETQ BP2 (FORWARD-LIST BP1 1 NIL 1 T))
-			       (RETURN NIL))
-			   (OR (SETQ BP3 (FORWARD-WORD BP2)) (RETURN NIL))
-			   (AND (EQ (BP-LINE BP2) (BP-LINE BP3))
-				(STRING-EQUAL "SPECIAL" (BP-LINE BP2) 0 (BP-INDEX BP2) 7
-					      (BP-INDEX BP3))
-				(SETQ BP2 (FORWARD-LIST BP1))	;Found one
-				(RETURN-FROM DECLARES (FORWARD-CHAR BP2 -1)))))
-		    ;;If there isnt a special declaration, make one at the start of the file
-		    (AND (EQ LINE LIMIT-LINE)
-			 (RETURN (FORWARD-CHAR (INSERT
-						 (SKIP-OVER-BLANK-LINES-AND-COMMENTS
-						   (INTERVAL-FIRST-BP *INTERVAL*) T)
-						 "(DECLARE (SPECIAL))
+;(DEFCOM COM-DECLARE-SPECIAL "Add the nth previous word to the last special declaration
+;This is totally bogus now, due to the fact that you should use (PROCLAIM '(SPECIAL ...))
+;instead since Common Lisp says that top-level DECLAREs are illegal. So foo on you." ()
+;  (ATOM-WORD-SYNTAX-BIND
+;    (LET (WORD)
+;      (LET ((BP1 (FORWARD-WORD (POINT) (- *NUMERIC-ARG*)))
+;	    BP2)
+;	(OR BP1 (BARF))
+;	(SETQ BP2 (FORWARD-WORD BP1 1))
+;	(OR BP2 (BARF))
+;	(SETQ WORD (STRING-INTERVAL BP1 BP2 T)))
+;      (LET ((BP (BLOCK DECLARES
+;		  (DO ((LINE (BP-LINE (POINT)) (LINE-PREVIOUS LINE))
+;		       (LIMIT-LINE (BP-LINE (INTERVAL-FIRST-BP *INTERVAL*))))
+;		      (NIL)
+;		    (AND (STRING-EQUAL "(DECLARE " LINE 0 0 9 9)
+;			 ;;Found a (DECLARE ...), look for SPECIAL in the CARs of the elements
+;			 (DO ((BP1 (CREATE-BP LINE 9) (FORWARD-SEXP BP1))
+;			      (BP2)
+;			      (BP3))
+;			     ((NULL BP1))
+;			   (OR (SETQ BP2 (FORWARD-LIST BP1 1 NIL 1 T))
+;			       (RETURN NIL))
+;			   (OR (SETQ BP3 (FORWARD-WORD BP2)) (RETURN NIL))
+;			   (AND (EQ (BP-LINE BP2) (BP-LINE BP3))
+;				(STRING-EQUAL "SPECIAL" (BP-LINE BP2) 0 (BP-INDEX BP2) 7
+;					      (BP-INDEX BP3))
+;				(SETQ BP2 (FORWARD-LIST BP1))	;Found one
+;				(RETURN-FROM DECLARES (FORWARD-CHAR BP2 -1)))))
+;		    ;;If there isnt a special declaration, make one at the start of the file
+;		    (AND (EQ LINE LIMIT-LINE)
+;			 (RETURN (FORWARD-CHAR (INSERT
+;						 (SKIP-OVER-BLANK-LINES-AND-COMMENTS
+;						   (INTERVAL-FIRST-BP *INTERVAL*) T)
+;						 "(DECLARE (SPECIAL))
 
-")
-					       -3)))))))
-	;; Now put it in and try not to overflow the line
-	(WITH-BP (PT (POINT) :MOVES)		;Preserve point
-	  (MOVE-BP (POINT) BP)
-	  (INSERT-MOVING (POINT) (STRING-APPEND #/SP WORD))
-	  (AUTO-FILL-HOOK #/SP)
-	  (COND ((END-LINE-P (POINT))
-		 (MOVE-BP (POINT) (END-LINE (POINT) 1))
-		 (INSERT (DELETE-BACKWARD-OVER *BLANKS* (POINT)) #/CR)
-		 (COM-INDENT-FOR-LISP)))
-	  (MOVE-BP (POINT) PT)))))
-  DIS-TEXT)
+;")
+;					       -3)))))))
+;	;; Now put it in and try not to overflow the line
+;	(WITH-BP (PT (POINT) :MOVES)		;Preserve point
+;	  (MOVE-BP (POINT) BP)
+;	  (INSERT-MOVING (POINT) (STRING-APPEND #/SP WORD))
+;	  (AUTO-FILL-HOOK #/SP)
+;	  (COND ((END-LINE-P (POINT))
+;		 (MOVE-BP (POINT) (END-LINE (POINT) 1))
+;		 (INSERT (DELETE-BACKWARD-OVER *BLANKS* (POINT)) #/CR)
+;		 (COM-INDENT-FOR-LISP)))
+;	  (MOVE-BP (POINT) PT)))))
+;  DIS-TEXT)
+
+#|  ;; This is commented out since com-lisp-match-search is better.
 
 ;;; Pattern finding command
 (DEFVAR *LAST-PATTERN* NIL)
@@ -366,7 +374,8 @@ instead since Common Lisp says that top-level DECLAREs are illegal. So foo on yo
 (DEFVAR *LAST-PATTERN-RESTART-LIST*)
 
 (DEFCOM COM-FIND-PATTERN "Move to next occurrence of the given pattern.
-The pattern must be a list, ** matches any one thing, ... any number of things.
+The pattern must be a list: # matches any one element, ... any number of elements.
+Everything else must match exactly except for arbitrary whitespace.
 A numeric argument repeats the last search." ()
   (LET (FORM RESTART BP)
     (COND (*NUMERIC-ARG-P*
@@ -376,7 +385,7 @@ A numeric argument repeats the last search." ()
 	  (T
 	   (LET ((FORM-STRING (TYPEIN-LINE-READLINE "Pattern to search for:"))
 		 (EOF '(())))
-	     (SETQ FORM (READ-FROM-STRING FORM-STRING EOF))
+	     (SETQ FORM (CLI:READ-FROM-STRING FORM-STRING NIL EOF))
 	     (AND (EQ FORM EOF) (BARF "Unbalanced parens"))
 	     (OR (CONSP FORM) (BARF "I only know how to search for lists"))
 	     ;; This is sort of a kludge
@@ -385,7 +394,7 @@ A numeric argument repeats the last search." ()
 					   (CONS (INTERN "#") ':/#)	;what the printer says
 					   (CONS (INTERN "**") ':**))	;same as :#
 				    FORM))))))
-    (MULTIPLE-VALUE (BP RESTART) (FIND-PATTERN (POINT) FORM RESTART))
+    (MULTIPLE-VALUE-SETQ (BP RESTART) (FIND-PATTERN (POINT) FORM RESTART))
     (OR BP (BARF))
     (MAYBE-PUSH-POINT BP)
     (MOVE-BP (POINT) BP)
@@ -398,8 +407,8 @@ A numeric argument repeats the last search." ()
        (BP2)
        (STREAM (INTERVAL-STREAM *INTERVAL*))
        (FORM)
-       (SI:XR-CORRESPONDENCE-FLAG T)
-       (SI:XR-CORRESPONDENCE NIL NIL)
+       (SI::XR-CORRESPONDENCE-FLAG T)
+       (SI::XR-CORRESPONDENCE NIL NIL)
        (RESTART-LIST RESTART-LIST NIL)
        (PLIST)
        (TEM))
@@ -410,25 +419,25 @@ A numeric argument repeats the last search." ()
     (COND (BP2
 	   (COND ((AND (SETQ TEM (GET PLIST 'CORRESPONDENCE))
 		       (COND ((> (CADR TEM) (INTERVAL-REAL-TICK BP1 BP2 T))
-			      (SETQ FORM (CAR TEM) SI:XR-CORRESPONDENCE (CADDR TEM))
+			      (SETQ FORM (CAR TEM) SI::XR-CORRESPONDENCE (CADDR TEM))
 			      T)
 			     (T
 			      (REMPROP PLIST 'CORRESPONDENCE)
 			      NIL))))
 		 (T
 		  (SEND STREAM :SET-BP BP1)
-		  (SETQ FORM (READ STREAM))
-		  (PUTPROP PLIST (LIST FORM (TICK) SI:XR-CORRESPONDENCE) 'CORRESPONDENCE)))
+		  (SETQ FORM (CLI:READ STREAM))
+		  (PUTPROP PLIST (LIST FORM (TICK) SI::XR-CORRESPONDENCE) 'CORRESPONDENCE)))
 	   (AND RESTART-LIST (SETQ FORM (CAR RESTART-LIST) RESTART-LIST (CDR RESTART-LIST)))
 	   (DO ((FORM FORM (CAR RESTART-LIST))
 		(RESTART-LIST RESTART-LIST (CDR RESTART-LIST))
 		(FOUND)
 		(BP3))
 	       (NIL)
-	     (MULTIPLE-VALUE (FOUND RESTART-LIST)
+	     (MULTIPLE-VALUE-SETQ (FOUND RESTART-LIST)
 	       (FIND-FROB PATTERN FORM RESTART-LIST))
 	     (OR FOUND (RETURN NIL))
-	     (AND (SETQ BP3 (CADR (MEMQ FOUND SI:XR-CORRESPONDENCE)))
+	     (AND (SETQ BP3 (CADR (MEMQ FOUND SI::XR-CORRESPONDENCE)))
 		  (BP-< BP BP3)
 		  (RETURN-FROM FIND-PATTERN BP3 RESTART-LIST))))
 	  (T					;Look forward for next defun
@@ -436,7 +445,7 @@ A numeric argument repeats the last search." ()
 
 ;;; Attempt to find an instance of THING in LIST
 (DEFUN FIND-FROB (THING LIST &OPTIONAL RESTART-LIST &AUX VAL)
-  (COND	((AND RESTART-LIST (MULTIPLE-VALUE (VAL RESTART-LIST)
+  (COND	((AND RESTART-LIST (MULTIPLE-VALUE-SETQ (VAL RESTART-LIST)
 			     (FIND-FROB THING (CAR RESTART-LIST) (CDR RESTART-LIST))))
 	 (PUSH LIST RESTART-LIST))
 	((MATCH THING LIST) (SETQ VAL LIST RESTART-LIST NIL))
@@ -444,7 +453,7 @@ A numeric argument repeats the last search." ()
 	(T
 	 (DO ((LIST LIST (CDR LIST)))
 	     ((NULL LIST) (SETQ VAL NIL RESTART-LIST NIL))
-	   (MULTIPLE-VALUE (VAL RESTART-LIST) (FIND-FROB THING (CAR LIST)))
+	   (MULTIPLE-VALUE-SETQ (VAL RESTART-LIST) (FIND-FROB THING (CAR LIST)))
 	   (WHEN VAL
 	     (PUSH (CDR LIST) RESTART-LIST)
 	     (RETURN NIL)))))
@@ -470,7 +479,8 @@ A numeric argument repeats the last search." ()
 				   (DO ((B B (CDR B)))
 				       ((NULL B))
 				     (AND (MATCH A B) (RETURN T)))))))))
-
+  |#
+
 (DEFCOM COM-EXECUTE-COMMAND-INTO-BUFFER
 	"Execute following editor command, printing into the buffer.
 Any output from the command which would ordinarily appear as type out
@@ -504,7 +514,8 @@ Calls TIME:PRINT-CURRENT-TIME, or if given an argument TIME:PRINT-CURRENT-DATE" 
     (MOVE-BP (POINT) (SEND STREAM :READ-BP)))
   DIS-TEXT)
 
-(DEFCOM COM-COUNT-LINES-REGION "Print the number of lines in the region in the echo area." (KM)
+(DEFCOM COM-COUNT-LINES-REGION
+  "Print the number of lines in the region in the echo area." (KM)
   (REGION (BP1 BP2)
     (FORMAT *QUERY-IO* "~&~D line~:P.  " (1- (COUNT-LINES BP1 BP2 T))))
   DIS-NONE)
@@ -523,8 +534,8 @@ Fast Where Am I prints a subset of this information faster." (KM)
 	  (AT-END-P (BP-= (INTERVAL-LAST-BP *INTERVAL*) POINT))
 	  (BP-IND (BP-INDENTATION POINT))
 	  (SW (FONT-SPACE-WIDTH)))
-      (FORMAT *QUERY-IO* "~&X=[~D. chars|~D. pixels|~:[~S~;~D.~] columns] ~
-			Y=~D.~@[ Char=~O~] Line=~D.(~D%)"
+      (FORMAT *QUERY-IO* "~&X=[~D chars|~D pixels|~:[~S~;~D~] columns] Y=~D ~
+			  ~@[Char=#o~O ~]Line=~D(~D%)"
 	      (BP-INDEX POINT)
 	      BP-IND
 	      (ZEROP (\ BP-IND SW))
@@ -532,14 +543,16 @@ Fast Where Am I prints a subset of this information faster." (KM)
 		  (TRUNCATE BP-IND SW)
 		  (// (FLOAT BP-IND) SW))
 	      (FIND-BP-IN-WINDOW *WINDOW* POINT)
-	      (AND (NOT AT-END-P) (BP-CHAR POINT))
+	      (AND (NOT AT-END-P) (CHAR-INT (BP-CHARACTER POINT)))
 	      POINT-LINES
-	      (IF (ZEROP INTERVAL-LINES)
-		  0
-		  (TRUNCATE (* 100. POINT-LINES) INTERVAL-LINES)))))
+	      (IF (ZEROP INTERVAL-LINES) 0
+		(TRUNCATE (* 100. POINT-LINES) INTERVAL-LINES)))))
   (AND (WINDOW-MARK-P *WINDOW*)
        (REGION (BP1 BP2)
-	 (FORMAT *QUERY-IO* ", Region has ~D line~:P.  " (1- (COUNT-LINES BP1 BP2 T)))))
+	 (FORMAT *QUERY-IO* " Region has ")
+	 (IF (EQ (BP-LINE BP1) (BP-LINE BP2))
+	     (FORMAT *QUERY-IO* "~D character~:P." (- (BP-INDEX BP2) (BP-INDEX BP1)))
+	     (FORMAT *QUERY-IO* "~D line~:P." (1- (COUNT-LINES BP1 BP2 T))))))
   DIS-NONE)
 
 (DEFCOM COM-FAST-WHERE-AM-I "Quickly print various things about where the point is.
@@ -551,7 +564,7 @@ Where Am I prints the same things and more." (KM)
     (LET ((AT-END-P (BP-= (INTERVAL-LAST-BP *INTERVAL*) POINT))
 	  (BP-IND (BP-INDENTATION POINT))
 	  (SW (FONT-SPACE-WIDTH)))
-      (FORMAT *QUERY-IO* "~&X=[~D. chars|~D. pixels|~:[~S~;~D.~] columns] Y=~D.~@[ Char=~O~]"
+      (FORMAT *QUERY-IO* "~&X=[~D chars|~D pixels|~:[~S~;~D~] columns] Y=~D~@[ Char=#o~O~]"
 	      (BP-INDEX POINT)
 	      BP-IND
 	      (ZEROP (\ BP-IND SW))
@@ -559,10 +572,13 @@ Where Am I prints the same things and more." (KM)
 		  (TRUNCATE BP-IND SW)
 		  (// (FLOAT BP-IND) SW))
 	      (FIND-BP-IN-WINDOW *WINDOW* POINT)
-	      (AND (NOT AT-END-P) (BP-CHAR POINT)))))
+	      (AND (NOT AT-END-P) (CHAR-INT (BP-CHARACTER POINT))))))
   (AND (WINDOW-MARK-P *WINDOW*)
        (REGION (BP1 BP2)
-	 (FORMAT *QUERY-IO* ", Region has ~D line~:P.  " (1- (COUNT-LINES BP1 BP2 T)))))
+	 (FORMAT *QUERY-IO* " Region has ")
+	 (IF (EQ (BP-LINE BP1) (BP-LINE BP2))
+	     (FORMAT *QUERY-IO* "~D character~:P." (- (BP-INDEX BP2) (BP-INDEX BP1)))
+	     (FORMAT *QUERY-IO* "~D line~:P." (1- (COUNT-LINES BP1 BP2 T))))))
   DIS-NONE)
 
 (DEFCOM COM-ARGLIST "Print the argument list of the specified function.
@@ -667,7 +683,8 @@ from the mini buffer." ()
     (IF (NULL NAME) (BARF)
       (LET ((DOC (DOCUMENTATION NAME 'FUNCTION)))
 	(IF (NULL DOC)
-	    (FORMAT *QUERY-IO* "~&~S is not documented as a function" NAME)
+	    (FORMAT *QUERY-IO* "~&~S is not documented~@[ as a function~]"
+		    NAME (CLI:SOME #'CDR (GET NAME 'SI::DOCUMENTATION-PROPERTY)))
 	  (IF (FDEFINEDP NAME)
 	      (PROGN (SEND *STANDARD-OUTPUT* :FRESH-LINE)
 		     (PRINT-ARGLIST NAME *STANDARD-OUTPUT*))
@@ -682,9 +699,10 @@ line of its documentation in the echo area." ()
   (LET ((NAME (READ-FUNCTION-NAME "Brief Document" (RELEVANT-FUNCTION-NAME (POINT)) T)))
     (IF (NULL NAME) (BARF)
       (LET ((DOC (DOCUMENTATION NAME 'FUNCTION)))
-	(IF (NULL DOC) (FORMAT *QUERY-IO* "~&~S is not documented as a function" NAME)
+	(IF (NULL DOC) (FORMAT *QUERY-IO* "~&~S is not documented~@[ as a function~]"
+			       NAME (CLI:SOME #'CDR (GET NAME 'SI::DOCUMENTATION-PROPERTY)))
 	  (FORMAT *QUERY-IO* "~&~S: ~A" NAME
-		  (SUBSTRING DOC 0 (STRING-SEARCH-CHAR #/CR DOC)))))))
+		  (SUBSTRING DOC 0 (STRING-SEARCH-CHAR #/NEWLINE DOC)))))))
     DIS-NONE)
 
 (DEFCOM COM-LONG-DOCUMENTATION "Prints long documentation for the specified symbol or function.
@@ -700,14 +718,13 @@ Then, if the name is a symbol, comes the documentation for the name in its other
 	  (FORMAT T "~S:" NAME)
 	(SEND *STANDARD-OUTPUT* :FRESH-LINE)
 	(PRINT-ARGLIST NAME *STANDARD-OUTPUT*))
-      (COND (ALL-DOC
-	     (LOOP FOR (KIND STRING) ON ALL-DOC BY 'CDDR
-		   UNLESS (STRING= STRING KIND 'FUNCTION)
-		   DO (FORMAT T "~&~%Documentation of ~S as a ~A:~%~A~%"
-			      NAME (STRING-DOWNCASE KIND) STRING)))
-	    (DOC
-	     (FORMAT T "~&~A" DOC))
-	    (T
+      (IF DOC (FORMAT T "~&~A" DOC))
+      (COND ((CLI:SOME #'CDR ALL-DOC)
+	     (LOOP FOR (KIND . STRING) IN ALL-DOC BY 'CDDR
+		   UNLESS (OR (NULL STRING) (STRING= KIND 'FUNCTION))
+		     DO (FORMAT T "~2&Documentation of ~S as a ~(~A~):~%~A~%"
+				NAME KIND STRING)))
+	    ((NOT DOC)
 	     (FORMAT *QUERY-IO* "~&~S is not documented." NAME)))))
   DIS-NONE)
 
@@ -719,7 +736,7 @@ looks for lookalike symbols in other packages." ()
 	 (BP2 (FORWARD-ATOM BP1)))
     (IF (NULL BP2) (BARF))
     (MULTIPLE-VALUE-BIND (VAR ERROR)
-	(CATCH-ERROR (WITH-INPUT-FROM-STRING (S (BP-LINE BP1) (BP-INDEX BP1) (BP-INDEX BP2))
+	(CATCH-ERROR (WITH-INPUT-FROM-STRING (S (BP-LINE BP1) :start (BP-INDEX BP1) :end (BP-INDEX BP2))
 		       (READ S)))
       (IF (OR ERROR (NOT (SYMBOLP VAR))) (BARF))
       (OR (DESCRIBE-VARIABLE-INTERNAL VAR)
@@ -728,7 +745,7 @@ looks for lookalike symbols in other packages." ()
 	    (IF (DESCRIBE-VARIABLE-INTERNAL SYM)
 		(RETURN T)))
 	  (PROGN
-	    (SEND *QUERY-IO* :CLEAR-SCREEN)			;Clear the echo area
+	    (SEND *QUERY-IO* :CLEAR-WINDOW)	;Clear the echo area
 	    (SEND *QUERY-IO* :SEND-IF-HANDLES :TYPEOUT-STAYS)
 	    (FORMAT *QUERY-IO* "~&~S is not a declared variable." VAR)))
       DIS-NONE)))
@@ -738,17 +755,19 @@ looks for lookalike symbols in other packages." ()
 	 (BOUND (BOUNDP VAR))
 	 (DOC (DOCUMENTATION VAR 'VARIABLE))
 	 (STREAM (IF DOC *STANDARD-OUTPUT* *QUERY-IO*)))
-    (COND ((OR DECL BOUND DOC)
-	   (FORMAT STREAM "~&~S has ~:[no~;a~] value" VAR BOUND)
-	   (IF (EQ (CAR DECL) 'SPECIAL)
-	       (FORMAT STREAM " and is declared special ~:[by file ~A~]"
-		       (EQ (CADR DECL) T) (CADR DECL)))
-	   (IF (EQ (CAR DECL) 'SYS:SYSTEM-CONSTANT)
-	       (FORMAT STREAM " and is marked as constant ~:[by file ~A~]"
-		       (EQ (CADR DECL) T) (CADR DECL)))
-	   (IF DOC
-	       (FORMAT STREAM "~%~A" DOC))
-	   T))))
+    (WHEN (OR DECL BOUND DOC)
+      (IF BOUND
+	  (FORMAT STREAM "~&~S has a value" VAR)
+	(FORMAT STREAM "~&~S is void" VAR))
+      (IF (EQ (CAR DECL) 'SPECIAL)
+	  (FORMAT STREAM " and is declared special ~:[by file ~A~]"
+		  (EQ (CADR DECL) T) (CADR DECL)))
+      (IF (EQ (CAR DECL) 'SYS:SYSTEM-CONSTANT)
+	  (FORMAT STREAM " and is marked as constant ~:[by file ~A~]"
+		  (EQ (CADR DECL) T) (CADR DECL)))
+      (IF DOC
+	  (FORMAT STREAM "~%~A" DOC))
+      T)))
 
 (DEFCOM COM-TRACE "Trace or untrace a function.
 Reads the name of the function from the mini-buffer (the top of the kill
@@ -757,7 +776,8 @@ of trace options.  With an argument, omits menu step" ()
   (LET ((FCN (READ-FUNCTION-NAME "Trace" (RELEVANT-FUNCTION-NAME (POINT)) T)))
     (IF (NOT *NUMERIC-ARG-P*)
 	(TV:TRACE-VIA-MENUS FCN)
-	(EVAL (IF (ATOM FCN) `(TRACE (,FCN)) `(TRACE (:FUNCTION ,FCN))))))
+      ;; gag
+      (EVAL (IF (ATOM FCN) `(TRACE (,FCN)) `(TRACE (:FUNCTION ,FCN))))))
   DIS-NONE)
 
 (DEFCOM COM-WHERE-IS-SYMBOL "Show which packages contain the specified symbol." ()
@@ -794,10 +814,9 @@ before point, and the number of lines after point." (KM)
   (COND ((NULL SYMBOL) (BARF))
 	((FDEFINEDP SYMBOL)
 	 (SETQ FSPEC (FDEFINITION (SI:UNENCAPSULATE-FUNCTION-SPEC SYMBOL)))
-	 (COND ((OR (= (%DATA-TYPE FSPEC) DTP-FEF-POINTER)
-		    (AND (CONSP FSPEC)
-			 (EQ (CAR FSPEC) 'MACRO)
-			 (= (%DATA-TYPE (CDR FSPEC)) DTP-FEF-POINTER)))
+	 (COND ((OR (COMPILED-FUNCTION-P FSPEC)
+		    (AND (EQ (CAR-SAFE FSPEC) 'MACRO)
+			 (COMPILED-FUNCTION-P (CDR FSPEC))))
 		(FORMAT T "~&~S:" SYMBOL)
 		(DISASSEMBLE SYMBOL))
 	       ((BARF "Can't find FEF for ~S" SYMBOL))))
