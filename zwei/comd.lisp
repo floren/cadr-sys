@@ -9,6 +9,7 @@
 Puts PROMPT in the mode line.  Returns a symbol in the utility package.
 The ZWEI:TEXT property of that symbol is the text contents.
 The ZWEI:POINT property of it is a location saved on it."
+;character lossage
   (SETQ CHAR (READ-CHAR-NO-HANG *STANDARD-INPUT*))
   (DO-FOREVER
     (WHEN (NULL CHAR)
@@ -139,7 +140,7 @@ The register name, a character with no meta bits, is read from the keyboard." ()
 	  (T (BARF "The register ~A does not contain anything." Q-REG))))
   DIS-NONE)
 
-(DEFCOM COM-SAVE-POSITION "Save the current point in a register.
+(DEFCOM COM-SAVE-POSITION-IN-REGISTER "Save the current point in a register.
 The register name, a character with no meta bits, is read from the keyboard." ()
   (LET ((Q-REG (GET-REGISTER-NAME "Point to register:")))
     (SAVE-POSITION-IN-REGISTER Q-REG (POINT)))
@@ -154,7 +155,7 @@ The register name, a character with no meta bits, is read from the keyboard." ()
 	   (SETQ PT (CONS (COPY-BP BP :NORMAL)  (BP-TOP-LEVEL-NODE BP)))))
     (PUTPROP REGISTER PT 'POINT)))
 
-(DEFCOM COM-JUMP-TO-SAVED-POSITION "Restore a saved position from a register.
+(DEFCOM COM-JUMP-TO-REGISTER-POSITION "Restore a saved position from a register.
 The register name, a character with no meta bits, is read from the keyboard." (KM)
   (LET ((Q-REG (GET-REGISTER-NAME "Register to point:" " containing a location")))
     (LET ((PT (GET Q-REG 'POINT)))
@@ -176,8 +177,11 @@ If there is text in the mini buffer, delete it all.
 If the mini buffer is empty, quit out of it." ()
   (BEEP)
   (COND (*NUMERIC-ARG-P* DIS-NONE)
+	((WINDOW-MARK-P *WINDOW*)
+	 (SETQ *MARK-STAYS* NIL)
+	 DIS-NONE)
 	((BP-= (INTERVAL-FIRST-BP *INTERVAL*) (INTERVAL-LAST-BP *INTERVAL*))
-	 (*THROW 'TOP-LEVEL T))
+	 (*THROW 'NON-MINIBUFFER-LEVEL T))
 	(T
 	 (DELETE-INTERVAL *INTERVAL*)
 	 DIS-TEXT)))
