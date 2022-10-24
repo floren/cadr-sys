@@ -203,7 +203,7 @@ NIL if SYSTEM is not loaded at all."
   (LET* ((PATCH-SYSTEM (GET-PATCH-SYSTEM-NAMED SYSTEM T T))
 	 CURRENT-MAJOR-VERSION)
     (AND PATCH-SYSTEM
-	 (SETQ (CURRENT-MAJOR-VERSION (PATCH-VERSION PATCH-SYSTEM)))
+	 (SETQ CURRENT-MAJOR-VERSION (PATCH-VERSION PATCH-SYSTEM))
 	 (OR (> CURRENT-MAJOR-VERSION MAJOR-VERSION)
 	     (AND (= CURRENT-MAJOR-VERSION MAJOR-VERSION)
 		  ( (OR (VERSION-NUMBER (CAR (PATCH-VERSION-LIST PATCH-SYSTEM))) 0)
@@ -399,7 +399,7 @@ LOAD-PATCHES returns T if any patches were loaded, otherwise NIL."
 				       (PATCH-NAME PATCH))))
 			   ;; Avoid error if non ex file, if patch is known to be unfinished.
 			   (CONDITION-CASE-IF (NULL (VERSION-EXPLANATION VERSION)) ()
-			       (LOAD PATHNAME :SET-DEFAULT-PATHNAME NIL)
+			       (LOAD FILENAME :SET-DEFAULT-PATHNAME NIL)
 			     (FS:FILE-NOT-FOUND
 			      (WHEN VERBOSE-P
 				(FORMAT T "~&File ~A does not exist, ignoring this patch."
@@ -425,11 +425,8 @@ LOAD-PATCHES returns T if any patches were loaded, otherwise NIL."
     (if (send host :get 'fs:make-logical-pathname-host)
 	(fs:make-logical-pathname-host host :warn-about-redefinition nil))))
 
-(defun load-and-save-incremental-patches (&optional band)
+(defun load-and-save-incremental-patches (&optional band &REST KEYWORD-ARGS)
   "Loads all new patches and saves the updated lisp world into an incremental partition."
-  "Load all patches and save a new Lisp world in a disk partition.
-KEYWORD-ARGS are passed to LOAD-PATCHES.
-BAND is the name or number of a LOD band to save in."
   (CHECK-TYPE BAND (OR NUMBER STRING NULL) "A specifier for a band")
   (IF (OR (MEMQ :FORCE-UNFINISHED KEYWORD-ARGS)
 	  (MEMQ :UNRELEASED KEYWORD-ARGS))
@@ -447,7 +444,7 @@ you should not save this environment."
 	      (PATCH-NAME PATCH-SYSTEM))
       (SEND *QUERY-IO* :CLEAR-INPUT)
       (UNLESS (YES-OR-NO-P "Dump anyway? ")
-	(RETURN-FROM LOAD-AND-SAVE-PATCHES NIL))))
+	(RETURN-FROM LOAD-AND-SAVE-incremental-PATCHES NIL))))
   (DO ((BAND1 BAND (PROMPT-AND-READ :STRING "~&Save into which band? "))
        (COUNT 0 (1+ COUNT)))
       (())
