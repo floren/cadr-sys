@@ -179,7 +179,7 @@
    ;; Systems not initially loaded, but done right afterwards
    MIT-SPECIFIC
    CADR
-   ZMAIL
+;;   ZMAIL -- this is big, do it seperatly, so we can GC.
    ;; Systems defined elsewhere
    FILE-SYSTEM-UTILITIES ;Consists of: LOCAL-FILE MAGTAPE FILE-SERVER
    ;; Misc. systems used by MAGTAPE and FILE.
@@ -189,7 +189,8 @@
    ))
 
 (DEFUN COMPILE-OUTER-SYSTEM (&OPTIONAL (RECOMPILEP NIL))
-  (COMPILE-SYSTEM 'OUTER-SYSTEM RECOMPILEP))
+  (COMPILE-SYSTEM 'OUTER-SYSTEM RECOMPILEP)
+  (COMPILE-SYSTEM 'ZMAIL RECOMPILEP))
 
 (DEFUN LOAD-OUTER-SYSTEM (&OPTIONAL (RELOADP NIL))
   (IF RELOADP
