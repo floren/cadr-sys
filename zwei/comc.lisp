@@ -39,7 +39,7 @@ characters from the beginning."
   DIS-TEXT)	;DIS-TEXT in case user manually alters the buffer with Lisp code
 
 (DEFCOM COM-EVALUATE-INTO-BUFFER
-	"Evaluate a form from the mini-buffer and insert the results into the buffer.
+  "Evaluate a form from the mini-buffer and insert the results into the buffer.
 If there are multiple values, each value is printed into the buffer,
 with a Return before each one.
 A numeric argument means output printed by the evaluation also goes in the buffer." (KM)
@@ -48,7 +48,7 @@ A numeric argument means output printed by the evaluation also goes in the buffe
     (LET ((VALUES
 	    (MULTIPLE-VALUE-LIST
 	      (LET ((*STANDARD-OUTPUT* (IF *NUMERIC-ARG-P* STREAM *STANDARD-OUTPUT*)))
-		(SI:EVAL-SPECIAL-OK FORM)))))
+		(SI:EVAL-ABORT-TRIVIAL-ERRORS FORM)))))
       (DOLIST (V VALUES)
 	(TERPRI STREAM)
 	(FUNCALL (OR PRIN1 #'PRIN1)
@@ -62,7 +62,7 @@ A numeric argument means output printed by the evaluation also goes in the buffe
     (SYS:READ-ERROR (BARF (STRING ERROR)))))
 
 (DEFCOM COM-EVALUATE-AND-REPLACE-INTO-BUFFER
-	"Evaluate the next s-expression and replace the result into the buffer.
+  "Evaluate the next s-expression and replace the result into the buffer.
 The original expression is deleted and the value, printed out, replaces it."
 	()
   (LET* ((POINT (POINT)) (MARK (MARK))
@@ -84,11 +84,12 @@ The result is printed on the screen with GRIND-TOP-LEVEL." ()
       (GRIND-TOP-LEVEL (MACROEXPAND FORM))))
   DIS-NONE)
 
-(DEFCOM COM-MACRO-EXPAND-EXPRESSION-ALL "Print macroexpansion of next s-expression to all levels.
+(DEFCOM COM-MACRO-EXPAND-EXPRESSION-ALL
+  "Print macroexpansion of next s-expression to all levels.
 The result is printed on the screen with GRIND-TOP-LEVEL." ()
   (LET ((STREAM (REST-OF-INTERVAL-STREAM (POINT))))
     (LET ((FORM (READ-OR-BARF STREAM)))
-      (GRIND-TOP-LEVEL (COMPILER:MACROEXPAND-ALL FORM))))
+      (GRIND-TOP-LEVEL (MACROEXPAND-ALL FORM))))
   DIS-NONE)
 
 (DEFCOM COM-COMPILE-REGION "Compile the current region or defun.
@@ -98,7 +99,9 @@ In that case, DEFVARs reset the variable even if already bound." ()
   (COMPILE-DEFUN-INTERNAL T "Compiling" "compiled.")
   DIS-NONE)
 
-(DEFCOM COM-MICROCOMPILE-REGION "Microcompile just between point and the mark." ()
+(DEFCOM COM-MICROCOMPILE-REGION "Microcompile the current region or defun.
+If there is a region, it is compiled.
+Otherwise, the current or next defun is compiled." ()
   (COMPILE-DEFUN-INTERNAL T "Microcompiling" "microcompiled."
 			    NIL ;USE-TYPEOUT
 			    NIL ;DEFVAR-HACK
@@ -221,10 +224,10 @@ ECHO-NAME is a string containing a lowercase past participle and period (/"compi
   (UNDO-SAVE-CURRENT-RANGE)
   (SETQ FORMAT-FUNCTION (CASE USE-TYPEOUT
 			  ((T :TYPEOUT) #'(LAMBDA (STRING &REST ARGS)
-					    (APPLY 'FORMAT T STRING ARGS)))
+					    (APPLY #'FORMAT T STRING ARGS)))
 			  (:PROMPT #'PROMPT-LINE-MORE)
 			  (OTHERWISE #'(LAMBDA (STRING &REST ARGS)
-					(APPLY 'FORMAT *QUERY-IO* STRING ARGS)))))
+					(APPLY #'FORMAT *QUERY-IO* STRING ARGS)))))
   (IF REGION-NAME
       (FUNCALL FORMAT-FUNCTION "~&~A ~A" MODE-NAME REGION-NAME)
     (FUNCALL FORMAT-FUNCTION "~&~A ~S" MODE-NAME (SECTION-NODE-NAME (BP-NODE BP1))))
@@ -242,6 +245,9 @@ ECHO-NAME is a string containing a lowercase past participle and period (/"compi
   (FUNCALL FORMAT-FUNCTION " -- ~A" ECHO-NAME)
   (UPDATE-INTERVAL-COMPILE-TICK BP1 BP2 T))
 
+;Careful!  When you get around to changing this, leave
+; COMPILE-P and COMPILE-PROCESSING-MODE as specials with the same meaning
+; as now.  Prolog uses them while expanding its macros.  3/17/85 
 (DEFUN COMPILE-INTERVAL (COMPILE-P PRINT-RESULTS-STREAM DEFVAR-HACK
 			 BP1 &OPTIONAL BP2 IN-ORDER-P
 			 (COMPILE-PROCESSING-MODE 'COMPILER:MACRO-COMPILE)
@@ -272,8 +278,7 @@ ALREADY-RESECTIONIZED-FLAG should be T to inhibit resectionization."
   (SETQ STREAM (INTERVAL-STREAM BP1 BP2 T))
   ;; Arrange for first read-error's location to be saved in q-reg ".".
   (REMPROP (MAKE-REGISTER-NAME #/.) 'POINT)
-;Why is this needed?  Anyway, the macro is not defined now.
-;  (SI:BINDING-INTERPRETER-ENVIRONMENT (())
+  (LET ((SI:*ALL-FREE-INTERPRETER-VARIABLE-REFERENCES-SPECIAL* T))
     (MULTIPLE-VALUE-BIND (VARS VALS) (SEND *INTERVAL* :ATTRIBUTE-BINDINGS)
       (PROGV VARS VALS
 	(WHEN FS:THIS-IS-A-PATCH-FILE
@@ -289,23 +294,31 @@ ALREADY-RESECTIONIZED-FLAG should be T to inhibit resectionization."
 			  STREAM
 			  GENERIC-PATHNAME
 			  NIL			;FASD-FLAG
-			  'COMPILE-INTERVAL-PROCESS-FN
+			  (IF (AND COMPILE-P (NOT (EQ COMPILE-P T)))
+		;if using user supplied evaluator, avoid any possible macro-expanding, etc
+		; in COMPILE-DRIVER.
+			      'SIMPLE-COMPILE-INTERVAL-PROCESS-FN
+			    'COMPILE-INTERVAL-PROCESS-FN)
 			  T			;QC-FILE-LOAD-FLAG
 			  NIL			;QC-FILE-IN-CORE-FLAG
-			  PACKAGE
+			  *PACKAGE*
 			  NIL			;FILE-LOCAL-DECLARATIONS
 			  NIL			;Unused
 			  WHOLE-FILE)))
 	    (IF COMPILE-P
 		(COMPILER:LOCKING-RESOURCES-NO-QFASL (DO-IT))
-	      (DO-IT))))))
-;    )
+	      (DO-IT)))))))
   (OR (NULL GENERIC-PATHNAME)
       (SI:RECORD-FILE-DEFINITIONS GENERIC-PATHNAME SI:FDEFINE-FILE-DEFINITIONS WHOLE-FILE)))
 
 (DEFUN COMPILE-INTERVAL-PROCESS-FN (FORM)
   (COMPILER:COMPILE-DRIVER FORM 'COMPILE-INTERVAL-PROCESS-BASIC-FORM
 			   'COMPILE-INTERVAL-PREPROCESS-FN))
+
+;;;COMPILE-DRIVER does all sorts of macro-expand stuff these days, regardless of process-fn 
+;;;  and OVERRIDE-FN, so we bypass it if this buffer doesnt contain LISP anyway.
+(DEFUN SIMPLE-COMPILE-INTERVAL-PROCESS-FN (FORM)
+  (COMPILE-INTERVAL-PROCESS-BASIC-FORM FORM 'RANDOM))
 
 ;;; Record the name of what we are compiling, if this form makes it clear.
 ;;; Turn DEFVAR into SETQ if appropriate.
@@ -323,7 +336,7 @@ ALREADY-RESECTIONIZED-FLAG should be T to inhibit resectionization."
       (FERROR NIL "~S not a recognized form" FORM))
     (PUTPROP (CADR FORM) T 'SPECIAL)		;Declare it
     (WHEN (> (LENGTH FORM) 3)			;in case there is a documentation string.
-      (SETF (DOCUMENTATION (SECOND FORM) 'VARIABLE) (EVAL (FOURTH FORM)))
+      (SETF (DOCUMENTATION (SECOND FORM) 'VARIABLE) (SI:EVAL1 (FOURTH FORM)))
       (SETQ FORM (NBUTLAST FORM)))		;remove documentation so that
 						;hack into SETQ works properly.
     (SETF (CAR FORM) 'SETQ))			;then always SETQ
@@ -519,44 +532,43 @@ A numeric arg means ask about each section individually."
   (FORMAT T "~&Done.~%")
   DIS-NONE)
 
+(DEFMACRO DO-CHANGED-LISP-BUFFERS ((BUFFER BUFFER-LIST) &BODY BODY)
+  "This is careful to not use random buffers."
+  `(DOLIST (,BUFFER ,BUFFER-LIST)
+     (WHEN (AND (EQ (IF (EQ ,BUFFER *INTERVAL*)
+			*MAJOR-MODE*
+		      (BUFFER-SAVED-MAJOR-MODE ,BUFFER))
+		    'LISP-MODE)
+		(NOT (GET ,BUFFER 'SPECIAL-PURPOSE))
+		;; Don't consider buffers never modified.
+		(> (NODE-TICK ,BUFFER)
+		   (BUFFER-FILE-READ-TICK BUFFER)))
+       ,@BODY)))
+     
 (DEFCOM COM-COMPILE-CHANGED-SECTIONS "Compile any sections which have been edited.
 Only sections that contain definitions will be compiled.
 A numeric arg means ask about each section individually."
 	()
-  (DOLIST (BUFFER *ZMACS-BUFFER-LIST*)
-    (AND (EQ (IF (EQ BUFFER *INTERVAL*)
-		 *MAJOR-MODE*
-	         (BUFFER-SAVED-MAJOR-MODE BUFFER))
-	     'LISP-MODE)
-	 ;; Don't consider buffers never modified.
-	 (> (NODE-TICK BUFFER)
-	    (BUFFER-FILE-READ-TICK BUFFER))
-	 (SI:FILE-OPERATION-WITH-WARNINGS
-	   ((AND (BUFFER-FILE-ID BUFFER)
-		 (SEND (SEND BUFFER :GENERIC-PATHNAME) :GENERIC-PATHNAME))
-	    :COMPILE NIL)
-	   (COMPILER:COMPILER-WARNINGS-CONTEXT-BIND
-	     (COMPILE-BUFFER-CHANGED-FUNCTIONS BUFFER *NUMERIC-ARG-P*)))))
+  (DO-CHANGED-LISP-BUFFERS (BUFFER *ZMACS-BUFFER-LIST*)
+    (SI:FILE-OPERATION-WITH-WARNINGS
+      ((AND (BUFFER-FILE-ID BUFFER)
+	    (SEND (SEND BUFFER :GENERIC-PATHNAME) :GENERIC-PATHNAME))
+       :COMPILE NIL)
+      (COMPILER:COMPILER-WARNINGS-CONTEXT-BIND
+	(COMPILE-BUFFER-CHANGED-FUNCTIONS BUFFER *NUMERIC-ARG-P*))))
   (FORMAT T "~&Done.~%")
   DIS-NONE)
 
 (DEFCOM COM-TAGS-COMPILE-CHANGED-SECTIONS "Compile any sections in files in tag table which have been edited.
 Only sections that contain definitions will be compiled.
 A numeric arg means ask about each section individually." ()
-  (DOLIST (BUFFER (TAG-TABLE-BUFFERS NIL))
-    (AND (EQ (IF (EQ BUFFER *INTERVAL*)
-		 *MAJOR-MODE*
-	         (BUFFER-SAVED-MAJOR-MODE BUFFER))
-	     'LISP-MODE)
-	 ;; Don't consider buffers never modified.
-	 (> (NODE-TICK BUFFER)
-	    (BUFFER-FILE-READ-TICK BUFFER))
-	 (SI:FILE-OPERATION-WITH-WARNINGS
-	   ((AND (BUFFER-FILE-ID BUFFER)
-		 (SEND (SEND BUFFER :GENERIC-PATHNAME) :GENERIC-PATHNAME))
-	    :COMPILE NIL)
-	   (COMPILER:COMPILER-WARNINGS-CONTEXT-BIND
-	     (COMPILE-BUFFER-CHANGED-FUNCTIONS BUFFER *NUMERIC-ARG-P*)))))
+  (DO-CHANGED-LISP-BUFFERS (BUFFER (TAG-TABLE-BUFFERS NIL))
+    (SI:FILE-OPERATION-WITH-WARNINGS
+      ((AND (BUFFER-FILE-ID BUFFER)
+	    (SEND (SEND BUFFER :GENERIC-PATHNAME) :GENERIC-PATHNAME))
+       :COMPILE NIL)
+      (COMPILER:COMPILER-WARNINGS-CONTEXT-BIND
+	(COMPILE-BUFFER-CHANGED-FUNCTIONS BUFFER *NUMERIC-ARG-P*))))
   (FORMAT T "~&Done.~%")
   DIS-NONE)
 
@@ -573,32 +585,20 @@ A numeric arg means ask about each section individually." ()
 Only sections that contain definitions will be evaluated.
 A numeric arg means ask about each section individually."
 	()
-  (DOLIST (BUFFER *ZMACS-BUFFER-LIST*)
-    (AND (EQ (IF (EQ BUFFER *INTERVAL*)
-		 *MAJOR-MODE*
-	         (BUFFER-SAVED-MAJOR-MODE BUFFER))
-	     'LISP-MODE)
-	 ;; Don't consider buffers never modified.
-	 (> (NODE-TICK BUFFER)
-	    (BUFFER-FILE-READ-TICK BUFFER))
-	 (COMPILE-BUFFER-CHANGED-FUNCTIONS BUFFER *NUMERIC-ARG-P*
-					   NIL '("Evaluate" "Evaluating" "evaluated.") )))
+  (DO-CHANGED-LISP-BUFFERS (BUFFER *ZMACS-BUFFER-LIST*)
+    (COMPILE-BUFFER-CHANGED-FUNCTIONS BUFFER *NUMERIC-ARG-P*
+				      NIL '("Evaluate" "Evaluating" "evaluated.")))
   (FORMAT T "~&Done.~%")
   DIS-NONE)
 
-(DEFCOM COM-TAGS-EVALUATE-CHANGED-SECTIONS "Evaluate any sections in files in tag table which have been edited.
+(DEFCOM COM-TAGS-EVALUATE-CHANGED-SECTIONS
+  "Evaluate any sections in files in tag table which have been edited.
 Only sections that contain definitions will be evaluated.
-A numeric arg means ask about each section individually." ()
-  (DOLIST (BUFFER (TAG-TABLE-BUFFERS NIL))
-    (AND (EQ (IF (EQ BUFFER *INTERVAL*)
-		 *MAJOR-MODE*
-		 (BUFFER-SAVED-MAJOR-MODE BUFFER))
-	     'LISP-MODE)
-	 ;; Don't consider buffers never modified.
-	 (> (NODE-TICK BUFFER)
-	    (BUFFER-FILE-READ-TICK BUFFER))
-	 (COMPILE-BUFFER-CHANGED-FUNCTIONS BUFFER *NUMERIC-ARG-P*
-					   NIL '("Evaluate" "Evaluating" "evaluated.") )))
+A numeric arg means ask about each section individually."
+  ()
+  (DO-CHANGED-LISP-BUFFERS (BUFFER (TAG-TABLE-BUFFERS NIL))
+    (COMPILE-BUFFER-CHANGED-FUNCTIONS BUFFER *NUMERIC-ARG-P*
+				      NIL '("Evaluate" "Evaluating" "evaluated.")))
   (FORMAT T "~&Done.~%")
   DIS-NONE)
 
