@@ -1,0 +1,10 @@
+
+;System CONVERSE made by LISPM at 10/24/22 08:49:47  -*-Mode: Lisp; Package: User; Base: 10.-*-
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: IO1; CONVER LISP >"
+  '((:COMPILE NIL
+     (ZWEI::QSEND-FORCE-MESSAGE-1 NIL NIL
+      (COMPILER:UNDEFINED-FUNCTION-USED :PROBABLE-ERROR NIL "The undefined function ~S was called" ZWEI::SEND-MESSAGE-STRING))
+     (ZWEI::CONVERSE-SEND-MSG-INTERNAL NIL NIL
+      (COMPILER:UNDEFINED-FUNCTION-USED :PROBABLE-ERROR NIL "The undefined function ~S was called" ZWEI::SEND-MESSAGE-STRING)))))

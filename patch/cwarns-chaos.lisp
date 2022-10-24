@@ -1,0 +1,54 @@
+
+;System CHAOS made by LISPM at 10/24/22 04:29:49  -*-Mode: Lisp; Package: User; Base: 10.-*-
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: IO; CHSNCP LISP >"
+  '((:COMPILE NIL
+     (CHAOS::SETUP-MY-ADDRESS NIL NIL
+      (COMPILER:UNDEFINED-FUNCTION-USED :PROBABLE-ERROR NIL "The undefined function ~S was called" SI::FIND-PROCESSOR-CONFIGURATION-STRUCTURE)
+      (COMPILER::FREE-VARIABLE :MISSING-DECLARATION NIL "The variable ~S is used free; assumed special." SI::*MY-PROC-NUMBER*))
+     (CHAOS::TRANSMIT-INT-PKT NIL NIL
+      (COMPILER:UNDEFINED-FUNCTION-USED :PROBABLE-ERROR NIL "The undefined function ~S was called" SI::SHARE-MODE-ACTIVE-P)
+      (COMPILER:UNDEFINED-FUNCTION-USED :PROBABLE-ERROR NIL "The undefined function ~S was called" UNIX::PROCESSOR-FOR-HOST-IF-ON-MY-NUBUS)
+      (COMPILER:UNDEFINED-FUNCTION-USED :PROBABLE-ERROR NIL "The undefined function ~S was called" ETHERNET::GET-ETHERNET-ADDRESS)
+      (COMPILER:UNDEFINED-FUNCTION-USED :PROBABLE-ERROR NIL "The undefined function ~S was called" UNIX::TRANSMIT-INT-PKT-TO-SHARING-HOST)
+      (COMPILER::FREE-VARIABLE :MISSING-DECLARATION NIL "The variable ~S is used free; assumed special." SI::*OTHER-PROCESSORS*)
+      (COMPILER::FREE-VARIABLE :MISSING-DECLARATION NIL "The variable ~S is used free; assumed special." SI::*ETHERNET-HARDWARE-CONTROLLER*)
+      (COMPILER::FREE-VARIABLE :MISSING-DECLARATION NIL "The variable ~S is used free; assumed special." SI::*MY-OP*)
+      (COMPILER::FREE-VARIABLE :MISSING-DECLARATION NIL "The variable ~S is used free; assumed special." ETHERNET::MY-ETHERNET-ADDRESS)
+      (COMPILER::FREE-VARIABLE :MISSING-DECLARATION NIL "The variable ~S is used free; assumed special." ETHERNET::CHAOS-ETHERNET-TYPE)
+      (COMPILER::FREE-VARIABLE :MISSING-DECLARATION NIL "The variable ~S is used free; assumed special." ETHERNET::*ETHERNET-CHAOS-PKTS-TRANSMITTED*)
+      (COMPILER::FREE-VARIABLE :MISSING-DECLARATION NIL "The variable ~S is used free; assumed special." ETHERNET::*ETHERNET-CHAOS-PKTS-NOT-TRANSMITTED-LACKING-ETHERNET-ADDRESS*)))))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: IO; CHUSE LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: IO; CHSAUX LISP >"
+  '((:COMPILE NIL
+     (CHAOS:POLL-HOSTS NIL NIL
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." CHAOS::PKT))
+     (CHAOS::USER-ACTIVITY-STRING NIL NIL
+      (SI::BAD-TYPE :IMPLAUSIBLE NIL "The type ~S does not seem to be defined" ZWEI::ZMAIL-FRAME)))))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: IO1; CHATST LISP >"
+  '((:COMPILE NIL
+     (CHAOS::%U-WRITE NIL NIL
+      (COMPILER:UNDEFINED-FUNCTION-USED :PROBABLE-ERROR NIL "The undefined function ~S was called" CADR:DBG-WRITE))
+     (CHAOS::%U-READ NIL NIL
+      (COMPILER:UNDEFINED-FUNCTION-USED :PROBABLE-ERROR NIL "The undefined function ~S was called" CADR:DBG-READ)))))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: IO1; EFTP LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: SITE; HSTTBL LISP >"
+  '((:COMPILE NIL)))
