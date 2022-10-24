@@ -1,4 +1,4 @@
-;;; -*- Mode:LISP; Package:ZWEI; Base:8 -*-
+;;; -*- Mode:LISP; Package:ZWEI; Base:8; Readtable:ZL -*-
 ;;; ** (c) Copyright 1980 Massachusetts Institute of Technology **
 ;;; This file provides the section specific code for ZMACS
 ;;; It uses the utility file stuff in ZWEI; FILES.
@@ -43,10 +43,13 @@ you type just a carriage return." ()
 (DEFUN GET-PACKAGE-TO-SEARCH ()
   (LET ((PKG (COND ((< *NUMERIC-ARG* 4) *PACKAGE*)
 		   ((< *NUMERIC-ARG* 16.) PKG-GLOBAL-PACKAGE)
-		   (T (LET ((X (TYPEIN-LINE-READLINE "Package to search (default ~A):"
-						     *PACKAGE*)))
+		   (T (LET ((X ; this really ought to do a READ..
+			      (STRING-UPCASE
+				(TYPEIN-LINE-READLINE "Package to search (default ~A):"
+						      *PACKAGE*))))
 			(PKG-FIND-PACKAGE (IF (EQUAL X "") *PACKAGE* X)))))))
-    (VALUES PKG (IF (= *NUMERIC-ARG* 4) "all packages" (FORMAT NIL "package ~A" PKG)))))
+    (VALUES PKG
+	    (IF (= *NUMERIC-ARG* 4) "all packages" (FORMAT NIL "package ~A" PKG)))))
 
 (DEFUN WHO-CALLS-INTERNAL (PROMPT &OPTIONAL MUST-BE-DEFINED-FLAG)
   "Read a function name and find all functions that call it.
@@ -96,7 +99,7 @@ Also discard any function specs that are for :PREVIOUS-DEFINITION properties."
 		      (STRING-LESSP XNAME YNAME)))))
 
 (DEFUN LIST-ZMACS-CALLERS-TO-BE-EDITED (TYPE FUNCTION JUST-EDIT CALLERS)
-  (COMMAND-STORE 'COM-GO-TO-NEXT-TOP-LEVEL-POSSIBILITY #/C-/. *ZMACS-COMTAB*)
+  (COMMAND-STORE 'COM-GO-TO-NEXT-TOP-LEVEL-POSSIBILITY #/C-/. *ZMACS-COMTAB*)
   (FUNCALL (IF JUST-EDIT #'EDIT-FUNCTIONS-NO-DISPLAY #'EDIT-FUNCTIONS-DISPLAY)
 	   ;; We want the symbols to show with their proper package prefixes
 	   (STABLE-SORTCAR (MAPCAR #'(LAMBDA (X)
@@ -107,25 +110,38 @@ Also discard any function specs that are for :PREVIOUS-DEFINITION properties."
 	   "No ~A~@[ ~S~] found."
 	   TYPE FUNCTION))
 
-(DEFCOM COM-FUNCTION-APROPOS "List functions containing the given substring.
-Searches the current package, or all packages with control-U, or asks for
-a package with two control-U's." ()
+(DEFUN LISP-OBJECT-APROPOS (WHAT PREDICATE)
   (MULTIPLE-VALUE-BIND (PKG PKG-NAME) (GET-PACKAGE-TO-SEARCH)
     (MULTIPLE-VALUE-BIND (FUNCTION KEY STR)
-       (GET-EXTENDED-SEARCH-STRINGS
-	 (FORMAT NIL "List functions in ~A containing substring:" PKG-NAME))
+	(GET-EXTENDED-SEARCH-STRINGS
+	  (FORMAT NIL "List ~As in ~A containing substring:" WHAT PKG-NAME))
       (LIST-ZMACS-CALLERS-TO-BE-EDITED
-	"Functions matching" STR NIL
+	(FORMAT NIL "~@(~A~)s matching" WHAT) STR NIL
 	(SETUP-ZMACS-CALLERS-TO-BE-EDITED
 	    (LET ((L NIL))
-	      (FUNCALL (IF (EQ PKG PKG-GLOBAL-PACKAGE) 'MAPATOMS-ALL 'MAPATOMS)
+	      (FUNCALL (IF (EQ PKG PKG-GLOBAL-PACKAGE) #'MAPATOMS-ALL #'MAPATOMS)
 		       #'(LAMBDA (SYM)
 			   (AND (FUNCALL FUNCTION KEY (STRING SYM))
-				(FBOUNDP SYM)
+				(FUNCALL PREDICATE SYM)
 				(PUSH SYM L)))
 		       PKG)
 	      L)))))
   DIS-NONE)
+
+(DEFCOM COM-FUNCTION-APROPOS "List functions containing the given substring.
+Searches the current package, or all packages with control-U, or asks for
+a package with two control-U's." ()
+  (LISP-OBJECT-APROPOS "function" #'FBOUNDP))
+
+(DEFCOM COM-LISP-VARIABLE-APROPOS "List variables containing the given substring.
+Searches the current package, or all packages with control-U, or asks for
+a package with two control-U's." ()
+  (LISP-OBJECT-APROPOS "variable" #'BOUNDP))
+
+(DEFCOM COM-FLAVOR-APROPOS "List flavors containing the given substring.
+/Searches the current package, or all packages with control-U, or asks for
+a package with two control-U's." ()
+  (LISP-OBJECT-APROPOS "flavor" #'(LAMBDA (S) (GET S 'SI:FLAVOR))))
 
 (DEFCOM COM-LIST-MATCHING-SYMBOLS "List symbols satisfying the given predicate.
 Searches the current package, or all packages with control-U, or asks for
@@ -133,7 +149,7 @@ a package with two control-U's." ()
   (MULTIPLE-VALUE-BIND (PKG PKG-NAME) (GET-PACKAGE-TO-SEARCH)
     (LET ((FUNCTION (READ-EVALUATED-MINI-BUFFER
 		      "'(LAMBDA (SYMBOL) )" 18.
-		      "List functions in ~A satisfying: (end with ~C)" PKG-NAME #/END))
+		      "List functions in ~A satisfying: (end with ~C)" PKG-NAME #/END))
 	  (SYMBOL (GENSYM)))
       (FSET SYMBOL FUNCTION)
       (COMPILE SYMBOL)
@@ -150,14 +166,16 @@ INITIAL-CONTENTS is a string to start off with, and INITIAL-CHAR-POS if non-NIL
  is where to put the cursor in that string.
 FORMAT-STRING and FORMAT-ARGS are used for prompting."
   (SETQ PROMPT (IF (NULL FORMAT-ARGS) FORMAT-STRING
-		   (APPLY 'FORMAT NIL FORMAT-STRING FORMAT-ARGS)))
-  (MULTIPLE-VALUE (NIL NIL INTERVAL)
-    (EDIT-IN-MINI-BUFFER *MINI-BUFFER-MULTI-LINE-COMTAB* INITIAL-CONTENTS INITIAL-CHAR-POS
-			 (AND PROMPT (NCONS PROMPT))))
+		   (APPLY #'FORMAT NIL FORMAT-STRING FORMAT-ARGS)))
+  (SETQ INTERVAL (NTH-VALUE 2
+		   (EDIT-IN-MINI-BUFFER *MINI-BUFFER-MULTI-LINE-COMTAB*
+					INITIAL-CONTENTS
+					INITIAL-CHAR-POS
+					(AND PROMPT (NCONS PROMPT)))))
   (LET ((FORM-STRING (STRING-INTERVAL INTERVAL))
 	(FORM)
 	(EOF '(())))
-    (SETQ FORM (READ-FROM-STRING FORM-STRING EOF 0))
+    (SETQ FORM (CLI:READ-FROM-STRING FORM-STRING NIL EOF :START 0))
     (AND (EQ FORM EOF) (BARF "Unbalanced parentheses."))
     (EVAL FORM)))
 
@@ -165,7 +183,7 @@ FORMAT-STRING and FORMAT-ARGS are used for prompting."
   "Return a string for how function spec SPEC would look in a definition a source file.
 For example, a (:PROPERTY x y) function spec looks like (x y)."
   (COND ((STRINGP SPEC) SPEC)
-	((SYMBOLP SPEC) (GET-PNAME SPEC))
+	((SYMBOLP SPEC) (SYMBOL-NAME SPEC))
 	((ATOM SPEC) (FORMAT NIL "~S" SPEC))
 	((MEMQ (CAR SPEC) '(:PROPERTY :METHOD :MAYBE-METHOD :HANDLER))
 	 (DEFINITION-NAME-AS-STRING (CAR SPEC)
@@ -190,12 +208,12 @@ in the package which the car of SPEC belongs to, if that is possible."
 		 (AND TEM (NEQ TEM SI:PKG-KEYWORD-PACKAGE)
 		      (NEQ TEM SI:PKG-GLOBAL-PACKAGE)
 		      (NEQ TEM SI:PKG-SYSTEM-PACKAGE))))
-	  ((PACKAGE (SYMBOL-PACKAGE (CAR SPEC))))
+	  ((*PACKAGE* (SYMBOL-PACKAGE (CAR SPEC))))
     (COND ((AND (SYMBOLP SPEC)
 		(LOOP WITH PNAME = (SYMBOL-NAME SPEC)
 		      FOR I FROM 0 BELOW (LENGTH PNAME)
-		      AS CH = (AREF PNAME I)
-		      ALWAYS (OR ( #/A CH #/Z) (EQ CH #/-))))
+		      AS CH = (CHAR PNAME I)
+		      ALWAYS (OR (CHAR #/A CH #/Z) (CHAR= CH #/-))))
 	   (SYMBOL-NAME SPEC))
 	  ((AND (CONSP SPEC)
 		(LOOP FOR ELT IN SPEC
@@ -203,31 +221,175 @@ in the package which the car of SPEC belongs to, if that is possible."
 		      (AND (SYMBOLP ELT)
 			   (LET ((PNAME (SYMBOL-NAME ELT)))
 			     (LOOP FOR I FROM 0 BELOW (LENGTH PNAME)
-				   AS CH = (AREF PNAME I)
-				   ALWAYS (OR ( #/A CH #/Z) (EQ CH #/-)))))))
-	   (LET ((STRING (MAKE-ARRAY 40. ':TYPE ART-STRING ':FILL-POINTER 0)))
-	     (ARRAY-PUSH STRING #/()
+				   AS CH = (CHAR PNAME I)
+				   ALWAYS (OR (CHAR #/A CH #/Z) (CHAR= CH #/-)))))))
+	   (LET ((STRING (MAKE-STRING 40. :FILL-POINTER 0)))
+	     (VECTOR-PUSH #/( STRING)
 	     (LOOP FOR X IN SPEC
 		   FOR POS FROM 0 BY 1
 		   AS P = (SYMBOL-PACKAGE X)
-		   AS PNAME = (GET-PNAME X)
-		   DO (OR (ZEROP POS) (STRING-NCONC STRING #/SP))
+		   AS PNAME = (SYMBOL-NAME X)
+		   DO (OR (ZEROP POS) (STRING-NCONC STRING #/SP))
 		   (IF (AND (NEQ P PACKAGE)
 			    (NOT (MEMQ P (PACKAGE-USE-LIST PACKAGE))))
 		       (STRING-NCONC STRING
 				     (IF (EQ P SI:PKG-KEYWORD-PACKAGE)
 					 ""
 				       (SI:PKG-SHORTEST-NAME P SI:PKG-GLOBAL-PACKAGE))
-				     #/: PNAME)
+				     #/: PNAME)
 		     (STRING-NCONC STRING PNAME)))
-	     (STRING-NCONC STRING #/))
+	     (STRING-NCONC STRING #/))
 	     STRING))
 	  (T
 	   ;; Not all symbols, stay on the safe side
 	   (FORMAT:OUTPUT NIL
 	     (PRIN1 SPEC))))))
 
-(DEFUN SYMBOL-FROM-STRING (STR &OPTIONAL LINE OK-TO-ASK SYM &AUX (EOF '(())) ERRORP)
+;;; Derive function spec from defining form and/or function spec shorthand
+;;; This all used to be inside SYMBOL-FROM-STRING
+
+;;; Certain types of function specs have two ways to type them, with and without the leading
+;;; type keyword.  Also certain types of functions and other definitions do not follow the
+;;; standard form of (DEFxxx name options...).  What we do here is to recognize and
+;;; standardize those cases.
+
+(defstruct (def-pat (:type :list*) (:conc-name def-pat-)
+		    (:alterant nil)
+		    (:constructor make-def-pat
+				  (def-name string length type sub-type)))
+  def-name
+  string
+  length
+  type
+  sub-type)
+
+(defvar *def-patterns* nil
+  "Used by SYMBOL-FROM-STRING to record patterns of special defining forms.")
+
+(defmacro def-definer (def-name type &optional sub-type)
+  "Used to tell Zwei of the existence of a defining form.  
+The TYPE is used to select an appropriate (:PROPERTY ... SYMBOL-FROM-STRING) function to
+parse the the name into a function spec.  The optional SUB-TYPE is needed in cases where
+one parsing function is shared by several defining forms.  For instance
+/(:PROPERTY :ALWAYS-METHOD SYMBOL-FROM-STRING) is used for both DEFMETHOD and DEFWRAPPER,
+but DEFWRAPPER needs an implicit :WRAPPER inserted into the function spec."
+  `(progn 'compile
+	  (setq *def-patterns*
+		(delete-if #'(lambda (x) (eq ',def-name (car x))) *def-patterns*))
+	  (let ((.string. (string-append "(" (string ',def-name))))
+	    (push (make-def-pat ',def-name .string. (string-length .string.) ,type ,sub-type)
+		  *def-patterns*))))
+
+;;; (DEFMETHOD (FLAVOR ...) ... => (:METHOD FLAVOR ...)
+;;; (DEFWRAPPER (FLAVOR :MESSAGE) ... => (:METHOD FLAVOR :WRAPPER :MESSAGE)
+
+(def-definer defmethod :always-method)
+(def-definer defwrapper :always-method :wrapper)
+
+(defun (:property :ALWAYS-METHOD symbol-from-string) (spec str ignore meth-type ignore)
+  (values (CONS :METHOD (if meth-type
+			    (list* (first SPEC) meth-type (rest SPEC))
+			  SPEC))
+	  str))
+
+;;; Some ambiguous cases, etc.
+
+;;; :HANDLER doesn't appear in source files, but gets translated into an appropriate :METHOD
+;;; here, by analyzing the combined method.
+
+(defprop :MAYBE-METHOD maybe-method-symbol-from-string symbol-from-string)
+(defprop :METHOD       maybe-method-symbol-from-string symbol-from-string)
+(defprop :HANDLER      maybe-method-symbol-from-string symbol-from-string)
+
+(defun maybe-method-symbol-from-string (spec str type ignore ok-to-ask
+					&aux sym)
+  (LET ((FLAVOR (CAR SPEC))
+	(MESSAGE (IF (CDDR SPEC) (CADDR SPEC) (CADR SPEC)))
+	FL)
+    (COND ((SETQ FL (GET FLAVOR 'SI:FLAVOR)))
+	  ;;>> Ugh
+	  ((AND (VALIDATE-2-LONG-LIST SPEC) (CLASS-SYMBOLP FLAVOR))
+	   (SETQ SYM (FUNCALL (SYMBOL-VALUE FLAVOR) ':METHOD-FOR (CADR SPEC))
+		 FL T))
+	  (OK-TO-ASK
+	   (DOLIST (SYMBOL (PACKAGE-LOOKALIKE-SYMBOLS FLAVOR
+						      NIL '(SI:FLAVOR)))
+	     (IF (FQUERY () "Do you mean ~S? "
+			 `(:METHOD ,SYMBOL . ,(CDR SPEC)))
+		 (RETURN (SETQ FLAVOR SYMBOL
+			       SPEC (CONS FLAVOR (CDR SPEC))
+			       FL (GET FLAVOR 'SI:FLAVOR)))))))
+    (or (COND ((SYMBOLP FL)				;T or NIL
+	       (AND (EQ TYPE ':MAYBE-METHOD)
+		    (VALIDATE-2-LONG-LIST SPEC)
+		    (values (CONS ':PROPERTY SPEC)
+			    str)))
+	      ((FDEFINEDP `(:METHOD . ,SPEC))
+	       (values `(:METHOD . ,SPEC)
+		       str))
+	      (OK-TO-ASK
+	       (DOLIST (SYMBOL (OR (FIND-COMBINED-METHODS FLAVOR MESSAGE NIL)
+				   (SI:FLAVOR-ALL-INHERITABLE-METHODS
+				     FLAVOR MESSAGE)))
+		 (IF (FQUERY '() "Do you mean ~S? " SYMBOL)
+		     (return (values SYMBOL
+				     str))))))
+	       (values nil
+		       str))))
+
+;;; (DEFSTRUCT (NAME ... => NAME
+
+(def-definer defstruct :defstruct)
+
+(defun (:property :DEFSTRUCT symbol-from-string) (spec ignore ignore ignore ignore
+						  &aux sym)
+  (values (setq sym (car spec))
+	  (symbol-name sym)))
+
+;;; (DEFSELECT (FSPEC ...) ... => FSPEC
+
+(def-definer defselect :defselect)
+
+(defun (:property :DEFSELECT symbol-from-string) (spec ignore ignore ignore ignore
+						  &aux sym)
+  (SETQ SYM (CAR SPEC))
+  (IF (SYMBOLP SYM)
+      (values sym
+	      (SYMBOL-NAME SYM))
+    (MULTIPLE-VALUE-bind (SYM STR)
+	(SYMBOL-FROM-STRING SYM)
+      (values sym
+	      str))))
+
+;;; (DEFUN (INDICATOR SYMBOL) ... => (:PROPERTY INDICATOR SYMBOL)
+
+(defun (:property :PROPERTY symbol-from-string) (spec str ignore ignore ignore)
+  (if (VALIDATE-2-LONG-LIST SPEC)
+      (values (CONS :property SPEC)
+	      str)
+    (values nil
+	    str)))
+
+;;; :INTERNAL doesn't appear in source files, but might be given as the argument to
+;;; m-X Disassemble.  The code here just tries not to destory it.
+
+(defun (:property :INTERNAL symbol-from-string) (spec ignore ignore ignore ignore)
+  (values (CONS :internal SPEC)
+	  (DEFINITION-NAME-AS-STRING NIL (CAR SPEC))))
+
+;;; Obsolete randomness?
+
+(defun (:property :INSTANCE-METHOD symbol-from-string) (spec str ignore ignore ignore)
+  (if (BOUNDP (CAR SPEC))
+      (values (FUNCALL (CLASS (SYMBOL-VALUE (CAR SPEC)))
+		       :METHOD-FOR (CADR SPEC))
+	      str)
+    (values nil
+	    str)))
+
+
+(DEFUN SYMBOL-FROM-STRING (STR &OPTIONAL LINE OK-TO-ASK SYM
+			   &AUX (EOF '(())) ERRORP)
   "Given a string STR as found after DEF..., return the name of the object being defined.
 LINE is the line that the string was found in.  It is used for
 finding the particular defining construct used; this affects the result
@@ -258,92 +420,37 @@ if you already know it."
 	 (VALUES SYM (SYMBOL-NAME SYM)))
 	((OR (ATOM SYM) (EQ SYM EOF))
 	 (VALUES NIL NIL T))
-	(T
-	 ;; Here SYM is a list.  Certain types of function specs have two ways to
-	 ;; type them, with and without the leading type keyword.  Also certain types
-	 ;; of functions and other definitions do not follow the standard form
-	 ;; of (DEFxxx name options...).  What we do here is to recognize and
-	 ;; standardize those cases.  The variables are:
+	(:else
+	 ;; At this point we have a list to parse.  The variables are:
 	 ;;	TYPE - the type of function spec or non-function definition
 	 ;;	SYM - the function spec or definition name
 	 ;;	SPEC - the variant of SYM which appears in the source code
 	 ;;	STR - SPEC converted to a string
-	 ;; :HANDLER doesn't appear in source files, but gets translated into
-	 ;; an appropriate :METHOD here, by analyzing the combined method.
-	 ;; :INTERNAL doesn't appear in source files, but might be given as the argument
-	 ;; to M-X Disassemble.  The code here just tries not to destory it.
+	 ;;     S-FROM-S-FN - a function which will return SYM and STR given
+	 ;;                   these variables, SUB-TYPE, and OK-TO-ASK
 	 (LET ((TYPE (CAR SYM))
-	       DELIM-IDX SPEC)
+	       (sub-type nil)
+	       SPEC s-from-s-fn)
 	   (IF (GET TYPE 'SI::FUNCTION-SPEC-HANDLER)
 	       (SETQ SPEC (CDR SYM)
 		     STR (DEFINITION-NAME-AS-STRING TYPE SPEC))
-	       (SETQ SPEC SYM
-		     DELIM-IDX (AND LINE (STRING-SEARCH-SET "( " LINE 1))
-		     TYPE (COND ((NULL LINE)
+	     (SETQ SPEC SYM)
+	     (let ((DELIM-IDX (AND LINE (STRING-SEARCH-SET "( " LINE 1))))
+	       (setq type (COND ((NULL LINE)
 				 :MAYBE-METHOD)
-				((AND (EQ DELIM-IDX 12)
-				      (%STRING-EQUAL LINE 0 "(DEFMETHOD" 0 12))
-				 :ALWAYS-METHOD)
-				((AND (EQ DELIM-IDX 13)
-				      (%STRING-EQUAL LINE 0 "(DEFWRAPPER" 0 13))
-				 (SETQ SPEC (LIST (CAR SPEC) ':WRAPPER (SECOND SPEC)))
-				 :ALWAYS-METHOD)
-				((AND (EQ DELIM-IDX 12)
-				      (%STRING-EQUAL LINE 0 "(DEFSTRUCT" 0 12))
-				 :DEFSTRUCT)
-				((AND (EQ DELIM-IDX 12)
-				      (%STRING-EQUAL LINE 0 "(DEFSELECT" 0 12))
-				 :DEFSELECT)
-				(T :PROPERTY))))
-	   (OR (CASE TYPE
-		 (:INSTANCE-METHOD
-		  (AND (BOUNDP (CAR SPEC))
-		       (SETQ SYM (FUNCALL (CLASS (SYMEVAL (CAR SPEC)))
-					  :METHOD-FOR (CADR SPEC)))))
-		 (:ALWAYS-METHOD
-		  (SETQ SYM (CONS :METHOD SPEC)))
-		 ((:METHOD :HANDLER :MAYBE-METHOD)
-		  (LET ((FLAVOR (CAR SPEC))
-			(MESSAGE (IF (CDDR SPEC) (CADDR SPEC) (CADR SPEC)))
-			FL)
-		    (COND ((SETQ FL (GET FLAVOR 'SI:FLAVOR)))
-			  ((AND (VALIDATE-2-LONG-LIST SPEC) (CLASS-SYMBOLP FLAVOR))
-			   (SETQ SYM (FUNCALL (SYMEVAL FLAVOR) ':METHOD-FOR (CADR SPEC))
-				 FL T))
-			  (OK-TO-ASK
-			   (DOLIST (SYMBOL (PACKAGE-LOOKALIKE-SYMBOLS FLAVOR
-								      NIL '(SI:FLAVOR)))
-			     (IF (FQUERY () "Do you mean ~S? "
-					 `(:METHOD ,SYMBOL . ,(CDR SPEC)))
-				 (RETURN (SETQ FLAVOR SYMBOL
-					       SPEC (CONS FLAVOR (CDR SPEC))
-					       FL (GET FLAVOR 'SI:FLAVOR)))))))
-		    (COND ((SYMBOLP FL)		;T or NIL
-			   (AND (EQ TYPE ':MAYBE-METHOD)
-				(VALIDATE-2-LONG-LIST SPEC)
-				(SETQ SYM (CONS ':PROPERTY SPEC))))
-			  ((FDEFINEDP `(:METHOD . ,SPEC))
-			   (SETQ SYM `(:METHOD . ,SPEC)))
-			  (OK-TO-ASK
-			   (DOLIST (SYMBOL (OR (FIND-COMBINED-METHODS FLAVOR MESSAGE NIL)
-					       (SI:FLAVOR-ALL-INHERITABLE-METHODS
-						 FLAVOR MESSAGE)))
-			     (IF (FQUERY '() "Do you mean ~S? " SYMBOL)
-				 (RETURN (SETQ SYM SYMBOL))))))))
-		 (:DEFSTRUCT
-		  (SETQ SYM (CAR SPEC)
-			STR (GET-PNAME SYM)))
-		 (:DEFSELECT
-		  (SETQ SYM (CAR SPEC))
-		  (IF (SYMBOLP SYM)
-		      (SETQ STR (GET-PNAME SYM))
-		      (MULTIPLE-VALUE (SYM STR)
-			(SYMBOL-FROM-STRING SYM))))
-		 (:PROPERTY
-		  (AND (VALIDATE-2-LONG-LIST SPEC)
-		       (SETQ SYM (CONS TYPE SPEC))))
-		 (:INTERNAL (SETQ SYM (CONS TYPE SPEC))
-			    (SETQ STR (DEFINITION-NAME-AS-STRING NIL (CAR SPEC)))))
+				((dolist (def-pat *def-patterns*)
+				   (let ((def-pat-length (def-pat-length def-pat)))
+				     (when (AND (= DELIM-IDX def-pat-length)
+						(%STRING-EQUAL LINE 0
+							       (def-pat-string def-pat)
+							       0 def-pat-length))
+				       (setq sub-type (def-pat-sub-type def-pat))
+				       (return (def-pat-type def-pat))))))
+				(T :PROPERTY)))))
+	   (OR (and (setq s-from-s-fn (get type 'symbol-from-string))
+		    ;; This function is required to pass STR through untouched if it loses
+		    (multiple-value (sym str)
+		      (funcall s-from-s-fn spec str type sub-type ok-to-ask)))
 	       ;; Something we don't understand, make a bogus symbol to use as a property
 	       ;; list to remember the location of this definition
 	       (SETQ SYM (INTERN STR *UTILITY-PACKAGE*))))
@@ -359,6 +466,7 @@ if you already know it."
        (SYMBOLP (CADR L))
        (NULL (CDDR L))))
 
+
 ;;; The properties this uses are defined in MODES.
 ;;; The mode's property is probably :LISP, :TEXT or NIL.
 ;;; Note that some things open-code this so they can do the GETs only once.
@@ -380,7 +488,8 @@ The third value is T if there is no definition on the line."
 
 (DEFUN (:PROPERTY :LISP GET-SECTION-NAME) (LINE BP &AUX STR SYM ERRORP
 					   IDX END-IDX (EOF "") NON-FONT-LINE)
-  (IF (NOT (AND (> (LENGTH LINE) 1) (= (LDB %%CH-CHAR (AREF LINE 0)) #/()))
+  (IF (NOT (AND (> (LENGTH LINE) 1)
+		(= (CHAR-CODE (CHAR LINE 0)) (CHAR-CODE #/())))
       (VALUES NIL NIL T)
     (SETQ ERRORP T)
     (WHEN (AND (%STRING-EQUAL LINE 0 "(DEF" 0 4)
@@ -408,15 +517,16 @@ The third value is T if there is no definition on the line."
 				   (LET ((NAME
 					   (PATHNAME-NAME (BUFFER-PATHNAME BUFFER))))
 				     (IF (CONSP NAME)
-					 (APPLY 'STRING-APPEND
+					 (APPLY #'STRING-APPEND
 						(MAPCAR #'(LAMBDA (NAME-ELT)
 							    (IF (CONSP NAME-ELT)
-								(CAR NAME-ELT) NAME-ELT))
+								(CAR NAME-ELT)
+							        NAME-ELT))
 							NAME))
 				       (STRING NAME)))
 				 (BUFFER-NAME BUFFER)))
 			     "-"
-			     (LET ((START-INDEX (STRING-SEARCH-NOT-CHAR #/( LINE)))
+			     (LET ((START-INDEX (STRING-SEARCH-NOT-CHAR #/( LINE)))
 			       (SUBSTRING LINE START-INDEX
 					  (AND START-INDEX
 					       (STRING-SEARCH-SET *WHITESPACE-CHARS*
@@ -449,7 +559,7 @@ The third value is T if there is no definition on the line."
 	 (STRING-REMOVE-FONTS (STRING-INTERVAL BP BP1)))))
 
 (DEFUN (:PROPERTY NIL GET-SECTION-NAME) (LINE BP)
-  LINE BP
+  (DECLARE (IGNORE LINE BP))
   (VALUES NIL NIL T))
 
 ;;; The SECTION-P is a function which takes a line as arg
@@ -461,7 +571,8 @@ The third value is T if there is no definition on the line."
 ;;; then you can use the GET-SECTION-NAME function after you prepare for it.
 (DEFUN (:PROPERTY :LISP SECTION-P) (LINE)
   (AND (PLUSP (LENGTH LINE))
-       (= (LDB %%CH-CHAR (AREF LINE 0)) #/()))
+       (= (CHAR-CODE (CHAR LINE 0))
+	  (CHAR-CODE #/())))
 
 (DEFUN (:PROPERTY :TEXT SECTION-P) (LINE)
   (%STRING-EQUAL LINE 0 ".DEF" 0 4))
@@ -485,10 +596,12 @@ If nothing is found, the beginning of the interval is returned."
       (NIL)
     (AND (SETQ INDEX (STRING-SEARCH KEY LINE FROM-INDEX
 				    (AND (EQ LINE END-LINE) (BP-INDEX BP2))))
-	 (COND ((CHAR-EQUAL #/( (AREF LINE 0))
+	 (COND ((CHAR-EQUAL #/( (CHAR LINE 0))
 		(SETQ DEFUN-LINE LINE)
 		(RETURN T))
-	       ((AND (NULL COMMENT-LINE) (SETQ TEM (FIND-COMMENT-START LINE)) (< TEM INDEX))
+	       ((AND (NULL COMMENT-LINE)
+		     (SETQ TEM (FIND-COMMENT-START LINE))
+		     (< TEM INDEX))
 		(SETQ COMMENT-LINE LINE))
 	       ((NULL NON-DEFUN-LINE)
 		(SETQ NON-DEFUN-LINE LINE))))
@@ -556,39 +669,39 @@ Get the name of the file from the mini-buffer." ()
   (READ-TAG-TABLE (READ-DEFAULTED-PATHNAME "Tag Table:" (PATHNAME-DEFAULTS) "TAGS"))
   DIS-NONE)
 
-(DEFUN READ-TAG-TABLE (FILE &AUX (ADDED-COMPLETIONS (MAKE-ARRAY 1000 ':TYPE 'ART-Q-LIST
-								     ':LEADER-LENGTH 2)))
+(DEFUN READ-TAG-TABLE (FILE &AUX (ADDED-COMPLETIONS (MAKE-ARRAY #o1000 :TYPE 'ART-Q-LIST
+								       :LEADER-LENGTH 2)))
   "Read in tag table file named FILE, recording source files of functions in it."
   (STORE-ARRAY-LEADER 0 ADDED-COMPLETIONS 0)
   (WITH-OPEN-FILE (STREAM FILE '(:READ :SUPER-IMAGE))
     (DO ((LINE) (EOF)
 	 (FILE-LIST) (PATHNAME) (MODE))
 	(NIL)
-      (MULTIPLE-VALUE (LINE EOF)
-	(SEND STREAM ':LINE-IN))
+      (MULTIPLE-VALUE-SETQ (LINE EOF)
+	(SEND STREAM :LINE-IN))
       (COND (EOF
-	     (SEND FILE ':PUTPROP (NREVERSE FILE-LIST) 'ZMACS-TAG-TABLE-FILE-SYMBOLS)
+	     (SEND FILE :PUTPROP (NREVERSE FILE-LIST) 'ZMACS-TAG-TABLE-FILE-SYMBOLS)
 	     (OR (RASSQ FILE *ZMACS-TAG-TABLE-ALIST*)
 		 (PUSH (CONS (STRING FILE) FILE) *ZMACS-TAG-TABLE-ALIST*))
 	     (RETURN)))
       (SETQ PATHNAME (FS:MERGE-PATHNAME-DEFAULTS LINE *PATHNAME-DEFAULTS*))
       (PUSH PATHNAME FILE-LIST)
-      (SETQ LINE (SEND STREAM ':LINE-IN))	;Length,Mode
+      (SETQ LINE (SEND STREAM :LINE-IN))	;Length,Mode
       (SETQ MODE (GET-FILE-MAJOR-MODE
-		   (INTERN (SUBSTRING LINE (1+ (STRING-SEARCH-CHAR #/, LINE))) "USER")))
-      (DO ((PACKAGE (PKG-FIND-PACKAGE (OR (SEND (SEND PATHNAME ':GENERIC-PATHNAME)
-						':GET ':PACKAGE)
-					  *PACKAGE*)))
+		   (INTERN (SUBSTRING LINE (1+ (STRING-SEARCH-CHAR #/, LINE))) "USER")))
+      (DO ((*PACKAGE* (PKG-FIND-PACKAGE (OR (SEND (SEND PATHNAME :GENERIC-PATHNAME)
+						  :GET :PACKAGE)
+					    *PACKAGE*)))
 	   (SPACE-POS) (RUBOUT-POS)
 	   (STR) (SNAME))
-	  ((= (AREF (SETQ LINE (SEND STREAM ':LINE-IN)) 0) #/))
-	(COND ((SETQ SPACE-POS (STRING-SEARCH-SET '(#/SP #/TAB) LINE))
+	  ((CHAR= (CHAR (SETQ LINE (SEND STREAM :LINE-IN)) 0) #/))
+	(COND ((SETQ SPACE-POS (STRING-SEARCH-SET '(#/SP #/TAB) LINE))
 	       (SETQ SPACE-POS (1+ SPACE-POS)
-		     RUBOUT-POS (COND ((STRING-SEARCH-CHAR 177 LINE SPACE-POS))
-				      (T (SEND STREAM ':LINE-IN)
+		     RUBOUT-POS (COND ((STRING-SEARCH-CHAR (INT-CHAR #o177) LINE SPACE-POS))
+				      (T (SEND STREAM :LINE-IN)
 					 (1+ (STRING-LENGTH LINE))))
 		     STR (SUBSTRING LINE SPACE-POS (1- RUBOUT-POS)))
-	       (COND ((SELECTQ (GET MODE 'EDITING-TYPE)
+	       (COND ((CASE (GET MODE 'EDITING-TYPE)
 			(:LISP
 			 (AND (%STRING-EQUAL LINE 0 "(DEF" 0 4)
 			      (NOT (%STRING-EQUAL LINE 0 "(DEFPROP " 0 9))
@@ -609,8 +722,8 @@ Get the name of the file from the mini-buffer." ()
 (DEFCOM COM-LIST-TAG-TABLES "List the names of all the tag table files read in" ()
   (DOLIST (TAG-TABLE *ZMACS-TAG-TABLE-ALIST*)
     (FORMAT T "~&~4TFiles in tag table ~A:~%" (CAR TAG-TABLE))
-    (SEND *STANDARD-OUTPUT* ':ITEM-LIST 'FILE
-	  (SEND (CDR TAG-TABLE) ':GET 'ZMACS-TAG-TABLE-FILE-SYMBOLS)))
+    (SEND *STANDARD-OUTPUT* :ITEM-LIST 'FILE
+	  (SEND (CDR TAG-TABLE) :GET 'ZMACS-TAG-TABLE-FILE-SYMBOLS)))
   (FORMAT T "~&Done.~%")
   DIS-NONE)
 
@@ -626,8 +739,8 @@ Get the name of the file from the mini-buffer." ()
 RESTART non-NIL means select the first file in the tag table
 and reset the list of files to be gone through."
   (AND RESTART
-       (SETQ *ZMACS-LAST-TAGS-FILE-LIST* (SEND (SELECT-TAG-TABLE) ':GET
-					       'ZMACS-TAG-TABLE-FILE-SYMBOLS)))
+       (SETQ *ZMACS-LAST-TAGS-FILE-LIST*
+	     (SEND (SELECT-TAG-TABLE) :GET 'ZMACS-TAG-TABLE-FILE-SYMBOLS)))
   (OR *ZMACS-LAST-TAGS-FILE-LIST* (BARF "No more files"))
   (POP *ZMACS-LAST-TAGS-FILE-LIST* PATHNAME)
   (COND ((SETQ BUFFER (FIND-FILE-BUFFER PATHNAME))
@@ -641,8 +754,8 @@ and reset the list of files to be gone through."
   "Return BP to start of the next file in the selected tag table.
 RESTART non-NIL means start again at first file in tag table."
   (AND RESTART
-       (SETQ *ZMACS-LAST-TAGS-FILE-LIST* (SEND (SELECT-TAG-TABLE) ':GET
-					       'ZMACS-TAG-TABLE-FILE-SYMBOLS)))
+       (SETQ *ZMACS-LAST-TAGS-FILE-LIST*
+	     (SEND (SELECT-TAG-TABLE) :GET 'ZMACS-TAG-TABLE-FILE-SYMBOLS)))
   (OR *ZMACS-LAST-TAGS-FILE-LIST* (BARF "No more files"))
   (POP *ZMACS-LAST-TAGS-FILE-LIST* PATHNAME)
   (COND ((SETQ BUFFER (FIND-FILE-BUFFER PATHNAME))
@@ -655,8 +768,7 @@ RESTART non-NIL means start again at first file in tag table."
   "Return a list of all buffers in the selected tag table.
 READ-IN-ALL-FILES means visit all the files;
 otherwise, we return only the buffers for files already read in."
-  (SETQ FILE-LIST (SEND (SELECT-TAG-TABLE) ':GET
-			'ZMACS-TAG-TABLE-FILE-SYMBOLS))
+  (SETQ FILE-LIST (SEND (SELECT-TAG-TABLE) :GET 'ZMACS-TAG-TABLE-FILE-SYMBOLS))
   (DOLIST (FILE FILE-LIST)
     (LET ((BUFFER (FIND-FILE-BUFFER FILE)))
       (IF BUFFER (PUSH BUFFER BUFFER-LIST))
@@ -669,7 +781,7 @@ otherwise, we return only the buffers for files already read in."
 
 (DEFCOM COM-TAGS-SEARCH "Search for the specified string within files of the tags table" ()
   (LET ((*MINI-BUFFER-DEFAULT-STRING* *ZMACS-TAGS-SEARCH-KEY-STRING*))
-    (MULTIPLE-VALUE (*ZMACS-TAGS-SEARCH-FUNCTION* *ZMACS-TAGS-SEARCH-KEY*)
+    (MULTIPLE-VALUE-SETQ (*ZMACS-TAGS-SEARCH-FUNCTION* *ZMACS-TAGS-SEARCH-KEY*)
       (GET-EXTENDED-STRING-SEARCH-STRINGS NIL "Tags search:" *SEARCH-MINI-BUFFER-COMTAB*)))
   (SETQ *ZMACS-TAGS-SEARCH-KEY-STRING*
 	(STRING-INTERVAL (WINDOW-INTERVAL (GET-SEARCH-MINI-BUFFER-WINDOW))))
@@ -687,7 +799,7 @@ otherwise, we return only the buffers for files already read in."
     (SETQ *ZMACS-TAGS-SEARCH-KEY* (COPYLIST STRINGS))
     (SETQ *ZMACS-TAGS-SEARCH-FUNCTION* 'FSM-SEARCH)
     (SETQ *ZMACS-TAGS-SEARCH-KEY-STRING*
-	  (MAKE-ARRAY 20 ':TYPE ART-FAT-STRING ':LEADER-LIST '(0)))
+	  (MAKE-ARRAY #o20 :TYPE ART-FAT-STRING :FILL-POINTER 0))
     (DO ((STRINGS STRINGS (CDR STRINGS)))
 	((NULL STRINGS))
       (STRING-NCONC *ZMACS-TAGS-SEARCH-KEY-STRING*
@@ -695,7 +807,7 @@ otherwise, we return only the buffers for files already read in."
       (OR (NULL (CDR STRINGS))
 	  (STRING-NCONC *ZMACS-TAGS-SEARCH-KEY-STRING*
 			402))))
-  (COMMAND-STORE 'COM-TAGS-SEARCH-NEXT-OCCURRENCE #/. *ZMACS-COMTAB*)
+  (COMMAND-STORE 'COM-TAGS-SEARCH-NEXT-OCCURRENCE #/C-/. *ZMACS-COMTAB*)
   (MUST-REDISPLAY *WINDOW* DIS-TEXT)
   (TAGS-SEARCH-NEXT-OCCURRENCE T))
 
@@ -725,7 +837,7 @@ otherwise, we return only the buffers for files already read in."
 (DEFPROP COM-TAGS-QUERY-REPLACE T CONTROL-PERIOD)
 (DEFCOM COM-TAGS-QUERY-REPLACE "Perform a query replace within the tags table files.
 Does Query Replace over all the file in the selected tags table, one file at a time." ()
-  (MULTIPLE-VALUE (*TAGS-QUERY-REPLACE-FROM* *TAGS-QUERY-REPLACE-TO*)
+  (MULTIPLE-VALUE-SETQ (*TAGS-QUERY-REPLACE-FROM* *TAGS-QUERY-REPLACE-TO*)
     (QUERY-REPLACE-STRINGS NIL))
   (SETQ *TAGS-QUERY-REPLACE-DELIMITED* (AND *NUMERIC-ARG-P* *NUMERIC-ARG*))
   (COMMAND-STORE 'COM-CONTINUE-TAGS-QUERY-REPLACE #/. *ZMACS-COMTAB*)
@@ -783,7 +895,7 @@ Does Query Replace over all the file in the selected tags table, one file at a t
     (LET ((*MODE-WORD-SYNTAX-TABLE* (IF (AND *NUMERIC-ARG-P* (MINUSP *NUMERIC-ARG*))
 					*ATOM-WORD-SYNTAX-TABLE* *MODE-WORD-SYNTAX-TABLE*))
 	  FROM-LIST TO-LIST)
-      (MULTIPLE-VALUE (FROM-LIST TO-LIST)
+      (MULTIPLE-VALUE-SETQ (FROM-LIST TO-LIST)
 	(PARSE-BUFFER-REPLACE-PAIRS T))
       (QUERY-REPLACE-LIST (POINT) (INTERVAL-LAST-BP *INTERVAL*)
 			  FROM-LIST TO-LIST *NUMERIC-ARG-P*)))
@@ -843,9 +955,8 @@ ALREADY-GENERIC non-NIL says assume PATHNAME is already a generic pathname."
   ;;if there wasn't a pathname, return the SYSTEM system
   (IF (NULL PATHNAME) (SI:FIND-SYSTEM-NAMED "System")
       (LET* ((GENERIC-PATHNAME
-	       (IF ALREADY-GENERIC PATHNAME
-		 (SEND PATHNAME ':GENERIC-PATHNAME)))
-	     (SYSTEMS (SEND GENERIC-PATHNAME ':GET ':SYSTEMS)))
+	       (IF ALREADY-GENERIC PATHNAME (SEND PATHNAME :GENERIC-PATHNAME)))
+	     (SYSTEMS (SEND GENERIC-PATHNAME :GET ':SYSTEMS)))
 	;;if it wasn't defined as part of a system, use the SYSTEM system
 	(IF (NULL SYSTEMS) (SI:FIND-SYSTEM-NAMED "System")
 	  (SI:FIND-SYSTEM-NAMED (CAR SYSTEMS))))))
@@ -893,11 +1004,13 @@ Tags Compile Changed Sections to look through all files now visited." ()
 (DEFUN SELECT-FILE-LIST-AS-TAG-TABLE (FILE-LIST NAME)
   "Select a phony tag table named NAME consisting of the files in FILE-LIST.
 This can be used to control commands such as Tags Search."
-  (SETQ *ZMACS-CURRENT-TAG-TABLE* (MAKE-INSTANCE 'TAG-TABLE-DUMMY-FILE ':NAME NAME))
-  (FUNCALL *ZMACS-CURRENT-TAG-TABLE* ':PUTPROP
-	   (MAPCAR #'(LAMBDA (X) (FS:MERGE-PATHNAME-DEFAULTS X *PATHNAME-DEFAULTS*))
-		   FILE-LIST)
-	   'ZMACS-TAG-TABLE-FILE-SYMBOLS)
+  (SETQ *ZMACS-CURRENT-TAG-TABLE* (MAKE-INSTANCE 'TAG-TABLE-DUMMY-FILE :NAME NAME))
+  (SEND *ZMACS-CURRENT-TAG-TABLE* :PUTPROP
+				  (MAPCAR #'(LAMBDA (X)
+					      (FS:MERGE-PATHNAME-DEFAULTS
+						X *PATHNAME-DEFAULTS*))
+					  FILE-LIST)
+				  'ZMACS-TAG-TABLE-FILE-SYMBOLS)
   (PUSH (CONS NAME *ZMACS-CURRENT-TAG-TABLE*) *ZMACS-TAG-TABLE-ALIST*))
 
 (DEFUN SELECT-TAG-TABLE (&OPTIONAL (DEFAULT-P T))
@@ -933,21 +1046,21 @@ Returns two values, a list of strings to replace and a list of replacement strin
       (NIL)
     (SETQ BP (FORWARD-OVER *WHITESPACE-CHARS* BP))
     (AND (BP-= BP END-BP) (RETURN (NREVERSE FROM-LIST) (NREVERSE TO-LIST)))
-    (IF (= (BP-CH-CHAR BP) #/;)
+    (IF (CHAR= (BP-CH-CHARACTER BP) #/;)
 	(SETQ BP (BEG-LINE BP 1))
-	(MULTIPLE-VALUE (TEM BP)
-	  (PARSE-BUFFER-REPLACE-PAIRS-1 BP))
-	(PUSH TEM FROM-LIST)
-	(SETQ BP (FORWARD-OVER *BLANKS* BP))
-	(AND (END-LINE-P BP) (BARF "Only one item on line ~S" (BP-LINE BP)))
-	(MULTIPLE-VALUE (TEM BP)
-	  (PARSE-BUFFER-REPLACE-PAIRS-1 BP))
-	(PUSH TEM TO-LIST))))
+      (MULTIPLE-VALUE-SETQ (TEM BP)
+	(PARSE-BUFFER-REPLACE-PAIRS-1 BP))
+      (PUSH TEM FROM-LIST)
+      (SETQ BP (FORWARD-OVER *BLANKS* BP))
+      (AND (END-LINE-P BP) (BARF "Only one item on line ~S" (BP-LINE BP)))
+      (MULTIPLE-VALUE-SETQ (TEM BP)
+	(PARSE-BUFFER-REPLACE-PAIRS-1 BP))
+      (PUSH TEM TO-LIST))))
 
 (DEFUN PARSE-BUFFER-REPLACE-PAIRS-1 (BP &AUX BP1 STR)
   (OR (SETQ BP1 (FORWARD-SEXP BP)) (BARF "Premature eof on line ~S" (BP-LINE BP)))
   (SETQ STR (STRING-INTERVAL BP BP1 T))
-  (AND (= (AREF STR 0) #/")
+  (AND (CHAR= (CHAR STR 0) #/")
        (SETQ STR (READ-FROM-STRING STR)))
   (VALUES STR BP1))
 
@@ -962,8 +1075,8 @@ Returns two values, a list of strings to replace and a list of replacement strin
 (DEFUN TYPEOUT-YES-OR-NO-P (&REST FORMAT-ARGS)
   "Ask the user Yes or No, printing in the typeout window."
   (LET ((*QUERY-IO* *STANDARD-OUTPUT*))
-    (APPLY 'FQUERY '#,`(:TYPE :READLINE
-			      :CHOICES ,FORMAT:YES-OR-NO-P-CHOICES)
+    (APPLY #'FQUERY '#,`(:TYPE :READLINE
+			 :CHOICES ,FORMAT:YES-OR-NO-P-CHOICES)
 	   FORMAT-ARGS)))
 
 (TV:ADD-TYPEOUT-ITEM-TYPE *TYPEOUT-COMMAND-ALIST* BP "Move" MOVE-TO-BP T
@@ -985,10 +1098,9 @@ Returns two values, a list of strings to replace and a list of replacement strin
   (TYPEOUT-ABORT-MINI-BUFFER)
   (SETQ PATHNAME (MAKE-DEFAULTED-PATHNAME (STRING STRING) (PATHNAME-DEFAULTS)))
   ;;It we get a specific file, see if that was the newest and if so, use that instead
-  (AND (NOT (MEMQ (SETQ VERSION (SEND PATHNAME ':VERSION)) '(:NEWEST :UNSPECIFIC)))
-       (= VERSION (SEND (SEND (FUNCALL PATHNAME ':NEW-VERSION ':NEWEST) ':TRUENAME)
-			':VERSION))
-       (SETQ PATHNAME (SEND PATHNAME ':NEW-VERSION ':NEWEST)))
+  (AND (NOT (MEMQ (SETQ VERSION (SEND PATHNAME :VERSION)) '(:NEWEST :UNSPECIFIC)))
+       (= VERSION (SEND (SEND (SEND PATHNAME :NEW-VERSION :NEWEST) :TRUENAME) :VERSION))
+       (SETQ PATHNAME (SEND PATHNAME :NEW-VERSION :NEWEST)))
   (FIND-FILE PATHNAME))
 
 (TV:ADD-TYPEOUT-ITEM-TYPE *TYPEOUT-COMMAND-ALIST* FILE "Load" LOAD-DEFAULTED-FILE NIL
@@ -1046,7 +1158,7 @@ Returns two values, a list of strings to replace and a list of replacement strin
 		 (AND (SI:METH-DEFINEDP METH)
 		      (PUSH (LIST FLAVOR (SI:METH-METHOD-TYPE METH) (SI:METH-FUNCTION-SPEC METH))
 			    CLASSES-AND-FUNCTION-SYMBOLS))))))
-    (PROG () (RETURN CLASSES-AND-FUNCTION-SYMBOLS OPERATION))))
+    (VALUES CLASSES-AND-FUNCTION-SYMBOLS OPERATION)))
 
 (DEFF GET-MESSAGE-NAME 'READ-OPERATION-NAME)
 (DEFUN READ-OPERATION-NAME (PROMPT)
@@ -1060,8 +1172,8 @@ may be derived from it."
 	  (LET ((FUN (RELEVANT-FUNCTION-NAME (POINT))))
 	    (AND (MEMQ FUN '(FUNCALL LEXPR-FUNCALL SEND LEXPR-SEND
 				     <- FUNCALL-SELF LEXPR-FUNCALL-SELF))
-		 (RELEVANT-METHOD-NAME (POINT)
-				       (IF (MEMQ FUN '(FUNCALL-SELF LEXPR-FUNCALL-SELF)) 1 2))))
+		 (RELEVANT-METHOD-NAME
+		   (POINT) (IF (MEMQ FUN '(FUNCALL-SELF LEXPR-FUNCALL-SELF)) 1 2))))
 	  NIL T)
       ;; Kludge around to not get screwed by completions to funny symbols
       ;; while still working if user points with the mouse
@@ -1086,7 +1198,7 @@ may be derived from it."
   ;; Duplicates code from SETUP-ZMACS-CALLERS-TO-BE-EDITED in order to
   ;; put the methods in execution order rather than alphabetical order
   (SETQ METHODS (FIND-COMBINED-METHODS FLAVOR MESSAGE))
-  (COMMAND-STORE 'COM-GO-TO-NEXT-TOP-LEVEL-POSSIBILITY #/C-/. *ZMACS-COMTAB*)
+  (COMMAND-STORE 'COM-GO-TO-NEXT-TOP-LEVEL-POSSIBILITY #/C-/. *ZMACS-COMTAB*)
   ;; Duplicates code from LIST-ZMACS-CALLERS-TO-BE-EDITED in order to
   ;; put the methods in execution order rather than alphabetical order
   (FUNCALL (IF JUST-EDIT #'EDIT-FUNCTIONS-NO-DISPLAY #'EDIT-FUNCTIONS-DISPLAY)
@@ -1098,38 +1210,38 @@ may be derived from it."
 
 (DEFUN FIND-COMBINED-METHODS (FLAVOR MESSAGE &OPTIONAL (ERROR T) &AUX FL SM METHOD)
   "Return a list of the non-combined methods involved in handling MESSAGE to FLAVOR"
-  (PROG ()
-	(OR (SETQ FL (GET FLAVOR 'SI:FLAVOR))
-	    (IF ERROR (BARF "~S not DEFFLAVOR'ed" FLAVOR) (RETURN)))
-	(OR (SI:FLAVOR-METHOD-HASH-TABLE FL)
-	    (IF (FQUERY NIL "~S's combined methods are not composed.  Compose them? "
-			FLAVOR)
-		(SI:RECOMPILE-FLAVOR FLAVOR NIL T NIL)
-	      (IF ERROR (BARF "~S's methods are not composed" FLAVOR) (RETURN))))
-	(SETQ METHOD
-	      (IF (SI:FLAVOR-GET FL ':ABSTRACT-FLAVOR)
-		  (AND (FDEFINEDP `(:METHOD ,FLAVOR :COMBINED ,MESSAGE))
-		       (FDEFINITION `(:METHOD ,FLAVOR :COMBINED ,MESSAGE)))
-		(IGNORE-ERRORS
-		  (SI:GET-FLAVOR-HANDLER-FOR FLAVOR MESSAGE))))
-	(OR METHOD
-	    (IF ERROR
-		(BARF "Flavor ~S does not handle message ~S" FLAVOR MESSAGE)
-	      (RETURN)))
-	(SETQ METHOD (FUNCTION-NAME METHOD))
-	(RETURN
-	  (COND ((SETQ SM
-		       (CDDDR (OR (CADR (ASSQ 'SI:COMBINED-METHOD-DERIVATION
-					      (DEBUGGING-INFO
-						(SI:UNENCAPSULATE-FUNCTION-SPEC METHOD))))
-				  (SI:FUNCTION-SPEC-GET METHOD
-							'SI:COMBINED-METHOD-DERIVATION))))
-		 (NCONC (REVERSE (CDR (ASSQ ':WRAPPER SM)))	;Try to approximate the order
-			(REVERSE (CDR (ASSQ ':BEFORE SM)))	;in which they're called
-			(REVERSE (CDR (ASSQ NIL SM)))
-			(COPYLIST (CDR (ASSQ ':AFTER SM)))
-			(MAPCAN #'(LAMBDA (X)
-				    (AND (NOT (MEMQ (CAR X) '(:WRAPPER :BEFORE NIL :AFTER)))
-					 (REVERSE (CDR X))))
-				SM)))
-		(T (LIST METHOD))))))
+  (BLOCK NIL
+    (OR (SETQ FL (GET FLAVOR 'SI:FLAVOR))
+	(IF ERROR (BARF "~S not DEFFLAVOR'ed" FLAVOR) (RETURN)))
+    (OR (SI::FLAVOR-METHOD-HASH-TABLE FL)
+	(IF (FQUERY NIL "~S's combined methods are not composed.  Compose them? "
+		    FLAVOR)
+	    (SI::RECOMPILE-FLAVOR FLAVOR NIL T NIL)
+	  (IF ERROR (BARF "~S's methods are not composed" FLAVOR) (RETURN))))
+    (SETQ METHOD
+	  (IF (SI::FLAVOR-GET FL ':ABSTRACT-FLAVOR)
+	      (AND (FDEFINEDP `(:METHOD ,FLAVOR :COMBINED ,MESSAGE))
+		   (FDEFINITION `(:METHOD ,FLAVOR :COMBINED ,MESSAGE)))
+	    (IGNORE-ERRORS
+	      (SI::GET-FLAVOR-HANDLER-FOR FLAVOR MESSAGE))))
+    (OR METHOD
+	(IF ERROR
+	    (BARF "Flavor ~S does not handle message ~S" FLAVOR MESSAGE)
+	  (RETURN)))
+    (SETQ METHOD (FUNCTION-NAME METHOD))
+    (RETURN
+      (COND ((SETQ SM
+		   (CDDDR (OR (CADR (ASSQ 'SI::COMBINED-METHOD-DERIVATION
+					  (DEBUGGING-INFO
+					    (SI:UNENCAPSULATE-FUNCTION-SPEC METHOD))))
+			      (SI:FUNCTION-SPEC-GET METHOD
+						    'SI::COMBINED-METHOD-DERIVATION))))
+	     (NCONC (REVERSE (CDR (ASSQ ':WRAPPER SM)))	;Try to approximate the order
+		    (REVERSE (CDR (ASSQ ':BEFORE SM)))	;in which they're called
+		    (REVERSE (CDR (ASSQ NIL SM)))
+		    (COPYLIST (CDR (ASSQ ':AFTER SM)))
+		    (MAPCAN #'(LAMBDA (X)
+				(AND (NOT (MEMQ (CAR X) '(:WRAPPER :BEFORE NIL :AFTER)))
+				     (REVERSE (CDR X))))
+			    SM)))
+	    (T (LIST METHOD))))))
