@@ -442,7 +442,7 @@ while running me, do so as a batch process/"."
 	       (FERROR NIL "Area-symbol ~S clobbered" AREA))	;don't get grossly faked out
 	  (GC-RECLAIM-OLDSPACE-AREA AREA-NUMBER)))
       (SETQ GC-DAEMON-PAGE-CONS-ALARM -1)	;Wake up daemon process
-      (SETQ GC-OLDSPACE-EXISTS NIL)))))
+      (SETQ GC-OLDSPACE-EXISTS NIL))))
 
 ;;; GC-RECLAIM-OLDSPACE-AREA - deletes all old-space regions of a specified area,
 ;;; unthreading from the lists, and returning the virtual memory to free.
