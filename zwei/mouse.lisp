@@ -1,4 +1,4 @@
-;;; Mouse commands for ZWEI -*- Mode:LISP; Package:ZWEI; Base:8 -*-
+;;; Mouse commands for ZWEI -*- Mode:LISP; Package:ZWEI; Base:8; Readtable:T -*-
 ;;; ** (c) Copyright 1980 Massachusetts Institute of Technology **
 ;;; Note: some screen system primitives live in SCREEN
 
@@ -39,17 +39,17 @@ then the character being pointed at flashes rapidly.")
        (TV:OPEN-BLINKER *MOUSE-CHAR-BLINKER*))
   (SETQ *MOUSE-P* NIL
 	*MOUSE-CHAR-BLINKER* (TV:MAKE-BLINKER TV:MOUSE-SHEET 'TV:CHARACTER-BLINKER
-					      ':VISIBILITY NIL
-					      ':HALF-PERIOD 4
-					      ':FONT TV:(SCREEN-DEFAULT-FONT DEFAULT-SCREEN)
-					      ':CHAR #/?)
+					      :VISIBILITY NIL
+					      :HALF-PERIOD 4
+					      :FONT (TV:SCREEN-DEFAULT-FONT TV:DEFAULT-SCREEN)
+					      :CHAR #/?)
 	*MOUSE-BOX-BLINKER* (TV:MAKE-BLINKER TV:MOUSE-SHEET 'TV:HOLLOW-RECTANGULAR-BLINKER
 					     ':VISIBILITY NIL)
 	*MOUSE-BLINKER* *MOUSE-BOX-BLINKER*
 	*GLOBAL-MOUSE-CHAR-BLINKER* (TV:MAKE-BLINKER TV:MOUSE-SHEET
 						     'TV:HOLLOW-RECTANGULAR-BLINKER
-						     ':VISIBILITY NIL
-						     ':HALF-PERIOD 4)
+						     :VISIBILITY NIL
+						     :HALF-PERIOD 4)
 	*GLOBAL-MOUSE-CHAR-BLINKER-HANDLER* NIL
 	*GLOBAL-MOUSE-CHAR-BLINKER-DOCUMENTATION-STRING* NIL))
 
@@ -90,7 +90,7 @@ The values are relative to the margins of the window."
 Returns NIL if the mouse is not in that window or not pointing at text.
 X and Y, if non-NIL, are used instead of the mouse position.
 They should be relative to the window margins."
-  (MULTIPLE-VALUE (CHAR X Y LINE CHAR-POS)
+  (MULTIPLE-VALUE-SETQ (CHAR X Y LINE CHAR-POS)
     (MOUSE-CHAR WINDOW T X Y))
   (COND ((NULL CHAR)      ;Couldn't anything, use end of buffer for want of anything better
          (COPY-BP (INTERVAL-LAST-BP (WINDOW-INTERVAL WINDOW))))
@@ -112,24 +112,24 @@ Otherwise, the values are CHAR, X, Y, LINE, INDEX, WIDTH.
  LINE is the line the character is in.  INDEX is the position in that line.
  WIDTH is the width in pixels of the character."
   (DECLARE (VALUES CHAR X Y LINE INDEX WIDTH))
-  (PROG (SHEET LINE PLINE CHAR-POS LH REAL-PLINE START END)
+  (LET (SHEET LINE PLINE CHAR-POS LH REAL-PLINE START END)
     (SETQ SHEET (WINDOW-SHEET WINDOW))
-    (COND ((NULL Y)
-	   (MULTIPLE-VALUE (X Y) (MOUSE-POSITION WINDOW))))
+    (IF (NULL Y)
+	(MULTIPLE-VALUE-SETQ (X Y) (MOUSE-POSITION WINDOW)))
     (SETQ LH (TV:SHEET-LINE-HEIGHT SHEET)
 	  PLINE (SETQ REAL-PLINE (FLOOR Y LH)))
     ;; If mouse moves to out of range, protect against error and return
     (AND (OR (MINUSP PLINE) ( PLINE (WINDOW-N-PLINES WINDOW)))
 	 (IF FIXUP-P
 	     (SETQ PLINE (MAX 0 (MIN PLINE (1- (WINDOW-N-PLINES WINDOW)))))
-	     (RETURN NIL)))
-    (DO NIL ((SETQ LINE (PLINE-LINE WINDOW PLINE)))
-      (AND (ZEROP PLINE) (RETURN NIL))
-      (SETQ PLINE (1- PLINE)))
-    (OR LINE (RETURN NIL))
+	     (RETURN-FROM MOUSE-CHAR NIL)))
+    (DO () ((SETQ LINE (PLINE-LINE WINDOW PLINE)))
+      (IF (ZEROP PLINE) (RETURN NIL))
+      (DECF PLINE))
+    (OR LINE (RETURN-FROM MOUSE-CHAR NIL))
     (SETQ START (PLINE-FROM-INDEX WINDOW PLINE))
     ;; I can't see why this could happen, but it did, so avoid blowing out.
-    (OR START (RETURN NIL))
+    (OR START (RETURN-FROM MOUSE-CHAR NIL))
     (WHEN (WINDOW-INTERVAL WINDOW)		;for robustness...
       (LET ((BP (INTERVAL-FIRST-BP (WINDOW-INTERVAL WINDOW))))
 	(AND (EQ LINE (BP-LINE BP)) (SETQ START (MAX START (BP-INDEX BP)))))
@@ -139,20 +139,20 @@ Otherwise, the values are CHAR, X, Y, LINE, INDEX, WIDTH.
 	(TV:SHEET-COMPUTE-MOTION SHEET 0 (* PLINE LH) LINE START END NIL
 				 (MAX 0 X) (* REAL-PLINE LH)))
       (IF (NULL CHAR-POS)			;Mouse is off end of line, pointing at the CR
-	  (RETURN
-	    #/CR
-	    X
-	    Y
-	    LINE
-	    (OR END (LINE-LENGTH LINE)))
+	  (VALUES #/NEWLINE
+		  X
+		  Y
+		  LINE
+		  (OR END (LINE-LENGTH LINE)))
 	;; X, Y, CHAR-POS are for char to right of mouse
 	;; Find the character which is just over the mouse
 	(SETQ CHAR-POS (MAX 0 (1- CHAR-POS)))
-	(LET ((CHAR (IF (= CHAR-POS (LINE-LENGTH LINE)) #/CR
-		      (AREF LINE CHAR-POS)))
+	(LET ((CHAR (IF (= CHAR-POS (LINE-LENGTH LINE))
+			#/NEWLINE
+		        (CHAR LINE CHAR-POS)))
 	      (FONT-MAP (TV:SHEET-FONT-MAP SHEET)))
-	  (LET ((CH (LDB %%CH-CHAR CHAR))
-		(FONT (LDB %%CH-FONT CHAR))
+	  (LET ((CH (CHAR-CODE CHAR))
+		(FONT (CHAR-FONT CHAR))
 		CHAR-X CHAR-WIDTH)
 	    (SETQ FONT (AREF FONT-MAP (IF ( FONT
 					     (ARRAY-ACTIVE-LENGTH FONT-MAP))
@@ -163,7 +163,7 @@ Otherwise, the values are CHAR, X, Y, LINE, INDEX, WIDTH.
 		      CHAR-WIDTH (- X CHAR-X))
 	      (SETQ CHAR-WIDTH (TV:SHEET-CHARACTER-WIDTH SHEET CH FONT)
 		    CHAR-X (MAX 0 (- X CHAR-WIDTH))))
-	    (RETURN CHAR
+	    (VALUES (CHAR-INT CHAR)
 		    CHAR-X
 		    (+ Y (- (TV:SHEET-BASELINE SHEET) (FONT-BASELINE FONT)))
 		    LINE CHAR-POS CHAR-WIDTH)))))))
@@ -215,47 +215,47 @@ The third value is T if the user typed a package prefix."
 		  *DEFINITION-NAME-HISTORY*))
 	    (LET ((*BATCH-UNDO-SAVE* T))
 	      (DELETE-INTERVAL (WINDOW-INTERVAL *MINI-BUFFER-WINDOW*)))
-	    (READ-FUNCTION-NAME-COMMAND-HOOK NIL)
 	    (UNWIND-PROTECT
-	      (COMPLETING-READ-FROM-MINI-BUFFER PROMPT *ZMACS-COMPLETION-AARRAY*
-						(OR (NEQ STRINGP 'ALWAYS-READ)
-						    'ALWAYS-STRING))
+		(PROGN (READ-FUNCTION-NAME-COMMAND-HOOK NIL)
+		       (COMPLETING-READ-FROM-MINI-BUFFER PROMPT *ZMACS-COMPLETION-AARRAY*
+							 (OR (NEQ STRINGP 'ALWAYS-READ)
+							     'ALWAYS-STRING)))
 	      (READ-FUNCTION-NAME-COMMAND-HOOK T))))
-	SYM ERROR-P) 
+	SYM ERRORP)
     (COND ((EQUAL NAME "")
 	   (OR DEFAULT (BARF))
 	   (SETQ SYM DEFAULT
-		 NAME (IF (SYMBOLP NAME) (STRING NAME)
-			(FORMAT:OUTPUT NIL (PRINC DEFAULT)))))
-	  ((CONSP NAME)
-	   (SETQ SYM (CDR NAME)
-		 NAME (CAR NAME))
-	   (AND (CONSP SYM) (NEQ STRINGP 'MULTIPLE-OK)
-		(SETQ SYM (CAR SYM))))
+		 NAME (IF (SYMBOLP NAME) (SYMBOL-NAME NAME) (PRINC-TO-STRING DEFAULT))))
+;	  ((CONSP NAME)
+;	   (SETQ SYM (CDR NAME)
+;		 NAME (CAR NAME))
+;	   (AND (CONSP SYM) (NEQ STRINGP 'MULTIPLE-OK)
+;		(SETQ SYM (CAR SYM))))
 	  ((EQ STRINGP T)			;If returning a string, don't intern it
 	   (SETQ SYM NAME))
 	  (T
 	   ;; If the string that was specified started with a package prefix,
 	   ;; return a flag saying so.
 	   ;; SYMBOL-FROM-STRING will flush the prefix from NAME.
+	   ;; ** KLUDGE!! **
 	   (LET ((NON-LETTER-INDEX
 		   (STRING-SEARCH-NOT-SET " ABCDEFGHIJKLMNOPQRSTUVWXYZ-" NAME)))
-	     (AND NON-LETTER-INDEX (= (AREF NAME NON-LETTER-INDEX) #/:)
+	     (AND NON-LETTER-INDEX (= (CHAR NAME NON-LETTER-INDEX) #/:)
 		  (SETQ EXPLICIT-PACKAGE-P T)))
-	   (MULTIPLE-VALUE (SYM NAME ERROR-P)
+	   (MULTIPLE-VALUE-SETQ (SYM NAME ERRORP)
 	     (SYMBOL-FROM-STRING NAME NIL T))
-	   (AND (CONSP SYM) (EQ STRINGP 'MULTIPLE-OK)
-		(SETQ SYM (NCONS SYM)))
-	   (AND ERROR-P (BARF "Read error"))))
+;	   (AND MULTIPLEP (EQ STRINGP 'MULTIPLE-OK)
+;		(SETQ SYM (NCONS SYM)))
+	   (IF ERRORP (BARF "Read error"))))
     (AND (EQ MUST-BE-DEFINED T)
 	 (NOT (OR (FDEFINEDP SYM)
 		  (AND (SYMBOLP SYM)
-		       (SI:MEMQ-ALTERNATED 'SI:ARGLIST (PLIST SYM)))))
+		       (SI:MEMQ-ALTERNATED 'SI:ARGLIST (PLIST SYM)))))	;ucode entry
 	 (OR (DOLIST (SPEC (PACKAGE-LOOKALIKE-SYMBOLS SYM))
-	       (AND (FQUERY '(:SELECT T)
+	       (AND (FQUERY ()
 			    ;; Always print prefix
-			    ;; Don't leave PACKAGE in keyword during query.
-			    (LET ((*PACKAGE* SI:PKG-KEYWORD-PACKAGE))
+			    ;; Don't leave *PACKAGE* in keyword during query.
+			    (LET ((*PACKAGE* SI:PKG-USER-PACKAGE))
 			      (FORMAT NIL "Do you mean ~S? " SPEC)))
 		    (RETURN (SETQ SYM SPEC))))
 	     (BARF "~S is not defined" SYM)))
@@ -279,7 +279,7 @@ The third value is T if the user typed a package prefix."
 	 (SETQ *GLOBAL-MOUSE-CHAR-BLINKER-HANDLER*
 	       (IF READ-FUNCTION-NAME-MUST-BE-DEFINED
 		   'BLINK-FUNCTION
-		 'BLINK-ATOM)
+		   'BLINK-ATOM)
 	       *GLOBAL-MOUSE-CHAR-BLINKER-DOCUMENTATION-STRING*
 	       "Click left on highlighted name to select it."
 	       *MOUSE-HOOK*
@@ -329,10 +329,10 @@ The values are the symbol pointed at, the line it is in,
 and the start and end indices of the symbol as a substring in that line.
 All values are NIL if the position is not on a valid symbol."
   (DECLARE (VALUES SYMBOL LINE START END))
-  (OR CHAR (MULTIPLE-VALUE (CHAR X Y LINE INDEX)
+  (OR CHAR (MULTIPLE-VALUE-SETQ (CHAR X Y LINE INDEX)
 	       (MOUSE-CHAR WINDOW)))
   (AND CHAR
-       ( CHAR #/CR)
+       ( CHAR #/NEWLINE)
        (DO ((I INDEX (1- I)))
 	   ((OR (ZEROP I)
 		( (ATOM-WORD-SYNTAX (CHAR-CODE (AREF LINE I))) WORD-ALPHABETIC))
@@ -343,8 +343,8 @@ All values are NIL if the position is not on a valid symbol."
 				(COMPUTE-BUFFER-PACKAGE INTERVAL)
 				(MULTIPLE-VALUE (SYMBOL END)
 				  (CLI:READ-FROM-STRING LINE NIL NIL
-							':START (SETQ I (1+ I))
-							':PRESERVE-WHITESPACE T))
+							:START (SETQ I (1+ I))
+							:PRESERVE-WHITESPACE T))
 				(SETQ END (MIN (ARRAY-ACTIVE-LENGTH LINE) END)))
 			      NIL)
 		 (SYMBOLP SYMBOL)
@@ -387,7 +387,7 @@ All values are NIL if the position is not on a valid symbol."
 (DEFUN BLINK-ATOM (BLINKER WINDOW CHAR X Y LINE INDEX)
   (BLINK-FUNCTION BLINKER WINDOW CHAR X Y LINE INDEX T))
 
-;;; The commands themselves
+;;;; The commands themselves
 
 ;;; Single click on the left button.
 (DEFPROP COM-MOUSE-MARK-REGION "Move point" :MOUSE-SHORT-DOCUMENTATION)
@@ -435,13 +435,12 @@ affecting point (or mark)." (KM)
                    (T
                     (SETQ PX MX PY MY)
                     (MARK))))
-    (FUNCALL SHEET ':SET-MOUSE-CURSORPOS
-		   (+ PX (FLOOR (TV:SHEET-CHAR-WIDTH SHEET) 2))
-		   (+ PY (FLOOR (* 3 (TV:SHEET-LINE-HEIGHT SHEET)) 4)))
-    (DO ()
-        (NIL)
-      (OR (WAIT-FOR-MOUSE LAST-X LAST-Y) (RETURN NIL))
-      (MULTIPLE-VALUE (LAST-X LAST-Y) (MOUSE-POSITION))
+    (SEND SHEET :SET-MOUSE-CURSORPOS (+ PX (FLOOR (TV:SHEET-CHAR-WIDTH SHEET) 2))
+				     (+ PY (FLOOR (* 3 (TV:SHEET-LINE-HEIGHT SHEET)) 4)))
+    (DO-FOREVER
+      (UNLESS (WAIT-FOR-MOUSE LAST-X LAST-Y)
+	(RETURN NIL))
+      (MULTIPLE-VALUE-SETQ (LAST-X LAST-Y) (MOUSE-POSITION))
       (SETQ BP1 (MOUSE-BP *WINDOW* LAST-X LAST-Y))
       (MOVE-BP BP BP1)
       (MUST-REDISPLAY *WINDOW* DIS-BPS)
@@ -461,7 +460,7 @@ affecting point (or mark)." (KM)
     (COND ((AND CHAR (OR (NEQ LINE OL) ( CHAR-POS OCP)))
 	   (SETQ OL LINE OCP CHAR-POS)
 	   (MOVE-BP POINT LINE CHAR-POS)
-	   (FUNCALL (SELECTQ (GET *MAJOR-MODE* 'EDITING-TYPE)
+	   (FUNCALL (CASE (GET *MAJOR-MODE* 'EDITING-TYPE)
 		      (:LISP 'LISP-MARK-THING)
 		      (:TEXT 'TEXT-MARK-THING)
 		      (OTHERWISE 'DEFAULT-MARK-THING))
@@ -509,7 +508,7 @@ affecting point (or mark)." (KM)
          (DEFAULT-MARK-THING POINT MARK CHAR LINE CHAR-POS))))
 
 (DEFUN DEFAULT-MARK-THING (POINT MARK CHAR LINE CHAR-POS &AUX TEM)
-  (COND ((= CHAR #/FF)
+  (COND ((= CHAR #/PAGE)
          (MOVE-BP MARK (FORWARD-PAGE POINT -1 T)))
         ((MEMQ CHAR '(#/SP #/TAB))
          (COND ((STRING-REVERSE-SEARCH-NOT-SET *BLANKS* LINE CHAR-POS)
@@ -517,7 +516,7 @@ affecting point (or mark)." (KM)
                (T
                 (MOVE-BP POINT LINE 0)
                 (MOVE-BP MARK LINE (LINE-LENGTH LINE)))))
-        ((= CHAR #/CR)
+        ((= CHAR #/NEWLINE)
          (MOVE-BP MARK LINE 0))
         ((SETQ TEM (ASS 'CHAR-EQUAL CHAR *MATCHING-DELIMITER-LIST*))
          (MOVE-BP MARK (SEARCH POINT (CADR TEM) NIL T)))
@@ -590,7 +589,7 @@ mouse is released." (KM)
 		 END-LINE (LINE-NEXT START-LINE))))
     (MULTIPLE-VALUE-BIND (X Y)
         (FIND-BP-IN-WINDOW-COORDS (FORWARD-OVER *BLANKS* (BEG-OF-LINE START-LINE)) *WINDOW*)
-    (FUNCALL SHEET ':SET-MOUSE-CURSORPOS X Y))
+    (SEND SHEET :SET-MOUSE-CURSORPOS X Y))
     (PROCESS-WAIT "MOUSE" #'(LAMBDA () (OR (ZEROP TV:MOUSE-LAST-BUTTONS) *MOUSE-P*)))
     (DO ((LAST-X)
 	 (LAST-Y)
@@ -610,16 +609,17 @@ mouse is released." (KM)
                               (MAX 0 (+ DELTA (LINE-INDENTATION LINE SHEET))) SHEET))))
       (MUST-REDISPLAY *WINDOW* DIS-TEXT)
       (REDISPLAY *WINDOW* ':POINT)
-      (OR (WAIT-FOR-MOUSE LAST-X LAST-Y 5) (RETURN NIL))))
+      (WAIT-FOR-MOUSE LAST-X LAST-Y 8.)
+      (WHEN (ZEROP (TV:MOUSE-BUTTONS)) (RETURN))))
   DIS-TEXT)
 
 ;;; *** This should figure out some other kind of mouse-blinker ***
 (DEFCOM COM-MOUSE-INDENT-UNDER "Indent the current line as selected by the mouse." (KM)
-  (LET ((CH (FUNCALL STANDARD-INPUT ':MOUSE-OR-KBD-TYI)))
+  (LET ((CH (SEND *STANDARD-INPUT* :MOUSE-OR-KBD-TYI)))
     (COND ((= CH #/MOUSE-1-1)
 	   (INDENT-LINE (POINT) (BP-INDENTATION (MOUSE-BP *WINDOW*)))
 	   (INDENT-BP-ADJUSTMENT (POINT))
 	   DIS-TEXT)
 	  (T
-	   (FUNCALL STANDARD-INPUT ':UNTYI CH)
+	   (SEND *STANDARD-INPUT* :UNTYI CH)
            (COM-INDENT-UNDER)))))
