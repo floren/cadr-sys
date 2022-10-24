@@ -76,7 +76,7 @@ An argument of U is treated like -1: it deletes single comment starts." ()
 	    (MOVE-BP BP LINE 0)
 	    (UNLESS (EQ (LINE-TYPE LINE) ':BLANK)
 	      (INSERT BP INSERT)))
-	  (RETURN-ARRAY INSERT)))
+	  (RETURN-ARRAY (PROG1 INSERT (SETQ INSERT NIL)))))
     (SETQ *NUMERIC-ARG* (- *NUMERIC-ARG*))
     (DO ((LINE START-LINE (LINE-NEXT LINE))
 	 (BP (CREATE-BP START-LINE 0))
@@ -98,7 +98,7 @@ An argument of U is treated like -1: it deletes single comment starts." ()
 (DEFCOM COM-LISP-MATCH-SEARCH "Move to next occurrence of the given pattern of Lisp code.
 In matching, differences in whitespace characters are ignored
  except for characters that are quoted or inside strings.
-The characters ** as an atom in the pattern match any sexp in the buffer.
+The characters # as an atom in the pattern match any sexp in the buffer.
 The characters ... as an atom in the pattern match any number of sexps.
 Patterns starting with infrequent characters such as open parentheses
 are found much faster.  Those starting with common letters are likely to be slow.
@@ -123,7 +123,7 @@ An empty pattern string means repeat the last pattern specified." ()
   "Search from BP for Lisp code that matches against STRING.
 Matching at any given place is done with LISP-STRING-BUFFER-MATCH.
 Differences in whitespace characters are ignored except when quoted or inside strings.
-The characters ** as an atom in the STRING match any sexp in the buffer.
+The characters # as an atom in the STRING match any sexp in the buffer.
 The characters ... as an atom in the STRING match any number of sexps.
 
 If a match is found, the value is a bp to the end (start, if reverse) of the matching text.
@@ -140,13 +140,13 @@ FIXUP-P says what to do if no match is found.
   ;; Ignore leading delimiter chars in STRING.
   (DO () ((NOT (= LIST-DELIMITER (LIST-SYNTAX (CHAR STRING START)))))
     (INCF START))
-  ;; Strings that start with ... or ** are handled specially.
-  (COND ((AND (STRING-EQUAL STRING "..." START 0 (+ START 3))
+  ;; Strings that start with ... or # are handled specially.
+  (COND ((AND (STRING-EQUAL STRING "..." :START1 START :END1 (+ START 3))
 	      (OR (= (+ START 3) END)
 		  (NOT (MEMQ (LIST-SYNTAX (CHAR STRING (+ START 3)))
 			     '(#,LIST-ALPHABETIC #,LIST-SINGLE-QUOTE)))))
-	 (BARF "A search pattern starts with ... is not meaningful."))
-	((AND (STRING-EQUAL STRING "**" START 0 (+ START 2))
+	 (BARF "A search pattern starting with ... is not meaningful."))
+	((AND (STRING-EQUAL STRING "#" :START1 START :END1 (+ START 1))
 	      (OR (= (+ START 2) END)
 		  (NOT (MEMQ (LIST-SYNTAX (CHAR STRING (+ START 2)))
 			     '(#,LIST-ALPHABETIC #,LIST-SINGLE-QUOTE)))))
@@ -185,7 +185,7 @@ The buffer text starts at START-BP.  It will not match past LIMIT-BP.
 If there is a match, the value is a bp to the end of the buffer text matched.
 Otherwise, the value is NIL.
 Differences in whitespace characters are ignored except when quoted or inside strings.
-The characters ** as an atom in the PATTERN-STRING match any sexp in the buffer.
+The characters # as an atom in the PATTERN-STRING match any sexp in the buffer.
 The characters ... as an atom in the PATTERN-STRING match any number of sexps."
   (UNLESS END (SETQ END (LENGTH PATTERN-STRING)))
   (DO-NAMED OUTER
@@ -235,7 +235,7 @@ The characters ... as an atom in the PATTERN-STRING match any number of sexps."
 	     (SETQ IN-ATOM NIL))
 	    ((AND (NOT IN-ATOM)
 		  ( (+ I 3) END)
-		  (STRING-EQUAL PATTERN-STRING "..." I 0 (+ I 3))
+		  (STRING-EQUAL PATTERN-STRING "..." :START1 I :END1 (+ I 3))
 		  (OR (= (+ I 3) END)
 		      (NOT (MEMQ (LIST-SYNTAX (CHAR PATTERN-STRING (+ I 3)))
 				 '(#,LIST-ALPHABETIC #,LIST-SINGLE-QUOTE)))))
@@ -250,7 +250,7 @@ The characters ... as an atom in the PATTERN-STRING match any number of sexps."
 	       (UNLESS BP (RETURN NIL))))
 	    ((AND (NOT IN-ATOM)
 		  ( (+ I 2) END)
-		  (STRING-EQUAL PATTERN-STRING "**" I 0 (+ I 2))
+		  (STRING-EQUAL PATTERN-STRING "#" :START1 I :END1 (+ I 1))
 		  (OR (= (+ I 2) END)
 		      (NOT (MEMQ (LIST-SYNTAX (CHAR PATTERN-STRING (+ I 2)))
 				 '(#,LIST-ALPHABETIC #,LIST-SINGLE-QUOTE)))))
