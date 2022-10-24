@@ -3,9 +3,6 @@
 ;;; More winning Lisp Machine software patch facility.   DLW & BEE 10/24/80
 ;;; The functions in this file manage the patch files
 
-;;;   someday remember the time a patch-directory was written, and punt analyzing it
-;;;   if the time hasn't changed.
-
 ;;; There are 3 kinds of files for each system. There is a patch description file.
 ;;; This file contains a version of the patch-system structure. This gives the
 ;;; format of the patch, and also contains the major version counter for the system
@@ -20,16 +17,25 @@
   VERSION			;most recent version of the system
   )
 
+;; note that the version-list of patch-systems is most recent first,
+;; whereas patch-dirs are oldest first!!
+
 ;;; Internal format of each patch system
 (DEFSTRUCT (PATCH-SYSTEM :LIST (:CONC-NAME PATCH-) (:INCLUDE PATCH-MAJOR) (:ALTERANT NIL))
-  STATUS			;a keyword
-  (VERSION-LIST NIL)		;list of versions loaded and explanations, latest first.
+  (STATUS NIL :DOCUMENTATION "A keyword: usually one of:
+:RELEASED, :EXPERIMENTAL, :OBSOLETE, :INCONSISTENT, :BROKEN")
+  (VERSION-LIST NIL :DOCUMENTATION
+    "List of PATCH-VERSION structures corresponding to loaded patches. MOST RECENT FIRST.")
+  (DIRECTORY-LOADED-ID NIL :DOCUMENTATION
+    "Cons of truename and creation-date of the file to which we last read or wrote the
+patch directory to a file, or NIL")
+  (PATCH-DIR NIL :DOCUMENTATION "The patch-directory, as last read from file, or NIL.")
   )
 
 ;;; Format of patch directory
-(DEFSTRUCT (PATCH-DIR :LIST :CONC-NAME (:ALTERANT NIL))
+(DEFSTRUCT (PATCH-DIR :LIST (:CONC-NAME PATCH-DIR-) (:ALTERANT NIL))
   STATUS
-  VERSION-LIST)			;List of patches and explanations, earliest first.
+  VERSION-LIST)			;List of patches and explanations, **OLDEST** first.
 
 ;;; Information for each patch.
 ;;; Elements of the PATCH-VERSION-LIST and the PATCH-DIR-VERSION-LIST look like this.
@@ -86,15 +92,15 @@ This modifies the patch directory files of the system."
   (SETQ PATCH-MAJOR (MAKE-PATCH-MAJOR :NAME NAME :VERSION VERSION))
   (WITH-OPEN-FILE (FILE (PATCH-SYSTEM-PATHNAME NAME :SYSTEM-DIRECTORY) :DIRECTION :OUTPUT)
     (FORMAT FILE
-	    ";;; -*- Mode:LISP; Package:USER; Base:10; Readtable:T; Patch-File:T -*-
-")
+	    ";;; -*- Mode:LISP; Package:USER; Base:10; Readtable:T; Patch-File:T -*-~%")
     (WRITE-RESPONSIBILITY-COMMENT FILE)
     (LET ((*PRINT-BASE* 10.))
       (PRINT PATCH-MAJOR FILE)))
   (LET ((FIRST-VERS (MAKE-PATCH-VERSION :NUMBER 0
 					:EXPLANATION (FORMAT NIL "~A Loaded" NAME))))
     (WRITE-PATCH-DIRECTORY PATCH-MAJOR (MAKE-PATCH-DIR :STATUS STATUS
-						       :VERSION-LIST (NCONS FIRST-VERS))))
+						       :VERSION-LIST (NCONS FIRST-VERS))
+			   T))
   VERSION)
 
 (DEFUN GET-PATCH-SYSTEM-MAJOR-VERSION (NAME &OPTIONAL NO-ERROR-P)
@@ -113,6 +119,13 @@ NO-ERROR-P says no error if cannot read the files."
 	    (PATCH-VERSION PATCH-MAJOR)))
       (FS:FILE-ERROR NIL))))
 
+(DEFVAR SYSTEM-STATUS-ALIST '((:EXPERIMENTAL "Experimental" "Exp" "experimental")
+			      (:RELEASED "" "" "released")
+			      (:OBSOLETE "Obsolete" "Obs" "obsolete")
+			      (:INCONSISTENT "Inconsistent (unreleased patches loaded)"
+					     "Bad" "inconsistent (unreleased patches loaded)")
+			      (:BROKEN "Broken" "Broke" "broken")))
+
 (DEFUN READ-PATCH-DIRECTORY (PATCH-SYSTEM &OPTIONAL NOERROR &AUX DIR)
   "Read in a patch directory file, returning the list-structure representation.
 PATCH-SYSTEM is an object of type PATCH-SYSTEM.
@@ -123,20 +136,22 @@ NOERROR means return NIL rather than get error if patch directory file won't ope
 							:VERSION-DIRECTORY
 							(PATCH-VERSION PATCH-SYSTEM)))
 	(LET ((*READ-BASE* 10.) (*PRINT-BASE* 10.) (*PACKAGE* PKG-USER-PACKAGE)
-	      (*READTABLE* INITIAL-READTABLE))
-	  (SETQ DIR (CLI:READ PATCH-DIR)))
-	(ECASE (CAR DIR)
-	  (:EXPERIMENTAL)
-	  (:RELEASED)
-	  (:BROKEN)
-	  (:INCONSISTENT)
-	  (:OBSOLETE))
+	      (*READTABLE* INITIAL-READTABLE)
+	      (INFO (SEND PATCH-DIR :INFO)))
+	  ;; don't waste time reading it in again
+	  (IF (AND INFO (EQUAL INFO (PATCH-DIRECTORY-LOADED-ID PATCH-SYSTEM)))
+	      (SETQ DIR (PATCH-PATCH-DIR PATCH-SYSTEM))
+	    (SETQ DIR (CLI:READ PATCH-DIR))
+	    (SETF (PATCH-PATCH-DIR PATCH-SYSTEM) DIR
+		  (PATCH-DIRECTORY-LOADED-ID PATCH-SYSTEM) INFO)))
+	(UNLESS (ASSQ (PATCH-DIR-STATUS DIR) SYSTEM-STATUS-ALIST)
+	  (FERROR NIL "UNKNOWN PATCH SYSTEM STATUS ~S for ~A"
+		  (PATCH-DIR-STATUS DIR) (PATCH-NAME PATCH-SYSTEM)))
 	DIR)
     (FS:FILE-ERROR NIL)))
 
-
 ;;; Write out a patch directory file from the list-structure representation.
-(DEFUN WRITE-PATCH-DIRECTORY (PATCH-SYSTEM PATCH-DIR)
+(DEFUN WRITE-PATCH-DIRECTORY (PATCH-SYSTEM PATCH-DIR &OPTIONAL MAJORP)
   "Write out a new patch directory file for PATCH-SYSTEM.
 PATCH-DIR is a list described by the defstruct PATCH-DIR,
 which is the data to write into the file."
@@ -161,7 +176,10 @@ which is the data to write into the file."
 	 (PRIN1 PATCH STREAM)
 	 (SEND STREAM :STRING-OUT "
   "))
-       (SEND STREAM :STRING-OUT "))"))))
+       (SEND STREAM :STRING-OUT "))")
+       (UNLESS MAJORP
+	 (SETF (PATCH-DIRECTORY-LOADED-ID PATCH-SYSTEM) (SEND STREAM :INFO))
+	 (SETF (PATCH-PATCH-DIR PATCH-SYSTEM) PATCH-DIR)))))
 
 (DEFUN PRINT-PATCHES (&OPTIONAL (SYSTEM "System") (AFTER 0))
   "Print the patches of the system SYSTEM after minor version AFTER."
@@ -183,13 +201,13 @@ then the answer is T regardless of MINOR-VERSION, on the usually-true assumption
 that the newer system contains everything patched into the older one.
 NIL if SYSTEM is not loaded at all."
   (LET* ((PATCH-SYSTEM (GET-PATCH-SYSTEM-NAMED SYSTEM T T))
-	 (CURRENT-MAJOR-VERSION (PATCH-VERSION PATCH-SYSTEM)))
+	 CURRENT-MAJOR-VERSION)
     (AND PATCH-SYSTEM
+	 (SETQ (CURRENT-MAJOR-VERSION (PATCH-VERSION PATCH-SYSTEM)))
 	 (OR (> CURRENT-MAJOR-VERSION MAJOR-VERSION)
 	     (AND (= CURRENT-MAJOR-VERSION MAJOR-VERSION)
 		  ( (OR (VERSION-NUMBER (CAR (PATCH-VERSION-LIST PATCH-SYSTEM))) 0)
 		     MINOR-VERSION))))))
-
 
 (DEFUN PRINT-PATCH (MAJOR-VERSION-NUMBER PATCH-VERSION-DESC)
   (FORMAT T "~&~D.~D ~8T~A:~:[~; (unreleased)~]~&~10T~~A~"
@@ -269,8 +287,7 @@ LOAD-PATCHES returns T if any patches were loaded, otherwise NIL."
 		      (MAKE-SYSTEM "SITE" :NOCONFIRM :NO-RELOAD-SYSTEM-DECLARATION :SILENT)))
 		(SETQ SOMETHING-CHANGED T)
 	      (WHEN VERBOSE-P (FORMAT T "  it hasn't.")))
-	    (DOLIST (H FS::*LOGICAL-PATHNAME-HOST-LIST*)
-	      (FS:MAKE-LOGICAL-PATHNAME-HOST H :WARN-ABOUT-REDEFINITION NIL)))
+	    (LOAD-PATCHES-FOR-LOGICAL-PATHNAME-HOSTS))
 	  (OR SYSTEM-NAMES (SETQ SYSTEM-NAMES PATCH-SYSTEMS-LIST))
 	  (LET ((FIRST-SYSTEM T))  ; This is the first system being patched.
 	    (DOLIST (PATCH SYSTEM-NAMES)
@@ -297,8 +314,7 @@ LOAD-PATCHES returns T if any patches were loaded, otherwise NIL."
 		      (FORMAT T "~&Patches for ~A (Current version is ~D.~D):"
 			      (PATCH-NAME PATCH) MAJOR (CAAR (LAST NEW-VERS))))
 		    (DOLIST (VERSION PATCHES-NOT-LOADED)
-		      (LET* ((FILENAME (PATCH-SYSTEM-PATHNAME (PATCH-NAME PATCH)
-							      :PATCH-FILE
+		      (LET* ((FILENAME (PATCH-SYSTEM-PATHNAME (PATCH-NAME PATCH) :PATCH-FILE
 							      (PATCH-VERSION PATCH)
 							      (VERSION-NUMBER VERSION)
 							      :QFASL)))
@@ -383,7 +399,7 @@ LOAD-PATCHES returns T if any patches were loaded, otherwise NIL."
 				       (PATCH-NAME PATCH))))
 			   ;; Avoid error if non ex file, if patch is known to be unfinished.
 			   (CONDITION-CASE-IF (NULL (VERSION-EXPLANATION VERSION)) ()
-			       (LOAD FILENAME NIL NIL T (NOT VERBOSE-P))	; Don't set default,
+			       (LOAD PATHNAME :SET-DEFAULT-PATHNAME NIL)
 			     (FS:FILE-NOT-FOUND
 			      (WHEN VERBOSE-P
 				(FORMAT T "~&File ~A does not exist, ignoring this patch."
@@ -404,11 +420,19 @@ LOAD-PATCHES returns T if any patches were loaded, otherwise NIL."
 	      (SETQ FIRST-SYSTEM NIL)))))))
   SOMETHING-CHANGED)
 
-(DEFUN LOAD-AND-SAVE-PATCHES (&OPTIONAL BAND &REST KEYWORD-ARGS)
+(defun load-patches-for-logical-pathname-hosts ()
+  (dolist (host fs::*logical-pathname-host-list*)
+    (if (send host :get 'fs:make-logical-pathname-host)
+	(fs:make-logical-pathname-host host :warn-about-redefinition nil))))
+
+(defun load-and-save-incremental-patches (&optional band)
+  "Loads all new patches and saves the updated lisp world into an incremental partition."
   "Load all patches and save a new Lisp world in a disk partition.
 KEYWORD-ARGS are passed to LOAD-PATCHES.
 BAND is the name or number of a LOD band to save in."
-  (IF (CLI:INTERSECTION '(:FORCE-UNFINISHED :UNRELEASED) KEYWORD-ARGS)
+  (CHECK-TYPE BAND (OR NUMBER STRING NULL) "A specifier for a band")
+  (IF (OR (MEMQ :FORCE-UNFINISHED KEYWORD-ARGS)
+	  (MEMQ :UNRELEASED KEYWORD-ARGS))
       (FERROR NIL ":FORCE-UNFINISHED and :UNRELEASED are not reasonable arguments here."))
   (DOLIST (PATCH-SYSTEM PATCH-SYSTEMS-LIST)
     (WHEN (EQ (PATCH-STATUS PATCH-SYSTEM) :INCONSISTENT)
@@ -428,9 +452,56 @@ you should not save this environment."
        (COUNT 0 (1+ COUNT)))
       (())
     (WHEN BAND1
-      (IF (PARSE-NUMBER BAND1 0 NIL NIL T)
-	  (SETQ BAND1 (STRING-APPEND "LOD" BAND1)))
-      (COND ((NOT (STRING-EQUAL BAND1 "LOD" 0 0 3 3))
+      (COND ((NUMBERP BAND1)
+	     (SETQ BAND1 (FORMAT NIL "LOD~D" BAND1)))
+	    ((PARSE-NUMBER BAND1 0 NIL NIL T)
+	     (SETQ BAND1 (STRING-APPEND "LOD" BAND1))))
+      (COND ((NOT (STRING-EQUAL BAND1 "LOD" :END1 3))
+	     (FORMAT *QUERY-IO* "~&You must save into a LOD partition."))
+	    ((NOT (FIND-DISK-PARTITION BAND1))
+	     (FORMAT *QUERY-IO* "~&No such band: ~A." BAND1))
+	    ((FIND-DISK-PARTITION-FOR-WRITE BAND1)
+	     ;; Non-NIL means user gave confirmation.
+	     (SETQ BAND BAND1)
+	     (RETURN))))
+    (IF (ZEROP COUNT) (PRINT-DISK-LABEL)))
+  (WITH-SYS-HOST-ACCESSIBLE
+    (COND ((APPLY #'LOAD-PATCHES :NOSELECTIVE KEYWORD-ARGS)
+	   (DISK-SAVE-incremental BAND))
+	  (T (FORMAT *QUERY-IO* "~&No patches have been made.")))))
+  
+
+(DEFUN LOAD-AND-SAVE-PATCHES (&OPTIONAL BAND &REST KEYWORD-ARGS)
+  "Load all patches and save a new Lisp world in a disk partition.
+KEYWORD-ARGS are passed to LOAD-PATCHES.
+BAND is the name or number of a LOD band to save in."
+  (CHECK-TYPE BAND (OR NUMBER STRING NULL) "A specifier for a band")
+  (IF (OR (MEMQ :FORCE-UNFINISHED KEYWORD-ARGS)
+	  (MEMQ :UNRELEASED KEYWORD-ARGS))
+      (FERROR NIL ":FORCE-UNFINISHED and :UNRELEASED are not reasonable arguments here."))
+  (DOLIST (PATCH-SYSTEM PATCH-SYSTEMS-LIST)
+    (WHEN (EQ (PATCH-STATUS PATCH-SYSTEM) :INCONSISTENT)
+      (BEEP)
+      (FORMAT *QUERY-IO* "~&You have loaded patches out of sequence,
+ or loaded unreleased patches, in ~A.
+As a result, the environment is probably inconsistent with the
+current patches and will remain so despite attempts to update it.
+Unless you understand these problems well and know how to
+be sure whether they are occurring, or how to clean them up,
+you should not save this environment."
+	      (PATCH-NAME PATCH-SYSTEM))
+      (SEND *QUERY-IO* :CLEAR-INPUT)
+      (UNLESS (YES-OR-NO-P "Dump anyway? ")
+	(RETURN-FROM LOAD-AND-SAVE-PATCHES NIL))))
+  (DO ((BAND1 BAND (PROMPT-AND-READ :STRING "~&Save into which band? "))
+       (COUNT 0 (1+ COUNT)))
+      (())
+    (WHEN BAND1
+      (COND ((NUMBERP BAND1)
+	     (SETQ BAND1 (FORMAT NIL "LOD~D" BAND1)))
+	    ((PARSE-NUMBER BAND1 0 NIL NIL T)
+	     (SETQ BAND1 (STRING-APPEND "LOD" BAND1))))
+      (COND ((NOT (STRING-EQUAL BAND1 "LOD" :END1 3))
 	     (FORMAT *QUERY-IO* "~&You must save into a LOD partition."))
 	    ((NOT (FIND-DISK-PARTITION BAND1))
 	     (FORMAT *QUERY-IO* "~&No such band: ~A." BAND1))
@@ -445,7 +516,7 @@ you should not save this environment."
 	  (T (FORMAT *QUERY-IO* "~&No patches have been made.")))))
 
 ;;; Say who did it: which hardware, which firmware, which software, and which meatware.
-(DEFUN WRITE-RESPONSIBILITY-COMMENT (STREAM)
+(DEFUN WRITE-RESPONSIBILITY-COMMENT (STREAM &AUX (TIME:*DEFAULT-DATE-PRINT-MODE* :DD-MMM-YY))
   (FORMAT STREAM "~&;;; Written ~\DATIME\ by ~A,
 ;;; while running on ~A from band ~C
 ;;; with ~A.~2%"
@@ -474,8 +545,8 @@ Returns the allocated minor version number."
 	  (RETURN (FORMAT WARNING-STREAM "~&Note: Patch ~D.~D is not finished yet."
 			  (PATCH-VERSION PATCH-SYSTEM)
 			  (VERSION-NUMBER P)))))
-    (RPLACD LAST-PATCH
-	    (NCONS (MAKE-PATCH-VERSION :NUMBER NEW-VERSION :EXPLANATION NIL)))
+    (SETF (CDR LAST-PATCH)
+	  (NCONS (MAKE-PATCH-VERSION :NUMBER NEW-VERSION :EXPLANATION NIL)))
     (WRITE-PATCH-DIRECTORY PATCH-SYSTEM PATCH-DIR)
     NEW-VERSION))
 
@@ -490,13 +561,14 @@ To release the patch, call CONSUMMATE-PATCH again
 NO-RECOMPILE says do not compile the patch file source;
  this would normally be used only with releasing an already finished patch."
   (UNLESS NO-RECOMPILE
-    (QC-FILE (PATCH-SYSTEM-PATHNAME (PATCH-NAME PATCH-SYSTEM) :PATCH-FILE
-				    (PATCH-VERSION PATCH-SYSTEM) NUMBER
-				    :LISP)))
+    (COMPILE-FILE (PATCH-SYSTEM-PATHNAME (PATCH-NAME PATCH-SYSTEM) :PATCH-FILE
+					 (PATCH-VERSION PATCH-SYSTEM) NUMBER
+					 :LISP)))
   (LET* ((PATCH-DIR (READ-PATCH-DIRECTORY PATCH-SYSTEM))
-	 (PATCHES (PATCH-DIR-VERSION-LIST PATCH-DIR)))
-    (IF MESSAGE (SETF (CADR (ASSQ NUMBER PATCHES)) MESSAGE))
-    (SETF (CDDDR (ASSQ NUMBER PATCHES)) (LIST (NOT RELEASE-FLAG)))
+	 (PATCHES (PATCH-DIR-VERSION-LIST PATCH-DIR))
+	 (VERSION (ASSQ NUMBER PATCHES)))
+    (IF MESSAGE (SETF (VERSION-EXPLANATION VERSION) MESSAGE))
+    (SETF (VERSION-UNRELEASED VERSION) (NOT RELEASE-FLAG))
     (WRITE-PATCH-DIRECTORY PATCH-SYSTEM PATCH-DIR)
     NIL))	;Despite the comment above, this function doesnt seem to detect any
 		; meaningful errors and returns randomness.  So return NIL for success.
@@ -508,8 +580,7 @@ the system name and major version number."
   (LET* ((PATCH-DIR (READ-PATCH-DIRECTORY PATCH-SYSTEM))
 	 (PATCHES (PATCH-DIR-VERSION-LIST PATCH-DIR)))
     (SETF (PATCH-DIR-VERSION-LIST PATCH-DIR)
-	  (DELQ (ASSQ NUMBER PATCHES)
-		(PATCH-DIR-VERSION-LIST PATCH-DIR)))
+	  (DELQ (ASSQ NUMBER PATCHES) (PATCH-DIR-VERSION-LIST PATCH-DIR)))
     (WRITE-PATCH-DIRECTORY PATCH-SYSTEM PATCH-DIR)
     NIL))
 
@@ -523,7 +594,7 @@ Unreleased patches are also described."
 			    (ASS #'STRING-EQUAL SYS-NAME PATCH-SYSTEMS-LIST))))
     (IF (NULL PATCH-SYSTEM)
 	(FORMAT STREAM "There seems to be no patchable ~A system .~%" SYSTEM)
-      (DOLIST (ELEM (SECOND (READ-PATCH-DIRECTORY PATCH-SYSTEM)))
+      (DOLIST (ELEM (PATCH-DIR-VERSION-LIST (READ-PATCH-DIRECTORY PATCH-SYSTEM)))
 	(WHEN (OR (NOT (VERSION-EXPLANATION ELEM))
 		  (VERSION-UNRELEASED ELEM))
 	  (FORMAT STREAM "~&  Found a patch started by ~A " (THIRD ELEM))
@@ -539,8 +610,8 @@ Unreleased patches are also described."
 	     (FORMAT STREAM "in the file ~A~%" (SEND F :TRUENAME))
 	     (STREAM-COPY-UNTIL-EOF F STREAM))))))))
 
-      
-;;; Utilities for system versions
+      
+;;;; Utilities for system versions
 
 (DEFVAR SYSTEM-ADDITIONAL-INFO ""
   "Additional info is printed after the version when the system is booted.")
@@ -570,18 +641,11 @@ Unreleased patches are also described."
       (SETQ VERS
 	    (READLINE-TRIM *QUERY-IO* ""
 			   `((:PROMPT ,(FORMAT NIL "~S will not fit in disk label.~@
-						    Please abbreviate to ~D characters~:P: "
+						    Please abbreviate to ~D character~:P: "
 					       VERS MAXIMUM-LENGTH))
 			     (:INITIAL-INPUT ,VERS)
 			     (:INITIAL-INPUT-POINTER ,MAXIMUM-LENGTH)))))
     VERS))
-
-(DEFVAR SYSTEM-STATUS-ALIST '((:EXPERIMENTAL "Experimental" "Exp" "experimental")
-			      (:RELEASED "" "" "released")
-			      (:OBSOLETE "Obsolete" "Obs" "obsolete")
-			      (:INCONSISTENT "Inconsistent (unreleased patches loaded)"
-					     "Bad" "inconsistent (unreleased patches loaded)")
-			      (:BROKEN "Broken" "Broke" "broken")))
 
 (DEFUN SYSTEM-VERSION-INFO (&OPTIONAL (BRIEF-P NIL) &AUX (FIRST T) TEM)
   "Return a one-line string giving the versions of all patchable systems.
@@ -659,7 +723,8 @@ The microcode version number and some other suitable information is also include
 
 (DEFUN GET-SYSTEM-VERSION (&OPTIONAL (SYSTEM "System"))
   "Returns the major and minor version numbers and status of the system named SYSTEM.
-This describes what is currently loaded, not the most recent ones on disk."
+This describes what is currently loaded, not the most recent ones on disk.
+Returns NIL if no such patchable system exists."
   (DECLARE (VALUES MAJOR MINOR STATUS))
   (LET ((PATCH (GET-PATCH-SYSTEM-NAMED SYSTEM T T)))
     (IF PATCH
@@ -673,8 +738,8 @@ NEW-STATUS should be :EXPERIMENTAL, :BROKEN, :RELEASED or :OBSOLETE.
 If MAJOR-VERSION is specified, the status of that major version is set.
 Otherwise the status of the currently loaded major version is set.
 This modifies the patch directory files."
-  (OR (ASSQ NEW-STATUS SYSTEM-STATUS-ALIST)
-      (FERROR NIL "~S is not a defined system status." NEW-STATUS))
+  (UNLESS (ASSQ NEW-STATUS SYSTEM-STATUS-ALIST)
+    (FERROR NIL "~S is not a defined system status." NEW-STATUS))
   (SETQ PATCH (GET-PATCH-SYSTEM-NAMED SYSTEM))
   (IF (AND MAJOR-VERSION ( MAJOR-VERSION (PATCH-VERSION PATCH)))
       (SETQ PATCH (MAKE-PATCH-SYSTEM :NAME SYSTEM :VERSION MAJOR-VERSION :STATUS NEW-STATUS))
@@ -689,3 +754,4 @@ This modifies the patch directory files."
 			   (GET-SYSTEM-VERSION))
 		    :BEFORE-COLD)
 
+;; kansas:<l.sys2>patch
