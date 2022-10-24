@@ -1,4 +1,5 @@
-;;; Functions that deal with indentation -*- Mode:LISP; Package:ZWEI; Base:8 -*-
+;;; -*- Mode:LISP; Package:ZWEI; Base:8; Readtable:ZL -*-
+;;; Functions which deal with indentation 
 ;;; ** (c) Copyright 1980 Massachusetts Institute of Technology **
 
 (DEFUN LINE-INDENTATION (LINE &OPTIONAL (SHEET (WINDOW-SHEET *WINDOW*)))
@@ -33,7 +34,7 @@ If we cannot get exactly to the GOAL pixel, we go a little past it."
   (LET (N M)
     (LET ((BPI (BP-VIRTUAL-INDENTATION BP SHEET))
 	  (SW (FONT-SPACE-WIDTH))
-	  (TW (SEND SHEET ':EDITOR-TAB-WIDTH)))
+	  (TW (SEND SHEET :EDITOR-TAB-WIDTH)))
       (SETQ M (FLOOR GOAL TW)			;Number of tabs to get to goal
 	    N (* TW M))				;Position of rightmost tab
       (IF (OR (> BPI N)				;Past there, no tabs can be used,
@@ -43,17 +44,18 @@ If we cannot get exactly to the GOAL pixel, we go a little past it."
     ;; M has number of tabs, N has number of spaces.
     ;; Set up SPACES with the string to be inserted.
     (SETQ SPACES (MAKE-ARRAY (+ M N)
-                             ':TYPE (IF (ZEROP *FONT*)
-					'ART-STRING
-					'ART-FAT-STRING)))
-    (LET ((TAB (IN-CURRENT-FONT #\TAB))
-	  (SPACE (IN-CURRENT-FONT #\SP)))
-      (DO I (1- M) (1- I) (MINUSP I)
-	  (ASET TAB SPACES I))
+                             :TYPE (IF (ZEROP *FONT*)
+;>> art-fat-string lossage
+				       'ART-STRING
+				       'ART-FAT-STRING)))
+    (LET ((TAB (IN-CURRENT-FONT #/TAB))
+	  (SPACE (IN-CURRENT-FONT #/SPACE)))
+      (DO ((I (1- M) (1- I))) ((MINUSP I))
+	(SETF (CHAR SPACES I) TAB))
       (DO ((I 1 (1+ I))
 	   (J M (1+ J)))
 	  ((> I N))
-	(ASET SPACE SPACES J))))
+	(SETF (CHAR SPACES J) SPACE))))
   (PROG1 (INSERT-MOVING BP SPACES)
 	 (RETURN-ARRAY SPACES)))
 
@@ -63,9 +65,9 @@ If we cannot get exactly to the GOAL pixel, we go a little past it."
       (LET* ((FONT (CURRENT-FONT *WINDOW*))
 	     (CHAR-WIDTH-TABLE (FONT-CHAR-WIDTH-TABLE FONT)))
 	(IF CHAR-WIDTH-TABLE
-	    (AREF CHAR-WIDTH-TABLE #\SP)
+	    (AREF CHAR-WIDTH-TABLE (CHAR-CODE #/SPACE))
 	  (FONT-CHAR-WIDTH FONT)))
-    (SEND *WINDOW* ':CHARACTER-WIDTH)))
+    (SEND *WINDOW* :CHARACTER-WIDTH)))
 
 (DEFUN INDENT-LINE (BP INDENTATION &OPTIONAL
 		       (SHEET (WINDOW-SHEET *WINDOW*))
@@ -80,28 +82,28 @@ In this case, BP is ignored; its only purpose is to set BP1."
   (LET (BP-AFTER BP-LIST NONBLANK-INDEX)
     (SETQ BP-AFTER (FORWARD-OVER *BLANKS* BP1))
     (SETQ NONBLANK-INDEX (BP-INDEX BP-AFTER))
-    (IF (= INDENTATION (STRING-WIDTH (BP-LINE BP1) 0 NONBLANK-INDEX SHEET)) BP-AFTER
-	(PROGN
-	  (DOLIST (BP2 (LINE-BP-LIST (BP-LINE BP1)))
-	    (COND ((OR (< (BP-INDEX BP2) NONBLANK-INDEX)
-		       (AND (= (BP-INDEX BP2) NONBLANK-INDEX)
-			    (EQ (BP-STATUS BP2) ':NORMAL)))
-		   (PUSH (CONS BP2 (BP-INDENTATION BP2 SHEET)) BP-LIST))))
-	  (DELETE-INTERVAL BP1 BP-AFTER T)
-	  ;; Don't screw up the undo information for this change
-	  ;; by trying to preserve indentation of it's bps.
-	  (LET ((US (NODE-UNDO-STATUS *INTERVAL*)))
-	    (UNLESS (EQ US ':DONT)
-	      (SETQ BP-LIST (DELQ (ASSQ (UNDO-STATUS-START-BP US) BP-LIST) BP-LIST))
-	      (SETQ BP-LIST (DELQ (ASSQ (UNDO-STATUS-END-BP US) BP-LIST) BP-LIST))))
-	  (PROG1 (INDENT-TO BP1 INDENTATION SHEET)
-		 (LET ((NONBLANK-INDEX (BP-INDEX (FORWARD-OVER *BLANKS*
-							       (CREATE-BP (BP-LINE BP) 0)))))
-		   (DOLIST (BP-AND-INDENTATION BP-LIST)
-		     (LET ((INDEX (INDENTATION-INDEX (BP-LINE (CAR BP-AND-INDENTATION))
-						     (CDR BP-AND-INDENTATION) SHEET)))
-		       (AND INDEX (SETF (BP-INDEX (CAR BP-AND-INDENTATION))
-					(MIN NONBLANK-INDEX INDEX)))))))))))
+    (IF (= INDENTATION (STRING-WIDTH (BP-LINE BP1) 0 NONBLANK-INDEX SHEET))
+	BP-AFTER
+      (DOLIST (BP2 (LINE-BP-LIST (BP-LINE BP1)))
+	(IF (OR (< (BP-INDEX BP2) NONBLANK-INDEX)
+		(AND (= (BP-INDEX BP2) NONBLANK-INDEX)
+		     (EQ (BP-STATUS BP2) ':NORMAL)))
+	    (PUSH (CONS BP2 (BP-INDENTATION BP2 SHEET)) BP-LIST)))
+      (DELETE-INTERVAL BP1 BP-AFTER T)
+      ;; Don't screw up the undo information for this change
+      ;; by trying to preserve indentation of its bps.
+      (LET ((US (NODE-UNDO-STATUS *INTERVAL*)))
+	(UNLESS (EQ US ':DONT)
+	  (SETQ BP-LIST (DELQ (ASSQ (UNDO-STATUS-START-BP US) BP-LIST) BP-LIST))
+	  (SETQ BP-LIST (DELQ (ASSQ (UNDO-STATUS-END-BP US) BP-LIST) BP-LIST))))
+      (PROG1 (INDENT-TO BP1 INDENTATION SHEET)
+	     (LET ((NONBLANK-INDEX (BP-INDEX (FORWARD-OVER *BLANKS*
+							   (CREATE-BP (BP-LINE BP) 0)))))
+	       (DOLIST (BP-AND-INDENTATION BP-LIST)
+		 (LET ((INDEX (INDENTATION-INDEX (BP-LINE (CAR BP-AND-INDENTATION))
+						 (CDR BP-AND-INDENTATION) SHEET)))
+		   (AND INDEX (SETF (BP-INDEX (CAR BP-AND-INDENTATION))
+				    (MIN NONBLANK-INDEX INDEX))))))))))
 
 (DEFUN INDENT-BP-ADJUSTMENT (BP)
   "If BP is within the indentation of its line, move it past.
@@ -148,27 +150,31 @@ A numeric argument is a repeat count." ()
 		(RETURN (BEEP)))
 	   ;; When moving forward, whenever we find a blank we must
 	   ;; convert all tabs within the blanks that follow.
-	   (AND (MEMQ (BP-CH-CHAR BP) *BLANKS*)
-		(LET ((BP1 (COPY-BP BP)))
-		  (DO ()
-		      ((OR (BP-= BP1 (INTERVAL-LAST-BP *INTERVAL*))
-			   (NOT (MEMQ (BP-CH-CHAR BP1) *BLANKS*))))
-		    (COND ((= (BP-CH-CHAR BP1) #\TAB)
-			   (TAB-CONVERT BP1 (FORWARD-CHAR BP1 1)))
-			  (T (IBP BP1))))))
+;character lossage
+	   (WHEN (OR (MEMQ (BP-CH-CHARACTER BP) *BLANKS*)
+		     (MEMQ (CHAR-INT (BP-CH-CHARACTER BP)) *BLANKS*))
+	     (LET ((BP1 (COPY-BP BP)))
+	       (DO ()
+		   ((OR (BP-= BP1 (INTERVAL-LAST-BP *INTERVAL*))
+;character lossage
+			(NOT (OR (MEMQ (BP-CH-CHARACTER BP1) *BLANKS*)
+				 (MEMQ (CHAR-INT (BP-CH-CHARACTER BP1)) *BLANKS*)))))
+		 (IF (CHAR= (BP-CH-CHARACTER BP1) #/TAB)
+		     (TAB-CONVERT BP1 (FORWARD-CHAR BP1 1))
+		   (IBP BP1)))))
 	   (IBP BP)))
 	(T
 	 (DOTIMES (I (- COUNT))
 	   (AND (BP-= BP (INTERVAL-FIRST-BP *INTERVAL*))
 		(RETURN (BEEP)))
-	   (WHEN (= (LDB %%CH-CHAR (BP-CHAR-BEFORE BP)) #\TAB)
+	   (WHEN (CHAR-EQUAL (BP-CHARACTER-BEFORE BP) #/TAB)
 	     (SETQ MIN-INDEX (1- (BP-INDEX BP)))
 	     (TAB-CONVERT (FORWARD-CHAR BP -1) BP))
 	   (DBP BP))))
-  (COND ((EQ (BP-LINE POINT) (BP-LINE BP))
-	 (MUST-REDISPLAY *WINDOW* DIS-LINE (BP-LINE POINT)
-			 (MIN (BP-INDEX POINT) MIN-INDEX (BP-INDEX BP))))
-	(T (MUST-REDISPLAY *WINDOW* DIS-TEXT)))
+  (IF (EQ (BP-LINE POINT) (BP-LINE BP))
+      (MUST-REDISPLAY *WINDOW* DIS-LINE (BP-LINE POINT)
+		      (MIN (BP-INDEX POINT) MIN-INDEX (BP-INDEX BP)))
+      (MUST-REDISPLAY *WINDOW* DIS-TEXT))
   (FUNCALL (IF *NUMERIC-ARG-P* #'KILL-INTERVAL #'DELETE-INTERVAL) POINT BP)
   DIS-NONE)
 
@@ -177,13 +183,13 @@ A numeric argument is a repeat count." ()
 BP-BEFORE and BP-AFTER should be temporary BPs to before and after the tab character."
   (LET ((INDENT-BEFORE (BP-VIRTUAL-INDENTATION BP-BEFORE))
 	(INDENT-AFTER (BP-VIRTUAL-INDENTATION BP-AFTER))
-	(*FONT* (LDB %%CH-FONT (BP-CHAR BP-BEFORE)))
+	(*FONT* (CHAR-FONT (BP-CHARACTER BP-BEFORE)))
 	SPACE NSPACES)
     (IF (BP-STATUS BP-BEFORE)
 	(FERROR NIL "~S is not a temporary BP." BP-BEFORE))
     (IF (BP-STATUS BP-AFTER)
 	(FERROR NIL "~S is not a temporary BP." BP-AFTER))
-    (SETQ SPACE (IN-CURRENT-FONT #\SP))
+    (SETQ SPACE (IN-CURRENT-FONT #/SPACE))
     (SETQ NSPACES (FLOOR (- INDENT-AFTER INDENT-BEFORE) (FONT-SPACE-WIDTH)))
     (MUNG-BP-LINE-AND-INTERVAL BP-BEFORE)
     (ASET SPACE (BP-LINE BP-BEFORE) (BP-INDEX BP-BEFORE))
@@ -210,7 +216,7 @@ Give either one arg, an interval, or two BPs."
   (DO ((BP BP1)
        (*INDENT-WITH-TABS* NIL)
        AFTER-BP)
-      ((NOT (SETQ AFTER-BP (SEARCH BP #\TAB NIL NIL NIL BP2))))
+      ((NOT (SETQ AFTER-BP (ZWEI-SEARCH BP #/TAB NIL NIL NIL BP2))))
     (SETQ BP (FORWARD-CHAR AFTER-BP -1))
     (TAB-CONVERT BP AFTER-BP)))
 
@@ -234,30 +240,29 @@ Give either one arg, an interval, or two BPs."
   (DO ((BP BP1)
        (*INDENT-WITH-TABS* T)
        AFTER-BP)
-      ((NOT (SETQ AFTER-BP (SEARCH BP "   " NIL NIL NIL BP2))))
+      ((NOT (SETQ AFTER-BP (ZWEI-SEARCH BP "   " NIL NIL NIL BP2))))
     ;; Get BP and AFTER-BP around this run of spaces.
     (SETQ BP (FORWARD-CHAR AFTER-BP -3))
-    (SETQ AFTER-BP (FORWARD-OVER '(#\SP) AFTER-BP))
+    (SETQ AFTER-BP (FORWARD-OVER '(#/SPACE) AFTER-BP))
     ;; Delete them and replace with standard indentation (which uses tabs if possible).
     (LET ((INDENTATION (BP-VIRTUAL-INDENTATION AFTER-BP))
-	  (*FONT* (LDB %%CH-FONT (BP-CHAR BP))))
+	  (*FONT* (CHAR-FONT (BP-CHARACTER BP))))
       (DELETE-INTERVAL BP AFTER-BP T)
       (INDENT-TO BP INDENTATION))))
 
-(DEFCOM COM-INDENT-FOR-LISP-COMMENTS-SPECIAL 
-	"Like LISP Tab, except in comments just inserts Tab." ()
-  (LET ((POINT (POINT))
-	IN-COMMENT)
-    (MULTIPLE-VALUE (NIL NIL IN-COMMENT)
-      (LISP-BP-SYNTACTIC-CONTEXT POINT))
-    (IF IN-COMMENT
-	(COM-INSERT-TAB) (COM-INDENT-FOR-LISP))))
+(DEFCOM COM-INDENT-FOR-LISP-COMMENTS-SPECIAL
+  "Like LISP Tab, except in comments just inserts Tab." ()
+  (LET ((POINT (POINT)))
+    (IF (NTH-VALUE 2 (LISP-BP-SYNTACTIC-CONTEXT POINT))
+	;; in a comment
+	(COM-INSERT-TAB)
+        (COM-INDENT-FOR-LISP))))
 
 (DEFCOM COM-INDENT-FOR-LISP "Indent this line to make ground LISP code.
 Numeric argument is number of lines to indent." ()
   (LET ((PT (POINT)) END FLAG)
     (SETQ END (OR (BEG-LINE PT *NUMERIC-ARG*)
-		  (INSERT (SETQ FLAG (INTERVAL-LAST-BP *INTERVAL*)) #\CR)))
+		  (INSERT (SETQ FLAG (INTERVAL-LAST-BP *INTERVAL*)) #/NEWLINE)))
     (SETQ END (INDENT-INTERVAL-FOR-LISP (BEG-LINE PT) END NIL NIL *NUMERIC-ARG-P*))
     (IF (= *NUMERIC-ARG* 1)
         (INDENT-BP-ADJUSTMENT PT)
@@ -272,10 +277,10 @@ Numeric argument is number of lines to indent." ()
 	*CURRENT-COMMAND-TYPE*)			;Don't be fooled
     (MAX (IF *INDENT-NEW-LINE-NEW-LINE-FUNCTION*
 	     (FUNCALL *INDENT-NEW-LINE-NEW-LINE-FUNCTION*)
-	   (KEY-EXECUTE #\CR *NUMERIC-ARG-P* *NUMERIC-ARG*))
+	   (KEY-EXECUTE #/NEWLINE *NUMERIC-ARG-P* *NUMERIC-ARG*))
 	 (IF *INDENT-NEW-LINE-INDENT-FUNCTION*
 	     (FUNCALL *INDENT-NEW-LINE-INDENT-FUNCTION*)
-	   (KEY-EXECUTE #\TAB)))))
+	   (KEY-EXECUTE #/TAB)))))
 
 (DEFCOM COM-INDENT-SEXP "Indent the following s-expression.
 Each line that starts within the s-expression is indented for Lisp.
@@ -297,13 +302,13 @@ next line that has a non-white-space character at the start."
 	"Insert a Return and the proper indentation at the s-expression before point." ()
   (LET* ((POINT (POINT))
 	 (BP (OR (FORWARD-SEXP POINT (- *NUMERIC-ARG*)) (BARF))))
-    (WITH-BP (OLD-POINT POINT ':NORMAL)
+    (WITH-BP (OLD-POINT POINT :NORMAL)
       (MOVE-BP POINT BP)
       (UNWIND-PROTECT
 	  (COM-INDENT-NEW-LINE)
 	(MOVE-BP POINT OLD-POINT)))))
 
-;;; Text grinding functions
+;;;; Text grinding functions
 
 (DEFUN FILL-INTERVAL (START-BP END-BP &OPTIONAL IN-ORDER-P ADJUST &AUX (FILLCOL *FILL-COLUMN*)
 		      LINE1 LINE2 TEM
@@ -321,31 +326,37 @@ ADJUST non-NIL says justify; otherwise just fill."
 			  (EQ LINE (BP-LINE (INTERVAL-LAST-BP *INTERVAL*))))
 		      (LINE-NEXT LINE) LINE)))
     ;; Remove any fill prefixes that are there already
-    (COND ((PLUSP (SETQ TEM (STRING-LENGTH *FILL-PREFIX*)))
-	   (SETQ FILLCOL (- FILLCOL (STRING-WIDTH *FILL-PREFIX*)))
-	   (DO ((LINE LINE1 (LINE-NEXT LINE)))
-	       ((EQ LINE LINE2))
-	     (IF (STRING-EQUAL LINE *FILL-PREFIX* 0 0 TEM TEM)
-		 (DELETE-INTERVAL (CREATE-BP LINE 0) (CREATE-BP LINE TEM) T)
-	       (PUSH LINE NON-PREFIX-LINES)))))
+    (WHEN (PLUSP (SETQ TEM (STRING-LENGTH *FILL-PREFIX*)))
+      (SETQ FILLCOL (- FILLCOL (STRING-WIDTH *FILL-PREFIX*)))
+      (DO ((LINE LINE1 (LINE-NEXT LINE)))
+	  ((EQ LINE LINE2))
+	(IF (STRING-EQUAL LINE *FILL-PREFIX* :END1 TEM)
+	    (DELETE-INTERVAL (CREATE-BP LINE 0) (CREATE-BP LINE TEM) T)
+	  (PUSH LINE NON-PREFIX-LINES))))
     ;; Make sentences ending at eol have extra space
     (DO ((LINE LINE1 (LINE-NEXT LINE)))
 	((EQ LINE LINE2))
       (AND ( (SETQ TEM (1- (LINE-LENGTH LINE))) 0)
-	   (MEMQ (LDB %%CH-CHAR (AREF LINE TEM)) *FILL-EXTRA-SPACE-LIST*)
+;character lossage
+	   (OR (MEMQ (CHAR-CODE (CHAR LINE TEM)) *FILL-EXTRA-SPACE-LIST*)
+	       (MEMQ (MAKE-CHAR (CHAR LINE TEM)) *FILL-EXTRA-SPACE-LIST*))
 	   (NEQ LINE2 (SETQ TEM (LINE-NEXT LINE)))
 	   (NOT (ZEROP (LINE-LENGTH TEM)))
-	   (INSERT (CREATE-BP LINE (LINE-LENGTH LINE)) #\SP)))
+	   (INSERT (CREATE-BP LINE (LINE-LENGTH LINE)) #/SPACE)))
     ;; Remove excess spaces except after periods, which we leave alone (e.g. vs sentences),
     ;; or at the start of lines.
-    (DO ((BP START-BP) (CH)) (())
-      (MULTIPLE-VALUE (BP CH) (SEARCH-SET BP *BLANKS*))
+    (DO ((BP START-BP) (CH))
+	(())
+      (MULTIPLE-VALUE-SETQ (BP CH) (SEARCH-SET BP *BLANKS*))
       (OR (AND BP (BP-< BP END-BP))
 	  (RETURN NIL))
-      (SETQ CH (BP-CHAR-BEFORE (BACKWARD-OVER '(#/" #/' #/) #/]) (FORWARD-CHAR BP -1))))
-      (COND ((CHAR-EQUAL CH #\CR)
+      (SETQ CH (BP-CHARACTER-BEFORE
+		 (BACKWARD-OVER '(#/" #/' #/) #/]) (FORWARD-CHAR BP -1))))
+      (COND ((CHAR-EQUAL CH #/NEWLINE)
 	     (SETQ BP (FORWARD-OVER *BLANKS* BP)))
-	    ((NOT (MEMQ (LDB %%CH-CHAR CH) *FILL-EXTRA-SPACE-LIST*))
+;character lossage
+	    ((NOT (OR (MEMQ (CHAR-CODE CH) *FILL-EXTRA-SPACE-LIST*)
+		      (MEMQ (MAKE-CHAR CH) *FILL-EXTRA-SPACE-LIST*)))
 	     (SETQ BP (DELETE-OVER *BLANKS* BP))
 	     (AND (END-LINE-P BP) (DELETE-BACKWARD-OVER *BLANKS* BP)))))
     ;; And now start filling
@@ -353,7 +364,7 @@ ADJUST non-NIL says justify; otherwise just fill."
 	 (TEM) (TEM-BP (CREATE-BP LINE1 0))
 	 (BREAK-NEXT)
 	 (SHEET (WINDOW-SHEET *WINDOW*))
-	 (FONT (SEND *WINDOW* ':CURRENT-FONT)))
+	 (FONT (SEND *WINDOW* :CURRENT-FONT)))
 	((EQ LINE LINE2))
       ;; Break generated by next line?
       (SETQ BREAK-NEXT (OR (EQ LINE2 (SETQ TEM (LINE-NEXT LINE)))
@@ -362,7 +373,11 @@ ADJUST non-NIL says justify; otherwise just fill."
 	    TEM (DO ((I 0 (1+ I))		;Initial blanks count in first word
 		     (LEN (LINE-LENGTH LINE)))
 		    ((OR (= I LEN)
-			 (NOT (MEMQ (LDB %%CH-CHAR (AREF LINE I)) *PARAGRAPH-DELIMITER-LIST*)))
+;character lossage
+			 (NOT (OR (MEMQ (MAKE-CHAR (CHAR LINE I))
+					*PARAGRAPH-DELIMITER-LIST*)
+				  (MEMQ (CHAR-CODE (CHAR LINE I))
+					*PARAGRAPH-DELIMITER-LIST*))))
 		     I)))
       ;; Handle this line
       (OR (BP-AT-PARAGRAPH-DELIMITER (MOVE-BP TEM-BP LINE 0))
@@ -370,9 +385,7 @@ ADJUST non-NIL says justify; otherwise just fill."
 	  ;; counts as blank.
 	  (AND NON-PREFIX-LINES
 	       (MEMQ LINE NON-PREFIX-LINES)
-	       (STRING-EQUAL LINE *FILL-PREFIX* 0 0
-			     (STRING-LENGTH LINE)
-			     (STRING-LENGTH LINE)))
+	       (STRING-EQUAL LINE *FILL-PREFIX* :END2 (STRING-LENGTH LINE)))
 	  (DO ((POS 0)
 	       (CHAR-POS 0)
 	       (CP TEM)
@@ -381,34 +394,34 @@ ADJUST non-NIL says justify; otherwise just fill."
 	       (NBLANKS 0))
 	      ((EQ LINE LINE2))
 	    (SETQ POS (TV:SHEET-STRING-LENGTH SHEET LINE CHAR-POS CP NIL FONT POS))
-	    (COND ((> POS FILLCOL)		;Line overflew
-		   (AND ( NBLANKS 1) (RETURN NIL))
-		   (MOVE-BP BP1 LINE CHAR-POS)
-		   (INSERT-MOVING BP1 #\CR)
-		   (DELETE-OVER *BLANKS* BP1)
-		   (MOVE-BP BP2 LINE (LINE-LENGTH LINE))
-		   (DELETE-BACKWARD-OVER *BLANKS* BP2)
-		   (COND ((NOT BREAK-NEXT)
-			  (SETQ BP1 (END-LINE BP1))
-			  (OR (BEG-LINE-P BP1) (INSERT-MOVING BP1 #\SP))
-			  (MOVE-BP BP2 (LINE-NEXT (BP-LINE BP1)) 0)
-			  (DELETE-INTERVAL BP1 BP2 T)))
-		   (SETQ NBLANKS (- NBLANKS 2))
-		   (AND ADJUST (PLUSP NBLANKS) (ADJUST-LINE LINE NBLANKS FILLCOL))
-		   (RETURN NIL)))
+	    (WHEN (> POS FILLCOL)		;Line overflew
+	      (IF ( NBLANKS 1) (RETURN NIL))
+	      (MOVE-BP BP1 LINE CHAR-POS)
+	      (INSERT-MOVING BP1 #/NEWLINE)
+	      (DELETE-OVER *BLANKS* BP1)
+	      (MOVE-BP BP2 LINE (LINE-LENGTH LINE))
+	      (DELETE-BACKWARD-OVER *BLANKS* BP2)
+	      (UNLESS BREAK-NEXT
+		(SETQ BP1 (END-LINE BP1))
+		(OR (BEG-LINE-P BP1) (INSERT-MOVING BP1 #/SPACE))
+		(MOVE-BP BP2 (LINE-NEXT (BP-LINE BP1)) 0)
+		(DELETE-INTERVAL BP1 BP2 T))
+	      (SETQ NBLANKS (- NBLANKS 2))
+	      (AND ADJUST (PLUSP NBLANKS) (ADJUST-LINE LINE NBLANKS FILLCOL))
+	      (RETURN NIL))
 	    (SETQ CHAR-POS CP)
 	    (COND ((= CHAR-POS (LINE-LENGTH LINE))
 		   (AND BREAK-NEXT (RETURN NIL))
 		   (MOVE-BP BP1 LINE CHAR-POS)
-		   (INSERT-MOVING BP1 #\SP)
+		   (INSERT-MOVING BP1 #/SPACE)
 		   (MOVE-BP BP2 (LINE-NEXT (BP-LINE BP1)) 0)
 		   (DELETE-INTERVAL BP1 BP2 T)
 		   (SETQ BREAK-NEXT (OR (EQ LINE2 (SETQ TEM (LINE-NEXT LINE)))
 					(MEMQ TEM NON-PREFIX-LINES)
 					(BP-AT-PARAGRAPH-TERMINATOR (MOVE-BP BP2 TEM 0) NIL)))
-		   (OR (= (AREF LINE CHAR-POS) #\SP)
+		   (OR (= (CHAR LINE CHAR-POS) #/SPACE)
 		       (SETQ NBLANKS (1+ NBLANKS))))
-		  ((SETQ CP (STRING-SEARCH-CHAR #\SP LINE (1+ CHAR-POS)))
+		  ((SETQ CP (STRING-SEARCH-CHAR #/SPACE LINE (1+ CHAR-POS)))
 		   (OR (= CP (1+ CHAR-POS))
 		       (SETQ NBLANKS (1+ NBLANKS))))
 		  (T
@@ -432,15 +445,16 @@ at which blanks can be inserted.  Yes, this is redundant."
        (EXP EXPER (1- EXP))
        (I AVG AVG))
       ((= N 0))
-    (OR (SETQ BP (SEARCH BP #\SP NIL NIL NIL (END-OF-LINE LINE)))
+    (OR (SETQ BP (ZWEI-SEARCH BP #/SPACE NIL NIL NIL (END-OF-LINE LINE)))
 	(FERROR NIL "Not enough spaces to adjust with in ~S" LINE))
     (SETQ BP (FORWARD-OVER *BLANKS* BP))
     (AND (> EXTRA 0) (= EXP 1)
 	 (SETQ I (1+ I)
 	       EXTRA (1- EXTRA)
 	       EXP EXPER))
-    (DO I I (1- I) (= I 0)
-	(INSERT-MOVING BP #\SP))))
+    (DO ((I I (1- I)))
+	((= I 0))
+      (INSERT-MOVING BP #/SPACE))))
 
 ;;;Common indenter for Tab, C-M-Q, and friends
 (DEFUN INDENT-INTERVAL-FOR-LISP (BP1 &OPTIONAL BP2 IN-ORDER-P START-BP (COMMENTS-P T))
@@ -467,18 +481,13 @@ COMMENTS-P if NIL means do not reindent the comments as comments."
 	            COMMENT))
 	     (SETQ INDENTATION NIL))
 	    (T
-	     (MULTIPLE-VALUE (INDENTATION IN-STRING)
+	     (MULTIPLE-VALUE-SETQ (INDENTATION IN-STRING)
 	       (INDENT-FOR-LISP BP START-BP))))
       (COND ((NOT IN-STRING)	        	;Dont touch lines inside a string
 	     (AND INDENTATION (INDENT-LINE BP INDENTATION))
 	     (AND COMMENTS-P (INDENT-FOR-COMMENT BP))))
       (OR (EQ (LINE-NEXT LINE) STOP-LINE)
 	  (LISP-PARSE-LINE-MEMOIZED LINE IN-STRING)))))
-
-(DEFMACRO UNKEYWORDIFY (SYM)
-  `(OR (AND (EQ (SYMBOL-PACKAGE ,SYM) SI:PKG-KEYWORD-PACKAGE)
-	    (INTERN-SOFT ,SYM SI:PKG-GLOBAL-PACKAGE))
-       ,SYM))
 
 (DEFUN INDENT-FOR-LISP (BP &OPTIONAL START-DEFUN-BP
 	        	   &AUX BP1 BP2 INDENTATION OFFSET SYM
@@ -493,11 +502,12 @@ START-DEFUN-BP is a BP to start parsing from.  Presumably before BP's line.
 OFFSET-LIST is a list specifying (number-of-sexps-to-skip amount-to-change-indentation ...)
 or if OFFSET-LIST is a symbol or function, it is funcall'ed and can return
 the indentation, an offset, or a bp whose indentation to use."
-  (PROG ()
-    (SETQ BP (CREATE-BP (BP-LINE BP) 0)
-	  BP1 (OR START-DEFUN-BP (SETQ START-DEFUN-BP (FORWARD-DEFUN BP -1 T))))
-    (SETQ IN-STRING (LISP-PARSE-FROM-DEFUN (BP-LINE BP) BP1))
-    (AND IN-STRING (RETURN 0 IN-STRING))
+  (DECLARE (VALUES LINE-INDENTATION-IN-PIXELS START-OF-LINE-IN-STRING-P))
+  (SETQ BP (CREATE-BP (BP-LINE BP) 0)
+	BP1 (OR START-DEFUN-BP (SETQ START-DEFUN-BP (FORWARD-DEFUN BP -1 T))))
+  (SETQ IN-STRING (LISP-PARSE-FROM-DEFUN (BP-LINE BP) BP1))
+  (IF IN-STRING
+      (VALUES 0 IN-STRING)
     ;; Get BP to last unterminated paren (up one level).  Sixth argument of NIL makes
     ;; sure we get an open paren and not a single-quote (forward or backward).
     (SETQ LASTPAREN (FORWARD-SEXP BP -1 NIL 1 BP1 NIL))
@@ -510,67 +520,79 @@ the indentation, an offset, or a bp whose indentation to use."
 	 (LET ((BP2 (FORWARD-CHAR LASTPAREN)))
 	   (LET ((I (BP-INDEX BP2)))
 	     (SETQ SYM (DO ((J I (1+ J))
-	        	    (LINE (BP-LINE BP2))
-	        	    (LENGTH (LINE-LENGTH (BP-LINE BP2))))
-	        	   ((OR ( J LENGTH)
-	        	        (AND ( (LIST-SYNTAX (AREF LINE J)) LIST-ALPHABETIC)
-	        	             ( (LIST-SYNTAX (AREF LINE J)) LIST-COLON)))
-	        	    (AND ( I J)
-	        	         (CATCH-ERROR (READ-FROM-STRING
+			    (LINE (BP-LINE BP2))
+			    (LENGTH (LINE-LENGTH (BP-LINE BP2))))
+			   ((OR ( J LENGTH)
+				(AND ( (LIST-SYNTAX (CHAR LINE J)) LIST-ALPHABETIC)
+				     ( (LIST-SYNTAX (CHAR LINE J)) LIST-COLON)))
+			    (AND ( I J)
+				 (CATCH-ERROR (CLI:READ-FROM-STRING
 						(STRING-REMOVE-FONTS (NSUBSTRING LINE I J))
-						'*EOF*)
-	        	        	      NIL)))))
+						NIL NIL)
+					      NIL)))))
 	     ;; Beware of funny read syntax, numbers, etc.
 	     (OR (SYMBOLP SYM) (SETQ SYM NIL))))
-	 (SETQ TEM (OR (CDR (ASSQ (UNKEYWORDIFY SYM)
-				  *LISP-INDENT-OFFSET-ALIST*))
-	               (AND (STRING-EQUAL SYM "DEF" 0 0 3 3)
-	        	    *LISP-DEFUN-INDENTATION*)))
+	 (SETQ TEM (GET-FUNCTION-LISP-INDENTATION SYM))	 
 	 ;; This function on the alist => value is either
 	 ;; an indentation list or a function to call.
 	 (COND ((CONSP TEM)         ;Indentation list, see how do handle this depth
-	        ;; How many sexps at this level precede point?  Set NSEXPS.
-	        ;; But, first, let's see how many are interesting (that's (1- MAX-I) ).
-	        ;; Don't keep counting NSEXPS when it's already larger than is interesting.
-	        (DO ((BP3 (FORWARD-CHAR LASTPAREN 1) (FORWARD-SEXP BP3 1 NIL 0 BP))
-	             (MAX-I (1+ (CAR (NLEFT 2 TEM))))
-	             (I 0 (1+ I)))
-	            ((NULL BP3) (SETQ NSEXPS (- I 2)))
-	          (AND (> I MAX-I) (RETURN NIL)))
-	        ;; Now see what the indentation lists says about that many sexps.
-	        (AND NSEXPS
-	             (DO ((L TEM (CDDR L))
-	        	  (I 0))
-	        	 ((OR (NULL L) (> I NSEXPS)))
-	               (AND (= (SETQ I (CAR L)) NSEXPS)
-	        	    (SETQ OFFSET (CADR L) LASTSEXP NIL)))))
+		;; How many sexps at this level precede point?  Set NSEXPS.
+		;; But, first, let's see how many are interesting (that's (1- MAX-I) ).
+		;; Don't keep counting NSEXPS when it's already larger than is interesting.
+		(DO ((BP3 (FORWARD-CHAR LASTPAREN 1) (FORWARD-SEXP BP3 1 NIL 0 BP))
+		     (MAX-I (1+ (CAR (NLEFT 2 TEM))))
+		     (I 0 (1+ I)))
+		    ((NULL BP3) (SETQ NSEXPS (- I 2)))
+		  (AND (> I MAX-I) (RETURN NIL)))
+		;; Now see what the indentation lists says about that many sexps.
+		(AND NSEXPS
+		     (DO ((L TEM (CDDR L))
+			  (I 0))
+			 ((OR (NULL L) (> I NSEXPS)))
+		       (AND (= (SETQ I (CAR L)) NSEXPS)
+			    (SETQ OFFSET (CADR L) LASTSEXP NIL)))))
 	       (T
-	        (MULTIPLE-VALUE (BP2 INDENTATION OFFSET)
-	          (FUNCALL TEM BP1 BP LASTPAREN LASTSEXP SPACE-WIDTH SYM)))))
-    (SETQ BP1 (DO () (NIL)
-	        (COND ((NULL LASTPAREN)	        ;If already balanced, nothing to do
-	               (RETURN BP))
-	              (BP2	        	;Specified what to indent to
-	               (RETURN BP2))
-	              (INDENTATION)	        ;Specified how far to indent
-	              ;;If there is no complete sexp at this paren depth, line up just after
-	              ;;the leftparen.
-	              ((OR (NULL LASTSEXP) (BP-< LASTSEXP LASTPAREN))
-	               (RETURN (FORWARD-CHAR LASTPAREN)))
-	              (T
-	               (SETQ BP1 (CREATE-BP (BP-LINE LASTSEXP) 0))
-	               ;;If complete sexp is on different line than the unmatched leftparen,
-	               ;;line up with start of sexp's line.
-	               (COND ((OR (NULL LASTPAREN) (BP-< LASTPAREN BP1))
-	        	      (SETQ BP1 (FORWARD-OVER *BLANKS* BP1))
-	        	      ;;OK only if the first on the line or at that level.
+		(MULTIPLE-VALUE-SETQ (BP2 INDENTATION OFFSET)
+		  ;; funcalled with arguments:
+		  ;;  bp to start of current defun
+		  ;;  bp to start of line (the one we are indenting)
+		  ;;  bp to last unterminated paren (up one level) (such as "(PROG ...)")
+		  ;;  bp to start of last complete sexp, or NIL if none at this level.
+		  ;;  space width of current font
+		  ;;  symbol at start of sexp (such as PROG)
+		  ;; values returned:
+		  ;;  bp to which to indent, or NIL
+		  ;;   (may be affected by OFFSET, third value returned)
+		  ;;  explicit indentation in pixels desired, or NIL.
+		  ;;   Overrides any other values
+		  ;;  offset from first first value (in space-widths) to indent, or 0
+		  ;;   (eg indent 3 spaces from bp to start of tag in a tagbody to get
+		  ;;    indentation for start of this sexp)
+		  (FUNCALL TEM BP1 BP LASTPAREN LASTSEXP SPACE-WIDTH SYM)))))
+    (SETQ BP1 (DO-FOREVER
+		(COND ((NULL LASTPAREN)	        ;If already balanced, nothing to do
+		       (RETURN BP))
+		      (BP2	        	;Specified what to indent to
+		       (RETURN BP2))
+		      (INDENTATION)	        ;Specified how far to indent
+		      ;; If there is no complete sexp at this paren depth, line up just after
+		      ;; the leftparen.
+		      ((OR (NULL LASTSEXP) (BP-< LASTSEXP LASTPAREN))
+		       (RETURN (FORWARD-CHAR LASTPAREN)))
+		      (T
+		       (SETQ BP1 (CREATE-BP (BP-LINE LASTSEXP) 0))
+		       ;; If complete sexp is on different line than the unmatched leftparen,
+		       ;; line up with start of sexp's line.
+		       (COND ((OR (NULL LASTPAREN) (BP-< LASTPAREN BP1))
+			      (SETQ BP1 (FORWARD-OVER *BLANKS* BP1))
+			      ;;OK only if the first on the line or at that level.
 			      ;; If LASTSEXP is first nonblank thing on its line, use it.
 			      ;; Also if there are no unmatched close parens preceding it,
 			      ;; use the first nonblank thing on that line
 			      ;; since that must be at LASTSEXP's level.
-	        	      (AND (OR (BP-= BP1 LASTSEXP)
+			      (AND (OR (BP-= BP1 LASTSEXP)
 				       (NOT (FORWARD-SEXP BP1 1 NIL 1 LASTSEXP)))
-	        	           (RETURN BP1))
+				   (RETURN BP1))
 			      ;; LASTSEXP follows on the same line as an unmatched close.
 			      ;; Back up one sexp from it.
 			      ;; Eventually this moves back across that unmatched close
@@ -579,37 +601,54 @@ the indentation, an offset, or a bp whose indentation to use."
 ;	        	            LASTPAREN (FORWARD-SEXP LASTSEXP -1 NIL 1 LASTPAREN NIL)
 ;	        	            LASTSEXP (FORWARD-SEXP LASTSEXP -1 NIL 0 LASTPAREN))
 			      )
-	        	     ;;Otherwise, maybe user specified how to handle this case
-	        	     (*LISP-INDENT-OFFSET*
-	        	      (SETQ OFFSET (+ *LISP-INDENT-OFFSET* OFFSET))
-	        	      (RETURN (FORWARD-CHAR LASTPAREN)))
-	        	     ;;If only one element in list so far, line up under left-paren
-	        	     ;;also if the CAR doesnt look like the name of a function
-	        	     ((SETQ TEM (INDENT-NOT-FUNCTION-P
+			     ;;Otherwise, maybe user specified how to handle this case
+			     (*LISP-INDENT-OFFSET*
+			      (SETQ OFFSET (+ *LISP-INDENT-OFFSET* OFFSET))
+			      (RETURN (FORWARD-CHAR LASTPAREN)))
+			     ;;If only one element in list so far, line up under left-paren
+			     ;;also if the CAR doesnt look like the name of a function
+			     ((SETQ TEM (INDENT-NOT-FUNCTION-P
 					  LASTPAREN
 					  (SETQ BP2 (FORWARD-CHAR LASTPAREN))
 					  START-DEFUN-BP))
 			      (IF (NUMBERP TEM) (SETQ OFFSET TEM))
-	        	      (RETURN BP2))
-	        	     ((BP-< LASTSEXP (SETQ BP1 (FORWARD-SEXP BP2)))
-	        	      (SETQ OFFSET
+			      (RETURN BP2))
+			     ((BP-< LASTSEXP (SETQ BP1 (FORWARD-SEXP BP2)))
+			      (SETQ OFFSET
 				    (IF (COND-CLAUSE-SUPERIOR-P LASTPAREN START-DEFUN-BP)
 					0
 				      *LISP-INDENT-LONE-FUNCTION-OFFSET*))
-	        	      (RETURN BP2))
-	        	     ;;Otherwise line up with start of the second element of that list
-	        	     (T
-	        	      (RETURN (SKIP-OVER-BLANK-LINES-AND-COMMENTS
+			      (RETURN BP2))
+			     ;; Otherwise line up with start of the second elt of that list
+			     (T
+			      (RETURN (SKIP-OVER-BLANK-LINES-AND-COMMENTS
 					(SKIP-OVER-BLANK-LINES-AND-COMMENTS BP1)))))))))
-    (OR INDENTATION (SETQ INDENTATION (MAX 0 (+ (* OFFSET SPACE-WIDTH) (BP-INDENTATION BP1)))))
-    (RETURN INDENTATION IN-STRING)))
+    (OR INDENTATION
+	(SETQ INDENTATION (MAX 0 (+ (* OFFSET SPACE-WIDTH) (BP-INDENTATION BP1)))))
+    (VALUES INDENTATION IN-STRING)))
 
+(DEFUN GET-FUNCTION-LISP-INDENTATION (SYM &AUX TEM)
+  (COND ((CDR (ASSQ SYM *LISP-INDENT-OFFSET-ALIST*)))
+	((AND (FBOUNDP SYM)
+	      (SETQ TEM (CDR (ASSQ 'INDENTATION (DEBUGGING-INFO SYM)))))
+	 (AND (CONSP TEM)
+	      (= (LENGTH TEM) 1)
+	      (SETQ TEM (CAR TEM)))
+	 TEM)
+	((STRING= SYM "DEF" :END1 3)
+	 *LISP-DEFUN-INDENTATION*)
+	(T
+	 NIL)))
+
+;;>> These two functions are a horrible kludge.
+;;>> What is the right general-porpoise strategy which catches the effects of these
+;;>>  two following functions (and also FLET, MACROLET and LABELS)??
 (DEFCONST *COND-CLAUSE-SUPERIORS*
 	  '(COND SELECT SELECTQ SELECTOR COND-EVERY SELECTQ-EVERY SELECT-MATCH
-		 CASE CASEQ TYPECASE CTYPECASE ETYPECASE CCASE ECASE
-		 CONDITION-CASE CONDITION-CASE-IF CONDITION-CALL CONDITION-CALL-IF
-		 WITH-OPEN-FILE-CASE WITH-OPEN-STREAM-CASE
-		 SIGNAL-PROCEED-CASE)
+	    CASE CASEQ TYPECASE CTYPECASE ETYPECASE CCASE ECASE
+	    CONDITION-CASE CONDITION-CASE-IF CONDITION-CALL CONDITION-CALL-IF
+	    WITH-OPEN-FILE-CASE WITH-OPEN-STREAM-CASE
+	    SIGNAL-PROCEED-CASE UNWIND-PROTECT-CASE FS:READING-FROM-FILE-CASE)
   "Functions whose arguments should be indented internally as clauses.")
 	 
 (DEFUN COND-CLAUSE-SUPERIOR-P (BP START-DEFUN-BP &AUX SUPBP LINE IDX)
@@ -632,7 +671,7 @@ in *COND-CLAUSE-SUPERIORS*."
 	  '(LET LET* LET-GLOBALLY LAMBDA PROG PROG*
 	    DO DO*
 	    (DEFSELECT T 1)
-	    MULTIPLE-VALUE MULTIPLE-VALUE-BIND
+	    MULTIPLE-VALUE MULTIPLE-VALUE-BIND MULTIPLE-VALUE-SETQ
 	    (DEFSUBST 2) (DEFMACRO 2)
 	    (DEFMETHOD 2) (DEFUN 2)
 	    (DEFFLAVOR 2 T 3 T))
@@ -655,8 +694,8 @@ LIMIT-BP should be a place to stop backward searches
 /(such as the start of the defun)."
   ;; Do that for any list whose car is not an atom,
   ;; unless it is a cond-clause (as determined by the list one level up).
-  (OR (AND ( (LIST-SYNTAX (SETQ TEM (BP-CH-CHAR BP2))) LIST-ALPHABETIC)
-	   (NOT (MEMQ TEM '(#/: #// #/|)))	        ;These are really atoms
+  (OR (AND ( (LIST-SYNTAX (SETQ TEM (BP-CH-CHARACTER BP2))) LIST-ALPHABETIC)
+	   (NOT (MEMQ TEM '(#/: #// #/|)))	;These are really atoms
 	   (NOT (COND-CLAUSE-SUPERIOR-P BP LIMIT-BP)))
       ;; Do that also if the list one level up makes it clear
       ;; that this is a list of variables to be bound, or some such thing.
@@ -688,14 +727,32 @@ LIMIT-BP should be a place to stop backward searches
 							     (FORWARD-CHAR BP 1))))
 			(RETURN (IF (NUMBERP (CADR ELTS)) (CADR ELTS) T)))))))))
        
-;;;This is the default indenter for PROGs; tags and forms must be handled separately.
+
+;;;; Special-purpose lisp indenters
+
+;; funcalled with arguments:
+;;  bp to start of current defun
+;;  bp to start of line (the one we are indenting)
+;;  bp to last unterminated paren (up one level) (such as "(PROG ...)")
+;;  bp to start of last complete sexp, or NIL if none at this level.
+;;  space width of current font
+;;  symbol at start of sexp (such as PROG)
+;; values returned:
+;;  bp to which to indent, or NIL (may be affected by OFFSET, third value returned)
+;;  explicit indentation in pixels desired, or NIL. Overrides any other values
+;;  offset from first first value (in space-widths) to indent, or 0
+;;   (eg indent 3 spaces from bp to start of tag in a tagbody to get
+;;    indentation for start of this sexp)
+
+;;; This is the default indenter for PROG, PROG* and TAGBDODY;
+;;;  tags and forms must be handled separately.
 (DEFVAR *PROG-TAG-INDENT-OFFSET* -3)
 (DEFVAR *PROG-FORM-INDENT-OFFSET* 0)
 
 ;; Also used for TAGBODY; then it knows there is no variable list.
 (DEFUN INDENT-PROG (IGNORE BP LASTPAREN IGNORE IGNORE SYM)
   (LET* ((THIS-LINE (BP-LINE BP))
-	 (ATOM-P (EQ (LINE-TYPE THIS-LINE) ':ATOM))
+	 (ATOM-P (EQ (LINE-TYPE THIS-LINE) :ATOM))
 	 (LAST-TAG-BP NIL)
 	 (LAST-NON-TAG-BP NIL)
 	 (BP2 (FORWARD-SEXP (FORWARD-CHAR LASTPAREN)
@@ -709,7 +766,7 @@ LIMIT-BP should be a place to stop backward searches
 	   (OR (BP-< BP2 BP) (RETURN NIL))
 	   (AND (BEG-LINE-P (BACKWARD-OVER *BLANKS* BP2))
 		(NEQ (SETQ LINE (BP-LINE BP2)) THIS-LINE)
-		(SELECTQ (LINE-TYPE LINE)
+		(CASE (LINE-TYPE LINE)
 		  (:ATOM (SETQ LAST-TAG-BP BP2))
 		  (:NORMAL (SETQ LAST-NON-TAG-BP BP2))))
 	   (OR (SETQ BP2 (FORWARD-SEXP BP2 1 NIL 0 BP))
