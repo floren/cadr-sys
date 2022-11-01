@@ -427,6 +427,15 @@ OR
 	      (declare (function-parent ,optimizer-name defoptimizer))
 	      . ,body))))
 
+;; until there really is such a thing, this is just sylistic
+(defmacro defrewrite (rewriter function-to-rewrite
+		      #|| &optional ((&rest rewrites-into)) ||# arglist &body body)
+  `(progn (add-optimizer-internal ',function-to-rewrite ',rewriter
+				  nil #||',rewrites-into||#)
+	  (defun ,rewriter ,arglist
+	      (declare (function-parent ,rewriter defrewrite))
+	      . ,body)))
+
 (defmacro defcompiler-synonym (function synonym-function)
   "Make the compiler substitute SYNONYM-FUNCTION for FUNCTION when compiling.
 eg (defcompiler-synonym plus +)"
