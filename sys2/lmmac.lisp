@@ -1847,6 +1847,12 @@ The last one of ARGUMENTS actually is a list of arguments, not one argument."
   (DECLARE (ARGLIST OBJECT OPERATION &REST ARGUMENTS))
   `(APPLY . ,ARGS))
 
+(defsubst send-if-handles (object operation &rest arguments)
+  "Send the message OPERATION to OBJECT if OBJECT handles that message.
+If it does, return the result of sending it that message on the given ARGUMENTS.
+Otherwise, return NIL."
+  (lexpr-funcall object :send-if-handles operation arguments))
+
 ;;; WITH-HELP-STREAM sets up a stream for printing a long help message.
 ;;; This is a pop-up window (like FINGER windows) if the parent stream is a window,
 ;;; otherwise the stream is simply the parent stream (this avoids lossage if the
