@@ -1,4 +1,5 @@
-;;; -*- Mode:LISP; Package:SYSTEM-INTERNALS; Base:8 -*-
+;;; -*- Mode:LISP; Package:SYSTEM-INTERNALS; Base:8; Readtable:ZL -*-
+
 ;;; ** (C) Copyright 1981, Symbolics, Inc.
 ;;;    Enhancements (C) Copyright 1981, Massachusetts Institute of Technology
 ;;; The Massachusetts Institute of Technology has acquired the rights from Symbolics
@@ -48,20 +49,22 @@
 
 (DEFFLAVOR STREAM () ()
   (:REQUIRED-METHODS :DIRECTION)
-  (:DOCUMENTATION :BASE-FLAVOR "All streams are built on this.
-    This flavor is mostly for TYPEP, but also provides default methods for messages
-    which all streams, input or output, are required to handle."))
+  (:DOCUMENTATION "All streams are built on this.
+This flavor is mostly for TYPEP, but also provides default methods for messages
+which all streams, input or output, are required to handle."))
 
-(DEFMETHOD (STREAM :CLOSE) (&OPTIONAL MODE)
-  MODE	;ignored
+(DEFMETHOD (STREAM :DEFAULT :CLOSE) (&OPTIONAL MODE)
+  (DECLARE (IGNORE MODE))
   NIL)
 
 ;;; Streams are binary until proven otherwise
-(DEFMETHOD (STREAM :CHARACTERS) () NIL)
+(DEFMETHOD (STREAM :DEFAULT :CHARACTERS) () NIL)
 
-(DEFMETHOD (STREAM :ELEMENT-TYPE) ()
-  (LET ((VALUE (SEND SELF ':SEND-IF-HANDLES ':BYTE-SIZE)))
-    (IF VALUE `(UNSIGNED-BYTE ,VALUE) 'FIXNUM)))
+(DEFMETHOD (STREAM :DEFAULT :ELEMENT-TYPE) ()
+  (LET ((VALUE (SEND SELF :SEND-IF-HANDLES :BYTE-SIZE)))
+    (IF VALUE
+	`(UNSIGNED-BYTE ,VALUE)
+        'FIXNUM)))
 
 (DEFFLAVOR CHARACTER-STREAM () ()
   (:INCLUDED-FLAVORS STREAM))
@@ -72,42 +75,43 @@
 
 (DEFFLAVOR INPUT-STREAM () (STREAM)
   (:REQUIRED-METHODS :TYI :UNTYI)
-  (:SELECT-METHOD-ORDER :TYI :UNTYI)
-  (:DOCUMENTATION :BASE-FLAVOR "All input streams are built on this."))
+; (:SELECT-METHOD-ORDER :TYI :UNTYI)
+  (:DOCUMENTATION "All input streams are built on this."))
 
-(DEFMETHOD (INPUT-STREAM :DIRECTION) () ':INPUT)
+(DEFMETHOD (INPUT-STREAM :DIRECTION) () :INPUT)
 
-(DEFMETHOD (INPUT-STREAM :LISTEN) ()
-  (LET ((TEM (FUNCALL-SELF ':TYI-NO-HANG NIL)))
+(DEFMETHOD (INPUT-STREAM :DEFAULT :LISTEN) ()
+  (LET ((TEM (SEND SELF :TYI-NO-HANG NIL)))
     (COND (TEM
-	   (FUNCALL-SELF ':UNTYI TEM)
+	   (SEND SELF :UNTYI TEM)
 	   T))))
 
-(DEFMETHOD (INPUT-STREAM :TYIPEEK) (&OPTIONAL EOF)
-  (LET ((TEM (FUNCALL-SELF ':TYI EOF)))
+(DEFMETHOD (INPUT-STREAM :DEFAULT :TYIPEEK) (&OPTIONAL EOF)
+  (LET ((TEM (SEND SELF :TYI EOF)))
     (COND (TEM
-	   (FUNCALL-SELF ':UNTYI TEM)
+	   (SEND SELF :UNTYI TEM)
 	   TEM))))
 
-(DEFMETHOD (INPUT-STREAM :TYI-NO-HANG) (&OPTIONAL EOF)
-  (SEND SELF ':TYI EOF))
-
-(DEFMETHOD (INPUT-STREAM :ANY-TYI) (&OPTIONAL EOF)
-  (SEND SELF ':TYI EOF))
-
-(DEFMETHOD (INPUT-STREAM :ANY-TYI-NO-HANG) (&OPTIONAL EOF)
-  (SEND SELF ':TYI EOF))
+;; why are these methods of all streams rather than just ones which support these operations
+;; in a meaningful fashion?
+(DEFMETHOD (INPUT-STREAM :DEFAULT :TYI-NO-HANG) (&OPTIONAL EOF)
+  (SEND SELF :TYI EOF))
+(DEFMETHOD (INPUT-STREAM :DEFAULT :ANY-TYI) (&OPTIONAL EOF)
+  (SEND SELF :TYI EOF))
+(DEFMETHOD (INPUT-STREAM :DEFAULT :ANY-TYI-NO-HANG) (&OPTIONAL EOF)
+  (SEND SELF :TYI EOF))
   
-(DEFMETHOD (INPUT-STREAM :CLEAR-INPUT) ()
+
+(DEFMETHOD (INPUT-STREAM :DEFAULT :CLEAR-INPUT) ()
   NIL)
 
-(DEFMETHOD (INPUT-STREAM :READ-UNTIL-EOF) ()
-  (LOOP WHILE (FUNCALL-SELF ':TYI)))
+(DEFMETHOD (INPUT-STREAM :DEFAULT :READ-UNTIL-EOF) ()
+  (LOOP WHILE (SEND SELF :TYI)))
 
-(DEFMETHOD (INPUT-STREAM :STRING-IN) (EOF STRING &OPTIONAL (START 0) END)
+(DEFMETHOD (INPUT-STREAM :DEFAULT :STRING-IN) (EOF STRING &OPTIONAL (START 0) END)
   (OR END (SETQ END (ARRAY-LENGTH STRING)))
   (LOOP WHILE (< START END)
-	AS CH = (FUNCALL-SELF ':TYI)
+	AS CH = (SEND SELF :TYI)
 	WHILE CH
 	DO (ASET CH STRING (PROG1 START (INCF START)))
 	FINALLY (AND (ARRAY-HAS-LEADER-P STRING)
@@ -115,44 +119,99 @@
 		(AND (NULL CH) EOF (FERROR 'END-OF-FILE-1 "End of file on ~S." SELF))
 		(RETURN (VALUES START (NULL CH)))))
 
+
+(defflavor input-character-stream () (character-stream input-stream)
+  :abstract-flavor
+; (:select-method-order :read-char :tyi)
+  (:required-methods :tyi))
+
+(defmethod (input-character-stream :default :read-char) ()
+  (let ((tem (send self :tyi)))
+    (if (fixnump tem)
+	(int-char tem)
+        tem)))
+
+;; These are only here for consistency with any-tyi-no-hang being a method of input-stream
+;;  Sigh
+;(defmethod (input-character-stream :default :read-char-no-hang) ()
+;  (send self :read-char)
+;(defmethod (input-character-stream :default :any-read-char) ()
+;  (send self :read-char))
+;(defmethod (input-character-stream :any-read-char-no-hang) ()
+;  (send self :read-char))
+
+(defflavor input-binary-stream () (input-stream)
+  :abstract-flavor
+; (:select-method-order :read-byte :tyi)
+  (:required-methods :tyi)
+
+(defmethod (input-binary-stream :default :read-byte) ()
+  (send self :tyi))
+
 (DEFFLAVOR OUTPUT-STREAM () (STREAM)
   (:REQUIRED-METHODS :TYO)
   :ABSTRACT-FLAVOR
-  (:SELECT-METHOD-ORDER :TYO)
-  (:DOCUMENTATION :BASE-FLAVOR "All output streams are built on this."))
+; (:SELECT-METHOD-ORDER :TYO)
+  (:DOCUMENTATION "All output streams are built on this."))
 
-(DEFMETHOD (OUTPUT-STREAM :DIRECTION) () ':OUTPUT)
+(DEFMETHOD (OUTPUT-STREAM :DIRECTION) () :OUTPUT)
 
-(DEFMETHOD (OUTPUT-STREAM :FRESH-LINE) ()
-  (FUNCALL-SELF ':TYO #\CR)
+;;; why is this a method of output-streams rather than output-character-streams?
+(DEFMETHOD (OUTPUT-STREAM :DEFAULT :FRESH-LINE) ()
+  (SEND SELF :TYO #/NEWLINE)
   T)
 
-(DEFMETHOD (OUTPUT-STREAM :STRING-OUT) (STRING &OPTIONAL (START 0) END)
+;;; why is this a method of output-streams rather than output-character-streams?
+(DEFMETHOD (OUTPUT-STREAM :DEFAULT :STRING-OUT) (STRING &OPTIONAL (START 0) END)
   (OR END (SETQ END (ARRAY-ACTIVE-LENGTH STRING)))
-  (DO ((I START (1+ I))) (( I END))
-    (FUNCALL-SELF ':TYO (AREF STRING I))))
+  (DO ((I START (1+ I)))
+      (( I END))
+    (SEND SELF :TYO (GLOBAL:AREF STRING I))))
 
-(DEFMETHOD (OUTPUT-STREAM :CLEAR-OUTPUT) ()
+(DEFMETHOD (OUTPUT-STREAM :DEFAULT :CLEAR-OUTPUT) ()
   NIL)
 
-(DEFMETHOD (OUTPUT-STREAM :FORCE-OUTPUT) ()
+(DEFMETHOD (OUTPUT-STREAM :DEFAULT :FORCE-OUTPUT) ()
   NIL)
 
-(DEFMETHOD (OUTPUT-STREAM :FINISH) ()
+(DEFMETHOD (OUTPUT-STREAM :DEFAULT :FINISH) ()
   NIL)
 
 (DEFMETHOD (OUTPUT-STREAM :BEFORE :FINISH) ()
-  (FUNCALL-SELF ':FORCE-OUTPUT))
+  (SEND SELF :FORCE-OUTPUT))
 
 (DEFMETHOD (OUTPUT-STREAM :EOF) ()
-  (FUNCALL-SELF ':FINISH))
+  (SEND SELF :FINISH))
+
+(defflavor output-character-stream () (character-stream output-stream)
+  :abstract-flavor
+; (:select-method-order :write-char :tyo)
+  (:required-methods :tyo))
+
+(defmethod (input-character-stream :default :write-char) (character)
+  (send self :tyo (char-int character)))
+
+(defflavor output-binary-stream () (output-stream)
+  :abstract-flavor
+; (:select-method-order :write-byte :tyo)
+  (:required-methods :tyo))
+
+(defmethod (output-binary-stream :default :write-byte) (byte)
+  (send self :tyo byte))
 
 (DEFFLAVOR BIDIRECTIONAL-STREAM () ()
   (:INCLUDED-FLAVORS INPUT-STREAM OUTPUT-STREAM))
 
-(DEFMETHOD (BIDIRECTIONAL-STREAM :DIRECTION) () ':BIDIRECTIONAL)
+(DEFMETHOD (BIDIRECTIONAL-STREAM :DIRECTION) () :BIDIRECTIONAL)
+
+(defflavor bidirectional-character-stream () ()
+  (:included-flavors bidirectional-stream input-character-stream output-character-stream))
+
+(defflavor bidirectional-binary-stream () ()
+  (:included-flavors bidirectional-stream input-binary-stream output-binary-stream))
+
 
-;;; Buffered streams
+;;;; Buffered streams
 
 (DEFFLAVOR BASIC-BUFFERED-INPUT-STREAM
 	((STREAM-INPUT-BUFFER NIL)
@@ -161,35 +220,35 @@
 	(INPUT-STREAM)
   :GETTABLE-INSTANCE-VARIABLES
   (:REQUIRED-METHODS :NEXT-INPUT-BUFFER :DISCARD-INPUT-BUFFER)
-  (:DOCUMENTATION :COMBINATION "Input stream with a buffer.  Defines only a :TYI method.
+  (:DOCUMENTATION "Input stream with a buffer.  Defines only a :TYI method.
 Requires methods :NEXT-INPUT-BUFFER, which takes a no hang argument and returns three
 values, an array, a starting index, and an ending index, or NIL at EOF or no input available
 right away.  And :DISCARD-INPUT-BUFFER takes the array back and throws it away someplace."))
 
 ;;; Returns non-NIL if any input was to be found.
 (DEFMETHOD (BASIC-BUFFERED-INPUT-STREAM :SETUP-NEXT-INPUT-BUFFER) (&OPTIONAL NO-HANG-P)
-  (FUNCALL-SELF ':DISCARD-CURRENT-INPUT-BUFFER)
+  (SEND SELF :DISCARD-CURRENT-INPUT-BUFFER)
   (MULTIPLE-VALUE (STREAM-INPUT-BUFFER STREAM-INPUT-INDEX STREAM-INPUT-LIMIT)
-    (FUNCALL-SELF ':NEXT-INPUT-BUFFER NO-HANG-P)))
+    (SEND SELF :NEXT-INPUT-BUFFER NO-HANG-P)))
 
 (DEFMETHOD (BASIC-BUFFERED-INPUT-STREAM :DISCARD-CURRENT-INPUT-BUFFER) ()
   (COND (STREAM-INPUT-BUFFER
 	 ;; Pretend that the index has reached the end, so that input remembering will work.
 	 (SETQ STREAM-INPUT-INDEX STREAM-INPUT-LIMIT)
-	 (FUNCALL-SELF ':DISCARD-INPUT-BUFFER
+	 (SEND SELF :DISCARD-INPUT-BUFFER
 		       (PROG1 STREAM-INPUT-BUFFER (SETQ STREAM-INPUT-BUFFER NIL))))))
 
-(DECLARE-FLAVOR-INSTANCE-VARIABLES (BASIC-BUFFERED-INPUT-STREAM)
 (DEFUN BASIC-BUFFERED-INPUT-STREAM-TYI (MESSAGE &OPTIONAL EOF)
+  (DECLARE (:SELF-FLAVOR BASIC-BUFFERED-INPUT-STREAM))
   (LOOP UNTIL (AND STREAM-INPUT-BUFFER
 		   (< STREAM-INPUT-INDEX STREAM-INPUT-LIMIT))
-	;Out of input, get some more
-	UNTIL (FUNCALL-SELF ':SETUP-NEXT-INPUT-BUFFER (EQ MESSAGE ':TYI-NO-HANG))
-	;Reached end of file
+	;; Out of input, get some more
+	UNTIL (SEND SELF :SETUP-NEXT-INPUT-BUFFER (EQ MESSAGE :TYI-NO-HANG))
+	;; Reached end of file
 	RETURN (AND EOF (FERROR 'SYS:END-OF-FILE-1 "End of file on ~S." SELF))
-	;Here we have a character available
-	FINALLY (RETURN (PROG1 (AREF STREAM-INPUT-BUFFER STREAM-INPUT-INDEX)
-			       (OR (EQ MESSAGE ':TYIPEEK) (INCF STREAM-INPUT-INDEX)))))) )
+	;; Here we have a character available
+	FINALLY (RETURN (PROG1 (GLOBAL:AREF STREAM-INPUT-BUFFER STREAM-INPUT-INDEX)
+			       (OR (EQ MESSAGE :TYIPEEK) (INCF STREAM-INPUT-INDEX))))))
 
 (DEFMETHOD (BASIC-BUFFERED-INPUT-STREAM :TYI) BASIC-BUFFERED-INPUT-STREAM-TYI)
 (DEFMETHOD (BASIC-BUFFERED-INPUT-STREAM :TYI-NO-HANG) BASIC-BUFFERED-INPUT-STREAM-TYI)
@@ -200,60 +259,61 @@ right away.  And :DISCARD-INPUT-BUFFER takes the array back and throws it away s
 			(1- STREAM-INPUT-INDEX))))
     (COND ((AND NEW-INDEX
 		( NEW-INDEX 0)
-		(EQ (AREF STREAM-INPUT-BUFFER NEW-INDEX) CH))
+		(EQ (GLOBAL:AREF STREAM-INPUT-BUFFER NEW-INDEX) CH))
 	   (SETQ STREAM-INPUT-INDEX NEW-INDEX))
 	  (T
-	   (FERROR NIL "Attempt to :UNTYI something different than last :TYI'ed.")))))
+	   (FERROR NIL "Attempt to :UNTYI something different from last :TYI'ed.")))))
 
 (DEFMETHOD (BASIC-BUFFERED-INPUT-STREAM :LISTEN) ()
   (OR (AND STREAM-INPUT-BUFFER
 	   (< STREAM-INPUT-INDEX STREAM-INPUT-LIMIT))
-      (FUNCALL-SELF ':SETUP-NEXT-INPUT-BUFFER T)))
+      (SEND SELF :SETUP-NEXT-INPUT-BUFFER T)))
 
 (DEFMETHOD (BASIC-BUFFERED-INPUT-STREAM :READ-UNTIL-EOF) ()
-  (LOOP WHILE (FUNCALL-SELF ':SETUP-NEXT-INPUT-BUFFER)))
+  (LOOP WHILE (SEND SELF :SETUP-NEXT-INPUT-BUFFER)))
 
 (DEFMETHOD (BASIC-BUFFERED-INPUT-STREAM :CLEAR-INPUT) ()
-  (FUNCALL-SELF ':DISCARD-CURRENT-INPUT-BUFFER))
+  (SEND SELF :DISCARD-CURRENT-INPUT-BUFFER))
 
 (DEFMETHOD (BASIC-BUFFERED-INPUT-STREAM :BEFORE :CLOSE) (&OPTIONAL IGNORE)
-  (FUNCALL-SELF ':DISCARD-CURRENT-INPUT-BUFFER))
+  (SEND SELF :DISCARD-CURRENT-INPUT-BUFFER))
+
 
 (DEFFLAVOR BUFFERED-INPUT-STREAM () (BASIC-BUFFERED-INPUT-STREAM)
-  (:DOCUMENTATION :COMBINATION "Buffered input stream with :READ-INPUT-BUFFER.
+  (:DOCUMENTATION "Buffered input stream with :READ-INPUT-BUFFER.
 Usef for all buffered input streams for which :TYI doesn't have wrappers to do
 translation or such."))
 
-(DEFMETHOD (BUFFERED-INPUT-STREAM :GET-INPUT-BUFFER) (&OPTIONAL EOF)
+(DEFMETHOD (BUFFERED-INPUT-STREAM :GET-INPUT-BUFFER) (&OPTIONAL EOF-ERROR-P)
   (LOOP UNTIL (AND STREAM-INPUT-BUFFER
 		   (< STREAM-INPUT-INDEX STREAM-INPUT-LIMIT))
-	;Out of input, get some more
-	UNTIL (FUNCALL-SELF ':SETUP-NEXT-INPUT-BUFFER)
-	;Reached end of file
-	RETURN (AND EOF (FERROR 'SYS:END-OF-FILE-1 "End of file on ~S." SELF))
-	;Here we have a non-empty available
+	;; Out of input, get some more
+	UNTIL (SEND SELF :SETUP-NEXT-INPUT-BUFFER)
+	;; Reached end of file
+	RETURN (AND EOF-ERROR-P (FERROR 'SYS:END-OF-FILE-1 "End of file on ~S." SELF))
+	;; Here we have a non-empty available
 	FINALLY (RETURN (VALUES STREAM-INPUT-BUFFER
 				STREAM-INPUT-INDEX
 				(- STREAM-INPUT-LIMIT STREAM-INPUT-INDEX)))))
 
-(DEFMETHOD (BUFFERED-INPUT-STREAM :READ-INPUT-BUFFER) (&OPTIONAL EOF)
+(DEFMETHOD (BUFFERED-INPUT-STREAM :READ-INPUT-BUFFER) (&OPTIONAL EOF-ERROR-P)
   (LOOP UNTIL (AND STREAM-INPUT-BUFFER
 		   (< STREAM-INPUT-INDEX STREAM-INPUT-LIMIT))
-	;Out of input, get some more
-	UNTIL (FUNCALL-SELF ':SETUP-NEXT-INPUT-BUFFER)
-	;Reached end of file
-	RETURN (AND EOF (FERROR 'SYS:END-OF-FILE-1 "End of file on ~S." SELF))
-	;Here we have a non-empty available
+	;; Out of input, get some more
+	UNTIL (SEND SELF :SETUP-NEXT-INPUT-BUFFER)
+	;; Reached end of file
+	RETURN (AND EOF-ERROR-P (FERROR 'SYS:END-OF-FILE-1 "End of file on ~S." SELF))
+	;; Here we have a non-empty available
 	FINALLY (RETURN (VALUES STREAM-INPUT-BUFFER STREAM-INPUT-INDEX STREAM-INPUT-LIMIT))))
 
-(DEFMETHOD (BUFFERED-INPUT-STREAM :STRING-IN) (EOF STRING &OPTIONAL (START 0) END)
+(DEFMETHOD (BUFFERED-INPUT-STREAM :STRING-IN) (EOF-ERROR-P STRING &OPTIONAL (START 0) END)
   (OR END (SETQ END (ARRAY-LENGTH STRING)))
   (LOOP WHILE (< START END)
 	WHILE (LOOP UNTIL (AND STREAM-INPUT-BUFFER
 			       (< STREAM-INPUT-INDEX STREAM-INPUT-LIMIT))
-		    ;Out of input, get some more
-		    UNTIL (FUNCALL-SELF ':SETUP-NEXT-INPUT-BUFFER)
-		    DO (AND EOF (FERROR 'SYS:END-OF-FILE-1 "End of file on ~S." SELF))
+		    ;; Out of input, get some more
+		    UNTIL (SEND SELF :SETUP-NEXT-INPUT-BUFFER)
+		    DO (AND EOF-ERROR-P (FERROR 'SYS:END-OF-FILE-1 "End of file on ~S." SELF))
 		    RETURN NIL
 		    FINALLY (RETURN T))
 	AS AMT = (MIN (- END START) (- STREAM-INPUT-LIMIT STREAM-INPUT-INDEX))
@@ -261,8 +321,9 @@ translation or such."))
 			       (SETQ STREAM-INPUT-INDEX (+ STREAM-INPUT-INDEX AMT))
 			       STRING START (SETQ START (+ START AMT)))
 	FINALLY (AND (ARRAY-HAS-LEADER-P STRING)
-		     (STORE-ARRAY-LEADER START STRING 0))
-		(RETURN (VALUES START (NULL STREAM-INPUT-BUFFER)))))
+		     (SETF (FILL-POINTER STRING) START))
+		(RETURN (VALUES START
+				(NULL STREAM-INPUT-BUFFER)))))
 
 (DEFMETHOD (BUFFERED-INPUT-STREAM :ADVANCE-INPUT-BUFFER) (&OPTIONAL NEW-INDEX)
   (COND (NEW-INDEX
@@ -271,7 +332,7 @@ translation or such."))
 	     (FERROR NIL "New index out of range"))
 	 (SETQ STREAM-INPUT-INDEX NEW-INDEX))
 	(T
-	 (FUNCALL-SELF ':DISCARD-CURRENT-INPUT-BUFFER))))
+	 (SEND SELF :DISCARD-CURRENT-INPUT-BUFFER))))
 
 (DEFFLAVOR BASIC-BUFFERED-OUTPUT-STREAM
 	((STREAM-OUTPUT-BUFFER NIL)
@@ -280,20 +341,20 @@ translation or such."))
 	(OUTPUT-STREAM)
   :GETTABLE-INSTANCE-VARIABLES
   (:REQUIRED-METHODS :NEW-OUTPUT-BUFFER :SEND-OUTPUT-BUFFER :DISCARD-OUTPUT-BUFFER)
-  (:DOCUMENTATION :COMBINATION "Output stream with a buffer.  Only gives a :TYO method.
+  (:DOCUMENTATION "Output stream with a buffer.  Only gives a :TYO method.
 Required methods are :NEW-OUTPUT-BUFFER, which returns three values, an array, starting index,
 and ending index into which characters can be stuffed.  And :SEND-OUTPUT-BUFFER takes the
 array and the ending output index reached, and transmit to the particular device.
 :DISCARD-OUTPUT-BUFFER takes the array and should forget about sending the buffered data."))
 
 (DEFMETHOD (BASIC-BUFFERED-OUTPUT-STREAM :SETUP-NEW-OUTPUT-BUFFER) ()
-  (FUNCALL-SELF ':SEND-CURRENT-OUTPUT-BUFFER)
+  (SEND SELF :SEND-CURRENT-OUTPUT-BUFFER)
   (MULTIPLE-VALUE (STREAM-OUTPUT-BUFFER STREAM-OUTPUT-INDEX STREAM-OUTPUT-LIMIT)
-    (FUNCALL-SELF ':NEW-OUTPUT-BUFFER)))
+    (SEND SELF :NEW-OUTPUT-BUFFER)))
 
 (DEFMETHOD (BASIC-BUFFERED-OUTPUT-STREAM :SEND-CURRENT-OUTPUT-BUFFER) ()
   (COND (STREAM-OUTPUT-BUFFER
-	 (FUNCALL-SELF ':SEND-OUTPUT-BUFFER
+	 (SEND SELF :SEND-OUTPUT-BUFFER
 		       ;; If aborted out of write, prefer losing data to
 		       ;; getting links circular.
 		       (PROG1 STREAM-OUTPUT-BUFFER (SETQ STREAM-OUTPUT-BUFFER NIL))
@@ -301,13 +362,13 @@ array and the ending output index reached, and transmit to the particular device
 
 (DEFMETHOD (BASIC-BUFFERED-OUTPUT-STREAM :DISCARD-CURRENT-OUTPUT-BUFFER) ()
   (AND STREAM-OUTPUT-BUFFER
-       (FUNCALL-SELF ':DISCARD-OUTPUT-BUFFER (PROG1 STREAM-OUTPUT-BUFFER
+       (SEND SELF :DISCARD-OUTPUT-BUFFER (PROG1 STREAM-OUTPUT-BUFFER
 						    (SETQ STREAM-OUTPUT-BUFFER NIL)))))
 
 (DEFMETHOD (BASIC-BUFFERED-OUTPUT-STREAM :TYO) (CH)
   (LOOP UNTIL (AND STREAM-OUTPUT-BUFFER
 		   (< STREAM-OUTPUT-INDEX STREAM-OUTPUT-LIMIT))
-	DO (FUNCALL-SELF ':SETUP-NEW-OUTPUT-BUFFER)
+	DO (SEND SELF :SETUP-NEW-OUTPUT-BUFFER)
 	FINALLY (ASET CH STREAM-OUTPUT-BUFFER STREAM-OUTPUT-INDEX)
 		(INCF STREAM-OUTPUT-INDEX)))
 
@@ -316,24 +377,24 @@ array and the ending output index reached, and transmit to the particular device
 	 (LOOP UNTIL (NOT (< STREAM-OUTPUT-INDEX STREAM-OUTPUT-LIMIT))
 	       DO (PROGN (ASET PAD STREAM-OUTPUT-BUFFER STREAM-OUTPUT-INDEX)
 			 (INCF STREAM-OUTPUT-INDEX))
-	       FINALLY (FUNCALL-SELF ':SEND-CURRENT-OUTPUT-BUFFER)))))
+	       FINALLY (SEND SELF :SEND-CURRENT-OUTPUT-BUFFER)))))
 
 
 (DEFMETHOD (BASIC-BUFFERED-OUTPUT-STREAM :FORCE-OUTPUT) ()
-  (FUNCALL-SELF ':SEND-CURRENT-OUTPUT-BUFFER))
+  (SEND SELF :SEND-CURRENT-OUTPUT-BUFFER))
 
 (DEFMETHOD (BASIC-BUFFERED-OUTPUT-STREAM :BEFORE :CLOSE) (&OPTIONAL ABORTP)
-  (FUNCALL-SELF (IF ABORTP ':DISCARD-CURRENT-OUTPUT-BUFFER
-			   ':SEND-CURRENT-OUTPUT-BUFFER)))
+  (SEND SELF (IF ABORTP :DISCARD-CURRENT-OUTPUT-BUFFER
+	                :SEND-CURRENT-OUTPUT-BUFFER)))
 
 (DEFMETHOD (BASIC-BUFFERED-OUTPUT-STREAM :LAST-CHAR-OUTPUT) ()
   (AND STREAM-OUTPUT-BUFFER
        (PLUSP STREAM-OUTPUT-INDEX)
-       (AREF STREAM-OUTPUT-BUFFER (1- STREAM-OUTPUT-INDEX))))
+       (GLOBAL:AREF STREAM-OUTPUT-BUFFER (1- STREAM-OUTPUT-INDEX))))
 
 (DEFFLAVOR BUFFERED-OUTPUT-STREAM () (BUFFERED-OUTPUT-STREAM-MIXIN
 				      BASIC-BUFFERED-OUTPUT-STREAM)
-  (:DOCUMENTATION :COMBINATION "Buffered output stream with :STRING-OUT.
+  (:DOCUMENTATION "Buffered output stream with :STRING-OUT.
 Should be used for all output streams which do not have wrappers on :TYO to do translation
 or such like."))
 
@@ -344,152 +405,156 @@ or such like."))
   (OR END (SETQ END (ARRAY-ACTIVE-LENGTH STRING)))
   (LOOP WHILE (< START END)
 	UNLESS STREAM-OUTPUT-BUFFER
-	  DO (FUNCALL-SELF ':SETUP-NEW-OUTPUT-BUFFER)
+	  DO (SEND SELF :SETUP-NEW-OUTPUT-BUFFER)
 	AS AMT = (MIN (- END START) (- STREAM-OUTPUT-LIMIT STREAM-OUTPUT-INDEX))
 	DO (COPY-ARRAY-PORTION STRING START (SETQ START (+ START AMT))
 			       STREAM-OUTPUT-BUFFER STREAM-OUTPUT-INDEX
 			       (SETQ STREAM-OUTPUT-INDEX (+ STREAM-OUTPUT-INDEX AMT)))
 	WHEN (< START END)
-	  DO (FUNCALL-SELF ':SEND-CURRENT-OUTPUT-BUFFER)))
+	  DO (SEND SELF :SEND-CURRENT-OUTPUT-BUFFER)))
 
-;; Since this stream has enough knowledge to execute this message intelligently, let it.
-;; Note that this message can't go in BASIC-BUFFERED-OUTPUT-STREAM, because wrappers may
-;; be defined on :TYO messages which would cause it to lose.
+;;; Since this stream has enough knowledge to execute this message intelligently, let it.
+;;; Note that this message can't go in BASIC-BUFFERED-OUTPUT-STREAM, because wrappers may
+;;; be defined on :TYO messages which would cause it to lose.
 (DEFMETHOD (BUFFERED-OUTPUT-STREAM-MIXIN :FRESH-LINE) ()
-  (IF (CHAR-EQUAL #\CR (OR (FUNCALL-SELF ':LAST-CHAR-OUTPUT) 0))
+  (IF (EQ #/NEWLINE (OR (SEND SELF :LAST-CHAR-OUTPUT) 0))
       NIL
-    (FUNCALL-SELF ':TYO #\CR)
+    (SEND SELF :TYO #/NEWLINE)
     T))
+
 
-; LINE input and output
+;;;; LINE input and output
 
-; This comes in two different flavors, depending on whether the stream is buffered
-; or unbuffered
+;;; This comes in two different flavors, depending on whether the stream is buffered
+;;; or unbuffered
 
-(DEFFLAVOR UNBUFFERED-LINE-INPUT-STREAM () (CHARACTER-STREAM INPUT-STREAM)
-  (:DOCUMENTATION :COMBINATION "Input stream with :LINE-IN but no buffering.
-Used with input streams which only support :TYI."))
+(DEFFLAVOR UNBUFFERED-LINE-INPUT-STREAM () (INPUT-CHARACTER-STREAM)
+  (:DOCUMENTATION "Character Input stream with :LINE-IN but no buffering.
+Used with input streams which only support :READ-CHAR."))
 
-(DEFMETHOD (UNBUFFERED-LINE-INPUT-STREAM :STRING-LINE-IN) (EOF STRING &OPTIONAL (START 0) END)
+(DEFMETHOD (UNBUFFERED-LINE-INPUT-STREAM :STRING-LINE-IN) (EOF-ERROR-P STRING
+							   &OPTIONAL (START 0) END)
   (OR END (SETQ END (ARRAY-LENGTH STRING)))
   (LOOP WHILE (< START END)
-	AS CH = (FUNCALL-SELF ':TYI)
-	WHILE (AND CH (NEQ CH #\RETURN))
-	DO (ASET CH STRING (PROG1 START (INCF START)))
+	AS CH = (SEND SELF :READ-CHAR NIL NIL)
+	WHILE (AND CH (NEQ CH #/NEWLINE))
+	DO (SETF (CHAR STRING (PROG1 START (INCF START))) CH)
 	FINALLY (AND (ARRAY-HAS-LEADER-P STRING)
-		     (STORE-ARRAY-LEADER START STRING 0))
-		(AND (NULL CH) EOF (FERROR 'END-OF-FILE-1 "End of file on ~S." SELF))
-		(RETURN (VALUES START (NULL CH) (NEQ CH #\RETURN)))))
+		     (SETF (FILL-POINTER STRING) START))
+		(AND (NULL CH) EOF-ERROR-P (FERROR 'END-OF-FILE-1 "End of file on ~S." SELF))
+		(RETURN (VALUES START
+				(NULL CH)
+				(NEQ CH #/RETURN)))))
 
 (DEFMETHOD (UNBUFFERED-LINE-INPUT-STREAM :LINE-IN) (&OPTIONAL LEADER)
   (LOOP WITH LENGTH-SO-FAR = 0
-	 AND LINE = (MAKE-ARRAY 80 ':TYPE 'ART-STRING
-				   ':LEADER-LENGTH (AND (NUMBERP LEADER) LEADER))
-	 AS CH = (FUNCALL-SELF ':TYI)
+	 AND LINE = (MAKE-STRING #o80 :LEADER-LENGTH (AND (NUMBERP LEADER) LEADER))
+	 AS CH = (SEND SELF :READ-CHAR NIL NIL)
 	 UNTIL (NULL CH)		;i.e. EOF
-	 UNTIL (= CH #\CR)
-	 ;We have an ordinary character, stick it on the end of the line
+	 UNTIL (EQ CH #/NEWLINE)
+	 ;; We have an ordinary character, stick it on the end of the line
 	 WHEN ( LENGTH-SO-FAR (ARRAY-LENGTH LINE))
 	   DO (SETQ LINE (ADJUST-ARRAY-SIZE LINE (FLOOR (* LENGTH-SO-FAR 3) 2)))
-	 DO (ASET CH LINE LENGTH-SO-FAR)
+	 DO (SETF (CHAR LINE LENGTH-SO-FAR) CH)
 	    (INCF LENGTH-SO-FAR)
 	 FINALLY
-	  ;Adjust size and active-length of line
+	  ;; Adjust size and active-length of line
 	  (ADJUST-ARRAY-SIZE LINE LENGTH-SO-FAR)
-	  (IF (ARRAY-HAS-LEADER-P LINE) (STORE-ARRAY-LEADER LENGTH-SO-FAR LINE 0))
+	  (IF (ARRAY-HAS-LEADER-P LINE)
+	      (SETF (FILL-POINTER LINE) LENGTH-SO-FAR))
 	  (RETURN (VALUES LINE (NULL CH)))))
 
 (DEFFLAVOR LINE-OUTPUT-STREAM-MIXIN () ()
   (:REQUIRED-METHODS :STRING-OUT)
-  (:INCLUDED-FLAVORS CHARACTER-STREAM OUTPUT-STREAM)
-  (:DOCUMENTATION :MIXIN "Output stream with :LINE-OUT.
+  (:INCLUDED-FLAVORS OUTPUT-CHARACTER-STREAM)
+  (:DOCUMENTATION "Output character stream with :LINE-OUT.
 Used for buffered and unbuffered streams."))
 
 (DEFMETHOD (LINE-OUTPUT-STREAM-MIXIN :LINE-OUT) (LINE &OPTIONAL (START 0) END)
-  (FUNCALL-SELF ':STRING-OUT LINE START END)
-  (FUNCALL-SELF ':TYO #\CR))
+  (SEND SELF :STRING-OUT LINE START END)
+  (SEND SELF :WRITE-CHAR #/NEWLINE))
 
 
-(DEFFLAVOR BUFFERED-LINE-INPUT-STREAM () (CHARACTER-STREAM BUFFERED-INPUT-STREAM)
-  (:DOCUMENTATION :COMBINATION "Input stream with buffering and :LINE-IN."))
+(DEFFLAVOR BUFFERED-LINE-INPUT-STREAM () (INPUT-CHARACTER-STREAM BUFFERED-INPUT-STREAM)
+  (:DOCUMENTATION "Input character stream with buffering and :LINE-IN."))
 
-(COMMENT
-(DEFMETHOD (BUFFERED-LINE-INPUT-STREAM :LINE-IN) (&OPTIONAL LEADER)
-  (LOOP WITH LENGTH-SO-FAR = 0
-	 AND LINE = (MAKE-ARRAY 80 ':TYPE 'ART-STRING
-				   ':LEADER-LENGTH (AND (NUMBERP LEADER) LEADER))
-	UNLESS (AND STREAM-INPUT-BUFFER
-		    (< STREAM-INPUT-INDEX STREAM-INPUT-LIMIT))
-	  ;Out of buffer, get another one
-	  DO (FUNCALL-SELF ':SETUP-NEXT-INPUT-BUFFER)
-	UNTIL (NULL STREAM-INPUT-BUFFER) 	;i.e. EOF
-	;We have a non-empty buffer, search for CR in it
-	AS CR-IDX = (%STRING-SEARCH-CHAR #\CR STREAM-INPUT-BUFFER STREAM-INPUT-INDEX
-					 STREAM-INPUT-LIMIT)
-	AS AMT = (- (OR CR-IDX STREAM-INPUT-LIMIT) STREAM-INPUT-INDEX)
-	;Nconc this many characters onto the end of the line
-	WHEN (> (+ AMT LENGTH-SO-FAR) (ARRAY-LENGTH LINE))
-	  DO (SETQ LINE (ADJUST-ARRAY-SIZE LINE (+ AMT LENGTH-SO-FAR)))
-	DO (COPY-ARRAY-PORTION STREAM-INPUT-BUFFER STREAM-INPUT-INDEX
-			         (SETQ STREAM-INPUT-INDEX (+ STREAM-INPUT-INDEX AMT))
-			       LINE LENGTH-SO-FAR (SETQ LENGTH-SO-FAR (+ LENGTH-SO-FAR AMT)))
-	UNTIL CR-IDX		;i.e. until we saw a CR
-	FINALLY
-	  ;If we terminated with a CR, advance over it
-	  (IF STREAM-INPUT-BUFFER (INCF STREAM-INPUT-INDEX))
-	  ;Adjust size and active-length of line
-	  (ADJUST-ARRAY-SIZE LINE LENGTH-SO-FAR)
-	  (IF (ARRAY-HAS-LEADER-P LINE) (STORE-ARRAY-LEADER LENGTH-SO-FAR LINE 0))
-	  (RETURN (VALUES LINE (NULL STREAM-INPUT-BUFFER)))))
-);COMMENT
+;(DEFMETHOD (BUFFERED-LINE-INPUT-STREAM :LINE-IN) (&OPTIONAL LEADER)
+;  (LOOP WITH LENGTH-SO-FAR = 0
+;	 AND LINE = (MAKE-ARRAY 80 :TYPE 'ART-STRING
+;				   :LEADER-LENGTH (AND (NUMBERP LEADER) LEADER))
+;	UNLESS (AND STREAM-INPUT-BUFFER
+;		    (< STREAM-INPUT-INDEX STREAM-INPUT-LIMIT))
+;	  ;Out of buffer, get another one
+;	  DO (SEND SELF :SETUP-NEXT-INPUT-BUFFER)
+;	UNTIL (NULL STREAM-INPUT-BUFFER) 	;i.e. EOF
+;	;We have a non-empty buffer, search for CR in it
+;	AS CR-IDX = (%STRING-SEARCH-CHAR #\CR STREAM-INPUT-BUFFER STREAM-INPUT-INDEX
+;					 STREAM-INPUT-LIMIT)
+;	AS AMT = (- (OR CR-IDX STREAM-INPUT-LIMIT) STREAM-INPUT-INDEX)
+;	;Nconc this many characters onto the end of the line
+;	WHEN (> (+ AMT LENGTH-SO-FAR) (ARRAY-LENGTH LINE))
+;	  DO (SETQ LINE (ADJUST-ARRAY-SIZE LINE (+ AMT LENGTH-SO-FAR)))
+;	DO (COPY-ARRAY-PORTION STREAM-INPUT-BUFFER STREAM-INPUT-INDEX
+;			         (SETQ STREAM-INPUT-INDEX (+ STREAM-INPUT-INDEX AMT))
+;			       LINE LENGTH-SO-FAR (SETQ LENGTH-SO-FAR (+ LENGTH-SO-FAR AMT)))
+;	UNTIL CR-IDX		;i.e. until we saw a CR
+;	FINALLY
+;	  ;If we terminated with a CR, advance over it
+;	  (IF STREAM-INPUT-BUFFER (INCF STREAM-INPUT-INDEX))
+;	  ;Adjust size and active-length of line
+;	  (ADJUST-ARRAY-SIZE LINE LENGTH-SO-FAR)
+;	  (IF (ARRAY-HAS-LEADER-P LINE) (STORE-ARRAY-LEADER LENGTH-SO-FAR LINE 0))
+;	  (RETURN (VALUES LINE (NULL STREAM-INPUT-BUFFER)))))
 
 (DEFMETHOD (BUFFERED-LINE-INPUT-STREAM :STRING-LINE-IN) (EOF STRING &OPTIONAL (START 0) END)
   (OR END (SETQ END (ARRAY-LENGTH STRING)))
   (LOOP WHILE (< START END)
 	WHILE (LOOP UNTIL (AND STREAM-INPUT-BUFFER
 			       (< STREAM-INPUT-INDEX STREAM-INPUT-LIMIT))
-		    ;Out of input, get some more
-		    UNTIL (FUNCALL-SELF ':SETUP-NEXT-INPUT-BUFFER)
+		    ;; Out of input, get some more
+		    UNTIL (SEND SELF :SETUP-NEXT-INPUT-BUFFER)
 		    DO (AND EOF (FERROR 'SYS:END-OF-FILE-1 "End of file on ~S." SELF))
 		    RETURN NIL
 		    FINALLY (RETURN T))
-	AS LINE-END-INDEX = (%STRING-SEARCH-CHAR #\RETURN STREAM-INPUT-BUFFER
+	AS LINE-END-INDEX = (%STRING-SEARCH-CHAR #/RETURN STREAM-INPUT-BUFFER
 						 STREAM-INPUT-INDEX STREAM-INPUT-LIMIT)
 	AS AMT = (MIN (- END START)
 		      (- (OR LINE-END-INDEX STREAM-INPUT-LIMIT) STREAM-INPUT-INDEX))
 	DO (COPY-ARRAY-PORTION STREAM-INPUT-BUFFER STREAM-INPUT-INDEX
-			       (SETQ STREAM-INPUT-INDEX (+ STREAM-INPUT-INDEX AMT))
-			       STRING START (SETQ START (+ START AMT)))
+			       (INCF STREAM-INPUT-INDEX AMT)
+			       STRING START (INCF START AMT))
 	   (WHEN (EQ STREAM-INPUT-INDEX LINE-END-INDEX)
 	     (INCF STREAM-INPUT-INDEX)
 	     (RETURN (VALUES START NIL NIL)))
 	FINALLY (AND (ARRAY-HAS-LEADER-P STRING)
-		     (STORE-ARRAY-LEADER START STRING 0))
-		(RETURN (VALUES START (NULL STREAM-INPUT-BUFFER) T))))
+		     (SETF (FILL-POINTER STRING) START))
+		(RETURN (VALUES START
+				(NULL STREAM-INPUT-BUFFER)
+				T))))
 
 (DEFMETHOD (BUFFERED-LINE-INPUT-STREAM :LINE-IN) (&OPTIONAL LEADER)
-  (LOOP NAMED LINE-IN
-	;; STRING is not made until needed to avoid calling ADJUST-ARRAY-SIZE except when
-	;; strings cross buffer boundaries.
-	WITH STRING = NIL
-	AND STRING-INDEX = 0
-	DO (LOOP UNTIL (AND STREAM-INPUT-BUFFER
-			    (< STREAM-INPUT-INDEX STREAM-INPUT-LIMIT))
-		 ;Out of input, get some more
-		 UNTIL (FUNCALL-SELF ':SETUP-NEXT-INPUT-BUFFER)
-		 ;EOF if none that way
-		 WHEN (NULL STRING)
-		   DO (SETQ STRING (MAKE-ARRAY STRING-INDEX
-					       ':TYPE 'ART-STRING
-					       ':LEADER-LENGTH (AND (NUMBERP LEADER) LEADER)))
-		 WHEN (NUMBERP LEADER)
-		   DO (STORE-ARRAY-LEADER STRING-INDEX STRING 0)
-		 DO (RETURN-FROM LINE-IN (VALUES STRING T)))
-	;; Now see if this buffer has a CR, and copy out the appropriate amount
-	AS CR-INDEX = (%STRING-SEARCH-CHAR #\CR STREAM-INPUT-BUFFER STREAM-INPUT-INDEX
-					   STREAM-INPUT-LIMIT)
-	WITH NEW-STRING-INDEX AND NEW-BUFFER-INDEX
-	WHEN (NOT (NULL CR-INDEX))
+  (BLOCK LINE-IN
+    (LOOP
+      ;; STRING is not made until needed to avoid calling ADJUST-ARRAY-SIZE except when
+      ;; strings cross buffer boundaries.
+      WITH STRING = NIL
+      AND STRING-INDEX = 0
+      DO (LOOP UNTIL (AND STREAM-INPUT-BUFFER
+			  (< STREAM-INPUT-INDEX STREAM-INPUT-LIMIT))
+	       ;Out of input, get some more
+	       UNTIL (SEND SELF :SETUP-NEXT-INPUT-BUFFER)
+	       ;EOF if none that way
+	       WHEN (NULL STRING)
+	       DO (SETQ STRING (MAKE-STRING STRING-INDEX
+					    :LEADER-LENGTH (AND (NUMBERP LEADER) LEADER)))
+	       WHEN (NUMBERP LEADER)
+	         DO (SETF (FILL-POINTER STRING) STRING-INDEX)
+	       DO (RETURN-FROM LINE-IN (VALUES STRING T)))
+      ;; Now see if this buffer has a CR, and copy out the appropriate amount
+      AS CR-INDEX = (%STRING-SEARCH-CHAR #/NEWLINE STREAM-INPUT-BUFFER STREAM-INPUT-INDEX
+					 STREAM-INPUT-LIMIT)
+      WITH NEW-STRING-INDEX AND NEW-BUFFER-INDEX
+      WHEN (NOT (NULL CR-INDEX))
 ;	  WHEN (AND (NULL STRING) (NULL LEADER))
 ;	    DO (SETQ STRING (LET ((ARRAY STREAM-INPUT-BUFFER)
 ;				  (OFFSET STREAM-INPUT-INDEX))
@@ -497,39 +562,39 @@ Used for buffered and unbuffered streams."))
 ;				   (SETQ OFFSET (+ OFFSET (%P-CONTENTS-OFFSET ARRAY 3))
 ;					 ARRAY (%P-CONTENTS-OFFSET ARRAY 1)))
 ;			      (MAKE-ARRAY (- CR-INDEX STREAM-INPUT-INDEX)
-;					  ':TYPE 'ART-STRING
-;					  ':DISPLACED-TO ARRAY
-;					  ':DISPLACED-INDEX-OFFSET OFFSET))
+;					  :TYPE 'ART-STRING
+;					  :DISPLACED-TO ARRAY
+;					  :DISPLACED-INDEX-OFFSET OFFSET))
 ;		     STREAM-INPUT-INDEX (1+ CR-INDEX))
 ;	       (RETURN (VALUES STRING NIL))
 ;	  ELSE
-	  DO (SETQ NEW-BUFFER-INDEX (1+ CR-INDEX)
-		   NEW-STRING-INDEX (+ STRING-INDEX (- CR-INDEX STREAM-INPUT-INDEX)))
+        DO (SETQ NEW-BUFFER-INDEX (1+ CR-INDEX)
+		 NEW-STRING-INDEX (+ STRING-INDEX (- CR-INDEX STREAM-INPUT-INDEX)))
 	ELSE DO (SETQ NEW-BUFFER-INDEX STREAM-INPUT-LIMIT
 		      NEW-STRING-INDEX (+ STRING-INDEX
 					  (- STREAM-INPUT-LIMIT STREAM-INPUT-INDEX)))
 	WHEN (NULL STRING)
-	;;Make a string to return or save the end of this packet in.
-	  DO (SETQ STRING (MAKE-ARRAY NEW-STRING-INDEX
-				      ':TYPE 'ART-STRING
-				      ':LEADER-LENGTH (AND (NUMBERP LEADER) LEADER)))
-	;;Was some stuff from previous packet, make room.
-	ELSE DO (ADJUST-ARRAY-SIZE STRING NEW-STRING-INDEX)
+	  ;;Make a string to return or save the end of this packet in.
+	  DO (SETQ STRING (MAKE-STRING NEW-STRING-INDEX
+				       :LEADER-LENGTH (AND (NUMBERP LEADER) LEADER)))
+	  ;;Was some stuff from previous packet, make room.
+	  ELSE DO (ADJUST-ARRAY-SIZE STRING NEW-STRING-INDEX)
 	DO (COPY-ARRAY-PORTION STREAM-INPUT-BUFFER STREAM-INPUT-INDEX NEW-BUFFER-INDEX
 			       STRING STRING-INDEX NEW-STRING-INDEX)
 	   (SETQ STREAM-INPUT-INDEX NEW-BUFFER-INDEX
 		 STRING-INDEX NEW-STRING-INDEX)
-	WHEN (NOT (NULL CR-INDEX))	;This buffer is enough to satisfy
-	DO (AND (NUMBERP LEADER) (STORE-ARRAY-LEADER STRING-INDEX STRING 0))
-	   (RETURN (VALUES STRING NIL))))
+	WHEN (NOT (NULL CR-INDEX))		;This buffer is enough to satisfy
+	DO (AND (NUMBERP LEADER) (SETF (FILL-POINTER STRING) STRING-INDEX))
+	   (RETURN (VALUES STRING NIL)))))
 
 
-;;; Less basic stream flavors
+;;;; Less basic stream flavors
 (DEFFLAVOR ASCII-TRANSLATING-INPUT-STREAM-MIXIN
 	() ()
   (:REQUIRED-METHODS :TYI)
-  (:INCLUDED-FLAVORS INPUT-STREAM)
-  (:DOCUMENTATION :MIXIN "An input stream that translates characters from ASCII into lisp machine character set for :TYI method."))
+  (:INCLUDED-FLAVORS INPUT-CHARACTER-STREAM)
+  (:DOCUMENTATION "A character input stream that translates characters from ASCII
+into lisp machine character set for :TYI method."))
 
 (DEFWRAPPER (ASCII-TRANSLATING-INPUT-STREAM-MIXIN :TYI) (IGNORE . BODY)
   `(PROGN
@@ -540,23 +605,23 @@ Used for buffered and unbuffered streams."))
 				. ,BODY))))
 
 (DEFUN TYI-FROM-ASCII-STREAM (ASCII-STREAM &AUX CH)
-  (SELECTQ (SETQ CH (FUNCALL ASCII-STREAM ':TYI))
-    (10 #\BS)
-    (11 #\TAB)
-    (12 #\LINE)
-    (14 #\FF)
-    (15
-     (LET ((CH1 (FUNCALL ASCII-STREAM ':TYI)))
-       (OR (= CH1 12) (FUNCALL ASCII-STREAM ':UNTYI CH1)))
-     #\CR)
-    (177 #\RUBOUT)
+  (CASE (SETQ CH (SEND ASCII-STREAM :TYI))
+    (#o10 #/BS)
+    (#o11 #/TAB)
+    (#o12 #/LINE)
+    (#o14 #/FF)
+    (#o15 (LET ((CH1 (SEND ASCII-STREAM :TYI)))
+	    (OR (= CH1 #o12) (SEND ASCII-STREAM :UNTYI CH1)))
+	  #/NEWLINE)
+    (#o177 #/RUBOUT)
     (T CH)))
 
 (DEFFLAVOR ASCII-TRANSLATING-OUTPUT-STREAM-MIXIN
 	() ()
   (:REQUIRED-METHODS :TYO)
-  (:INCLUDED-FLAVORS OUTPUT-STREAM)
-  (:DOCUMENTATION :MIXIN "An output stream that translates characters from lisp machine character set into ASCII for :TYO method."))
+  (:INCLUDED-FLAVORS OUTPUT-CHARACTER-STREAM)
+  (:DOCUMENTATION "A character output stream that translates characters from
+the lisp machine character set into ASCII for the :TYO method."))
 
 (DEFWRAPPER (ASCII-TRANSLATING-OUTPUT-STREAM-MIXIN :TYO) ((CH) . BODY)
   `(TYO-TO-ASCII-STREAM #'(LAMBDA (&REST .DAEMON-CALLER-ARGS.
@@ -566,17 +631,16 @@ Used for buffered and unbuffered streams."))
 			CH))
 
 (DEFUN TYO-TO-ASCII-STREAM (ASCII-STREAM CH)
-  (FUNCALL ASCII-STREAM ':TYO
-	   (SELECTQ CH
-	     (#\BS 10)
-	     (#\TAB 11)
-	     (#\LINE 12)
-	     (#\FF 14)
-	     (#\CR
-	      (FUNCALL ASCII-STREAM ':TYO 15)
-	      12)
-	     (#\RUBOUT 177)
-	     (T CH))))
+  (SEND ASCII-STREAM :TYO
+	(CASE CH
+	  (#/BS #o10)
+	  (#/TAB #o11)
+	  (#/LINE #o12)
+	  (#/FF #o14)
+	  (#/NEWLINE (SEND ASCII-STREAM :TYO #o15)
+		     #o12)
+	  (#/RUBOUT #o177)
+	  (T CH))))
 
 (DEFFLAVOR INPUT-POINTER-REMEMBERING-MIXIN
 	((INPUT-POINTER-BASE 0)
@@ -587,15 +651,14 @@ Used for buffered and unbuffered streams."))
   ;; It should return the real position set and arrange for the next :NEXT-INPUT-BUFFER
   ;; to contain the desired position in it someplace.
   (:REQUIRED-METHODS :SET-BUFFER-POINTER)
-  (:DOCUMENTATION :MIXIN "Buffered input stream with :SET-POINTER and :READ-POINTER methods."
-		  ))
+  (:DOCUMENTATION "Buffered input stream with :SET-POINTER and :READ-POINTER methods."))
 
 (DEFMETHOD (INPUT-POINTER-REMEMBERING-MIXIN :SET-BUFFER-POINTER) (NEW-POINTER)
   (FERROR NIL "Cannot set pointer on ~S to ~D" SELF NEW-POINTER))
 
 ;;; Obsolete shorthand message, but in the manual, so keep for a while.
 (DEFMETHOD (INPUT-POINTER-REMEMBERING-MIXIN :REWIND) ()
-  (FUNCALL-SELF ':SET-POINTER 0))
+  (SEND SELF :SET-POINTER 0))
 
 (DEFMETHOD (INPUT-POINTER-REMEMBERING-MIXIN :SET-POINTER) (NEW-POINTER)
   (LOOP AS NEW-RELATIVE-POINTER = (+ (- NEW-POINTER INPUT-POINTER-BASE)
@@ -606,9 +669,9 @@ Used for buffered and unbuffered streams."))
 		  (AND ( NEW-RELATIVE-POINTER STREAM-INPUT-LOWER-LIMIT)
 		       (< NEW-RELATIVE-POINTER STREAM-INPUT-LIMIT))
 		  (= NEW-RELATIVE-POINTER STREAM-INPUT-LOWER-LIMIT))
-	DO (FUNCALL-SELF ':DISCARD-CURRENT-INPUT-BUFFER)
-	   (SETQ INPUT-POINTER-BASE (FUNCALL-SELF ':SET-BUFFER-POINTER NEW-POINTER))
-	   (FUNCALL-SELF ':SETUP-NEXT-INPUT-BUFFER)
+	DO (SEND SELF :DISCARD-CURRENT-INPUT-BUFFER)
+	   (SETQ INPUT-POINTER-BASE (SEND SELF :SET-BUFFER-POINTER NEW-POINTER))
+	   (SEND SELF :SETUP-NEXT-INPUT-BUFFER)
 	FINALLY (SETQ STREAM-INPUT-INDEX NEW-RELATIVE-POINTER)))
 
 (DEFMETHOD (INPUT-POINTER-REMEMBERING-MIXIN :BEFORE :DISCARD-INPUT-BUFFER) (IGNORE)
@@ -631,7 +694,7 @@ Used for buffered and unbuffered streams."))
 	()
   (:SETTABLE-INSTANCE-VARIABLES OUTPUT-POINTER-BASE)
   (:INCLUDED-FLAVORS BASIC-BUFFERED-OUTPUT-STREAM)
-  (:DOCUMENTATION :MIXIN "Buffered output stream with :READ-POINTER method."))
+  (:DOCUMENTATION "Buffered output stream with :READ-POINTER method."))
 
 (DEFMETHOD (OUTPUT-POINTER-REMEMBERING-MIXIN :BEFORE :SEND-OUTPUT-BUFFER) (IGNORE IGNORE)
   (INCF OUTPUT-POINTER-BASE (- STREAM-OUTPUT-INDEX STREAM-OUTPUT-LOWER-LIMIT))
@@ -645,10 +708,10 @@ Used for buffered and unbuffered streams."))
 			    (- STREAM-OUTPUT-INDEX STREAM-OUTPUT-LOWER-LIMIT)
 			    0)))
 
-;We send a :GET-OLD-DATA (args are buffer and ending index) if it is
-;necessary to fill the beginning of the output buffer with the current
-;contents of the file in order to avoid clobbering data that we are
-;supposed to be skipping over.
+;;; We send a :GET-OLD-DATA (args are buffer and ending index) if it is
+;;; necessary to fill the beginning of the output buffer with the current
+;;; contents of the file in order to avoid clobbering data that we are
+;;; supposed to be skipping over.
 (DEFMETHOD (OUTPUT-POINTER-REMEMBERING-MIXIN :SET-POINTER) (NEW-POINTER)
   (DO ((BUFFER-RELOADED NIL T)) (())
     (LET ((NEW-RELATIVE-POINTER (+ (- NEW-POINTER OUTPUT-POINTER-BASE)
@@ -660,83 +723,86 @@ Used for buffered and unbuffered streams."))
 	    (= NEW-RELATIVE-POINTER STREAM-OUTPUT-LOWER-LIMIT))
 	  (PROGN (SETQ STREAM-OUTPUT-INDEX NEW-RELATIVE-POINTER)
 		 (AND BUFFER-RELOADED
-		      (FUNCALL-SELF ':GET-OLD-DATA
+		      (SEND SELF :GET-OLD-DATA
 				    STREAM-OUTPUT-BUFFER STREAM-OUTPUT-LOWER-LIMIT))
 		 (RETURN (+ OUTPUT-POINTER-BASE
 			    (IF STREAM-OUTPUT-INDEX
 				(- STREAM-OUTPUT-INDEX STREAM-OUTPUT-LOWER-LIMIT)
 			      0)))))
       ;; No, get another buffer after specifying where in the file we want.
-      (FUNCALL-SELF ':SEND-CURRENT-OUTPUT-BUFFER)
+      (SEND SELF :SEND-CURRENT-OUTPUT-BUFFER)
       (SETQ OUTPUT-POINTER-BASE
-	    (FUNCALL-SELF ':SET-BUFFER-POINTER NEW-POINTER))
-      (FUNCALL-SELF ':SETUP-NEW-OUTPUT-BUFFER))))
+	    (SEND SELF :SET-BUFFER-POINTER NEW-POINTER))
+      (SEND SELF :SETUP-NEW-OUTPUT-BUFFER))))
 
 (DEFMETHOD (OUTPUT-POINTER-REMEMBERING-MIXIN :DEFAULT :GET-OLD-DATA)
 	   (BUFFER-ARRAY OUTPUT-LOWER-LIMIT)
   BUFFER-ARRAY OUTPUT-LOWER-LIMIT
   NIL)  
+
 
 ;;; Some useful combinations
 (DEFFLAVOR BUFFERED-INPUT-CHARACTER-STREAM ()
 	   (INPUT-POINTER-REMEMBERING-MIXIN BUFFERED-LINE-INPUT-STREAM)
-  (:DOCUMENTATION :COMBINATION "A buffered input character stream, gives :LINE-IN."))
+  (:DOCUMENTATION "A buffered input character stream, gives :LINE-IN."))
 
 (DEFFLAVOR BUFFERED-OUTPUT-CHARACTER-STREAM ()
 	   (LINE-OUTPUT-STREAM-MIXIN CHARACTER-STREAM BUFFERED-OUTPUT-STREAM)
-  (:DOCUMENTATION :COMBINATION "A buffered output character stream, gives :LINE-OUT."))
+  (:DOCUMENTATION "A buffered output character stream, gives :LINE-OUT."))
 
 (DEFFLAVOR BUFFERED-CHARACTER-STREAM ()
 	   (BIDIRECTIONAL-STREAM INPUT-POINTER-REMEMBERING-MIXIN BUFFERED-LINE-INPUT-STREAM
 	    LINE-OUTPUT-STREAM-MIXIN BUFFERED-OUTPUT-STREAM)
-  (:DOCUMENTATION :COMBINATION "A bidrection character stream, :LINE-IN and :LINE-OUT."))
+  (:DOCUMENTATION "A bidrection character stream, :LINE-IN and :LINE-OUT."))
 
 (DEFFLAVOR BUFFERED-STREAM ()
 	   (BIDIRECTIONAL-STREAM BUFFERED-INPUT-STREAM BUFFERED-OUTPUT-STREAM)
-  (:DOCUMENTATION :COMBINATION "A bidirection buffered stream."))
+  (:DOCUMENTATION "A bidirection buffered stream."))
 
 (DEFFLAVOR BUFFERED-TYI-INPUT-STREAM ()
 	   (INPUT-POINTER-REMEMBERING-MIXIN UNBUFFERED-LINE-INPUT-STREAM
 	    BASIC-BUFFERED-INPUT-STREAM)
-  (:DOCUMENTATION :COMBINATION "A buffered character input stream for use with :TYI wrappers."))
+  (:DOCUMENTATION "A buffered character input stream for use with :TYI wrappers."))
 
 (DEFFLAVOR BUFFERED-TYO-OUTPUT-STREAM ()
 	   (LINE-OUTPUT-STREAM-MIXIN CHARACTER-STREAM BASIC-BUFFERED-OUTPUT-STREAM)
-  (:DOCUMENTATION :COMBINATION "A buffered character output stream for use with :TYO wrappers."))
+  (:DOCUMENTATION "A buffered character output stream for use with :TYO wrappers."))
 
 (DEFFLAVOR BUFFERED-TYI-TYO-STREAM ()
 	   (BIDIRECTIONAL-STREAM INPUT-POINTER-REMEMBERING-MIXIN UNBUFFERED-LINE-INPUT-STREAM
 	    BASIC-BUFFERED-INPUT-STREAM LINE-OUTPUT-STREAM-MIXIN BASIC-BUFFERED-OUTPUT-STREAM)
-  (:DOCUMENTATION :COMBINATION "A bidirectional buffered character stream, for use with :TYI and :TYO wrappers."))
+  (:DOCUMENTATION "A bidirectional buffered character stream, for use with
+:TYI and :TYO wrappers."))
+
 
-;;; Flavors for use with file computers
+;;;; Flavors for use with file computers
 
 ;;; For use with :PROBE OPEN calls
 (DEFFLAVOR FILE-STREAM-MIXIN
 	(PATHNAME)
 	()
   (:INCLUDED-FLAVORS STREAM)
-  (:REQUIRED-METHODS :TRUENAME :PLIST)
+  (:REQUIRED-METHODS :TRUENAME :PROPERTY-LIST)
   (:INITABLE-INSTANCE-VARIABLES PATHNAME)
   (:GETTABLE-INSTANCE-VARIABLES PATHNAME)
-  (:DOCUMENTATION :MIXIN "Streams for use with file computers, as returned by OPEN."))
+  (:DOCUMENTATION "Streams for use with file computers, as returned by OPEN."))
 
 (DEFMETHOD (FILE-STREAM-MIXIN :PRINT-SELF) (STREAM IGNORE IGNORE)
-  (SI:PRINTING-RANDOM-OBJECT (SELF STREAM :TYPEP)
+  (SYS:PRINTING-RANDOM-OBJECT (SELF STREAM :TYPE)
     (PRIN1 (STRING PATHNAME) STREAM)))
 
 (DEFMETHOD (FILE-STREAM-MIXIN :GET) (INDICATOR)
-  (LET ((PLIST (FUNCALL-SELF ':PLIST)))
-    (GET (LOCF PLIST) INDICATOR)))
+  (LET ((PLIST (SEND SELF :PROPERTY-LIST)))
+    (GETF PLIST INDICATOR)))
 
 (DEFMETHOD (FILE-STREAM-MIXIN :CREATION-DATE) ()
-  (FUNCALL-SELF ':GET ':CREATION-DATE))
+  (SEND SELF :GET :CREATION-DATE))
 
 (DEFMETHOD (FILE-STREAM-MIXIN :INFO) ()
-  (CONS (FUNCALL-SELF ':TRUENAME) (FUNCALL-SELF ':CREATION-DATE)))
+  (CONS (SEND SELF :TRUENAME) (SEND SELF :CREATION-DATE)))
 
 (DEFMETHOD (FILE-STREAM-MIXIN :GENERIC-PATHNAME) ()
-  (FUNCALL PATHNAME ':GENERIC-PATHNAME))
+  (SEND PATHNAME :GENERIC-PATHNAME))
 
 ;;; For use with :READ and :WRITE OPEN calls
 (DEFFLAVOR FILE-DATA-STREAM-MIXIN
@@ -744,42 +810,43 @@ Used for buffered and unbuffered streams."))
 	(FILE-STREAM-MIXIN)
   (:INCLUDED-FLAVORS STREAM)
   (:REQUIRED-METHODS :READ-POINTER :LENGTH :QFASLP)
-  (:DOCUMENTATION :MIXIN "Streams which can actually do file I/O."))
+  (:DOCUMENTATION "Streams which can actually do file I/O."))
 
 (DEFMETHOD (FILE-DATA-STREAM-MIXIN :AFTER :INIT) (IGNORE)
-  (FUNCALL TV:WHO-LINE-FILE-STATE-SHEET ':ADD-STREAM SELF))
+  (SEND TV:WHO-LINE-FILE-STATE-SHEET :ADD-STREAM SELF))
 
 (DEFMETHOD (FILE-DATA-STREAM-MIXIN :AFTER :CLOSE) (&OPTIONAL IGNORE)
-  (FUNCALL TV:WHO-LINE-FILE-STATE-SHEET ':DELETE-STREAM SELF))
+  (SEND TV:WHO-LINE-FILE-STATE-SHEET :DELETE-STREAM SELF))
 
 (DEFMETHOD (FILE-DATA-STREAM-MIXIN :WHO-LINE-INFORMATION)
 	   (&AUX COUNT LENGTH PERCENT DIRECTION)
-  (SETQ COUNT (FUNCALL-SELF ':READ-POINTER))
-  (SETQ DIRECTION (FUNCALL-SELF ':DIRECTION))
-  (AND (SETQ LENGTH (FUNCALL-SELF ':LENGTH))
+  (SETQ COUNT (SEND SELF :READ-POINTER))
+  (SETQ DIRECTION (SEND SELF :DIRECTION))
+  (AND (SETQ LENGTH (SEND SELF :LENGTH))
        (NOT (ZEROP LENGTH))
        (SETQ PERCENT (ROUND (* 100. COUNT) LENGTH)))
-  (LET ((MAYBE-NAME (FUNCALL-SELF ':TRUENAME)))
+  (LET ((MAYBE-NAME (SEND SELF :TRUENAME)))
     ;; directory streams (and maybe others) don't have truenames; show
     ;; their pathnames instead.
-    (IF (NULL MAYBE-NAME) (SETQ MAYBE-NAME (FUNCALL-SELF ':PATHNAME)))
+    (IF (NULL MAYBE-NAME) (SETQ MAYBE-NAME (SEND SELF :PATHNAME)))
     (VALUES MAYBE-NAME DIRECTION COUNT PERCENT)))
 
 (DEFFLAVOR INPUT-FILE-STREAM-MIXIN
 	()
 	(FILE-DATA-STREAM-MIXIN)
   (:INCLUDED-FLAVORS INPUT-POINTER-REMEMBERING-MIXIN)
-  (:DOCUMENTATION :MIXIN "Streams for use with input files."))
+  (:DOCUMENTATION "Streams for use with input files."))
 
 (DEFFLAVOR OUTPUT-FILE-STREAM-MIXIN
 	()
 	(FILE-DATA-STREAM-MIXIN)
   (:INCLUDED-FLAVORS OUTPUT-POINTER-REMEMBERING-MIXIN)
-  (:DOCUMENTATION :MIXIN "Streams for use with output files."))
+  (:DOCUMENTATION "Streams for use with output files."))
 
 (DEFMETHOD (OUTPUT-FILE-STREAM-MIXIN :LENGTH) () NIL)
+
 
-(DEFSTRUCT (INDENTING-STREAM)
+(DEFSTRUCT (INDENTING-STREAM (:ALTERANT ()))
   INDENTING-STREAM-BASE-STREAM
   INDENTING-STREAM-INDENTATION
   INDENTING-STREAM-BEGINNING-OF-LINE?)
@@ -790,30 +857,30 @@ If STREAM is already an indenting stream, it is returned unchanged.
 The indenting stream inserts a specified indentation before each line.
 It supports the :SET-INDENTATION and :INDENT-RELATIVE operations
 to specify the amount of indentation."
-  (IF (FUNCALL STREAM ':OPERATION-HANDLED-P ':INDENT-RELATIVE)
+  (IF (SEND STREAM :OPERATION-HANDLED-P :INDENT-RELATIVE)
       STREAM
     (LET-CLOSED ((*SELF (MAKE-INDENTING-STREAM
-			  INDENTING-STREAM-BASE-STREAM STREAM
-			  INDENTING-STREAM-INDENTATION 0
-			  INDENTING-STREAM-BEGINNING-OF-LINE? NIL)))
+			  :INDENTING-STREAM-BASE-STREAM STREAM
+			  :INDENTING-STREAM-INDENTATION 0
+			  :INDENTING-STREAM-BEGINNING-OF-LINE? NIL)))
       #'(LAMBDA (&REST STUFF)
-	  (LEXPR-FUNCALL #'INDENTING-STREAM-INTERFACE *SELF STUFF)))))
+	  (APPLY #'INDENTING-STREAM-INTERFACE *SELF STUFF)))))
 
 (DEFUN INDENTING-STREAM-INTERFACE (SELF MESSAGE &REST ARGS)
   (LET ((HANDLER (AND (SYMBOLP MESSAGE)
 		      (GET MESSAGE 'INDENTING-STREAM-OPERATIONS))))
     (IF (NULL HANDLER)
-	(LEXPR-FUNCALL (INDENTING-STREAM-BASE-STREAM SELF) MESSAGE ARGS)
+	(APPLY (INDENTING-STREAM-BASE-STREAM SELF) MESSAGE ARGS)
 	(FUNCALL HANDLER SELF ARGS))))
 
 (DEFUN INDENTING-STREAM-WHICH-OPERATIONS (SELF)
   (LET ((MY-OPS NIL)
-	(BASE-OPS (FUNCALL (INDENTING-STREAM-BASE-STREAM SELF) ':WHICH-OPERATIONS)))
+	(BASE-OPS (SEND (INDENTING-STREAM-BASE-STREAM SELF) :WHICH-OPERATIONS)))
     (SETQ MY-OPS
 	  (LIST* NIL
-		 ':WHICH-OPERATIONS ':OPERATION-HANDLED-P ':SEND-IF-HANDLES
-		 ':SET-INDENTATION ':INDENT-RELATIVE
-		 ':TYO ':STRING-OUT ':FRESH-LINE
+		 :WHICH-OPERATIONS :OPERATION-HANDLED-P :SEND-IF-HANDLES
+		 :SET-INDENTATION :INDENT-RELATIVE
+		 :TYO :STRING-OUT :FRESH-LINE
 		 BASE-OPS))
     (DO ((TAIL MY-OPS (CDR TAIL)))
 	((EQ (CDR TAIL) BASE-OPS)
@@ -824,43 +891,42 @@ to specify the amount of indentation."
 		 (RETURN (CDR MY-OPS))))))))
 
 (DEFUN INDENTING-STREAM-INDENT (SELF)
-  (IF (FUNCALL (INDENTING-STREAM-BASE-STREAM SELF)
-	       ':OPERATION-HANDLED-P ':INCREMENT-CURSORPOS)
-      (FUNCALL (INDENTING-STREAM-BASE-STREAM SELF)
-	       ':INCREMENT-CURSORPOS
-	       (INDENTING-STREAM-INDENTATION SELF)
-	       0 ':CHARACTER)
-      (DOTIMES (I (INDENTING-STREAM-INDENTATION SELF))
-	(FUNCALL (INDENTING-STREAM-BASE-STREAM SELF) ':TYO #\SPACE))))
+  (IF (SEND (INDENTING-STREAM-BASE-STREAM SELF) :OPERATION-HANDLED-P :INCREMENT-CURSORPOS)
+      (SEND (INDENTING-STREAM-BASE-STREAM SELF) :INCREMENT-CURSORPOS
+	    					(INDENTING-STREAM-INDENTATION SELF)
+						0 :CHARACTER)
+    (DOTIMES (I (INDENTING-STREAM-INDENTATION SELF))
+      (SEND (INDENTING-STREAM-BASE-STREAM SELF) :TYO #/SPACE))))
+
 
-(DEFUN (:WHICH-OPERATIONS INDENTING-STREAM-OPERATIONS) (SELF IGNORE)
+(DEFUN (:PROPERTY :WHICH-OPERATIONS INDENTING-STREAM-OPERATIONS) (SELF IGNORE)
   (INDENTING-STREAM-WHICH-OPERATIONS SELF))
 
-(DEFUN (:OPERATION-HANDLED-P INDENTING-STREAM-OPERATIONS) (SELF ARGS)
+(DEFUN (:PROPERTY :OPERATION-HANDLED-P INDENTING-STREAM-OPERATIONS) (SELF ARGS)
   (MEMQ (CAR ARGS) (INDENTING-STREAM-WHICH-OPERATIONS SELF)))
 
-(DEFUN (:SEND-IF-HANDLES INDENTING-STREAM-OPERATIONS) (SELF ARGS)
+(DEFUN (:PROPERTY :SEND-IF-HANDLES INDENTING-STREAM-OPERATIONS) (SELF ARGS)
   (IF (MEMQ (CAR ARGS) (INDENTING-STREAM-WHICH-OPERATIONS SELF))
-      (LEXPR-FUNCALL SELF (CAR ARGS) (CDR ARGS))
-      NIL))
+      (LEXPR-SEND SELF (CAR ARGS) (CDR ARGS))
+    NIL))
 
-(DEFUN (:SET-INDENTATION INDENTING-STREAM-OPERATIONS) (SELF ARGS)
+(DEFUN (:PROPERTY :SET-INDENTATION INDENTING-STREAM-OPERATIONS) (SELF ARGS)
   (SETF (INDENTING-STREAM-BEGINNING-OF-LINE? SELF) NIL)
   (SETF (INDENTING-STREAM-INDENTATION SELF) (CAR ARGS)))
 
-(DEFUN (:INDENT-RELATIVE INDENTING-STREAM-OPERATIONS) (SELF ARGS)
+(DEFUN (:PROPERTY :INDENT-RELATIVE INDENTING-STREAM-OPERATIONS) (SELF ARGS)
   (SETF (INDENTING-STREAM-BEGINNING-OF-LINE? SELF) NIL)
   (INCF (INDENTING-STREAM-INDENTATION SELF) (CAR ARGS)))
 
-(DEFUN (:TYO INDENTING-STREAM-OPERATIONS) (SELF ARGS)
-  (LEXPR-FUNCALL (INDENTING-STREAM-BASE-STREAM SELF)
-		 ':TYO (CAR ARGS) (CDR ARGS))
-  (SETF (INDENTING-STREAM-BEGINNING-OF-LINE? SELF)
-	(CHAR-EQUAL (CAR ARGS) #\CR))
+(DEFUN (:PROPERTY :TYO INDENTING-STREAM-OPERATIONS) (SELF ARGS &AUX (CAR (CAR ARGS)))
+; character lossage
+  (IF (CHARACTERP CAR) (SETQ CAR (CHAR-INT CAR)))
+  (LEXPR-SEND (INDENTING-STREAM-BASE-STREAM SELF) :TYO (CAR ARGS) (CDR ARGS))
+  (SETF (INDENTING-STREAM-BEGINNING-OF-LINE? SELF) (EQ CAR #/NEWLINE))
   (IF (NOT (NULL (INDENTING-STREAM-BEGINNING-OF-LINE? SELF)))
       (INDENTING-STREAM-INDENT SELF)))
 
-(DEFUN (:STRING-OUT INDENTING-STREAM-OPERATIONS) (SELF ARGS)
+(DEFUN (:PROPERTY :STRING-OUT INDENTING-STREAM-OPERATIONS) (SELF ARGS)
   (LET ((STRING (CAR ARGS))
 	(START (CADR ARGS))
 	(END (CADDR ARGS)))
@@ -870,18 +936,16 @@ to specify the amount of indentation."
 	   (SETF (INDENTING-STREAM-BEGINNING-OF-LINE? SELF) NIL)
 	   (LET ((MARK START))
 	     (DO ()
-		 ((NOT (SETQ MARK (%STRING-SEARCH-CHAR #\CR STRING MARK END)))
-		  (FUNCALL (INDENTING-STREAM-BASE-STREAM SELF)
-			   ':STRING-OUT STRING START END)
+		 ((NOT (SETQ MARK (%STRING-SEARCH-CHAR #/NEWLINE STRING MARK END)))
+		  (SEND (INDENTING-STREAM-BASE-STREAM SELF) :STRING-OUT STRING START END)
 		  (RETURN STRING))
-	       (FUNCALL (INDENTING-STREAM-BASE-STREAM SELF)
-			':STRING-OUT STRING START MARK)
-	       (INDENTING-STREAM-INTERFACE SELF ':TYO #\CR)
+	       (SEND (INDENTING-STREAM-BASE-STREAM SELF) :STRING-OUT STRING START MARK)
+	       (INDENTING-STREAM-INTERFACE SELF :TYO #/NEWLINE))
 	       (COND ((= (SETQ MARK (1+ MARK)) END)
 		      (SETF (INDENTING-STREAM-BEGINNING-OF-LINE? SELF) T)
 		      (RETURN STRING)))
 	       (SETQ START MARK)))))))
 
-(DEFUN (:FRESH-LINE INDENTING-STREAM-OPERATIONS) (SELF IGNORE)
+(DEFUN (:PROPERTY :FRESH-LINE INDENTING-STREAM-OPERATIONS) (SELF IGNORE)
   (IF (NULL (INDENTING-STREAM-BEGINNING-OF-LINE? SELF))
-      (INDENTING-STREAM-INTERFACE SELF ':TYO #\CR)))
+      (INDENTING-STREAM-INTERFACE SELF :TYO #/NEWLINE)))
