@@ -143,7 +143,7 @@ which all streams, input or output, are required to handle."))
 (defflavor input-binary-stream () (input-stream)
   :abstract-flavor
 ; (:select-method-order :read-byte :tyi)
-  (:required-methods :tyi)
+  (:required-methods :tyi))
 
 (defmethod (input-binary-stream :default :read-byte) ()
   (send self :tyi))
@@ -940,7 +940,7 @@ to specify the amount of indentation."
 		  (SEND (INDENTING-STREAM-BASE-STREAM SELF) :STRING-OUT STRING START END)
 		  (RETURN STRING))
 	       (SEND (INDENTING-STREAM-BASE-STREAM SELF) :STRING-OUT STRING START MARK)
-	       (INDENTING-STREAM-INTERFACE SELF :TYO #/NEWLINE))
+	       (INDENTING-STREAM-INTERFACE SELF :TYO #/NEWLINE)
 	       (COND ((= (SETQ MARK (1+ MARK)) END)
 		      (SETF (INDENTING-STREAM-BEGINNING-OF-LINE? SELF) T)
 		      (RETURN STRING)))
