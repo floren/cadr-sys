@@ -221,9 +221,11 @@ of that particular type, or NIL, meaning to find usages of any type."
 		        #'analyze-list)
 		    definition record-function))
     (select-method (analyze-list (%make-pointer dtp-list definition) record-function))
-    (closure (analyze-definition (closure-function definition)))))
+    (closure (analyze-definition (closure-function definition) :function
+				 (closure-function definition) record-function))))
 
 (defun analyze-flavor (definition record-function &aux (analyze-object-type :flavor))
+  (declare (special analyze-object-name analyze-object-type))
   (analyze-list (flavor-local-instance-variables definition) record-function)
   (analyze-list (flavor-init-keywords definition) record-function)
   (analyze-list (flavor-inittable-instance-variables definition) record-function)
