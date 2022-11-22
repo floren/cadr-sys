@@ -563,7 +563,6 @@ touch -d "Aug 29 21:02:17 1985" -- 'lambda-diag/mini-debug.lisp.8' # Epoch: 2703
 touch -d "Sep  1 18:58:09 1985" -- 'fonts/cptfont.qfasl.21' # Epoch: 2703455889, Author: MLY
 touch -d "Sep  1 18:58:09 1985" -- 'fonts/cptfontsh.qfasl.21' # Epoch: 2703455889, Author: MLY
 touch -d "Sep  1 18:58:49 1985" -- 'fonts/5x5.qfasl.12'	# Epoch: 2703455929, Author: MLY
-touch -d "Sep  1 18:58:49 1985" -- 'fonts/5x5.qfasl.12'	# Epoch: 2703455929, Author: MLY
 touch -d "Sep  8 14:30:15 1985" -- 'file/fs.lisp.84' # Epoch: 2704044615, Author: GJC
 touch -d "Sep 11 20:28:25 1985" -- 'sys2/numdef.lisp.13' # Epoch: 2704325305, Author: MLY
 touch -d "Sep 12 12:46:21 1985" -- 'io/crdtbl.lisp.39' # Epoch: 2704383981, Author: MLY
@@ -1976,7 +1975,6 @@ touch -d "Nov 12 20:53:57 1986" -- 'ulambda/uc-closure.lisp.71'	# Epoch: 2741219
 touch -d "Nov 12 20:53:57 1986" -- 'ulambda/uc-scavenger.lisp.147' # Epoch: 2741219637, Author: JRM
 touch -d "Nov 12 20:53:57 1986" -- 'window/fancy-landscape.lisp.24' # Epoch: 2741219637, Author: PLD
 touch -d "Nov 12 20:53:57 1986" -- 'window/fancy-landscape.qfasl.24' # Epoch: 2741219637, Author: PLD
-touch -d "Nov 13 14:08:33 1986" -- 'ubin/119p0.pdata.1'	# Epoch: 2741281713, Author: GJC
 touch -d "Nov 13 14:08:33 1986" -- 'ubin/119p0.pdata.1'	# Epoch: 2741281713, Author: GJC
 touch -d "Nov 14 09:54:15 1986" -- 'examples/netspy.lisp.1' # Epoch: 2741352855, Author: BUGMAN
 touch -d "Nov 14 09:56:06 1986" -- 'examples/netspy.lisp.2' # Epoch: 2741352966, Author: BUGMAN
