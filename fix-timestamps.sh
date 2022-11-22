@@ -4575,923 +4575,923 @@ hcuot "Nov 14 11:59:40 1984" 'patch/system-99-11.lisp.13'
 
 # tid/3336
 
-hcuot "Oct 27 23:52:56 1983" 'sys2/hash.lisp.81'
-hcuot "Apr 15 08:59:29 1984" 'sys2/hash.lisp.82'
-hcuot "Jun  5 01:39:39 1984" 'sys2/hash.lisp.83'
-hcuot "Jun  6 04:25:44 1984" 'sys2/hash.qfasl.83'
-hcuot "Oct 27 23:52:41 1983" 'sys2/hashfl.lisp.19'
-hcuot "Nov  1 23:49:35 1983" 'sys2/hashfl.lisp.20'
-hcuot "Apr 16 21:35:12 1984" 'sys2/hashfl.lisp.24'
-hcuot "Jun  5 01:33:55 1984" 'sys2/hashfl.lisp.25'
-hcuot "Jun 14 01:00:50 1984" 'sys2/hashfl.lisp.26'
-hcuot "Jun 14 01:02:32 1984" 'sys2/hashfl.lisp.27'
-hcuot "Jun 14 01:02:46 1984" 'sys2/hashfl.lisp.28'
-hcuot "Jun  6 04:26:59 1984" 'sys2/hashfl.qfasl.25'
-hcuot "Jun 21 07:26:29 1984" 'sys2/hashfl.qfasl.28'
-hcuot "Jan  7 13:03:49 1984" 'sys2/host.lisp.105'
-hcuot "May 20 08:26:42 1984" 'sys2/host.lisp.106'
-hcuot "Jun  5 03:17:20 1984" 'sys2/host.lisp.107'
-hcuot "Jun 10 10:30:34 1984" 'sys2/host.lisp.108'
-hcuot "Jun 12 09:17:05 1984" 'sys2/host.lisp.109'
-hcuot "Jun 15 09:41:58 1984" 'sys2/host.lisp.110'
-hcuot "Jun  6 04:28:44 1984" 'sys2/host.qfasl.107'
-hcuot "Jun 10 12:09:57 1984" 'sys2/host.qfasl.108'
-hcuot "Jun 12 10:21:21 1984" 'sys2/host.qfasl.109'
-hcuot "Jun 15 09:45:45 1984" 'sys2/host.qfasl.110'
-hcuot "Jun 29 08:57:31 1982" 'sys2/let.lisp.7'
-hcuot "Apr  7 15:51:47 1984" 'sys2/let.lisp.8'
-hcuot "Aug 14 03:09:26 1983" 'sys2/let.qfasl.7'
-hcuot "Aug 20 14:33:08 1983" 'sys2/lmmac.lisp.278'
-hcuot "Oct 30 05:20:24 1983" 'sys2/lmmac.lisp.299'
-hcuot "May 10 11:30:29 1984" 'sys2/lmmac.lisp.348'
-hcuot "May 20 10:25:41 1984" 'sys2/lmmac.lisp.352'
-hcuot "Jun  4 08:44:01 1984" 'sys2/lmmac.lisp.356'
-hcuot "Jun 13 22:16:20 1984" 'sys2/lmmac.lisp.360'
-hcuot "Jun  6 01:44:24 1984" 'sys2/lmmac.qfasl.356'
-hcuot "Jun  9 13:35:46 1984" 'sys2/lmmac.qfasl.357'
-hcuot "Jun 13 19:31:22 1984" 'sys2/lmmac.qfasl.358'
-hcuot "Jun 21 03:24:01 1984" 'sys2/lmmac.qfasl.360'
-hcuot "Aug 13 09:44:29 1983" 'sys2/login.lisp.76'
-hcuot "May  9 12:09:16 1984" 'sys2/login.lisp.83'
-hcuot "Jun  5 01:16:24 1984" 'sys2/login.lisp.84'
-hcuot "Jun  6 04:32:14 1984" 'sys2/login.qfasl.84'
-hcuot "Nov 30 01:23:16 1983" 'sys2/loop.lisp.795'
-hcuot "Jun 13 22:42:07 1984" 'sys2/loop.lisp.796'
-hcuot "Jun 15 17:03:27 1984" 'sys2/loop.lisp.797'
-hcuot "Jun 20 18:08:26 1984" 'sys2/loop.lisp.798'
-hcuot "Jun  6 04:33:32 1984" 'sys2/loop.qfasl.795'
-hcuot "Jun 21 07:28:18 1984" 'sys2/loop.qfasl.798'
-hcuot "Nov 18 14:36:42 1983" 'sys2/maksys.lisp.166'
-hcuot "Jan 25 07:41:37 1984" 'sys2/maksys.lisp.174'
-hcuot "Jun  5 01:11:51 1984" 'sys2/maksys.lisp.175'
-hcuot "Jun 16 20:18:39 1984" 'sys2/maksys.lisp.176'
-hcuot "Jun  6 04:40:23 1984" 'sys2/maksys.qfasl.175'
-hcuot "Jun 16 20:18:52 1984" 'sys2/maksys.qfasl.176'
-hcuot "Jul 27 10:36:50 1983" 'sys2/matrix.lisp.18'
-hcuot "Mar 14 19:02:00 1984" 'sys2/matrix.lisp.23'
-hcuot "Apr  9 18:08:41 1984" 'sys2/matrix.lisp.26'
-hcuot "Jun  6 12:54:58 1984" 'sys2/matrix.qfasl.26'
-hcuot "Nov 12 01:30:30 1983" 'sys2/meth.lisp.58'
-hcuot "Jun  6 23:55:50 1984" 'sys2/meth.lisp.59'
-hcuot "Jun 13 18:38:56 1984" 'sys2/meth.lisp.60'
-hcuot "Jun 17 06:43:45 1984" 'sys2/meth.lisp.61'
-hcuot "Jun 17 07:08:28 1984" 'sys2/meth.qfasl.61'
-hcuot "Jun  4 03:02:35 1984" 'sys2/numdef.lisp.1'
-hcuot "Jun  9 08:58:51 1984" 'sys2/numdef.lisp.4'
-hcuot "Jun 13 08:03:45 1984" 'sys2/numdef.lisp.6'
-hcuot "Jun 18 17:02:30 1984" 'sys2/numdef.lisp.7'
-hcuot "Jun 18 17:39:26 1984" 'sys2/numdef.lisp.8'
-hcuot "Jun 24 17:56:48 1984" 'sys2/numdef.lisp.9'
-hcuot "Jun 13 08:03:53 1984" 'sys2/numdef.qfasl.6'
-hcuot "Jun 21 05:53:02 1984" 'sys2/numdef.qfasl.8'
-hcuot "Sep 22 21:11:37 1983" 'sys2/numer.lisp.34'
-hcuot "Nov 10 02:28:15 1983" 'sys2/numer.lisp.41'
-hcuot "Mar 13 22:55:49 1984" 'sys2/numer.lisp.43'
-hcuot "Jun  4 02:59:32 1984" 'sys2/numer.lisp.45'
-hcuot "Jun  5 00:50:11 1984" 'sys2/numer.lisp.46'
-hcuot "Jun  8 21:16:39 1984" 'sys2/numer.lisp.47'
-hcuot "Jun  9 08:58:54 1984" 'sys2/numer.lisp.48'
-hcuot "Jun 13 07:50:07 1984" 'sys2/numer.lisp.49'
-hcuot "Jun 13 08:06:00 1984" 'sys2/numer.lisp.50'
-hcuot "Jun 13 08:06:34 1984" 'sys2/numer.lisp.51'
-hcuot "Jun 13 08:08:43 1984" 'sys2/numer.lisp.52'
-hcuot "Jun 14 09:46:37 1984" 'sys2/numer.lisp.53'
-hcuot "Jun 14 10:03:20 1984" 'sys2/numer.lisp.54'
-hcuot "Jun 17 05:47:53 1984" 'sys2/numer.lisp.55'
-hcuot "Jun  6 04:47:26 1984" 'sys2/numer.qfasl.46'
-hcuot "Jun 10 10:57:58 1984" 'sys2/numer.qfasl.48'
-hcuot "Jun 13 07:54:18 1984" 'sys2/numer.qfasl.49'
-hcuot "Jun 13 08:08:52 1984" 'sys2/numer.qfasl.52'
-hcuot "Jun 14 09:46:42 1984" 'sys2/numer.qfasl.53'
-hcuot "Jun 14 10:17:00 1984" 'sys2/numer.qfasl.54'
-hcuot "Jun 17 05:50:32 1984" 'sys2/numer.qfasl.55'
-hcuot "Mar 22 04:17:42 1984" 'sys2/patch.lisp.150'
-hcuot "May 10 11:30:23 1984" 'sys2/patch.lisp.151'
-hcuot "Jun  5 00:46:42 1984" 'sys2/patch.lisp.152'
-hcuot "Jun  6 05:09:32 1984" 'sys2/patch.lisp.153'
-hcuot "Jun 13 13:49:50 1984" 'sys2/patch.lisp.154'
-hcuot "Jun  6 04:48:58 1984" 'sys2/patch.qfasl.152'
-hcuot "Jun 10 10:59:15 1984" 'sys2/patch.qfasl.153'
-hcuot "Jun 13 20:01:57 1984" 'sys2/patch.qfasl.154'
-hcuot "Apr  5 21:46:25 1984" 'sys2/plane.lisp.30'
-hcuot "May 31 14:08:31 1984" 'sys2/plane.lisp.31'
-hcuot "Jun  6 04:51:31 1984" 'sys2/plane.qfasl.31'
-hcuot "Feb 17 11:36:34 1984" 'sys2/proces.lisp.153'
-hcuot "May 13 02:31:33 1984" 'sys2/proces.lisp.154'
-hcuot "May 20 15:33:58 1984" 'sys2/proces.lisp.155'
-hcuot "Jun 14 09:28:49 1984" 'sys2/proces.lisp.156'
-hcuot "Jun 14 09:38:01 1984" 'sys2/proces.lisp.157'
-hcuot "Jun  6 04:55:18 1984" 'sys2/proces.qfasl.155'
-hcuot "Jun 14 09:29:02 1984" 'sys2/proces.qfasl.156'
-hcuot "Jun 14 09:38:13 1984" 'sys2/proces.qfasl.157'
-hcuot "Dec 26 03:13:49 1983" 'sys2/prodef.lisp.39'
-hcuot "May 13 02:30:56 1984" 'sys2/prodef.lisp.40'
-hcuot "Jun  4 06:23:40 1984" 'sys2/prodef.lisp.41'
-hcuot "Jun 13 17:49:05 1984" 'sys2/prodef.lisp.42'
-hcuot "Jun 13 20:06:12 1984" 'sys2/prodef.lisp.43'
-hcuot "Jun 13 21:27:52 1984" 'sys2/prodef.lisp.44'
-hcuot "Jun 14 01:32:10 1984" 'sys2/prodef.lisp.45'
-hcuot "Jun 15 17:55:34 1984" 'sys2/prodef.lisp.46'
-hcuot "Jun 21 06:01:12 1984" 'sys2/prodef.lisp.47'
-hcuot "Jun  6 02:08:42 1984" 'sys2/prodef.qfasl.41'
-hcuot "Jun 13 19:48:03 1984" 'sys2/prodef.qfasl.42'
-hcuot "Jun 21 05:51:54 1984" 'sys2/prodef.qfasl.46'
-hcuot "Jun 21 06:01:41 1984" 'sys2/prodef.qfasl.47'
-hcuot "Apr  1 19:50:03 1984" 'sys2/qtrace.lisp.148'
-hcuot "Apr 22 04:59:26 1984" 'sys2/qtrace.lisp.149'
-hcuot "Jun  6 05:27:40 1984" 'sys2/qtrace.qfasl.149'
-hcuot "Nov  5 04:47:16 1983" 'sys2/rat.lisp.34'
-hcuot "Mar 29 11:34:31 1984" 'sys2/rat.lisp.37'
-hcuot "Jun  4 03:02:01 1984" 'sys2/rat.lisp.38'
-hcuot "Jun  4 23:24:29 1984" 'sys2/rat.lisp.39'
-hcuot "Jun  6 01:41:26 1984" 'sys2/rat.lisp.40'
-hcuot "Jun  6 01:42:00 1984" 'sys2/rat.lisp.41'
-hcuot "Jun  6 05:49:57 1984" 'sys2/rat.lisp.42'
-hcuot "Jun  7 16:48:46 1984" 'sys2/rat.lisp.43'
-hcuot "Jun 14 21:17:48 1984" 'sys2/rat.lisp.44'
-hcuot "Jun  6 05:28:48 1984" 'sys2/rat.qfasl.41'
-hcuot "Jun 10 12:26:15 1984" 'sys2/rat.qfasl.43'
-hcuot "Jun 21 08:21:04 1984" 'sys2/rat.qfasl.44'
-hcuot "Aug  6 12:26:38 1983" 'sys2/resour.lisp.17'
-hcuot "Nov  7 22:06:04 1983" 'sys2/resour.lisp.18'
-hcuot "Apr 15 07:32:26 1984" 'sys2/resour.lisp.26'
-hcuot "Jun  6 11:46:53 1984" 'sys2/resour.lisp.27'
-hcuot "Jun 24 06:09:43 1984" 'sys2/resour.lisp.28'
-hcuot "Jun  6 05:35:50 1984" 'sys2/resour.qfasl.26'
-hcuot "Jun 10 12:32:26 1984" 'sys2/resour.qfasl.27'
-hcuot "Feb  8 14:52:48 1984" 'sys2/selev.lisp.21'
-hcuot "May 11 13:54:50 1984" 'sys2/selev.lisp.22'
-hcuot "Jun  6 05:37:21 1984" 'sys2/selev.qfasl.22'
-hcuot "Oct 12 09:45:31 1983" 'sys2/setf.lisp.51'
-hcuot "Nov 10 20:13:54 1983" 'sys2/setf.lisp.52'
-hcuot "Apr  5 21:47:51 1984" 'sys2/setf.lisp.85'
-hcuot "May 20 08:10:47 1984" 'sys2/setf.lisp.86'
-hcuot "Jun  4 19:59:04 1984" 'sys2/setf.lisp.89'
-hcuot "Jun 14 09:05:31 1984" 'sys2/setf.lisp.90'
-hcuot "Jun 17 06:31:52 1984" 'sys2/setf.lisp.91'
-hcuot "Jun  6 01:58:39 1984" 'sys2/setf.qfasl.89'
-hcuot "Jun 14 09:05:38 1984" 'sys2/setf.qfasl.90'
-hcuot "Jun 17 07:36:58 1984" 'sys2/setf.qfasl.91'
-hcuot "Dec 22 17:32:02 1983" 'sys2/setf.xqfasl.67'
-hcuot "Oct  6 16:24:42 1983" 'sys2/sgdefs.lisp.53'
-hcuot "Jan 12 14:29:47 1984" 'sys2/sgdefs.lisp.54'
-hcuot "Jun  6 02:11:03 1984" 'sys2/sgdefs.qfasl.54'
-hcuot "Dec 31 23:26:30 1982" 'sys2/step.lisp.58'
-hcuot "Mar  2 23:25:35 1983" 'sys2/step.lisp.60'
-hcuot "Sep 20 00:20:05 1983" 'sys2/step.lisp.61'
-hcuot "Oct 29 19:56:25 1983" 'sys2/step.lisp.63'
-hcuot "Dec 22 02:05:09 1983" 'sys2/step.lisp.65'
-hcuot "Apr 22 04:59:17 1984" 'sys2/step.lisp.66'
-hcuot "Jun 17 06:30:55 1984" 'sys2/step.lisp.67'
-hcuot "Nov 10 18:53:55 1983" 'sys2/step.qfasl.63'
-hcuot "Jun  6 05:40:08 1984" 'sys2/step.qfasl.66'
-hcuot "Jun 17 07:16:01 1984" 'sys2/step.qfasl.67'
-hcuot "Apr  6 10:08:15 1984" 'sys2/string.lisp.130'
-hcuot "May 13 04:32:48 1984" 'sys2/string.lisp.132'
-hcuot "Jun  4 22:14:12 1984" 'sys2/string.lisp.133'
-hcuot "Jun 15 06:55:18 1984" 'sys2/string.lisp.134'
-hcuot "Jun 15 07:14:54 1984" 'sys2/string.lisp.135'
-hcuot "Jun 15 17:44:09 1984" 'sys2/string.lisp.136'
-hcuot "Jun  6 05:43:56 1984" 'sys2/string.qfasl.133'
-hcuot "Jun 15 06:56:11 1984" 'sys2/string.qfasl.134'
-hcuot "Jun 21 08:30:48 1984" 'sys2/string.qfasl.136'
-hcuot "Aug  4 13:25:26 1983" 'sys2/struct.lisp.286'
-hcuot "Nov 12 20:33:12 1983" 'sys2/struct.lisp.287'
-hcuot "Nov 29 05:45:39 1983" 'sys2/struct.lisp.292'
-hcuot "Mar  7 23:22:17 1984" 'sys2/struct.lisp.309'
-hcuot "May 18 06:09:04 1984" 'sys2/struct.lisp.311'
-hcuot "Jun  5 03:17:48 1984" 'sys2/struct.lisp.316'
-hcuot "Jun  6 00:29:40 1984" 'sys2/struct.lisp.317'
-hcuot "Jun 10 17:00:34 1984" 'sys2/struct.lisp.318'
-hcuot "Jun 12 15:41:29 1984" 'sys2/struct.lisp.319'
-hcuot "Jun 16 22:07:01 1984" 'sys2/struct.lisp.320'
-hcuot "Jun 12 16:09:43 1984" 'sys2/struct.qfasl.319'
-hcuot "Jun 16 22:07:30 1984" 'sys2/struct.qfasl.320'
-hcuot "Nov 10 11:06:56 1983" 'sys2/system.lisp.82'
-hcuot "Apr 27 13:19:33 1984" 'sys2/system.lisp.89'
-hcuot "May 25 20:24:44 1984" 'sys2/system.lisp.93'
-hcuot "Jun  7 04:10:40 1984" 'sys2/system.lisp.94'
-hcuot "Jun 18 15:29:19 1984" 'sys2/system.lisp.97'
-hcuot "Nov 10 11:07:02 1983" 'sys2/system.qfasl.82'
-hcuot "Jun  6 05:47:05 1984" 'sys2/system.qfasl.93'
-hcuot "Jun 10 12:33:34 1984" 'sys2/system.qfasl.94'
-hcuot "Jun 13 09:44:38 1984" 'sys2/system.qfasl.95'
-hcuot "Jun 15 22:23:48 1984" 'sys2/system.qfasl.96'
-hcuot "Jun 18 15:29:30 1984" 'sys2/system.qfasl.97'
-hcuot "Jun 23 07:07:52 1983" 'sys2/unfasl.lisp.15'
-hcuot "Aug  3 08:04:28 1983" 'sys2/unfasl.lisp.16'
-hcuot "Oct 25 00:31:34 1983" 'sys2/unfasl.qfasl.16'
-hcuot "Oct 22 14:37:42 1983" 'sys2/usymld.lisp.183'
-hcuot "Nov 12 09:18:33 1983" 'sys2/usymld.lisp.185'
-hcuot "Feb 17 16:46:44 1984" 'sys2/usymld.lisp.186'
-hcuot "Nov 14 02:54:56 1983" 'sys2/usymld.qfasl.185'
-hcuot "Jan  3 08:50:32 1984" 'tape/copy.lisp.128'
-hcuot "Feb 16 13:56:19 1984" 'tape/copy.lisp.133'
-hcuot "Jan  3 09:50:47 1984" 'tape/copy.qfasl.128'
-hcuot "Jan 19 16:25:49 1984" 'tape/ddoc.text.4'
-hcuot "May 12 05:49:07 1984" 'tape/ddoc.text.8'
-hcuot "Jan 19 16:25:57 1984" 'tape/fdump.lisp.18'
-hcuot "Feb 16 13:56:28 1984" 'tape/fdump.lisp.24'
-hcuot "May 12 05:29:43 1984" 'tape/fdump.lisp.27'
-hcuot "Jan 10 04:56:50 1984" 'tape/fdump-def.lisp.5'
-hcuot "Feb 16 13:56:36 1984" 'tape/fdump-def.lisp.8'
-hcuot "May 12 05:52:14 1984" 'tape/fdump-def.lisp.12'
-hcuot "Jan  2 09:37:10 1984" 'tape/fdump-def.qfasl.1'
-hcuot "Jan 10 03:54:15 1984" 'tape/fdump-file-cdate-i.lisp.1'
-hcuot "Jan 10 04:12:46 1984" 'tape/fdump-file-cdate-i.lisp.2'
-hcuot "Jan 19 16:26:13 1984" 'tape/fdump-file-cdate-i.qfasl.2'
-hcuot "Feb 16 13:56:44 1984" 'tape/fdump-r.lisp.4'
-hcuot "May 12 05:29:45 1984" 'tape/fdump-r.lisp.5'
-hcuot "Jan  3 10:36:11 1984" 'tape/magtape.directory.11'
-hcuot "Oct 26 20:41:54 1983" 'tape/magtape-14.directory.14'
-hcuot "Mar  8 06:56:47 1983" 'tape/magtape-14-1.qfasl.1'
-hcuot "Apr 25 09:51:48 1983" 'tape/magtape-14-3.qfasl.1'
-hcuot "May 19 04:11:34 1983" 'tape/magtape-14-4.qfasl.3'
-hcuot "Oct 26 20:41:16 1983" 'tape/magtape-14-5.qfasl.1'
-hcuot "Feb 16 14:09:51 1984" 'tape/magtape-22.directory.12'
-hcuot "Feb 16 14:24:04 1984" 'tape/magtape-22.directory.13'
-hcuot "Jan  7 22:40:45 1984" 'tape/magtape-22-1.lisp.1'
-hcuot "Jan  7 22:40:56 1984" 'tape/magtape-22-1.qfasl.1'
-hcuot "Jan  7 23:28:27 1984" 'tape/magtape-22-2.lisp.1'
-hcuot "Jan  7 23:28:40 1984" 'tape/magtape-22-2.qfasl.1'
-hcuot "Jan  8 00:41:18 1984" 'tape/magtape-22-3.lisp.1'
-hcuot "Jan  8 00:41:44 1984" 'tape/magtape-22-3.qfasl.1'
-hcuot "Jan 13 13:06:26 1984" 'tape/magtape-22-4.lisp.1'
-hcuot "Jan 13 13:06:35 1984" 'tape/magtape-22-4.qfasl.1'
-hcuot "Jan 19 17:40:22 1984" 'tape/magtape-22-5.lisp.1'
-hcuot "Jan 19 17:40:32 1984" 'tape/magtape-22-5.qfasl.1'
-hcuot "Feb 16 14:23:22 1984" 'tape/magtape-22-6.lisp.1'
-hcuot "Feb 16 14:23:28 1984" 'tape/magtape-22-6.qfasl.1'
-hcuot "Jan 13 12:25:26 1984" 'tape/mtaux.lisp.79'
-hcuot "Jan 19 17:04:02 1984" 'tape/mtaux.lisp.80'
-hcuot "Jan  3 09:52:48 1984" 'tape/mtaux.qfasl.77'
-hcuot "Jun 20 06:21:53 1983" 'tape/mtdefs.lisp.28'
-hcuot "Dec 16 15:34:10 1983" 'tape/mtdefs.lisp.30'
-hcuot "Jan  3 09:46:18 1984" 'tape/mtdefs.qfasl.30'
-hcuot "Jan  7 23:43:06 1984" 'tape/mtstr.lisp.86'
-hcuot "Jan 11 05:40:52 1984" 'tape/mtstr.lisp.87'
-hcuot "Jan  3 09:47:58 1984" 'tape/mtstr.qfasl.85'
-hcuot "Jan  3 08:50:55 1984" 'tape/odump.lisp.1'
-hcuot "Jan  3 10:33:05 1984" 'tape/odump.qfasl.1'
-hcuot "May 12 05:29:46 1984" 'tape/package.lisp.1'
-hcuot "Jan  3 07:59:49 1984" 'tape/pdp10.lisp.1'
-hcuot "Feb  9 07:10:16 1984" 'tape/rmunit.lisp.1'
-hcuot "May 12 07:27:48 1984" 'tape/rmunit.lisp.2'
-hcuot "May 12 08:31:18 1984" 'tape/rmunit.lisp.3'
-hcuot "May 12 05:29:46 1984" 'tape/system.lisp.3'
-hcuot "Jan  3 04:42:55 1984" 'tape/tm.lisp.23'
-hcuot "May 12 05:29:47 1984" 'tape/tm.lisp.25'
-hcuot "Jan  3 04:43:02 1984" 'tape/tmdefs.lisp.6'
-hcuot "May 12 05:29:48 1984" 'tape/tmdefs.lisp.7'
-hcuot "Jan 19 16:26:52 1984" 'tape/unit.lisp.5'
-hcuot "May 12 05:29:49 1984" 'tape/unit.lisp.6'
-hcuot "May 12 07:27:24 1984" 'tape/unit.lisp.7'
-hcuot "Jan  3 08:01:02 1984" 'tape/vms.lisp.1'
-hcuot "Jan  3 08:01:02 1984" 'tape/vms.lisp.2'
-hcuot "Jan 19 16:27:08 1984" 'tape/new/mtdefs.lisp.2'
-hcuot "May 12 05:29:49 1984" 'tape/new/mtdefs.lisp.3'
-hcuot "May 12 07:28:11 1984" 'tape/new/mtdefs.lisp.4'
-hcuot "May 12 07:45:03 1984" 'tape/new/mtdefs.qfasl.4'
-hcuot "Jan 11 06:38:45 1984" 'tape/new/mtrqb.lisp.2'
-hcuot "May 12 05:29:49 1984" 'tape/new/mtrqb.lisp.3'
-hcuot "Jan 11 06:38:21 1984" 'tape/new/mtstr.lisp.3'
-hcuot "May 12 05:29:50 1984" 'tape/new/mtstr.lisp.4'
-hcuot "May 12 08:31:35 1984" 'tape/new/mtstr.lisp.5'
-hcuot "Jan 19 16:27:21 1984" 'tape/new/tmunit.lisp.2'
-hcuot "May 12 05:29:50 1984" 'tape/new/tmunit.lisp.5'
-hcuot "Jan 11 06:38:10 1984" 'tape/new/weunit.lisp.2'
-hcuot "May 12 05:29:51 1984" 'tape/new/weunit.lisp.3'
-hcuot "Jan  3 06:11:30 1984" 'tape/to-merge/-read-.-this-.1'
-hcuot "Oct  9 20:43:50 1983" 'tape/to-merge/copy.lisp.130'
-hcuot "Sep 24 21:21:09 1983" 'tape/to-merge/mtaux.lisp.71'
-hcuot "Sep 24 21:27:33 1983" 'tape/to-merge/mtdefs.lisp.49'
-hcuot "Oct  9 20:11:44 1983" 'tape/to-merge/mtstr.lisp.90'
-hcuot "Feb  3 08:23:56 1983" 'test/-read-.-this-.1'
-hcuot "Nov 20 23:29:49 1982" 'ubin/dcfu.uload.4'
-hcuot "Aug  4 07:23:05 1982" 'ubin/memd.uload.1'
-hcuot "May  7 01:22:05 1983" 'ubin/ucadr.locs.239'
-hcuot "Aug 26 14:18:51 1983" 'ubin/ucadr.locs.257'
-hcuot "Mar  3 08:22:09 1984" 'ubin/ucadr.locs.309'
-hcuot "Jun  8 05:31:58 1984" 'ubin/ucadr.locs.310'
-hcuot "Jun  8 23:07:57 1984" 'ubin/ucadr.locs.311'
-hcuot "Jun 16 21:32:16 1984" 'ubin/ucadr.locs.312'
-hcuot "Jun 16 22:57:16 1984" 'ubin/ucadr.locs.313'
-hcuot "Jun 17 01:45:52 1984" 'ubin/ucadr.locs.314'
-hcuot "May  7 01:19:58 1983" 'ubin/ucadr.mcr.239'
-hcuot "Aug 26 14:16:41 1983" 'ubin/ucadr.mcr.257'
-hcuot "Mar  3 08:20:07 1984" 'ubin/ucadr.mcr.309'
-hcuot "Jun  8 05:29:50 1984" 'ubin/ucadr.mcr.310'
-hcuot "Jun  8 23:03:26 1984" 'ubin/ucadr.mcr.311'
-hcuot "Jun 16 21:29:59 1984" 'ubin/ucadr.mcr.312'
-hcuot "Jun 16 22:54:55 1984" 'ubin/ucadr.mcr.313'
-hcuot "Jun 17 01:42:17 1984" 'ubin/ucadr.mcr.314'
-hcuot "May  7 01:20:31 1983" 'ubin/ucadr.sym.239'
-hcuot "Aug 26 14:17:12 1983" 'ubin/ucadr.sym.257'
-hcuot "Nov 28 19:18:44 1983" 'ubin/ucadr.sym.305'
-hcuot "Dec 29 05:39:42 1983" 'ubin/ucadr.sym.306'
-hcuot "Jan 23 03:03:17 1984" 'ubin/ucadr.sym.308'
-hcuot "Mar  3 08:20:33 1984" 'ubin/ucadr.sym.309'
-hcuot "Jun  8 05:30:18 1984" 'ubin/ucadr.sym.310'
-hcuot "Jun 11 22:34:45 1984" 'ubin/ucadr.sym.311'
-hcuot "Jun 16 21:44:49 1984" 'ubin/ucadr.sym.312'
-hcuot "Jun 16 22:55:25 1984" 'ubin/ucadr.sym.313'
-hcuot "Jun 17 01:42:47 1984" 'ubin/ucadr.sym.314'
-hcuot "May  7 01:22:07 1983" 'ubin/ucadr.tbl.239'
-hcuot "Aug 26 14:18:53 1983" 'ubin/ucadr.tbl.257'
-hcuot "Mar  3 08:22:10 1984" 'ubin/ucadr.tbl.309'
-hcuot "Jun  8 05:32:00 1984" 'ubin/ucadr.tbl.310'
-hcuot "Jun  8 23:08:00 1984" 'ubin/ucadr.tbl.311'
-hcuot "Jun 16 21:32:18 1984" 'ubin/ucadr.tbl.312'
-hcuot "Jun 16 22:57:19 1984" 'ubin/ucadr.tbl.313'
-hcuot "Jun 17 01:45:55 1984" 'ubin/ucadr.tbl.314'
-hcuot "Apr  9 11:19:01 1983" 'ucadr/cadldb.lisp.20'
-hcuot "Jul 26 10:31:51 1983" 'ucadr/cadldb.qfasl.20'
-hcuot "Jun 29 10:56:11 1982" 'ucadr/cadtlk.mid.9'
-hcuot "Jun 29 10:56:32 1982" 'ucadr/chaos.test.1'
-hcuot "Jun 29 10:56:46 1982" 'ucadr/dcfu.text.23'
-hcuot "Dec 22 06:46:28 1982" 'ucadr/dcfu.uload.3'
-hcuot "Jun 29 10:59:34 1982" 'ucadr/memd.lisp.26'
-hcuot "Jun 29 10:59:39 1982" 'ucadr/mmtest.lisp.15'
-hcuot "Jun 29 10:56:41 1982" 'ucadr/obsolete-cold-load-maker.lisp.1'
-hcuot "Nov 17 06:26:42 1982" 'ucadr/packed.lisp.119'
-hcuot "Oct 14 23:41:23 1983" 'ucadr/packed.lisp.124'
-hcuot "Jun 29 11:00:13 1982" 'ucadr/praid.lisp.21'
-hcuot "Jun 29 11:00:18 1982" 'ucadr/promh.text.9'
-hcuot "Jul 20 09:27:19 1983" 'ucadr/uc-arith.lisp.18'
-hcuot "Nov 18 14:23:35 1983" 'ucadr/uc-arith.lisp.25'
-hcuot "Apr 29 00:12:20 1984" 'ucadr/uc-arith.lisp.27'
-hcuot "Apr 30 23:43:08 1984" 'ucadr/uc-arith.lisp.28'
-hcuot "May 20 23:14:24 1984" 'ucadr/uc-arith.lisp.29'
-hcuot "Jun  5 23:24:56 1984" 'ucadr/uc-arith.lisp.30'
-hcuot "Jun  5 23:38:51 1984" 'ucadr/uc-arith.lisp.31'
-hcuot "Jun  8 20:31:34 1984" 'ucadr/uc-arith.lisp.32'
-hcuot "Apr  3 12:38:40 1983" 'ucadr/uc-array.lisp.27'
-hcuot "Jul 23 10:01:24 1983" 'ucadr/uc-array.lisp.28'
-hcuot "Nov 29 21:22:31 1983" 'ucadr/uc-array.lisp.59'
-hcuot "May 20 23:41:03 1984" 'ucadr/uc-array.lisp.60'
-hcuot "Jun  8 20:31:25 1984" 'ucadr/uc-array.lisp.61'
-hcuot "Jun 16 20:59:03 1984" 'ucadr/uc-array.lisp.62'
-hcuot "Jun 17 01:36:02 1984" 'ucadr/uc-array.lisp.63'
-hcuot "Mar 31 23:16:21 1983" 'ucadr/uc-array-cache.lisp.1'
-hcuot "Mar 31 23:15:30 1983" 'ucadr/uc-cadr.lisp.6'
-hcuot "Jul 29 11:02:16 1983" 'ucadr/uc-cadr.lisp.7'
-hcuot "Jun  2 03:53:36 1984" 'ucadr/uc-cadr.lisp.8'
-hcuot "Jul 23 10:18:19 1983" 'ucadr/uc-call-return.lisp.37'
-hcuot "Sep 23 05:03:26 1983" 'ucadr/uc-call-return.lisp.61'
-hcuot "Jan 27 08:37:59 1984" 'ucadr/uc-call-return.lisp.97'
-hcuot "Mar 22 06:55:28 1984" 'ucadr/uc-call-return.lisp.98'
-hcuot "May 19 03:59:07 1984" 'ucadr/uc-call-return.lisp.99'
-hcuot "Jun  8 04:16:44 1984" 'ucadr/uc-call-return.lisp.100'
-hcuot "Jun 17 01:36:13 1984" 'ucadr/uc-call-return.lisp.101'
-hcuot "Oct 11 07:19:04 1982" 'ucadr/uc-chaos.lisp.1'
-hcuot "Oct 15 01:27:48 1982" 'ucadr/uc-cold-disk.lisp.2'
-hcuot "Jun  8 11:15:36 1983" 'ucadr/uc-cold-disk.lisp.9'
-hcuot "Nov 14 10:06:43 1983" 'ucadr/uc-cold-disk.lisp.16'
-hcuot "Oct 11 07:18:14 1982" 'ucadr/uc-disk.lisp.1'
-hcuot "Nov 14 08:21:19 1983" 'ucadr/uc-disk.lisp.2'
-hcuot "Jun  4 07:41:28 1983" 'ucadr/uc-fctns.lisp.26'
-hcuot "Sep 13 09:27:33 1983" 'ucadr/uc-fctns.lisp.40'
-hcuot "Apr 11 00:36:59 1984" 'ucadr/uc-fctns.lisp.73'
-hcuot "Apr 17 23:46:13 1984" 'ucadr/uc-fctns.lisp.74'
-hcuot "May 11 05:41:36 1984" 'ucadr/uc-fctns.lisp.75'
-hcuot "Jun  8 20:31:12 1984" 'ucadr/uc-fctns.lisp.76'
-hcuot "Jun 16 20:58:42 1984" 'ucadr/uc-fctns.lisp.77'
-hcuot "Jun 16 21:24:03 1984" 'ucadr/uc-fctns.lisp.78'
-hcuot "Jun 16 22:40:24 1984" 'ucadr/uc-fctns.lisp.79'
-hcuot "Apr  3 12:37:59 1983" 'ucadr/uc-hacks.lisp.3'
-hcuot "Oct 17 16:11:57 1983" 'ucadr/uc-hacks.lisp.5'
-hcuot "Feb  4 09:53:01 1983" 'ucadr/uc-interrupt.lisp.4'
-hcuot "Oct 30 00:16:52 1983" 'ucadr/uc-interrupt.lisp.7'
-hcuot "Oct 13 05:05:41 1982" 'ucadr/uc-logical.lisp.2'
-hcuot "Jul 23 11:00:06 1983" 'ucadr/uc-logical.lisp.7'
-hcuot "Mar  3 04:56:48 1984" 'ucadr/uc-logical.lisp.8'
-hcuot "Apr  4 07:09:21 1983" 'ucadr/uc-macrocode.lisp.9'
-hcuot "Oct 19 12:16:21 1983" 'ucadr/uc-macrocode.lisp.22'
-hcuot "Nov 14 02:49:50 1983" 'ucadr/uc-macrocode.lisp.28'
-hcuot "Oct 11 20:53:14 1982" 'ucadr/uc-mc.lisp.1'
-hcuot "Nov 14 02:47:25 1983" 'ucadr/uc-mc.lisp.2'
-hcuot "Apr  5 09:49:33 1983" 'ucadr/uc-meter.lisp.3'
-hcuot "Jul 23 12:00:11 1983" 'ucadr/uc-meter.lisp.4'
-hcuot "Aug  1 09:39:57 1983" 'ucadr/uc-meter.lisp.5'
-hcuot "Jun  5 10:47:27 1983" 'ucadr/uc-page-fault.lisp.7'
-hcuot "Oct 17 16:11:44 1983" 'ucadr/uc-page-fault.lisp.10'
-hcuot "Nov 21 09:24:14 1983" 'ucadr/uc-page-fault.lisp.13'
-hcuot "Apr  5 09:49:02 1983" 'ucadr/uc-parameters.lisp.204'
-hcuot "Oct 29 22:36:55 1983" 'ucadr/uc-parameters.lisp.222'
-hcuot "Dec 28 07:16:45 1983" 'ucadr/uc-parameters.lisp.228'
-hcuot "May  1 09:20:26 1984" 'ucadr/uc-parameters.lisp.229'
-hcuot "Jun  2 03:53:42 1984" 'ucadr/uc-parameters.lisp.230'
-hcuot "Oct 11 07:18:51 1982" 'ucadr/uc-pup.lisp.1'
-hcuot "Nov 16 10:34:29 1983" 'ucadr/uc-stack-closure.lisp.3'
-hcuot "Jan 23 03:33:37 1984" 'ucadr/uc-stack-closure.lisp.6'
-hcuot "Jun 15 06:04:18 1984" 'ucadr/uc-stack-closure.lisp.7'
-hcuot "Jun 15 06:08:23 1984" 'ucadr/uc-stack-closure.lisp.8'
-hcuot "Nov 17 06:07:32 1982" 'ucadr/uc-stack-groups.lisp.3'
-hcuot "Apr  5 09:49:39 1983" 'ucadr/uc-stack-groups.lisp.4'
-hcuot "Jul 23 11:47:54 1983" 'ucadr/uc-stack-groups.lisp.5'
-hcuot "Feb 15 09:14:27 1983" 'ucadr/uc-storage-allocation.lisp.12'
-hcuot "Apr  3 12:39:03 1983" 'ucadr/uc-storage-allocation.lisp.13'
-hcuot "Jul 29 10:34:22 1983" 'ucadr/uc-storage-allocation.lisp.15'
-hcuot "May 19 04:22:04 1984" 'ucadr/uc-storage-allocation.lisp.16'
-hcuot "Jul 20 10:00:15 1983" 'ucadr/uc-string.lisp.13'
-hcuot "Aug 28 00:10:40 1983" 'ucadr/uc-string.lisp.20'
-hcuot "Apr  6 09:54:27 1984" 'ucadr/uc-string.lisp.23'
-hcuot "Jun  8 05:21:08 1984" 'ucadr/uc-string.lisp.24'
-hcuot "Apr  3 12:37:55 1983" 'ucadr/uc-track-mouse.lisp.2'
-hcuot "Jul 20 06:38:27 1983" 'ucadr/uc-transporter.lisp.6'
-hcuot "Aug 15 14:07:26 1983" 'ucadr/uc-transporter.lisp.9'
-hcuot "Dec 29 05:09:16 1983" 'ucadr/uc-transporter.lisp.22'
-hcuot "May  1 09:20:21 1984" 'ucadr/uc-transporter.lisp.23'
-hcuot "Apr  4 09:20:18 1983" 'ucadr/uc-tv.lisp.3'
-hcuot "Jul 23 12:18:17 1983" 'ucadr/uc-tv.lisp.4'
-hcuot "Apr  5 03:29:11 1984" 'ucadr/uc-tv.lisp.5'
-hcuot "Jun 29 11:00:58 1982" 'ucadr/ucadlr.text.746'
-hcuot "Nov 14 01:30:39 1983" 'ucadr/ucode.lisp.19'
-hcuot "Aug 25 05:24:02 1982" 'wind/baswin.text.7'
-hcuot "Aug  9 02:24:49 1983" 'wind/blink.text.21'
-hcuot "Nov 16 05:33:30 1983" 'wind/choice.text.94'
-hcuot "Jan 22 09:23:05 1984" 'wind/choice.text.95'
-hcuot "Jul 23 04:52:44 1983" 'wind/edges.text.14'
-hcuot "Aug 25 05:25:39 1982" 'wind/emack.fasl.1'
-hcuot "Aug 25 05:25:27 1982" 'wind/emack.lisp.36'
-hcuot "Apr  7 15:53:58 1984" 'wind/emack.lisp.37'
-hcuot "Jul  6 04:46:40 1983" 'wind/fonts.text.17'
-hcuot "Aug  9 02:21:25 1983" 'wind/frames.text.14'
-hcuot "Aug  8 05:44:03 1983" 'wind/grafix.text.24'
-hcuot "Aug  8 07:11:30 1983" 'wind/input.text.24'
-hcuot "Sep 30 08:33:21 1983" 'wind/input.text.26'
-hcuot "Aug 25 05:26:36 1982" 'wind/lstfla.lisp.5'
-hcuot "Apr  7 15:55:43 1984" 'wind/lstfla.lisp.6'
-hcuot "Aug  8 06:15:43 1983" 'wind/margin.text.20'
-hcuot "Aug 23 15:42:25 1983" 'wind/misc.text.24'
-hcuot "Aug  8 11:24:58 1983" 'wind/mouse.text.33'
-hcuot "Aug 25 05:27:06 1982" 'wind/operat.bolio.1'
-hcuot "Aug 25 05:26:46 1982" 'wind/operat.text.45'
-hcuot "Aug 25 05:27:12 1982" 'wind/outlin.text.2'
-hcuot "Aug  9 04:51:45 1983" 'wind/output.text.27'
-hcuot "Oct 29 02:54:29 1983" 'wind/output.text.28'
-hcuot "Aug  8 07:11:36 1983" 'wind/select.text.21'
-hcuot "Nov 19 01:30:08 1983" 'wind/select.text.22'
-hcuot "Aug  8 10:42:49 1983" 'wind/tscrol.text.37'
-hcuot "Jul  6 05:25:11 1983" 'wind/typout.text.17'
-hcuot "Aug  9 03:11:35 1983" 'wind/windo1.text.51'
-hcuot "Feb  4 11:57:38 1984" 'wind/windo1.text.52'
-hcuot "Jul  3 06:44:16 1983" 'wind/windoc.bolio.14'
-hcuot "Jun 21 06:34:00 1983" 'wind/windoc.dict.1'
-hcuot "Aug  9 03:12:27 1983" 'wind/windoc.log.12'
-hcuot "Aug  9 03:10:00 1983" 'wind/windoc.text.15'
-hcuot "Aug  9 03:23:20 1983" 'wind/windoc.vars.33'
-hcuot "Aug 25 05:30:20 1982" 'wind/window.gloss.1'
-hcuot "Aug 25 05:30:32 1982" 'wind/window.manual.1'
-hcuot "Aug 25 05:30:42 1982" 'wind/window.methds.1'
-hcuot "Aug 25 05:30:47 1982" 'wind/winman.text.1'
-hcuot "Sep 20 00:19:55 1983" 'window/basstr.lisp.346'
-hcuot "Apr  7 20:52:51 1984" 'window/basstr.lisp.361'
-hcuot "May 26 11:21:27 1984" 'window/basstr.lisp.363'
-hcuot "Jun 13 21:10:16 1984" 'window/basstr.lisp.364'
-hcuot "Jun 14 07:12:33 1984" 'window/basstr.lisp.365'
-hcuot "Jun 15 10:17:11 1984" 'window/basstr.lisp.366'
-hcuot "Jun 15 10:17:39 1984" 'window/basstr.lisp.367'
-hcuot "Jun 24 22:24:20 1984" 'window/basstr.lisp.368'
-hcuot "Jun 24 23:32:56 1984" 'window/basstr.lisp.369'
-hcuot "Jun 25 00:03:58 1984" 'window/basstr.lisp.370'
-hcuot "Jun  6 08:05:24 1984" 'window/basstr.qfasl.363'
-hcuot "Jun 14 07:36:20 1984" 'window/basstr.qfasl.365'
-hcuot "Jun 21 08:50:10 1984" 'window/basstr.qfasl.367'
-hcuot "Nov 30 01:23:44 1983" 'window/baswin.lisp.553'
-hcuot "Apr 15 07:28:51 1984" 'window/baswin.lisp.559'
-hcuot "Jun  6 11:46:15 1984" 'window/baswin.lisp.561'
-hcuot "Jun 12 16:36:34 1984" 'window/baswin.qfasl.561'
-hcuot "Mar  3 04:18:07 1984" 'window/choice.lisp.110'
-hcuot "Apr 22 11:43:14 1984" 'window/choice.lisp.111'
-hcuot "Jun  5 21:49:08 1984" 'window/choice.lisp.113'
-hcuot "Jun 12 04:53:07 1984" 'window/choice.lisp.114'
-hcuot "Jun 12 17:00:43 1984" 'window/choice.qfasl.114'
-hcuot "Aug  3 10:36:59 1983" 'window/cold.lisp.105'
-hcuot "Nov 10 07:11:35 1983" 'window/cold.lisp.112'
-hcuot "Mar 26 10:45:19 1984" 'window/cold.lisp.127'
-hcuot "Jun 17 04:26:37 1984" 'window/cold.lisp.128'
-hcuot "Jun  6 02:20:03 1984" 'window/cold.qfasl.127'
-hcuot "Jun 17 04:29:23 1984" 'window/cold.qfasl.128'
-hcuot "Oct 12 16:29:35 1983" 'window/color.lisp.65'
-hcuot "Dec 11 05:41:19 1983" 'window/color.lisp.66'
-hcuot "Jun 13 10:38:51 1984" 'window/color.lisp.67'
-hcuot "Jun  6 12:10:26 1984" 'window/color.qfasl.66'
-hcuot "Jun 13 20:40:01 1984" 'window/color.qfasl.67'
-hcuot "Jun 29 09:12:56 1982" 'window/cometh.lisp.23'
-hcuot "Aug  4 12:29:09 1983" 'window/cometh.lisp.26'
-hcuot "Oct 25 04:13:43 1983" 'window/cometh.oqfasl.26'
-hcuot "Jun 18 07:31:49 1984" 'window/cometh.qfasl.26'
-hcuot "Jun 29 09:13:09 1982" 'window/csrpos.lisp.9'
-hcuot "Jun  6 08:55:30 1984" 'window/csrpos.qfasl.9'
-hcuot "Nov 17 09:07:53 1983" 'window/eh.lisp.293'
-hcuot "Mar 22 07:07:03 1984" 'window/eh.lisp.320'
-hcuot "May  7 01:12:47 1984" 'window/eh.lisp.321'
-hcuot "Jun  9 13:24:43 1984" 'window/eh.lisp.327'
-hcuot "Jun 14 10:33:38 1984" 'window/eh.lisp.328'
-hcuot "Jun 16 01:04:40 1984" 'window/eh.lisp.329'
-hcuot "Jun 16 11:01:24 1984" 'window/eh.lisp.330'
-hcuot "Jun 17 04:54:46 1984" 'window/eh.lisp.331'
-hcuot "Jun 14 10:57:20 1984" 'window/eh.qfasl.328'
-hcuot "Jun 16 01:04:57 1984" 'window/eh.qfasl.329'
-hcuot "Jun 16 11:01:39 1984" 'window/eh.qfasl.330'
-hcuot "Jun 17 04:55:05 1984" 'window/eh.qfasl.331'
-hcuot "Feb 21 03:48:18 1984" 'window/ehc.lisp.220'
-hcuot "May 15 14:03:22 1984" 'window/ehc.lisp.223'
-hcuot "Jun  6 06:08:48 1984" 'window/ehc.lisp.226'
-hcuot "Jun 17 02:21:36 1984" 'window/ehc.qfasl.226'
-hcuot "Feb 21 03:39:03 1984" 'window/ehf.lisp.195'
-hcuot "May 11 13:24:25 1984" 'window/ehf.lisp.197'
-hcuot "Jun  9 13:25:09 1984" 'window/ehf.lisp.207'
-hcuot "Jun 11 13:59:18 1984" 'window/ehf.lisp.208'
-hcuot "Jun 12 20:33:43 1984" 'window/ehf.lisp.209'
-hcuot "Jun 14 11:31:38 1984" 'window/ehf.lisp.210'
-hcuot "Jun 14 11:48:33 1984" 'window/ehf.lisp.211'
-hcuot "Jun 21 02:52:44 1984" 'window/ehf.lisp.212'
-hcuot "Jun  6 12:20:09 1984" 'window/ehf.qfasl.203'
-hcuot "Jun 13 07:51:51 1984" 'window/ehf.qfasl.209'
-hcuot "Jun 14 11:32:04 1984" 'window/ehf.qfasl.210'
-hcuot "Jun 14 11:48:52 1984" 'window/ehf.qfasl.211'
-hcuot "Jun 21 09:49:53 1984" 'window/ehf.qfasl.212'
-hcuot "Jan 11 14:33:56 1984" 'window/ehw.lisp.107'
-hcuot "Mar 22 11:38:18 1984" 'window/ehw.lisp.108'
-hcuot "May 16 12:21:58 1984" 'window/ehw.lisp.109'
-hcuot "Jun  6 12:44:48 1984" 'window/ehw.qfasl.109'
-hcuot "Nov 23 16:24:15 1983" 'window/fed.lisp.194'
-hcuot "Feb  6 14:55:35 1984" 'window/fed.lisp.199'
-hcuot "Jun  6 12:01:32 1984" 'window/fed.qfasl.199'
-hcuot "Jun 16 15:41:36 1983" 'window/frame.lisp.164'
-hcuot "Apr 11 03:28:15 1984" 'window/frame.lisp.165'
-hcuot "Jun  6 08:41:54 1984" 'window/frame.qfasl.165'
-hcuot "Jun  4 03:03:15 1984" 'window/graphics.lisp.1'
-hcuot "Jun  6 08:13:00 1984" 'window/graphics.qfasl.1'
-hcuot "Jan  7 14:22:48 1984" 'window/inspct.lisp.152'
-hcuot "Jun  6 10:01:37 1984" 'window/inspct.lisp.153'
-hcuot "Jun 12 20:10:18 1984" 'window/inspct.lisp.154'
-hcuot "Jun  6 08:56:04 1984" 'window/inspct.qfasl.152'
-hcuot "Jun 12 19:27:35 1984" 'window/inspct.qfasl.153'
-hcuot "Jun 13 20:23:19 1984" 'window/inspct.qfasl.154'
-hcuot "Oct 30 06:32:13 1983" 'window/menu.lisp.98'
-hcuot "Nov 18 10:54:40 1983" 'window/menu.lisp.102'
-hcuot "Feb  5 10:43:00 1984" 'window/menu.lisp.103'
-hcuot "Jun  6 08:15:38 1984" 'window/menu.qfasl.103'
-hcuot "Dec 28 10:07:37 1983" 'window/mouse.lisp.245'
-hcuot "May  1 23:20:08 1984" 'window/mouse.lisp.246'
-hcuot "May 16 19:35:36 1984" 'window/mouse.lisp.247'
-hcuot "Jun  6 08:02:14 1984" 'window/mouse.qfasl.247'
-hcuot "Nov 19 02:27:34 1983" 'window/peek.lisp.144'
-hcuot "Jun  9 13:23:51 1984" 'window/peek.lisp.145'
-hcuot "Jun  6 09:06:22 1984" 'window/peek.qfasl.144'
-hcuot "Jun 12 19:34:25 1984" 'window/peek.qfasl.145'
-hcuot "Oct 12 19:07:51 1983" 'window/peekch.lisp.26'
-hcuot "May 25 02:14:17 1984" 'window/peekch.lisp.27'
-hcuot "Oct 25 05:15:23 1983" 'window/peekch.qfasl.26'
-hcuot "Jun 29 09:46:44 1982" 'window/peekfs.lisp.9'
-hcuot "Oct 25 05:17:11 1983" 'window/peekfs.qfasl.9'
-hcuot "Jun 29 09:46:50 1982" 'window/quest.lisp.42'
-hcuot "Apr  7 15:56:29 1984" 'window/quest.lisp.43'
-hcuot "Nov 30 05:28:54 1983" 'window/rh.lisp.146'
-hcuot "Mar 27 09:03:32 1984" 'window/rh.lisp.159'
-hcuot "Apr 18 09:15:27 1984" 'window/rh.lisp.160'
-hcuot "Jun 18 11:07:59 1984" 'window/rh.qfasl.160'
-hcuot "Nov 21 08:04:19 1983" 'window/scred.lisp.106'
-hcuot "May  3 19:34:28 1984" 'window/scred.lisp.107'
-hcuot "Jun  6 11:46:58 1984" 'window/scred.lisp.110'
-hcuot "Jun 18 04:57:58 1984" 'window/scred.lisp.111'
-hcuot "Jun 12 19:20:04 1984" 'window/scred.qfasl.110'
-hcuot "Jun 21 08:55:35 1984" 'window/scred.qfasl.111'
-hcuot "Jul 25 10:19:44 1983" 'window/scrman.lisp.165'
-hcuot "Oct 25 05:28:26 1983" 'window/scrman.qfasl.165'
-hcuot "Jul 25 10:21:03 1983" 'window/scroll.lisp.173'
-hcuot "Oct  6 17:48:59 1983" 'window/scroll.lisp.175'
-hcuot "Oct 25 05:31:33 1983" 'window/scroll.qfasl.175'
-hcuot "Feb  4 00:57:09 1984" 'window/sheet.lisp.554'
-hcuot "May 27 15:39:23 1984" 'window/sheet.lisp.555'
-hcuot "Jun  6 11:46:04 1984" 'window/sheet.lisp.557'
-hcuot "Jun 12 16:27:47 1984" 'window/sheet.qfasl.557'
-hcuot "Feb 16 16:22:54 1984" 'window/shwarm.lisp.318'
-hcuot "Apr  6 08:58:01 1984" 'window/shwarm.lisp.319'
-hcuot "May 20 22:13:35 1984" 'window/shwarm.lisp.321'
-hcuot "Jun  4 03:03:20 1984" 'window/shwarm.lisp.322'
-hcuot "Jun  6 07:48:16 1984" 'window/shwarm.qfasl.322'
-hcuot "Nov 21 10:54:11 1983" 'window/stream.lisp.116'
-hcuot "Apr  7 20:17:05 1984" 'window/stream.lisp.134'
-hcuot "May 27 15:38:37 1984" 'window/stream.lisp.136'
-hcuot "Jun  6 11:46:33 1984" 'window/stream.lisp.139'
-hcuot "Jun 17 13:29:19 1984" 'window/stream.lisp.140'
-hcuot "Jun 17 13:48:05 1984" 'window/stream.lisp.141'
-hcuot "Jun 18 05:50:48 1984" 'window/stream.lisp.142'
-hcuot "Jun 18 06:53:08 1984" 'window/stream.lisp.143'
-hcuot "Jun  6 08:10:42 1984" 'window/stream.qfasl.138'
-hcuot "Jun 12 16:46:29 1984" 'window/stream.qfasl.139'
-hcuot "Jun 17 13:29:26 1984" 'window/stream.qfasl.140'
-hcuot "Jun 17 14:23:22 1984" 'window/stream.qfasl.141'
-hcuot "Jun 18 11:13:24 1984" 'window/stream.qfasl.143'
-hcuot "Oct 25 06:19:35 1983" 'window/supdup.lisp.266'
-hcuot "Apr  6 09:36:45 1984" 'window/supdup.lisp.269'
-hcuot "Jun  6 09:12:53 1984" 'window/supdup.lisp.271'
-hcuot "Jun 12 20:14:53 1984" 'window/supdup.lisp.272'
-hcuot "Jun 20 03:02:58 1984" 'window/supdup.lisp.273'
-hcuot "Jun 21 09:08:21 1984" 'window/supdup.lisp.274'
-hcuot "Jun 25 00:38:41 1984" 'window/supdup.lisp.275'
-hcuot "Jun 12 19:37:59 1984" 'window/supdup.qfasl.271'
-hcuot "Jun 18 04:29:44 1984" 'window/supdup.qfasl.272'
-hcuot "Jun 21 09:00:50 1984" 'window/supdup.qfasl.273'
-hcuot "Nov 29 05:56:40 1983" 'window/sysmen.lisp.173'
-hcuot "Mar 18 04:49:43 1984" 'window/sysmen.lisp.176'
-hcuot "Jun  6 11:46:38 1984" 'window/sysmen.lisp.177'
-hcuot "Jun 12 16:48:40 1984" 'window/sysmen.qfasl.177'
-hcuot "Jun 29 09:51:17 1982" 'window/task.list.1'
-hcuot "Dec 26 03:16:03 1983" 'window/tscrol.lisp.69'
-hcuot "Jun  6 11:47:06 1984" 'window/tscrol.lisp.70'
-hcuot "Jun  6 08:39:29 1984" 'window/tscrol.qfasl.69'
-hcuot "Jun 12 19:25:15 1984" 'window/tscrol.qfasl.70'
-hcuot "Nov 20 12:48:36 1983" 'window/tvdefs.lisp.277'
-hcuot "Apr  7 19:54:59 1984" 'window/tvdefs.lisp.278'
-hcuot "Jun 17 13:39:06 1984" 'window/tvdefs.lisp.281'
-hcuot "Jun  6 06:00:00 1984" 'window/tvdefs.lisp.282'
-hcuot "Jun 12 16:19:52 1984" 'window/tvdefs.qfasl.280'
-hcuot "Jun 17 14:03:59 1984" 'window/tvdefs.qfasl.282'
-hcuot "Aug 20 14:24:51 1983" 'window/typwin.lisp.105'
-hcuot "Mar  4 08:08:46 1984" 'window/typwin.lisp.117'
-hcuot "May  1 23:22:28 1984" 'window/typwin.lisp.118'
-hcuot "Jun  6 08:36:19 1984" 'window/typwin.qfasl.118'
-hcuot "Nov 12 03:33:28 1983" 'window/wholin.lisp.84'
-hcuot "Jan 18 20:56:57 1984" 'window/wholin.lisp.85'
-hcuot "Jun  6 11:02:31 1984" 'window/wholin.lisp.86'
-hcuot "Jun 17 13:03:11 1984" 'window/wholin.lisp.87'
-hcuot "Jun  6 08:00:00 1984" 'window/wholin.qfasl.85'
-hcuot "Jun 12 16:44:13 1984" 'window/wholin.qfasl.86'
-hcuot "Jun 17 13:03:32 1984" 'window/wholin.qfasl.87'
-hcuot "Dec  9 23:26:17 1983" 'window/winddoc.lisp.2'
-hcuot "Jun  6 06:10:18 1984" 'zmail/bug.zmail.1'
-hcuot "Apr 14 07:50:23 1983" 'zmail/button.lisp.21'
-hcuot "Feb 19 14:39:57 1984" 'zmail/button.lisp.22'
-hcuot "Apr 11 03:28:22 1984" 'zmail/button.lisp.23'
-hcuot "Nov 15 10:36:26 1983" 'zmail/button.qfasl.21'
-hcuot "Feb 14 11:23:32 1983" 'zmail/cometh.lisp.49'
-hcuot "Sep 23 08:01:04 1983" 'zmail/cometh.lisp.50'
-hcuot "Apr  7 15:57:16 1984" 'zmail/cometh.lisp.51'
-hcuot "Nov 24 00:17:41 1983" 'zmail/cometh.qfasl.50'
-hcuot "Nov 15 10:44:02 1983" 'zmail/comnds.lisp.567'
-hcuot "Dec 31 03:02:15 1983" 'zmail/comnds.lisp.572'
-hcuot "Apr 18 09:42:20 1984" 'zmail/comnds.lisp.578'
-hcuot "Apr 22 00:16:43 1984" 'zmail/comnds.lisp.579'
-hcuot "Nov 22 11:19:13 1983" 'zmail/comnds.qfasl.567'
-hcuot "Aug 17 20:36:10 1983" 'zmail/defs.lisp.268'
-hcuot "Dec 11 02:49:48 1983" 'zmail/defs.lisp.269'
-hcuot "Apr 18 09:42:50 1984" 'zmail/defs.lisp.270'
-hcuot "Nov 15 08:58:36 1983" 'zmail/defs.qfasl.268'
-hcuot "Oct 28 07:04:23 1983" 'zmail/filter.lisp.343'
-hcuot "Nov 28 13:49:03 1983" 'zmail/filter.lisp.346'
-hcuot "Feb 23 13:39:32 1984" 'zmail/filter.lisp.350'
-hcuot "Apr 11 06:36:04 1984" 'zmail/filter.lisp.352'
-hcuot "Nov 28 14:03:40 1983" 'zmail/filter.qfasl.346'
-hcuot "Jun 29 11:22:50 1982" 'zmail/info.mail.1'
-hcuot "Nov 22 10:13:20 1983" 'zmail/lex733.lisp.10'
-hcuot "Dec  3 14:55:46 1983" 'zmail/lex733.lisp.13'
-hcuot "Apr 30 15:49:02 1984" 'zmail/lex733.lisp.14'
-hcuot "Dec  3 14:56:06 1983" 'zmail/lex733.qfasl.5'
-hcuot "Jun 29 11:23:06 1982" 'zmail/lm.lisp.3'
-hcuot "Apr  7 15:57:50 1984" 'zmail/lm.lisp.4'
-hcuot "Jun 29 11:23:09 1982" 'zmail/lmcsrv.lisp.4'
-hcuot "Apr  7 15:58:15 1984" 'zmail/lmcsrv.lisp.5'
-hcuot "Sep 21 04:59:02 1983" 'zmail/lmfile.lisp.3'
-hcuot "Apr  7 15:59:55 1984" 'zmail/lmfile.lisp.4'
-hcuot "Dec 18 08:47:50 1983" 'zmail/lmfile.qfasl.3'
-hcuot "Oct 24 03:34:02 1983" 'zmail/mail.lisp.299'
-hcuot "Apr 22 00:16:27 1984" 'zmail/mail.lisp.306'
-hcuot "Apr 30 15:49:21 1984" 'zmail/mail.lisp.307'
-hcuot "May 16 11:06:22 1984" 'zmail/mail.lisp.308'
-hcuot "Nov 15 10:08:53 1983" 'zmail/mail.qfasl.299'
-hcuot "Sep 21 23:30:47 1983" 'zmail/mfhost.lisp.55'
-hcuot "Oct  9 11:09:21 1983" 'zmail/mfhost.lisp.56'
-hcuot "Apr  7 16:02:19 1984" 'zmail/mfhost.lisp.57'
-hcuot "Nov 15 09:51:50 1983" 'zmail/mfhost.qfasl.56'
-hcuot "Dec  3 22:47:32 1983" 'zmail/mfiles.lisp.320'
-hcuot "Dec 11 10:55:49 1983" 'zmail/mfiles.lisp.321'
-hcuot "Apr 11 06:35:11 1984" 'zmail/mfiles.lisp.322'
-hcuot "Nov 15 09:44:21 1983" 'zmail/mfiles.qfasl.319'
-hcuot "Mar 23 11:01:45 1983" 'zmail/mult.lisp.22'
-hcuot "Jun 16 10:40:07 1983" 'zmail/mult.lisp.23'
-hcuot "Apr  7 16:02:56 1984" 'zmail/mult.lisp.24'
-hcuot "Nov 15 10:34:39 1983" 'zmail/mult.qfasl.23'
-hcuot "Dec 10 23:37:49 1983" 'zmail/parse.lisp.52'
-hcuot "Nov 15 11:02:07 1983" 'zmail/patch.directory.13'
-hcuot "Oct 28 07:03:34 1983" 'zmail/patch-51.directory.21'
-hcuot "Aug 23 00:25:50 1983" 'zmail/patch-51-1.lisp.1'
-hcuot "Aug 23 00:25:56 1983" 'zmail/patch-51-1.qfasl.1'
-hcuot "Sep  7 21:56:01 1983" 'zmail/patch-51-2.lisp.1'
-hcuot "Sep  7 21:56:11 1983" 'zmail/patch-51-2.qfasl.1'
-hcuot "Sep 21 23:30:38 1983" 'zmail/patch-51-3.lisp.6'
-hcuot "Sep 21 23:49:06 1983" 'zmail/patch-51-3.qfasl.6'
-hcuot "Sep 21 23:26:54 1983" 'zmail/patch-51-4.lisp.2'
-hcuot "Sep 21 23:52:02 1983" 'zmail/patch-51-4.qfasl.2'
-hcuot "Sep 23 08:11:23 1983" 'zmail/patch-51-5.lisp.2'
-hcuot "Sep 23 08:11:28 1983" 'zmail/patch-51-5.qfasl.2'
-hcuot "Sep 26 05:52:32 1983" 'zmail/patch-51-6.lisp.1'
-hcuot "Sep 26 05:52:40 1983" 'zmail/patch-51-6.qfasl.1'
-hcuot "Oct 14 07:56:33 1983" 'zmail/patch-51-7.lisp.1'
-hcuot "Oct 14 07:56:39 1983" 'zmail/patch-51-7.qfasl.1'
-hcuot "Oct 22 08:30:39 1983" 'zmail/patch-51-8.lisp.1'
-hcuot "Oct 22 08:30:48 1983" 'zmail/patch-51-8.qfasl.1'
-hcuot "Oct 28 07:02:36 1983" 'zmail/patch-51-9.lisp.1'
-hcuot "Oct 28 07:02:49 1983" 'zmail/patch-51-9.qfasl.1'
-hcuot "Apr 23 17:32:33 1984" 'zmail/patch-53.directory.46'
-hcuot "Apr 26 05:12:09 1984" 'zmail/patch-53.directory.47'
-hcuot "Dec  7 12:43:09 1983" 'zmail/patch-53-1.lisp.2'
-hcuot "Dec  7 12:43:52 1983" 'zmail/patch-53-1.qfasl.2'
-hcuot "Jan 30 06:21:26 1984" 'zmail/patch-53-10.lisp.1'
-hcuot "Jan 30 06:21:32 1984" 'zmail/patch-53-10.qfasl.1'
-hcuot "Feb 16 07:57:45 1984" 'zmail/patch-53-11.lisp.2'
-hcuot "Feb 16 07:57:48 1984" 'zmail/patch-53-11.qfasl.2'
-hcuot "Feb 23 13:40:40 1984" 'zmail/patch-53-12.lisp.2'
-hcuot "Feb 23 13:40:45 1984" 'zmail/patch-53-12.qfasl.2'
-hcuot "Mar  4 08:41:33 1984" 'zmail/patch-53-13.lisp.1'
-hcuot "Mar  4 08:41:37 1984" 'zmail/patch-53-13.qfasl.1'
-hcuot "Mar 24 17:24:31 1984" 'zmail/patch-53-14.lisp.2'
-hcuot "Mar 24 17:24:35 1984" 'zmail/patch-53-14.qfasl.2'
-hcuot "Apr 11 07:05:23 1984" 'zmail/patch-53-15.lisp.3'
-hcuot "Apr 11 07:05:32 1984" 'zmail/patch-53-15.qfasl.3'
-hcuot "Apr 18 09:41:32 1984" 'zmail/patch-53-16.lisp.1'
-hcuot "Apr 18 09:41:38 1984" 'zmail/patch-53-16.qfasl.1'
-hcuot "Apr 22 00:46:53 1984" 'zmail/patch-53-17.lisp.2'
-hcuot "Apr 22 00:47:01 1984" 'zmail/patch-53-17.qfasl.2'
-hcuot "Dec  6 05:18:26 1983" 'zmail/patch-53-2.lisp.1'
-hcuot "Dec  6 05:18:36 1983" 'zmail/patch-53-2.qfasl.1'
-hcuot "Dec 13 06:15:17 1983" 'zmail/patch-53-3.lisp.2'
-hcuot "Dec 13 06:15:23 1983" 'zmail/patch-53-3.qfasl.2'
-hcuot "Dec 14 08:54:56 1983" 'zmail/patch-53-5.lisp.1'
-hcuot "Dec 14 08:55:02 1983" 'zmail/patch-53-5.qfasl.1'
-hcuot "Jan  3 18:55:45 1984" 'zmail/patch-53-6.lisp.2'
-hcuot "Jan  3 18:55:54 1984" 'zmail/patch-53-6.qfasl.2'
-hcuot "Jan  1 01:08:53 1984" 'zmail/patch-53-7.lisp.3'
-hcuot "Jan  1 01:09:00 1984" 'zmail/patch-53-7.qfasl.3'
-hcuot "Jan  1 15:59:26 1984" 'zmail/patch-53-8.lisp.3'
-hcuot "Jan  1 15:59:30 1984" 'zmail/patch-53-8.qfasl.3'
-hcuot "Jan  1 16:00:18 1984" 'zmail/patch-53-9.lisp.2'
-hcuot "Jan  1 16:00:22 1984" 'zmail/patch-53-9.qfasl.2'
-hcuot "Jun 29 11:28:11 1982" 'zmail/poop.text.35'
-hcuot "Mar  1 21:59:09 1983" 'zmail/profil.lisp.104'
-hcuot "Mar 24 17:25:30 1984" 'zmail/profil.lisp.117'
-hcuot "Apr 11 03:29:40 1984" 'zmail/profil.lisp.118'
-hcuot "Apr 16 21:36:09 1984" 'zmail/profil.lisp.119'
-hcuot "Jun 21 02:53:43 1984" 'zmail/profil.lisp.120'
-hcuot "Nov 28 14:14:24 1983" 'zmail/profil.qfasl.110'
-hcuot "Feb 14 10:57:47 1983" 'zmail/refer.lisp.5'
-hcuot "Apr  7 16:03:55 1984" 'zmail/refer.lisp.6'
-hcuot "Nov 15 09:57:14 1983" 'zmail/refer.qfasl.5'
-hcuot "Jun 24 05:45:55 1983" 'zmail/rfc733.lisp.54'
-hcuot "Nov 22 11:12:10 1983" 'zmail/rfc733.lisp.55'
-hcuot "Apr 30 14:38:24 1984" 'zmail/rfc733.lisp.56'
-hcuot "Nov 22 11:32:32 1983" 'zmail/rfc733.qfasl.55'
-hcuot "Dec  8 07:00:35 1982" 'zmail/top.lisp.497'
-hcuot "Apr 16 07:17:47 1983" 'zmail/top.lisp.540'
-hcuot "Aug 17 20:36:16 1983" 'zmail/top.lisp.546'
-hcuot "Dec 31 03:02:48 1983" 'zmail/top.lisp.551'
-hcuot "Jun 15 17:35:56 1984" 'zmail/top.lisp.552'
-hcuot "Nov 24 00:24:32 1983" 'zmail/top.qfasl.549'
-hcuot "Nov  8 08:17:55 1983" 'zmail/window.lisp.333'
-hcuot "Dec 31 03:03:32 1983" 'zmail/window.lisp.339'
-hcuot "Apr 11 06:35:53 1984" 'zmail/window.lisp.340'
-hcuot "Nov 15 10:17:12 1983" 'zmail/window.qfasl.333'
-hcuot "Jun 29 11:04:18 1982" 'zwei/.comnd.text.1'
-hcuot "Jun 29 11:04:27 1982" 'zwei/atsign.xfile.1'
-hcuot "Mar 16 12:02:10 1983" 'zwei/bdired.lisp.39'
-hcuot "Dec 28 08:42:04 1983" 'zwei/bdired.lisp.40'
-hcuot "Jun  9 13:24:16 1984" 'zwei/bdired.lisp.41'
-hcuot "Jun  6 10:55:53 1984" 'zwei/bdired.qfasl.40'
-hcuot "Jun 12 19:59:33 1984" 'zwei/bdired.qfasl.41'
-hcuot "Jan 27 19:35:00 1983" 'zwei/bug.bugs7.1'
-hcuot "Jun 26 01:05:20 1984" 'zwei/bug.zwei.1'
-hcuot "Oct  8 10:11:11 1983" 'zwei/bug-zwei.text.1'
-hcuot "Jun 29 11:04:29 1982" 'zwei/bugs.bugs.1'
-hcuot "Jun 29 11:05:20 1982" 'zwei/bugs.bugs6.1'
-hcuot "Jun 29 11:05:52 1982" 'zwei/bugs.status.1'
-hcuot "Feb 19 15:27:21 1984" 'zwei/coma.lisp.100'
-hcuot "Mar 15 09:23:53 1984" 'zwei/coma.lisp.101'
-hcuot "Jun  6 10:25:29 1984" 'zwei/coma.qfasl.101'
-hcuot "Nov  7 05:37:56 1983" 'zwei/comb.lisp.91'
-hcuot "Apr  5 18:02:13 1984" 'zwei/comb.lisp.92'
-hcuot "Apr 30 15:47:59 1984" 'zwei/comb.lisp.93'
-hcuot "Jun  6 10:28:35 1984" 'zwei/comb.qfasl.93'
-hcuot "Feb 16 01:16:24 1984" 'zwei/comc.lisp.196'
-hcuot "Jun  5 03:44:12 1984" 'zwei/comc.lisp.199'
-hcuot "Jun  6 07:02:27 1984" 'zwei/comc.lisp.200'
-hcuot "Jun  9 13:24:12 1984" 'zwei/comc.lisp.201'
-hcuot "Jun  6 10:31:54 1984" 'zwei/comc.qfasl.200'
-hcuot "Jun 12 19:57:27 1984" 'zwei/comc.qfasl.201'
-hcuot "Jan  2 02:23:32 1984" 'zwei/comd.lisp.158'
-hcuot "Apr 11 03:27:57 1984" 'zwei/comd.lisp.159'
-hcuot "May 26 00:21:29 1984" 'zwei/comd.lisp.160'
-hcuot "Jun  6 06:58:32 1984" 'zwei/comd.lisp.161'
-hcuot "Jun  6 10:34:36 1984" 'zwei/comd.qfasl.161'
-hcuot "Dec 13 05:42:14 1983" 'zwei/come.lisp.132'
-hcuot "Apr  5 17:57:40 1984" 'zwei/come.lisp.133'
-hcuot "Jun  6 10:38:00 1984" 'zwei/come.qfasl.133'
-hcuot "Mar 24 17:00:22 1984" 'zwei/comf.lisp.95'
-hcuot "May 16 11:06:54 1984" 'zwei/comf.lisp.96'
-hcuot "Jun  6 10:40:15 1984" 'zwei/comf.qfasl.96'
-hcuot "Jul 10 09:07:15 1983" 'zwei/comg.lisp.37'
-hcuot "Mar 13 07:14:44 1984" 'zwei/comg.lisp.38'
-hcuot "Jun  5 03:52:51 1984" 'zwei/comg.lisp.39'
-hcuot "Jun  6 10:43:09 1984" 'zwei/comg.qfasl.39'
-hcuot "Mar 31 15:25:45 1984" 'zwei/comh.lisp.7'
-hcuot "Apr 16 21:22:48 1984" 'zwei/comh.lisp.8'
-hcuot "Jun  3 21:52:14 1984" 'zwei/comh.lisp.9'
-hcuot "Jun  6 06:26:27 1984" 'zwei/comh.lisp.10'
-hcuot "Jun  6 10:45:05 1984" 'zwei/comh.qfasl.10'
-hcuot "Mar 31 13:33:54 1984" 'zwei/coms.lisp.81'
-hcuot "Apr 22 04:59:03 1984" 'zwei/coms.lisp.82'
-hcuot "May 16 11:06:10 1984" 'zwei/coms.lisp.83'
-hcuot "Jun 24 17:05:08 1984" 'zwei/coms.lisp.84'
-hcuot "Jun  6 10:46:26 1984" 'zwei/coms.qfasl.83'
-hcuot "Dec 27 08:12:23 1983" 'zwei/comtab.lisp.301'
-hcuot "Mar 31 15:25:07 1984" 'zwei/comtab.lisp.307'
-hcuot "May 26 00:40:29 1984" 'zwei/comtab.lisp.308'
-hcuot "Jun  5 06:32:26 1984" 'zwei/comtab.lisp.309'
-hcuot "Jun  6 07:23:51 1984" 'zwei/comtab.lisp.310'
-hcuot "Jun 21 02:53:00 1984" 'zwei/comtab.lisp.311'
-hcuot "Jun 21 09:42:03 1984" 'zwei/comtab.lisp.312'
-hcuot "Jun 24 17:04:41 1984" 'zwei/comtab.lisp.313'
-hcuot "Jun  6 09:51:01 1984" 'zwei/comtab.qfasl.310'
-hcuot "Jun 21 09:32:51 1984" 'zwei/comtab.qfasl.311'
-hcuot "Jun 21 10:05:23 1984" 'zwei/comtab.qfasl.312'
-hcuot "Jan 19 21:30:52 1984" 'zwei/defs.lisp.144'
-hcuot "Mar 18 04:51:40 1984" 'zwei/defs.lisp.145'
-hcuot "Jun  6 07:54:47 1984" 'zwei/defs.lisp.146'
-hcuot "Jun  9 13:23:57 1984" 'zwei/defs.lisp.147'
-hcuot "Jun 12 17:45:35 1984" 'zwei/defs.lisp.148'
-hcuot "Jun 12 17:47:16 1984" 'zwei/defs.lisp.149'
-hcuot "Jun 12 17:53:09 1984" 'zwei/defs.lisp.150'
-hcuot "Jun 21 02:53:12 1984" 'zwei/defs.lisp.151'
-hcuot "Jun  6 09:21:38 1984" 'zwei/defs.qfasl.146'
-hcuot "Jun 12 17:53:40 1984" 'zwei/defs.qfasl.150'
-hcuot "Jun 21 09:11:01 1984" 'zwei/defs.qfasl.151'
-hcuot "Feb  9 19:45:22 1984" 'zwei/dired.lisp.299'
-hcuot "Apr 30 15:48:15 1984" 'zwei/dired.lisp.300'
-hcuot "May 28 11:58:08 1984" 'zwei/dired.lisp.301'
-hcuot "Jun  6 06:26:45 1984" 'zwei/dired.lisp.302'
-hcuot "Jun  6 10:49:26 1984" 'zwei/dired.qfasl.302'
-hcuot "Dec 27 08:59:04 1983" 'zwei/displa.lisp.149'
-hcuot "Feb  7 13:56:37 1984" 'zwei/displa.lisp.151'
-hcuot "Jun  5 06:32:38 1984" 'zwei/displa.lisp.152'
-hcuot "Jun  9 13:24:03 1984" 'zwei/displa.lisp.153'
-hcuot "Jun  6 09:54:42 1984" 'zwei/displa.qfasl.152'
-hcuot "Jun 12 19:50:49 1984" 'zwei/displa.qfasl.153'
-hcuot "Apr  8 07:11:15 1983" 'zwei/doc.lisp.67'
-hcuot "Feb 19 15:26:09 1984" 'zwei/doc.lisp.72'
-hcuot "Mar 13 07:14:21 1984" 'zwei/doc.lisp.73'
-hcuot "Jun 21 02:53:18 1984" 'zwei/doc.lisp.74'
-hcuot "Jun  6 10:57:16 1984" 'zwei/doc.qfasl.73'
-hcuot "Jun 21 09:36:39 1984" 'zwei/doc.qfasl.74'
-hcuot "Jun 29 11:10:53 1982" 'zwei/emacs.comdif.1'
-hcuot "Aug 10 10:28:26 1983" 'zwei/fasupd.lisp.29'
-hcuot "Apr  7 16:04:21 1984" 'zwei/fasupd.lisp.30'
-hcuot "Apr  7 16:05:03 1984" 'zwei/fasupd.lisp.31'
-hcuot "Jun  6 10:59:09 1984" 'zwei/fasupd.qfasl.31'
-hcuot "Jan  4 00:13:46 1984" 'zwei/files.lisp.192'
-hcuot "Mar 31 14:05:40 1984" 'zwei/files.lisp.193'
-hcuot "Jun  9 13:24:21 1984" 'zwei/files.lisp.194'
-hcuot "Jun  6 10:59:51 1984" 'zwei/files.qfasl.193'
-hcuot "Jun 12 20:01:07 1984" 'zwei/files.qfasl.194'
-hcuot "Feb  2 10:15:30 1984" 'zwei/font.lisp.86'
-hcuot "May  9 11:50:27 1984" 'zwei/font.lisp.87'
-hcuot "May 22 00:58:47 1984" 'zwei/font.lisp.88'
-hcuot "Jun  6 10:18:08 1984" 'zwei/font.qfasl.88'
-hcuot "Dec 31 01:48:22 1983" 'zwei/for.lisp.60'
-hcuot "Jun  6 09:59:00 1984" 'zwei/for.qfasl.60'
-hcuot "Jan  4 00:50:12 1984" 'zwei/history.lisp.15'
-hcuot "Jun  6 10:16:42 1984" 'zwei/history.qfasl.15'
-hcuot "Dec 22 10:01:04 1983" 'zwei/host.lisp.20'
-hcuot "Jun  6 11:04:19 1984" 'zwei/host.qfasl.20'
-hcuot "Oct 25 23:06:09 1983" 'zwei/indent.lisp.103'
-hcuot "Jun  8 20:12:23 1984" 'zwei/indent.lisp.104'
-hcuot "Jun  6 10:01:41 1984" 'zwei/indent.qfasl.103'
-hcuot "Jun 12 19:55:04 1984" 'zwei/indent.qfasl.104'
-hcuot "Jan 16 21:21:27 1984" 'zwei/info.zwei.1'
-hcuot "Jul 20 11:20:46 1983" 'zwei/insert.lisp.32'
-hcuot "Apr  7 16:06:12 1984" 'zwei/insert.lisp.33'
-hcuot "Jun  6 10:04:08 1984" 'zwei/insert.qfasl.33'
-hcuot "Dec 13 05:41:54 1983" 'zwei/ispell.lisp.39'
-hcuot "May 16 11:06:43 1984" 'zwei/ispell.lisp.40'
-hcuot "Jun  6 11:05:37 1984" 'zwei/ispell.qfasl.40'
-hcuot "Dec 28 21:06:08 1983" 'zwei/kbdmac.lisp.46'
-hcuot "Jun  6 07:17:18 1984" 'zwei/kbdmac.lisp.47'
-hcuot "Jun  6 10:20:12 1984" 'zwei/kbdmac.qfasl.47'
-hcuot "Dec 24 08:43:28 1983" 'zwei/lparse.lisp.31'
-hcuot "Jun  6 11:06:47 1984" 'zwei/lparse.qfasl.31'
-hcuot "Mar 15 09:24:11 1984" 'zwei/macros.lisp.137'
-hcuot "May 16 22:12:00 1984" 'zwei/macros.lisp.139'
-hcuot "Jun 18 17:18:16 1984" 'zwei/macros.lisp.141'
-hcuot "Jun  6 09:25:29 1984" 'zwei/macros.qfasl.140'
-hcuot "Jun 21 09:15:13 1984" 'zwei/macros.qfasl.141'
-hcuot "Jan 29 23:12:53 1984" 'zwei/meth.lisp.45'
-hcuot "Mar 18 09:39:19 1984" 'zwei/meth.lisp.47'
-hcuot "Jun  6 07:17:09 1984" 'zwei/meth.lisp.48'
-hcuot "Jun  6 10:06:00 1984" 'zwei/meth.qfasl.48'
-hcuot "Jan  2 02:23:39 1984" 'zwei/modes.lisp.127'
-hcuot "May 25 20:16:25 1984" 'zwei/modes.lisp.130'
+hcuot "Oct 27 23:52:56 1983" 'sys2/hash.lisp.81'		     # Author: RMS
+hcuot "Apr 15 08:59:29 1984" 'sys2/hash.lisp.82'		     # Author: MLY
+hcuot "Jun  5 01:39:39 1984" 'sys2/hash.lisp.83'		     # Author: MLY
+hcuot "Jun  6 04:25:44 1984" 'sys2/hash.qfasl.83'		     # Author: RMS
+hcuot "Oct 27 23:52:41 1983" 'sys2/hashfl.lisp.19'		     # Author: RMS
+hcuot "Nov  1 23:49:35 1983" 'sys2/hashfl.lisp.20'		     # Author: RMS
+hcuot "Apr 16 21:35:12 1984" 'sys2/hashfl.lisp.24'		     # Author: MLY
+hcuot "Jun  5 01:33:55 1984" 'sys2/hashfl.lisp.25'		     # Author: MLY
+hcuot "Jun 14 01:00:50 1984" 'sys2/hashfl.lisp.26'		     # Author: MERMAN.JAN
+hcuot "Jun 14 01:02:32 1984" 'sys2/hashfl.lisp.27'		     # Author: MERMAN.JAN
+hcuot "Jun 14 01:02:46 1984" 'sys2/hashfl.lisp.28'		     # Author: MERMAN.JAN
+hcuot "Jun  6 04:26:59 1984" 'sys2/hashfl.qfasl.25'		     # Author: RMS
+hcuot "Jun 21 07:26:29 1984" 'sys2/hashfl.qfasl.28'		     # Author: MLY
+hcuot "Jan  7 13:03:49 1984" 'sys2/host.lisp.105'		     # Author: DANIEL.G.MLY
+hcuot "May 20 08:26:42 1984" 'sys2/host.lisp.106'		     # Author: RPK
+hcuot "Jun  5 03:17:20 1984" 'sys2/host.lisp.107'		     # Author: MLY
+hcuot "Jun 10 10:30:34 1984" 'sys2/host.lisp.108'		     # Author: MLY
+hcuot "Jun 12 09:17:05 1984" 'sys2/host.lisp.109'		     # Author: MLY
+hcuot "Jun 15 09:41:58 1984" 'sys2/host.lisp.110'		     # Author: RPK
+hcuot "Jun  6 04:28:44 1984" 'sys2/host.qfasl.107'		     # Author: RMS
+hcuot "Jun 10 12:09:57 1984" 'sys2/host.qfasl.108'		     # Author: MLY
+hcuot "Jun 12 10:21:21 1984" 'sys2/host.qfasl.109'		     # Author: MLY
+hcuot "Jun 15 09:45:45 1984" 'sys2/host.qfasl.110'		     # Author: RPK
+hcuot "Jun 29 08:57:31 1982" 'sys2/let.lisp.7'			     # Author: RMS
+hcuot "Apr  7 15:51:47 1984" 'sys2/let.lisp.8'			     # Author: MLY
+hcuot "Aug 14 03:09:26 1983" 'sys2/let.qfasl.7'			     # Author: RMS
+hcuot "Aug 20 14:33:08 1983" 'sys2/lmmac.lisp.278'		     # Author: RMS
+hcuot "Oct 30 05:20:24 1983" 'sys2/lmmac.lisp.299'		     # Author: RMS
+hcuot "May 10 11:30:29 1984" 'sys2/lmmac.lisp.348'		     # Author: MLY
+hcuot "May 20 10:25:41 1984" 'sys2/lmmac.lisp.352'		     # Author: RMS
+hcuot "Jun  4 08:44:01 1984" 'sys2/lmmac.lisp.356'		     # Author: RMS
+hcuot "Jun 13 22:16:20 1984" 'sys2/lmmac.lisp.360'		     # Author: MERMAN.JAN
+hcuot "Jun  6 01:44:24 1984" 'sys2/lmmac.qfasl.356'		     # Author: RMS
+hcuot "Jun  9 13:35:46 1984" 'sys2/lmmac.qfasl.357'		     # Author: MLY
+hcuot "Jun 13 19:31:22 1984" 'sys2/lmmac.qfasl.358'		     # Author: MLY
+hcuot "Jun 21 03:24:01 1984" 'sys2/lmmac.qfasl.360'		     # Author: MLY
+hcuot "Aug 13 09:44:29 1983" 'sys2/login.lisp.76'		     # Author: RMS
+hcuot "May  9 12:09:16 1984" 'sys2/login.lisp.83'		     # Author: MLY
+hcuot "Jun  5 01:16:24 1984" 'sys2/login.lisp.84'		     # Author: MLY
+hcuot "Jun  6 04:32:14 1984" 'sys2/login.qfasl.84'		     # Author: RMS
+hcuot "Nov 30 01:23:16 1983" 'sys2/loop.lisp.795'		     # Author: RMS
+hcuot "Jun 13 22:42:07 1984" 'sys2/loop.lisp.796'		     # Author: MERMAN.JAN
+hcuot "Jun 15 17:03:27 1984" 'sys2/loop.lisp.797'		     # Author: MERMAN.JAN
+hcuot "Jun 20 18:08:26 1984" 'sys2/loop.lisp.798'		     # Author: MERMAN.JAN
+hcuot "Jun  6 04:33:32 1984" 'sys2/loop.qfasl.795'		     # Author: RMS
+hcuot "Jun 21 07:28:18 1984" 'sys2/loop.qfasl.798'		     # Author: MLY
+hcuot "Nov 18 14:36:42 1983" 'sys2/maksys.lisp.166'		     # Author: RMS
+hcuot "Jan 25 07:41:37 1984" 'sys2/maksys.lisp.174'		     # Author: RMS
+hcuot "Jun  5 01:11:51 1984" 'sys2/maksys.lisp.175'		     # Author: MLY
+hcuot "Jun 16 20:18:39 1984" 'sys2/maksys.lisp.176'		     # Author: MLY
+hcuot "Jun  6 04:40:23 1984" 'sys2/maksys.qfasl.175'		     # Author: RMS
+hcuot "Jun 16 20:18:52 1984" 'sys2/maksys.qfasl.176'		     # Author: MLY
+hcuot "Jul 27 10:36:50 1983" 'sys2/matrix.lisp.18'		     # Author: RMS
+hcuot "Mar 14 19:02:00 1984" 'sys2/matrix.lisp.23'		     # Author: MLY
+hcuot "Apr  9 18:08:41 1984" 'sys2/matrix.lisp.26'		     # Author: KAB
+hcuot "Jun  6 12:54:58 1984" 'sys2/matrix.qfasl.26'		     # Author: RMS
+hcuot "Nov 12 01:30:30 1983" 'sys2/meth.lisp.58'		     # Author: RMS
+hcuot "Jun  6 23:55:50 1984" 'sys2/meth.lisp.59'		     # Author: MERMAN.JAN
+hcuot "Jun 13 18:38:56 1984" 'sys2/meth.lisp.60'		     # Author: MERMAN.JAN
+hcuot "Jun 17 06:43:45 1984" 'sys2/meth.lisp.61'		     # Author: MLY
+hcuot "Jun 17 07:08:28 1984" 'sys2/meth.qfasl.61'		     # Author: MLY
+hcuot "Jun  4 03:02:35 1984" 'sys2/numdef.lisp.1'		     # Author: MLY
+hcuot "Jun  9 08:58:51 1984" 'sys2/numdef.lisp.4'		     # Author: MLY
+hcuot "Jun 13 08:03:45 1984" 'sys2/numdef.lisp.6'		     # Author: NGL
+hcuot "Jun 18 17:02:30 1984" 'sys2/numdef.lisp.7'		     # Author: MLY
+hcuot "Jun 18 17:39:26 1984" 'sys2/numdef.lisp.8'		     # Author: MLY
+hcuot "Jun 24 17:56:48 1984" 'sys2/numdef.lisp.9'		     # Author: MLY
+hcuot "Jun 13 08:03:53 1984" 'sys2/numdef.qfasl.6'		     # Author: NGL
+hcuot "Jun 21 05:53:02 1984" 'sys2/numdef.qfasl.8'		     # Author: MLY
+hcuot "Sep 22 21:11:37 1983" 'sys2/numer.lisp.34'		     # Author: RMS
+hcuot "Nov 10 02:28:15 1983" 'sys2/numer.lisp.41'		     # Author: RMS
+hcuot "Mar 13 22:55:49 1984" 'sys2/numer.lisp.43'		     # Author: RMS
+hcuot "Jun  4 02:59:32 1984" 'sys2/numer.lisp.45'		     # Author: MLY
+hcuot "Jun  5 00:50:11 1984" 'sys2/numer.lisp.46'		     # Author: MLY
+hcuot "Jun  8 21:16:39 1984" 'sys2/numer.lisp.47'		     # Author: MLY
+hcuot "Jun  9 08:58:54 1984" 'sys2/numer.lisp.48'		     # Author: MLY
+hcuot "Jun 13 07:50:07 1984" 'sys2/numer.lisp.49'		     # Author: NGL
+hcuot "Jun 13 08:06:00 1984" 'sys2/numer.lisp.50'		     # Author: NGL
+hcuot "Jun 13 08:06:34 1984" 'sys2/numer.lisp.51'		     # Author: NGL
+hcuot "Jun 13 08:08:43 1984" 'sys2/numer.lisp.52'		     # Author: NGL
+hcuot "Jun 14 09:46:37 1984" 'sys2/numer.lisp.53'		     # Author: RMS
+hcuot "Jun 14 10:03:20 1984" 'sys2/numer.lisp.54'		     # Author: RMS
+hcuot "Jun 17 05:47:53 1984" 'sys2/numer.lisp.55'		     # Author: MLY
+hcuot "Jun  6 04:47:26 1984" 'sys2/numer.qfasl.46'		     # Author: RMS
+hcuot "Jun 10 10:57:58 1984" 'sys2/numer.qfasl.48'		     # Author: MLY
+hcuot "Jun 13 07:54:18 1984" 'sys2/numer.qfasl.49'		     # Author: NGL
+hcuot "Jun 13 08:08:52 1984" 'sys2/numer.qfasl.52'		     # Author: NGL
+hcuot "Jun 14 09:46:42 1984" 'sys2/numer.qfasl.53'		     # Author: RMS
+hcuot "Jun 14 10:17:00 1984" 'sys2/numer.qfasl.54'		     # Author: RMS
+hcuot "Jun 17 05:50:32 1984" 'sys2/numer.qfasl.55'		     # Author: MLY
+hcuot "Mar 22 04:17:42 1984" 'sys2/patch.lisp.150'		     # Author: MLY
+hcuot "May 10 11:30:23 1984" 'sys2/patch.lisp.151'		     # Author: MLY
+hcuot "Jun  5 00:46:42 1984" 'sys2/patch.lisp.152'		     # Author: MLY
+hcuot "Jun  6 05:09:32 1984" 'sys2/patch.lisp.153'		     # Author: MLY
+hcuot "Jun 13 13:49:50 1984" 'sys2/patch.lisp.154'		     # Author: MLY
+hcuot "Jun  6 04:48:58 1984" 'sys2/patch.qfasl.152'		     # Author: RMS
+hcuot "Jun 10 10:59:15 1984" 'sys2/patch.qfasl.153'		     # Author: MLY
+hcuot "Jun 13 20:01:57 1984" 'sys2/patch.qfasl.154'		     # Author: MLY
+hcuot "Apr  5 21:46:25 1984" 'sys2/plane.lisp.30'		     # Author: MLY
+hcuot "May 31 14:08:31 1984" 'sys2/plane.lisp.31'		     # Author: MLY
+hcuot "Jun  6 04:51:31 1984" 'sys2/plane.qfasl.31'		     # Author: RMS
+hcuot "Feb 17 11:36:34 1984" 'sys2/proces.lisp.153'		     # Author: MLY
+hcuot "May 13 02:31:33 1984" 'sys2/proces.lisp.154'		     # Author: MLY
+hcuot "May 20 15:33:58 1984" 'sys2/proces.lisp.155'		     # Author: MLY
+hcuot "Jun 14 09:28:49 1984" 'sys2/proces.lisp.156'		     # Author: RMS
+hcuot "Jun 14 09:38:01 1984" 'sys2/proces.lisp.157'		     # Author: RMS
+hcuot "Jun  6 04:55:18 1984" 'sys2/proces.qfasl.155'		     # Author: RMS
+hcuot "Jun 14 09:29:02 1984" 'sys2/proces.qfasl.156'		     # Author: RMS
+hcuot "Jun 14 09:38:13 1984" 'sys2/proces.qfasl.157'		     # Author: RMS
+hcuot "Dec 26 03:13:49 1983" 'sys2/prodef.lisp.39'		     # Author: RMS
+hcuot "May 13 02:30:56 1984" 'sys2/prodef.lisp.40'		     # Author: MLY
+hcuot "Jun  4 06:23:40 1984" 'sys2/prodef.lisp.41'		     # Author: MLY
+hcuot "Jun 13 17:49:05 1984" 'sys2/prodef.lisp.42'		     # Author: MERMAN.JAN
+hcuot "Jun 13 20:06:12 1984" 'sys2/prodef.lisp.43'		     # Author: MERMAN.JAN
+hcuot "Jun 13 21:27:52 1984" 'sys2/prodef.lisp.44'		     # Author: MERMAN.JAN
+hcuot "Jun 14 01:32:10 1984" 'sys2/prodef.lisp.45'		     # Author: MERMAN.JAN
+hcuot "Jun 15 17:55:34 1984" 'sys2/prodef.lisp.46'		     # Author: MERMAN.JAN
+hcuot "Jun 21 06:01:12 1984" 'sys2/prodef.lisp.47'		     # Author: MLY
+hcuot "Jun  6 02:08:42 1984" 'sys2/prodef.qfasl.41'		     # Author: RMS
+hcuot "Jun 13 19:48:03 1984" 'sys2/prodef.qfasl.42'		     # Author: MLY
+hcuot "Jun 21 05:51:54 1984" 'sys2/prodef.qfasl.46'		     # Author: MLY
+hcuot "Jun 21 06:01:41 1984" 'sys2/prodef.qfasl.47'		     # Author: MLY
+hcuot "Apr  1 19:50:03 1984" 'sys2/qtrace.lisp.148'		     # Author: MLY
+hcuot "Apr 22 04:59:26 1984" 'sys2/qtrace.lisp.149'		     # Author: RMS
+hcuot "Jun  6 05:27:40 1984" 'sys2/qtrace.qfasl.149'		     # Author: RMS
+hcuot "Nov  5 04:47:16 1983" 'sys2/rat.lisp.34'			     # Author: RMS
+hcuot "Mar 29 11:34:31 1984" 'sys2/rat.lisp.37'			     # Author: MLY
+hcuot "Jun  4 03:02:01 1984" 'sys2/rat.lisp.38'			     # Author: MLY
+hcuot "Jun  4 23:24:29 1984" 'sys2/rat.lisp.39'			     # Author: MLY
+hcuot "Jun  6 01:41:26 1984" 'sys2/rat.lisp.40'			     # Author: RMS
+hcuot "Jun  6 01:42:00 1984" 'sys2/rat.lisp.41'			     # Author: RMS
+hcuot "Jun  6 05:49:57 1984" 'sys2/rat.lisp.42'			     # Author: MLY
+hcuot "Jun  7 16:48:46 1984" 'sys2/rat.lisp.43'			     # Author: MLY
+hcuot "Jun 14 21:17:48 1984" 'sys2/rat.lisp.44'			     # Author: RMS
+hcuot "Jun  6 05:28:48 1984" 'sys2/rat.qfasl.41'		     # Author: RMS
+hcuot "Jun 10 12:26:15 1984" 'sys2/rat.qfasl.43'		     # Author: MLY
+hcuot "Jun 21 08:21:04 1984" 'sys2/rat.qfasl.44'		     # Author: MLY
+hcuot "Aug  6 12:26:38 1983" 'sys2/resour.lisp.17'		     # Author: RMS
+hcuot "Nov  7 22:06:04 1983" 'sys2/resour.lisp.18'		     # Author: RMS
+hcuot "Apr 15 07:32:26 1984" 'sys2/resour.lisp.26'		     # Author: MLY
+hcuot "Jun  6 11:46:53 1984" 'sys2/resour.lisp.27'		     # Author: MLY
+hcuot "Jun 24 06:09:43 1984" 'sys2/resour.lisp.28'		     # Author: MLY
+hcuot "Jun  6 05:35:50 1984" 'sys2/resour.qfasl.26'		     # Author: RMS
+hcuot "Jun 10 12:32:26 1984" 'sys2/resour.qfasl.27'		     # Author: MLY
+hcuot "Feb  8 14:52:48 1984" 'sys2/selev.lisp.21'		     # Author: MLY
+hcuot "May 11 13:54:50 1984" 'sys2/selev.lisp.22'		     # Author: MLY
+hcuot "Jun  6 05:37:21 1984" 'sys2/selev.qfasl.22'		     # Author: RMS
+hcuot "Oct 12 09:45:31 1983" 'sys2/setf.lisp.51'		     # Author: RMS
+hcuot "Nov 10 20:13:54 1983" 'sys2/setf.lisp.52'		     # Author: RMS
+hcuot "Apr  5 21:47:51 1984" 'sys2/setf.lisp.85'		     # Author: MLY
+hcuot "May 20 08:10:47 1984" 'sys2/setf.lisp.86'		     # Author: RMS
+hcuot "Jun  4 19:59:04 1984" 'sys2/setf.lisp.89'		     # Author: RMS
+hcuot "Jun 14 09:05:31 1984" 'sys2/setf.lisp.90'		     # Author: RMS
+hcuot "Jun 17 06:31:52 1984" 'sys2/setf.lisp.91'		     # Author: MLY
+hcuot "Jun  6 01:58:39 1984" 'sys2/setf.qfasl.89'		     # Author: RMS
+hcuot "Jun 14 09:05:38 1984" 'sys2/setf.qfasl.90'		     # Author: RMS
+hcuot "Jun 17 07:36:58 1984" 'sys2/setf.qfasl.91'		     # Author: MLY
+hcuot "Dec 22 17:32:02 1983" 'sys2/setf.xqfasl.67'		     # Author: RMS
+hcuot "Oct  6 16:24:42 1983" 'sys2/sgdefs.lisp.53'		     # Author: RMS
+hcuot "Jan 12 14:29:47 1984" 'sys2/sgdefs.lisp.54'		     # Author: DANIEL.G.MLY
+hcuot "Jun  6 02:11:03 1984" 'sys2/sgdefs.qfasl.54'		     # Author: RMS
+hcuot "Dec 31 23:26:30 1982" 'sys2/step.lisp.58'		     # Author: CENT
+hcuot "Mar  2 23:25:35 1983" 'sys2/step.lisp.60'		     # Author: CENT
+hcuot "Sep 20 00:20:05 1983" 'sys2/step.lisp.61'		     # Author: RMS
+hcuot "Oct 29 19:56:25 1983" 'sys2/step.lisp.63'		     # Author: CENT
+hcuot "Dec 22 02:05:09 1983" 'sys2/step.lisp.65'		     # Author: RMS
+hcuot "Apr 22 04:59:17 1984" 'sys2/step.lisp.66'		     # Author: RMS
+hcuot "Jun 17 06:30:55 1984" 'sys2/step.lisp.67'		     # Author: MLY
+hcuot "Nov 10 18:53:55 1983" 'sys2/step.qfasl.63'		     # Author: RMS
+hcuot "Jun  6 05:40:08 1984" 'sys2/step.qfasl.66'		     # Author: RMS
+hcuot "Jun 17 07:16:01 1984" 'sys2/step.qfasl.67'		     # Author: MLY
+hcuot "Apr  6 10:08:15 1984" 'sys2/string.lisp.130'		     # Author: RMS
+hcuot "May 13 04:32:48 1984" 'sys2/string.lisp.132'		     # Author: MLY
+hcuot "Jun  4 22:14:12 1984" 'sys2/string.lisp.133'		     # Author: MLY
+hcuot "Jun 15 06:55:18 1984" 'sys2/string.lisp.134'		     # Author: RMS
+hcuot "Jun 15 07:14:54 1984" 'sys2/string.lisp.135'		     # Author: RMS
+hcuot "Jun 15 17:44:09 1984" 'sys2/string.lisp.136'		     # Author: MLY
+hcuot "Jun  6 05:43:56 1984" 'sys2/string.qfasl.133'		     # Author: RMS
+hcuot "Jun 15 06:56:11 1984" 'sys2/string.qfasl.134'		     # Author: RMS
+hcuot "Jun 21 08:30:48 1984" 'sys2/string.qfasl.136'		     # Author: MLY
+hcuot "Aug  4 13:25:26 1983" 'sys2/struct.lisp.286'		     # Author: RMS
+hcuot "Nov 12 20:33:12 1983" 'sys2/struct.lisp.287'		     # Author: RMS
+hcuot "Nov 29 05:45:39 1983" 'sys2/struct.lisp.292'		     # Author: RMS
+hcuot "Mar  7 23:22:17 1984" 'sys2/struct.lisp.309'		     # Author: MLY
+hcuot "May 18 06:09:04 1984" 'sys2/struct.lisp.311'		     # Author: RMS
+hcuot "Jun  5 03:17:48 1984" 'sys2/struct.lisp.316'		     # Author: MLY
+hcuot "Jun  6 00:29:40 1984" 'sys2/struct.lisp.317'		     # Author: MLY
+hcuot "Jun 10 17:00:34 1984" 'sys2/struct.lisp.318'		     # Author: MLY
+hcuot "Jun 12 15:41:29 1984" 'sys2/struct.lisp.319'		     # Author: MLY
+hcuot "Jun 16 22:07:01 1984" 'sys2/struct.lisp.320'		     # Author: MLY
+hcuot "Jun 12 16:09:43 1984" 'sys2/struct.qfasl.319'		     # Author: RMS
+hcuot "Jun 16 22:07:30 1984" 'sys2/struct.qfasl.320'		     # Author: MLY
+hcuot "Nov 10 11:06:56 1983" 'sys2/system.lisp.82'		     # Author: RMS
+hcuot "Apr 27 13:19:33 1984" 'sys2/system.lisp.89'		     # Author: MLY
+hcuot "May 25 20:24:44 1984" 'sys2/system.lisp.93'		     # Author: MLY
+hcuot "Jun  7 04:10:40 1984" 'sys2/system.lisp.94'		     # Author: MLY
+hcuot "Jun 18 15:29:19 1984" 'sys2/system.lisp.97'		     # Author: MLY
+hcuot "Nov 10 11:07:02 1983" 'sys2/system.qfasl.82'		     # Author: RMS
+hcuot "Jun  6 05:47:05 1984" 'sys2/system.qfasl.93'		     # Author: RMS
+hcuot "Jun 10 12:33:34 1984" 'sys2/system.qfasl.94'		     # Author: MLY
+hcuot "Jun 13 09:44:38 1984" 'sys2/system.qfasl.95'		     # Author: MLY
+hcuot "Jun 15 22:23:48 1984" 'sys2/system.qfasl.96'		     # Author: MLY
+hcuot "Jun 18 15:29:30 1984" 'sys2/system.qfasl.97'		     # Author: MLY
+hcuot "Jun 23 07:07:52 1983" 'sys2/unfasl.lisp.15'		     # Author: RMS
+hcuot "Aug  3 08:04:28 1983" 'sys2/unfasl.lisp.16'		     # Author: RMS
+hcuot "Oct 25 00:31:34 1983" 'sys2/unfasl.qfasl.16'		     # Author: RMS
+hcuot "Oct 22 14:37:42 1983" 'sys2/usymld.lisp.183'		     # Author: DANIEL.G.MLY
+hcuot "Nov 12 09:18:33 1983" 'sys2/usymld.lisp.185'		     # Author: RMS
+hcuot "Feb 17 16:46:44 1984" 'sys2/usymld.lisp.186'		     # Author: MLY
+hcuot "Nov 14 02:54:56 1983" 'sys2/usymld.qfasl.185'		     # Author: RMS
+hcuot "Jan  3 08:50:32 1984" 'tape/copy.lisp.128'		     # Author: RPK
+hcuot "Feb 16 13:56:19 1984" 'tape/copy.lisp.133'		     # Author: LMFILE
+hcuot "Jan  3 09:50:47 1984" 'tape/copy.qfasl.128'		     # Author: RPK
+hcuot "Jan 19 16:25:49 1984" 'tape/ddoc.text.4'			     # Author: RPK
+hcuot "May 12 05:49:07 1984" 'tape/ddoc.text.8'			     # Author: RPK
+hcuot "Jan 19 16:25:57 1984" 'tape/fdump.lisp.18'		     # Author: RPK
+hcuot "Feb 16 13:56:28 1984" 'tape/fdump.lisp.24'		     # Author: LMFILE
+hcuot "May 12 05:29:43 1984" 'tape/fdump.lisp.27'		     # Author: RPK
+hcuot "Jan 10 04:56:50 1984" 'tape/fdump-def.lisp.5'		     # Author: RPK
+hcuot "Feb 16 13:56:36 1984" 'tape/fdump-def.lisp.8'		     # Author: LMFILE
+hcuot "May 12 05:52:14 1984" 'tape/fdump-def.lisp.12'		     # Author: RPK
+hcuot "Jan  2 09:37:10 1984" 'tape/fdump-def.qfasl.1'		     # Author: RPK
+hcuot "Jan 10 03:54:15 1984" 'tape/fdump-file-cdate-i.lisp.1'	     # Author: RPK
+hcuot "Jan 10 04:12:46 1984" 'tape/fdump-file-cdate-i.lisp.2'	     # Author: RPK
+hcuot "Jan 19 16:26:13 1984" 'tape/fdump-file-cdate-i.qfasl.2'	     # Author: RPK
+hcuot "Feb 16 13:56:44 1984" 'tape/fdump-r.lisp.4'		     # Author: LMFILE
+hcuot "May 12 05:29:45 1984" 'tape/fdump-r.lisp.5'		     # Author: RPK
+hcuot "Jan  3 10:36:11 1984" 'tape/magtape.directory.11'	     # Author: RPK
+hcuot "Oct 26 20:41:54 1983" 'tape/magtape-14.directory.14'	     # Author: RPK
+hcuot "Mar  8 06:56:47 1983" 'tape/magtape-14-1.qfasl.1'	     # Author: RPK
+hcuot "Apr 25 09:51:48 1983" 'tape/magtape-14-3.qfasl.1'	     # Author: RPK
+hcuot "May 19 04:11:34 1983" 'tape/magtape-14-4.qfasl.3'	     # Author: RPK
+hcuot "Oct 26 20:41:16 1983" 'tape/magtape-14-5.qfasl.1'	     # Author: RPK
+hcuot "Feb 16 14:09:51 1984" 'tape/magtape-22.directory.12'	     # Author: LMFILE
+hcuot "Feb 16 14:24:04 1984" 'tape/magtape-22.directory.13'	     # Author: LMFILE
+hcuot "Jan  7 22:40:45 1984" 'tape/magtape-22-1.lisp.1'		     # Author: RMS
+hcuot "Jan  7 22:40:56 1984" 'tape/magtape-22-1.qfasl.1'	     # Author: RMS
+hcuot "Jan  7 23:28:27 1984" 'tape/magtape-22-2.lisp.1'		     # Author: RMS
+hcuot "Jan  7 23:28:40 1984" 'tape/magtape-22-2.qfasl.1'	     # Author: RMS
+hcuot "Jan  8 00:41:18 1984" 'tape/magtape-22-3.lisp.1'		     # Author: RMS
+hcuot "Jan  8 00:41:44 1984" 'tape/magtape-22-3.qfasl.1'	     # Author: RMS
+hcuot "Jan 13 13:06:26 1984" 'tape/magtape-22-4.lisp.1'		     # Author: GJC
+hcuot "Jan 13 13:06:35 1984" 'tape/magtape-22-4.qfasl.1'	     # Author: GJC
+hcuot "Jan 19 17:40:22 1984" 'tape/magtape-22-5.lisp.1'		     # Author: RPK
+hcuot "Jan 19 17:40:32 1984" 'tape/magtape-22-5.qfasl.1'	     # Author: RPK
+hcuot "Feb 16 14:23:22 1984" 'tape/magtape-22-6.lisp.1'		     # Author: LMFILE
+hcuot "Feb 16 14:23:28 1984" 'tape/magtape-22-6.qfasl.1'	     # Author: LMFILE
+hcuot "Jan 13 12:25:26 1984" 'tape/mtaux.lisp.79'		     # Author: GJC
+hcuot "Jan 19 17:04:02 1984" 'tape/mtaux.lisp.80'		     # Author: RPK
+hcuot "Jan  3 09:52:48 1984" 'tape/mtaux.qfasl.77'		     # Author: RPK
+hcuot "Jun 20 06:21:53 1983" 'tape/mtdefs.lisp.28'		     # Author: RPK
+hcuot "Dec 16 15:34:10 1983" 'tape/mtdefs.lisp.30'		     # Author: RPK
+hcuot "Jan  3 09:46:18 1984" 'tape/mtdefs.qfasl.30'		     # Author: RPK
+hcuot "Jan  7 23:43:06 1984" 'tape/mtstr.lisp.86'		     # Author: RMS
+hcuot "Jan 11 05:40:52 1984" 'tape/mtstr.lisp.87'		     # Author: RPK
+hcuot "Jan  3 09:47:58 1984" 'tape/mtstr.qfasl.85'		     # Author: RPK
+hcuot "Jan  3 08:50:55 1984" 'tape/odump.lisp.1'		     # Author: RPK
+hcuot "Jan  3 10:33:05 1984" 'tape/odump.qfasl.1'		     # Author: RPK
+hcuot "May 12 05:29:46 1984" 'tape/package.lisp.1'		     # Author: RPK
+hcuot "Jan  3 07:59:49 1984" 'tape/pdp10.lisp.1'		     # Author: RPK
+hcuot "Feb  9 07:10:16 1984" 'tape/rmunit.lisp.1'		     # Author: RPK
+hcuot "May 12 07:27:48 1984" 'tape/rmunit.lisp.2'		     # Author: MLY
+hcuot "May 12 08:31:18 1984" 'tape/rmunit.lisp.3'		     # Author: RPK
+hcuot "May 12 05:29:46 1984" 'tape/system.lisp.3'		     # Author: RPK
+hcuot "Jan  3 04:42:55 1984" 'tape/tm.lisp.23'			     # Author: RMS
+hcuot "May 12 05:29:47 1984" 'tape/tm.lisp.25'			     # Author: RPK
+hcuot "Jan  3 04:43:02 1984" 'tape/tmdefs.lisp.6'		     # Author: RMS
+hcuot "May 12 05:29:48 1984" 'tape/tmdefs.lisp.7'		     # Author: RPK
+hcuot "Jan 19 16:26:52 1984" 'tape/unit.lisp.5'			     # Author: RPK
+hcuot "May 12 05:29:49 1984" 'tape/unit.lisp.6'			     # Author: RPK
+hcuot "May 12 07:27:24 1984" 'tape/unit.lisp.7'			     # Author: MLY
+hcuot "Jan  3 08:01:02 1984" 'tape/vms.lisp.1'			     # Author: RPK
+hcuot "Jan  3 08:01:02 1984" 'tape/vms.lisp.2'			     # Author: MLY
+hcuot "Jan 19 16:27:08 1984" 'tape/new/mtdefs.lisp.2'		     # Author: RPK
+hcuot "May 12 05:29:49 1984" 'tape/new/mtdefs.lisp.3'		     # Author: RPK
+hcuot "May 12 07:28:11 1984" 'tape/new/mtdefs.lisp.4'		     # Author: MLY
+hcuot "May 12 07:45:03 1984" 'tape/new/mtdefs.qfasl.4'		     # Author: RPK
+hcuot "Jan 11 06:38:45 1984" 'tape/new/mtrqb.lisp.2'		     # Author: RPK
+hcuot "May 12 05:29:49 1984" 'tape/new/mtrqb.lisp.3'		     # Author: RPK
+hcuot "Jan 11 06:38:21 1984" 'tape/new/mtstr.lisp.3'		     # Author: RPK
+hcuot "May 12 05:29:50 1984" 'tape/new/mtstr.lisp.4'		     # Author: RPK
+hcuot "May 12 08:31:35 1984" 'tape/new/mtstr.lisp.5'		     # Author: RPK
+hcuot "Jan 19 16:27:21 1984" 'tape/new/tmunit.lisp.2'		     # Author: RPK
+hcuot "May 12 05:29:50 1984" 'tape/new/tmunit.lisp.5'		     # Author: RPK
+hcuot "Jan 11 06:38:10 1984" 'tape/new/weunit.lisp.2'		     # Author: RPK
+hcuot "May 12 05:29:51 1984" 'tape/new/weunit.lisp.3'		     # Author: RPK
+hcuot "Jan  3 06:11:30 1984" 'tape/to-merge/-read-.-this-.1'	     # Author: RPK
+hcuot "Oct  9 20:43:50 1983" 'tape/to-merge/copy.lisp.130'	     # Author: RMS
+hcuot "Sep 24 21:21:09 1983" 'tape/to-merge/mtaux.lisp.71'	     # Author: RMS
+hcuot "Sep 24 21:27:33 1983" 'tape/to-merge/mtdefs.lisp.49'	     # Author: RMS
+hcuot "Oct  9 20:11:44 1983" 'tape/to-merge/mtstr.lisp.90'	     # Author: RMS
+hcuot "Feb  3 08:23:56 1983" 'test/-read-.-this-.1'		     # Author: HDT
+hcuot "Nov 20 23:29:49 1982" 'ubin/dcfu.uload.4'		     # Author: AKR
+hcuot "Aug  4 07:23:05 1982" 'ubin/memd.uload.1'		     # Author: RMS
+hcuot "May  7 01:22:05 1983" 'ubin/ucadr.locs.239'		     # Author: RMS.G.DULCEY
+hcuot "Aug 26 14:18:51 1983" 'ubin/ucadr.locs.257'		     # Author: RMS
+hcuot "Mar  3 08:22:09 1984" 'ubin/ucadr.locs.309'		     # Author: RMS
+hcuot "Jun  8 05:31:58 1984" 'ubin/ucadr.locs.310'		     # Author: RMS
+hcuot "Jun  8 23:07:57 1984" 'ubin/ucadr.locs.311'		     # Author: MLY
+hcuot "Jun 16 21:32:16 1984" 'ubin/ucadr.locs.312'		     # Author: MLY
+hcuot "Jun 16 22:57:16 1984" 'ubin/ucadr.locs.313'		     # Author: MLY
+hcuot "Jun 17 01:45:52 1984" 'ubin/ucadr.locs.314'		     # Author: MLY
+hcuot "May  7 01:19:58 1983" 'ubin/ucadr.mcr.239'		     # Author: RMS.G.DULCEY
+hcuot "Aug 26 14:16:41 1983" 'ubin/ucadr.mcr.257'		     # Author: RMS
+hcuot "Mar  3 08:20:07 1984" 'ubin/ucadr.mcr.309'		     # Author: RMS
+hcuot "Jun  8 05:29:50 1984" 'ubin/ucadr.mcr.310'		     # Author: RMS
+hcuot "Jun  8 23:03:26 1984" 'ubin/ucadr.mcr.311'		     # Author: MLY
+hcuot "Jun 16 21:29:59 1984" 'ubin/ucadr.mcr.312'		     # Author: MLY
+hcuot "Jun 16 22:54:55 1984" 'ubin/ucadr.mcr.313'		     # Author: MLY
+hcuot "Jun 17 01:42:17 1984" 'ubin/ucadr.mcr.314'		     # Author: MLY
+hcuot "May  7 01:20:31 1983" 'ubin/ucadr.sym.239'		     # Author: RMS.G.DULCEY
+hcuot "Aug 26 14:17:12 1983" 'ubin/ucadr.sym.257'		     # Author: RMS
+hcuot "Nov 28 19:18:44 1983" 'ubin/ucadr.sym.305'		     # Author: RMS
+hcuot "Dec 29 05:39:42 1983" 'ubin/ucadr.sym.306'		     # Author: RMS
+hcuot "Jan 23 03:03:17 1984" 'ubin/ucadr.sym.308'		     # Author: RMS
+hcuot "Mar  3 08:20:33 1984" 'ubin/ucadr.sym.309'		     # Author: RMS
+hcuot "Jun  8 05:30:18 1984" 'ubin/ucadr.sym.310'		     # Author: RMS
+hcuot "Jun 11 22:34:45 1984" 'ubin/ucadr.sym.311'		     # Author: RMS
+hcuot "Jun 16 21:44:49 1984" 'ubin/ucadr.sym.312'		     # Author: MLY
+hcuot "Jun 16 22:55:25 1984" 'ubin/ucadr.sym.313'		     # Author: MLY
+hcuot "Jun 17 01:42:47 1984" 'ubin/ucadr.sym.314'		     # Author: MLY
+hcuot "May  7 01:22:07 1983" 'ubin/ucadr.tbl.239'		     # Author: RMS.G.DULCEY
+hcuot "Aug 26 14:18:53 1983" 'ubin/ucadr.tbl.257'		     # Author: RMS
+hcuot "Mar  3 08:22:10 1984" 'ubin/ucadr.tbl.309'		     # Author: RMS
+hcuot "Jun  8 05:32:00 1984" 'ubin/ucadr.tbl.310'		     # Author: RMS
+hcuot "Jun  8 23:08:00 1984" 'ubin/ucadr.tbl.311'		     # Author: MLY
+hcuot "Jun 16 21:32:18 1984" 'ubin/ucadr.tbl.312'		     # Author: MLY
+hcuot "Jun 16 22:57:19 1984" 'ubin/ucadr.tbl.313'		     # Author: MLY
+hcuot "Jun 17 01:45:55 1984" 'ubin/ucadr.tbl.314'		     # Author: MLY
+hcuot "Apr  9 11:19:01 1983" 'ucadr/cadldb.lisp.20'		     # Author: RMS
+hcuot "Jul 26 10:31:51 1983" 'ucadr/cadldb.qfasl.20'		     # Author: RMS
+hcuot "Jun 29 10:56:11 1982" 'ucadr/cadtlk.mid.9'		     # Author: RMS
+hcuot "Jun 29 10:56:32 1982" 'ucadr/chaos.test.1'		     # Author: RMS
+hcuot "Jun 29 10:56:46 1982" 'ucadr/dcfu.text.23'		     # Author: RMS
+hcuot "Dec 22 06:46:28 1982" 'ucadr/dcfu.uload.3'		     # Author: AKR
+hcuot "Jun 29 10:59:34 1982" 'ucadr/memd.lisp.26'		     # Author: RMS
+hcuot "Jun 29 10:59:39 1982" 'ucadr/mmtest.lisp.15'		     # Author: RMS
+hcuot "Jun 29 10:56:41 1982" 'ucadr/obsolete-cold-load-maker.lisp.1' # Author: RMS
+hcuot "Nov 17 06:26:42 1982" 'ucadr/packed.lisp.119'		     # Author: RMS
+hcuot "Oct 14 23:41:23 1983" 'ucadr/packed.lisp.124'		     # Author: ALR
+hcuot "Jun 29 11:00:13 1982" 'ucadr/praid.lisp.21'		     # Author: RMS
+hcuot "Jun 29 11:00:18 1982" 'ucadr/promh.text.9'		     # Author: RMS
+hcuot "Jul 20 09:27:19 1983" 'ucadr/uc-arith.lisp.18'		     # Author: RMS
+hcuot "Nov 18 14:23:35 1983" 'ucadr/uc-arith.lisp.25'		     # Author: RMS
+hcuot "Apr 29 00:12:20 1984" 'ucadr/uc-arith.lisp.27'		     # Author: RMS
+hcuot "Apr 30 23:43:08 1984" 'ucadr/uc-arith.lisp.28'		     # Author: RMS
+hcuot "May 20 23:14:24 1984" 'ucadr/uc-arith.lisp.29'		     # Author: RMS
+hcuot "Jun  5 23:24:56 1984" 'ucadr/uc-arith.lisp.30'		     # Author: RMS
+hcuot "Jun  5 23:38:51 1984" 'ucadr/uc-arith.lisp.31'		     # Author: RMS
+hcuot "Jun  8 20:31:34 1984" 'ucadr/uc-arith.lisp.32'		     # Author: MLY
+hcuot "Apr  3 12:38:40 1983" 'ucadr/uc-array.lisp.27'		     # Author: RMS
+hcuot "Jul 23 10:01:24 1983" 'ucadr/uc-array.lisp.28'		     # Author: NGL
+hcuot "Nov 29 21:22:31 1983" 'ucadr/uc-array.lisp.59'		     # Author: RMS
+hcuot "May 20 23:41:03 1984" 'ucadr/uc-array.lisp.60'		     # Author: RMS
+hcuot "Jun  8 20:31:25 1984" 'ucadr/uc-array.lisp.61'		     # Author: MLY
+hcuot "Jun 16 20:59:03 1984" 'ucadr/uc-array.lisp.62'		     # Author: MLY
+hcuot "Jun 17 01:36:02 1984" 'ucadr/uc-array.lisp.63'		     # Author: MLY
+hcuot "Mar 31 23:16:21 1983" 'ucadr/uc-array-cache.lisp.1'	     # Author: RMS
+hcuot "Mar 31 23:15:30 1983" 'ucadr/uc-cadr.lisp.6'		     # Author: RMS
+hcuot "Jul 29 11:02:16 1983" 'ucadr/uc-cadr.lisp.7'		     # Author: RMS
+hcuot "Jun  2 03:53:36 1984" 'ucadr/uc-cadr.lisp.8'		     # Author: RMS
+hcuot "Jul 23 10:18:19 1983" 'ucadr/uc-call-return.lisp.37'	     # Author: NGL
+hcuot "Sep 23 05:03:26 1983" 'ucadr/uc-call-return.lisp.61'	     # Author: RMS
+hcuot "Jan 27 08:37:59 1984" 'ucadr/uc-call-return.lisp.97'	     # Author: RMS
+hcuot "Mar 22 06:55:28 1984" 'ucadr/uc-call-return.lisp.98'	     # Author: RMS
+hcuot "May 19 03:59:07 1984" 'ucadr/uc-call-return.lisp.99'	     # Author: RMS
+hcuot "Jun  8 04:16:44 1984" 'ucadr/uc-call-return.lisp.100'	     # Author: RMS
+hcuot "Jun 17 01:36:13 1984" 'ucadr/uc-call-return.lisp.101'	     # Author: MLY
+hcuot "Oct 11 07:19:04 1982" 'ucadr/uc-chaos.lisp.1'		     # Author: RG
+hcuot "Oct 15 01:27:48 1982" 'ucadr/uc-cold-disk.lisp.2'	     # Author: RG
+hcuot "Jun  8 11:15:36 1983" 'ucadr/uc-cold-disk.lisp.9'	     # Author: RMS
+hcuot "Nov 14 10:06:43 1983" 'ucadr/uc-cold-disk.lisp.16'	     # Author: RMS
+hcuot "Oct 11 07:18:14 1982" 'ucadr/uc-disk.lisp.1'		     # Author: RG
+hcuot "Nov 14 08:21:19 1983" 'ucadr/uc-disk.lisp.2'		     # Author: RMS
+hcuot "Jun  4 07:41:28 1983" 'ucadr/uc-fctns.lisp.26'		     # Author: RMS
+hcuot "Sep 13 09:27:33 1983" 'ucadr/uc-fctns.lisp.40'		     # Author: RMS
+hcuot "Apr 11 00:36:59 1984" 'ucadr/uc-fctns.lisp.73'		     # Author: PGS
+hcuot "Apr 17 23:46:13 1984" 'ucadr/uc-fctns.lisp.74'		     # Author: MLY
+hcuot "May 11 05:41:36 1984" 'ucadr/uc-fctns.lisp.75'		     # Author: RMS
+hcuot "Jun  8 20:31:12 1984" 'ucadr/uc-fctns.lisp.76'		     # Author: MLY
+hcuot "Jun 16 20:58:42 1984" 'ucadr/uc-fctns.lisp.77'		     # Author: MLY
+hcuot "Jun 16 21:24:03 1984" 'ucadr/uc-fctns.lisp.78'		     # Author: MLY
+hcuot "Jun 16 22:40:24 1984" 'ucadr/uc-fctns.lisp.79'		     # Author: MLY
+hcuot "Apr  3 12:37:59 1983" 'ucadr/uc-hacks.lisp.3'		     # Author: RMS
+hcuot "Oct 17 16:11:57 1983" 'ucadr/uc-hacks.lisp.5'		     # Author: RMS
+hcuot "Feb  4 09:53:01 1983" 'ucadr/uc-interrupt.lisp.4'	     # Author: RMS
+hcuot "Oct 30 00:16:52 1983" 'ucadr/uc-interrupt.lisp.7'	     # Author: RMS
+hcuot "Oct 13 05:05:41 1982" 'ucadr/uc-logical.lisp.2'		     # Author: RG
+hcuot "Jul 23 11:00:06 1983" 'ucadr/uc-logical.lisp.7'		     # Author: NGL
+hcuot "Mar  3 04:56:48 1984" 'ucadr/uc-logical.lisp.8'		     # Author: RMS
+hcuot "Apr  4 07:09:21 1983" 'ucadr/uc-macrocode.lisp.9'	     # Author: RMS
+hcuot "Oct 19 12:16:21 1983" 'ucadr/uc-macrocode.lisp.22'	     # Author: RMS
+hcuot "Nov 14 02:49:50 1983" 'ucadr/uc-macrocode.lisp.28'	     # Author: RMS
+hcuot "Oct 11 20:53:14 1982" 'ucadr/uc-mc.lisp.1'		     # Author: RG
+hcuot "Nov 14 02:47:25 1983" 'ucadr/uc-mc.lisp.2'		     # Author: RMS
+hcuot "Apr  5 09:49:33 1983" 'ucadr/uc-meter.lisp.3'		     # Author: RMS
+hcuot "Jul 23 12:00:11 1983" 'ucadr/uc-meter.lisp.4'		     # Author: NGL
+hcuot "Aug  1 09:39:57 1983" 'ucadr/uc-meter.lisp.5'		     # Author: RMS
+hcuot "Jun  5 10:47:27 1983" 'ucadr/uc-page-fault.lisp.7'	     # Author: RMS
+hcuot "Oct 17 16:11:44 1983" 'ucadr/uc-page-fault.lisp.10'	     # Author: RMS
+hcuot "Nov 21 09:24:14 1983" 'ucadr/uc-page-fault.lisp.13'	     # Author: RMS
+hcuot "Apr  5 09:49:02 1983" 'ucadr/uc-parameters.lisp.204'	     # Author: RMS
+hcuot "Oct 29 22:36:55 1983" 'ucadr/uc-parameters.lisp.222'	     # Author: RMS
+hcuot "Dec 28 07:16:45 1983" 'ucadr/uc-parameters.lisp.228'	     # Author: RMS
+hcuot "May  1 09:20:26 1984" 'ucadr/uc-parameters.lisp.229'	     # Author: RMS
+hcuot "Jun  2 03:53:42 1984" 'ucadr/uc-parameters.lisp.230'	     # Author: RMS
+hcuot "Oct 11 07:18:51 1982" 'ucadr/uc-pup.lisp.1'		     # Author: RG
+hcuot "Nov 16 10:34:29 1983" 'ucadr/uc-stack-closure.lisp.3'	     # Author: RMS
+hcuot "Jan 23 03:33:37 1984" 'ucadr/uc-stack-closure.lisp.6'	     # Author: RMS
+hcuot "Jun 15 06:04:18 1984" 'ucadr/uc-stack-closure.lisp.7'	     # Author: RMS
+hcuot "Jun 15 06:08:23 1984" 'ucadr/uc-stack-closure.lisp.8'	     # Author: RMS
+hcuot "Nov 17 06:07:32 1982" 'ucadr/uc-stack-groups.lisp.3'	     # Author: RMS
+hcuot "Apr  5 09:49:39 1983" 'ucadr/uc-stack-groups.lisp.4'	     # Author: RMS
+hcuot "Jul 23 11:47:54 1983" 'ucadr/uc-stack-groups.lisp.5'	     # Author: NGL
+hcuot "Feb 15 09:14:27 1983" 'ucadr/uc-storage-allocation.lisp.12'   # Author: HDT
+hcuot "Apr  3 12:39:03 1983" 'ucadr/uc-storage-allocation.lisp.13'   # Author: RMS
+hcuot "Jul 29 10:34:22 1983" 'ucadr/uc-storage-allocation.lisp.15'   # Author: RMS
+hcuot "May 19 04:22:04 1984" 'ucadr/uc-storage-allocation.lisp.16'   # Author: RMS
+hcuot "Jul 20 10:00:15 1983" 'ucadr/uc-string.lisp.13'		     # Author: RMS
+hcuot "Aug 28 00:10:40 1983" 'ucadr/uc-string.lisp.20'		     # Author: RMS
+hcuot "Apr  6 09:54:27 1984" 'ucadr/uc-string.lisp.23'		     # Author: RMS
+hcuot "Jun  8 05:21:08 1984" 'ucadr/uc-string.lisp.24'		     # Author: RMS
+hcuot "Apr  3 12:37:55 1983" 'ucadr/uc-track-mouse.lisp.2'	     # Author: RMS
+hcuot "Jul 20 06:38:27 1983" 'ucadr/uc-transporter.lisp.6'	     # Author: RMS
+hcuot "Aug 15 14:07:26 1983" 'ucadr/uc-transporter.lisp.9'	     # Author: RMS
+hcuot "Dec 29 05:09:16 1983" 'ucadr/uc-transporter.lisp.22'	     # Author: RMS
+hcuot "May  1 09:20:21 1984" 'ucadr/uc-transporter.lisp.23'	     # Author: RMS
+hcuot "Apr  4 09:20:18 1983" 'ucadr/uc-tv.lisp.3'		     # Author: RMS
+hcuot "Jul 23 12:18:17 1983" 'ucadr/uc-tv.lisp.4'		     # Author: NGL
+hcuot "Apr  5 03:29:11 1984" 'ucadr/uc-tv.lisp.5'		     # Author: RMS
+hcuot "Jun 29 11:00:58 1982" 'ucadr/ucadlr.text.746'		     # Author: RMS
+hcuot "Nov 14 01:30:39 1983" 'ucadr/ucode.lisp.19'		     # Author: RMS
+hcuot "Aug 25 05:24:02 1982" 'wind/baswin.text.7'		     # Author: RMS
+hcuot "Aug  9 02:24:49 1983" 'wind/blink.text.21'		     # Author: RMS
+hcuot "Nov 16 05:33:30 1983" 'wind/choice.text.94'		     # Author: RMS
+hcuot "Jan 22 09:23:05 1984" 'wind/choice.text.95'		     # Author: RMS
+hcuot "Jul 23 04:52:44 1983" 'wind/edges.text.14'		     # Author: RMS
+hcuot "Aug 25 05:25:39 1982" 'wind/emack.fasl.1'		     # Author: RMS
+hcuot "Aug 25 05:25:27 1982" 'wind/emack.lisp.36'		     # Author: RMS
+hcuot "Apr  7 15:53:58 1984" 'wind/emack.lisp.37'		     # Author: MLY
+hcuot "Jul  6 04:46:40 1983" 'wind/fonts.text.17'		     # Author: RMS
+hcuot "Aug  9 02:21:25 1983" 'wind/frames.text.14'		     # Author: RMS
+hcuot "Aug  8 05:44:03 1983" 'wind/grafix.text.24'		     # Author: RMS
+hcuot "Aug  8 07:11:30 1983" 'wind/input.text.24'		     # Author: RMS
+hcuot "Sep 30 08:33:21 1983" 'wind/input.text.26'		     # Author: RMS
+hcuot "Aug 25 05:26:36 1982" 'wind/lstfla.lisp.5'		     # Author: RMS
+hcuot "Apr  7 15:55:43 1984" 'wind/lstfla.lisp.6'		     # Author: MLY
+hcuot "Aug  8 06:15:43 1983" 'wind/margin.text.20'		     # Author: RMS
+hcuot "Aug 23 15:42:25 1983" 'wind/misc.text.24'		     # Author: RMS
+hcuot "Aug  8 11:24:58 1983" 'wind/mouse.text.33'		     # Author: RMS
+hcuot "Aug 25 05:27:06 1982" 'wind/operat.bolio.1'		     # Author: RMS
+hcuot "Aug 25 05:26:46 1982" 'wind/operat.text.45'		     # Author: RMS
+hcuot "Aug 25 05:27:12 1982" 'wind/outlin.text.2'		     # Author: RMS
+hcuot "Aug  9 04:51:45 1983" 'wind/output.text.27'		     # Author: RMS
+hcuot "Oct 29 02:54:29 1983" 'wind/output.text.28'		     # Author: RMS
+hcuot "Aug  8 07:11:36 1983" 'wind/select.text.21'		     # Author: RMS
+hcuot "Nov 19 01:30:08 1983" 'wind/select.text.22'		     # Author: RMS
+hcuot "Aug  8 10:42:49 1983" 'wind/tscrol.text.37'		     # Author: RMS
+hcuot "Jul  6 05:25:11 1983" 'wind/typout.text.17'		     # Author: RMS
+hcuot "Aug  9 03:11:35 1983" 'wind/windo1.text.51'		     # Author: RMS
+hcuot "Feb  4 11:57:38 1984" 'wind/windo1.text.52'		     # Author: RMS
+hcuot "Jul  3 06:44:16 1983" 'wind/windoc.bolio.14'		     # Author: GSB
+hcuot "Jun 21 06:34:00 1983" 'wind/windoc.dict.1'		     # Author: RMS
+hcuot "Aug  9 03:12:27 1983" 'wind/windoc.log.12'		     # Author: RMS
+hcuot "Aug  9 03:10:00 1983" 'wind/windoc.text.15'		     # Author: RMS
+hcuot "Aug  9 03:23:20 1983" 'wind/windoc.vars.33'		     # Author: RMS
+hcuot "Aug 25 05:30:20 1982" 'wind/window.gloss.1'		     # Author: RMS
+hcuot "Aug 25 05:30:32 1982" 'wind/window.manual.1'		     # Author: RMS
+hcuot "Aug 25 05:30:42 1982" 'wind/window.methds.1'		     # Author: RMS
+hcuot "Aug 25 05:30:47 1982" 'wind/winman.text.1'		     # Author: RMS
+hcuot "Sep 20 00:19:55 1983" 'window/basstr.lisp.346'		     # Author: RMS
+hcuot "Apr  7 20:52:51 1984" 'window/basstr.lisp.361'		     # Author: MLY
+hcuot "May 26 11:21:27 1984" 'window/basstr.lisp.363'		     # Author: MLY
+hcuot "Jun 13 21:10:16 1984" 'window/basstr.lisp.364'		     # Author: MERMAN.JAN
+hcuot "Jun 14 07:12:33 1984" 'window/basstr.lisp.365'		     # Author: RPK
+hcuot "Jun 15 10:17:11 1984" 'window/basstr.lisp.366'		     # Author: RPK
+hcuot "Jun 15 10:17:39 1984" 'window/basstr.lisp.367'		     # Author: RPK
+hcuot "Jun 24 22:24:20 1984" 'window/basstr.lisp.368'		     # Author: RMS
+hcuot "Jun 24 23:32:56 1984" 'window/basstr.lisp.369'		     # Author: RMS
+hcuot "Jun 25 00:03:58 1984" 'window/basstr.lisp.370'		     # Author: RMS
+hcuot "Jun  6 08:05:24 1984" 'window/basstr.qfasl.363'		     # Author: RMS
+hcuot "Jun 14 07:36:20 1984" 'window/basstr.qfasl.365'		     # Author: RPK
+hcuot "Jun 21 08:50:10 1984" 'window/basstr.qfasl.367'		     # Author: MLY
+hcuot "Nov 30 01:23:44 1983" 'window/baswin.lisp.553'		     # Author: RMS
+hcuot "Apr 15 07:28:51 1984" 'window/baswin.lisp.559'		     # Author: MLY
+hcuot "Jun  6 11:46:15 1984" 'window/baswin.lisp.561'		     # Author: MLY
+hcuot "Jun 12 16:36:34 1984" 'window/baswin.qfasl.561'		     # Author: RMS
+hcuot "Mar  3 04:18:07 1984" 'window/choice.lisp.110'		     # Author: RMS
+hcuot "Apr 22 11:43:14 1984" 'window/choice.lisp.111'		     # Author: MLY
+hcuot "Jun  5 21:49:08 1984" 'window/choice.lisp.113'		     # Author: RMS
+hcuot "Jun 12 04:53:07 1984" 'window/choice.lisp.114'		     # Author: ECC
+hcuot "Jun 12 17:00:43 1984" 'window/choice.qfasl.114'		     # Author: RMS
+hcuot "Aug  3 10:36:59 1983" 'window/cold.lisp.105'		     # Author: RMS
+hcuot "Nov 10 07:11:35 1983" 'window/cold.lisp.112'		     # Author: RMS
+hcuot "Mar 26 10:45:19 1984" 'window/cold.lisp.127'		     # Author: MLY
+hcuot "Jun 17 04:26:37 1984" 'window/cold.lisp.128'		     # Author: MLY
+hcuot "Jun  6 02:20:03 1984" 'window/cold.qfasl.127'		     # Author: RMS
+hcuot "Jun 17 04:29:23 1984" 'window/cold.qfasl.128'		     # Author: MLY
+hcuot "Oct 12 16:29:35 1983" 'window/color.lisp.65'		     # Author: ALR
+hcuot "Dec 11 05:41:19 1983" 'window/color.lisp.66'		     # Author: RMS
+hcuot "Jun 13 10:38:51 1984" 'window/color.lisp.67'		     # Author: ECC
+hcuot "Jun  6 12:10:26 1984" 'window/color.qfasl.66'		     # Author: RMS
+hcuot "Jun 13 20:40:01 1984" 'window/color.qfasl.67'		     # Author: MLY
+hcuot "Jun 29 09:12:56 1982" 'window/cometh.lisp.23'		     # Author: RMS
+hcuot "Aug  4 12:29:09 1983" 'window/cometh.lisp.26'		     # Author: RMS
+hcuot "Oct 25 04:13:43 1983" 'window/cometh.oqfasl.26'		     # Author: RMS
+hcuot "Jun 18 07:31:49 1984" 'window/cometh.qfasl.26'		     # Author: RMS
+hcuot "Jun 29 09:13:09 1982" 'window/csrpos.lisp.9'		     # Author: RMS
+hcuot "Jun  6 08:55:30 1984" 'window/csrpos.qfasl.9'		     # Author: RMS
+hcuot "Nov 17 09:07:53 1983" 'window/eh.lisp.293'		     # Author: RMS
+hcuot "Mar 22 07:07:03 1984" 'window/eh.lisp.320'		     # Author: RMS
+hcuot "May  7 01:12:47 1984" 'window/eh.lisp.321'		     # Author: RMS
+hcuot "Jun  9 13:24:43 1984" 'window/eh.lisp.327'		     # Author: MLY
+hcuot "Jun 14 10:33:38 1984" 'window/eh.lisp.328'		     # Author: RMS
+hcuot "Jun 16 01:04:40 1984" 'window/eh.lisp.329'		     # Author: RMS
+hcuot "Jun 16 11:01:24 1984" 'window/eh.lisp.330'		     # Author: MLY
+hcuot "Jun 17 04:54:46 1984" 'window/eh.lisp.331'		     # Author: MLY
+hcuot "Jun 14 10:57:20 1984" 'window/eh.qfasl.328'		     # Author: RMS
+hcuot "Jun 16 01:04:57 1984" 'window/eh.qfasl.329'		     # Author: RMS
+hcuot "Jun 16 11:01:39 1984" 'window/eh.qfasl.330'		     # Author: MLY
+hcuot "Jun 17 04:55:05 1984" 'window/eh.qfasl.331'		     # Author: MLY
+hcuot "Feb 21 03:48:18 1984" 'window/ehc.lisp.220'		     # Author: MLY
+hcuot "May 15 14:03:22 1984" 'window/ehc.lisp.223'		     # Author: MLY
+hcuot "Jun  6 06:08:48 1984" 'window/ehc.lisp.226'		     # Author: MLY
+hcuot "Jun 17 02:21:36 1984" 'window/ehc.qfasl.226'		     # Author: RMS
+hcuot "Feb 21 03:39:03 1984" 'window/ehf.lisp.195'		     # Author: MLY
+hcuot "May 11 13:24:25 1984" 'window/ehf.lisp.197'		     # Author: MLY
+hcuot "Jun  9 13:25:09 1984" 'window/ehf.lisp.207'		     # Author: MLY
+hcuot "Jun 11 13:59:18 1984" 'window/ehf.lisp.208'		     # Author: RMS
+hcuot "Jun 12 20:33:43 1984" 'window/ehf.lisp.209'		     # Author: RMS
+hcuot "Jun 14 11:31:38 1984" 'window/ehf.lisp.210'		     # Author: RMS
+hcuot "Jun 14 11:48:33 1984" 'window/ehf.lisp.211'		     # Author: RMS
+hcuot "Jun 21 02:52:44 1984" 'window/ehf.lisp.212'		     # Author: MLY
+hcuot "Jun  6 12:20:09 1984" 'window/ehf.qfasl.203'		     # Author: RMS
+hcuot "Jun 13 07:51:51 1984" 'window/ehf.qfasl.209'		     # Author: MLY
+hcuot "Jun 14 11:32:04 1984" 'window/ehf.qfasl.210'		     # Author: RMS
+hcuot "Jun 14 11:48:52 1984" 'window/ehf.qfasl.211'		     # Author: RMS
+hcuot "Jun 21 09:49:53 1984" 'window/ehf.qfasl.212'		     # Author: MLY
+hcuot "Jan 11 14:33:56 1984" 'window/ehw.lisp.107'		     # Author: DANIEL.G.MLY
+hcuot "Mar 22 11:38:18 1984" 'window/ehw.lisp.108'		     # Author: MLY
+hcuot "May 16 12:21:58 1984" 'window/ehw.lisp.109'		     # Author: RMS
+hcuot "Jun  6 12:44:48 1984" 'window/ehw.qfasl.109'		     # Author: RMS
+hcuot "Nov 23 16:24:15 1983" 'window/fed.lisp.194'		     # Author: DANIEL.G.MLY
+hcuot "Feb  6 14:55:35 1984" 'window/fed.lisp.199'		     # Author: MLY
+hcuot "Jun  6 12:01:32 1984" 'window/fed.qfasl.199'		     # Author: RMS
+hcuot "Jun 16 15:41:36 1983" 'window/frame.lisp.164'		     # Author: RMS
+hcuot "Apr 11 03:28:15 1984" 'window/frame.lisp.165'		     # Author: MLY
+hcuot "Jun  6 08:41:54 1984" 'window/frame.qfasl.165'		     # Author: RMS
+hcuot "Jun  4 03:03:15 1984" 'window/graphics.lisp.1'		     # Author: MLY
+hcuot "Jun  6 08:13:00 1984" 'window/graphics.qfasl.1'		     # Author: RMS
+hcuot "Jan  7 14:22:48 1984" 'window/inspct.lisp.152'		     # Author: DANIEL.G.MLY
+hcuot "Jun  6 10:01:37 1984" 'window/inspct.lisp.153'		     # Author: MLY
+hcuot "Jun 12 20:10:18 1984" 'window/inspct.lisp.154'		     # Author: RMS
+hcuot "Jun  6 08:56:04 1984" 'window/inspct.qfasl.152'		     # Author: RMS
+hcuot "Jun 12 19:27:35 1984" 'window/inspct.qfasl.153'		     # Author: RMS
+hcuot "Jun 13 20:23:19 1984" 'window/inspct.qfasl.154'		     # Author: MLY
+hcuot "Oct 30 06:32:13 1983" 'window/menu.lisp.98'		     # Author: RMS
+hcuot "Nov 18 10:54:40 1983" 'window/menu.lisp.102'		     # Author: RMS
+hcuot "Feb  5 10:43:00 1984" 'window/menu.lisp.103'		     # Author: MLY
+hcuot "Jun  6 08:15:38 1984" 'window/menu.qfasl.103'		     # Author: RMS
+hcuot "Dec 28 10:07:37 1983" 'window/mouse.lisp.245'		     # Author: RMS
+hcuot "May  1 23:20:08 1984" 'window/mouse.lisp.246'		     # Author: MLY
+hcuot "May 16 19:35:36 1984" 'window/mouse.lisp.247'		     # Author: MLY
+hcuot "Jun  6 08:02:14 1984" 'window/mouse.qfasl.247'		     # Author: RMS
+hcuot "Nov 19 02:27:34 1983" 'window/peek.lisp.144'		     # Author: RMS
+hcuot "Jun  9 13:23:51 1984" 'window/peek.lisp.145'		     # Author: MLY
+hcuot "Jun  6 09:06:22 1984" 'window/peek.qfasl.144'		     # Author: RMS
+hcuot "Jun 12 19:34:25 1984" 'window/peek.qfasl.145'		     # Author: RMS
+hcuot "Oct 12 19:07:51 1983" 'window/peekch.lisp.26'		     # Author: ALR
+hcuot "May 25 02:14:17 1984" 'window/peekch.lisp.27'		     # Author: RPK
+hcuot "Oct 25 05:15:23 1983" 'window/peekch.qfasl.26'		     # Author: RMS
+hcuot "Jun 29 09:46:44 1982" 'window/peekfs.lisp.9'		     # Author: RMS
+hcuot "Oct 25 05:17:11 1983" 'window/peekfs.qfasl.9'		     # Author: RMS
+hcuot "Jun 29 09:46:50 1982" 'window/quest.lisp.42'		     # Author: RMS
+hcuot "Apr  7 15:56:29 1984" 'window/quest.lisp.43'		     # Author: MLY
+hcuot "Nov 30 05:28:54 1983" 'window/rh.lisp.146'		     # Author: RMS
+hcuot "Mar 27 09:03:32 1984" 'window/rh.lisp.159'		     # Author: MLY
+hcuot "Apr 18 09:15:27 1984" 'window/rh.lisp.160'		     # Author: MLY
+hcuot "Jun 18 11:07:59 1984" 'window/rh.qfasl.160'		     # Author: RMS
+hcuot "Nov 21 08:04:19 1983" 'window/scred.lisp.106'		     # Author: RMS
+hcuot "May  3 19:34:28 1984" 'window/scred.lisp.107'		     # Author: RPK
+hcuot "Jun  6 11:46:58 1984" 'window/scred.lisp.110'		     # Author: MLY
+hcuot "Jun 18 04:57:58 1984" 'window/scred.lisp.111'		     # Author: MLY
+hcuot "Jun 12 19:20:04 1984" 'window/scred.qfasl.110'		     # Author: RMS
+hcuot "Jun 21 08:55:35 1984" 'window/scred.qfasl.111'		     # Author: MLY
+hcuot "Jul 25 10:19:44 1983" 'window/scrman.lisp.165'		     # Author: RMS
+hcuot "Oct 25 05:28:26 1983" 'window/scrman.qfasl.165'		     # Author: RMS
+hcuot "Jul 25 10:21:03 1983" 'window/scroll.lisp.173'		     # Author: RMS
+hcuot "Oct  6 17:48:59 1983" 'window/scroll.lisp.175'		     # Author: RMS
+hcuot "Oct 25 05:31:33 1983" 'window/scroll.qfasl.175'		     # Author: RMS
+hcuot "Feb  4 00:57:09 1984" 'window/sheet.lisp.554'		     # Author: MLY
+hcuot "May 27 15:39:23 1984" 'window/sheet.lisp.555'		     # Author: MLY
+hcuot "Jun  6 11:46:04 1984" 'window/sheet.lisp.557'		     # Author: MLY
+hcuot "Jun 12 16:27:47 1984" 'window/sheet.qfasl.557'		     # Author: RMS
+hcuot "Feb 16 16:22:54 1984" 'window/shwarm.lisp.318'		     # Author: RPK
+hcuot "Apr  6 08:58:01 1984" 'window/shwarm.lisp.319'		     # Author: RPK
+hcuot "May 20 22:13:35 1984" 'window/shwarm.lisp.321'		     # Author: RMS
+hcuot "Jun  4 03:03:20 1984" 'window/shwarm.lisp.322'		     # Author: MLY
+hcuot "Jun  6 07:48:16 1984" 'window/shwarm.qfasl.322'		     # Author: RMS
+hcuot "Nov 21 10:54:11 1983" 'window/stream.lisp.116'		     # Author: RMS
+hcuot "Apr  7 20:17:05 1984" 'window/stream.lisp.134'		     # Author: MLY
+hcuot "May 27 15:38:37 1984" 'window/stream.lisp.136'		     # Author: MLY
+hcuot "Jun  6 11:46:33 1984" 'window/stream.lisp.139'		     # Author: MLY
+hcuot "Jun 17 13:29:19 1984" 'window/stream.lisp.140'		     # Author: RG
+hcuot "Jun 17 13:48:05 1984" 'window/stream.lisp.141'		     # Author: RG
+hcuot "Jun 18 05:50:48 1984" 'window/stream.lisp.142'		     # Author: MLY
+hcuot "Jun 18 06:53:08 1984" 'window/stream.lisp.143'		     # Author: MLY
+hcuot "Jun  6 08:10:42 1984" 'window/stream.qfasl.138'		     # Author: RMS
+hcuot "Jun 12 16:46:29 1984" 'window/stream.qfasl.139'		     # Author: RMS
+hcuot "Jun 17 13:29:26 1984" 'window/stream.qfasl.140'		     # Author: RG
+hcuot "Jun 17 14:23:22 1984" 'window/stream.qfasl.141'		     # Author: RG
+hcuot "Jun 18 11:13:24 1984" 'window/stream.qfasl.143'		     # Author: LISPM
+hcuot "Oct 25 06:19:35 1983" 'window/supdup.lisp.266'		     # Author: RMS
+hcuot "Apr  6 09:36:45 1984" 'window/supdup.lisp.269'		     # Author: RPK
+hcuot "Jun  6 09:12:53 1984" 'window/supdup.lisp.271'		     # Author: MLY
+hcuot "Jun 12 20:14:53 1984" 'window/supdup.lisp.272'		     # Author: RMS
+hcuot "Jun 20 03:02:58 1984" 'window/supdup.lisp.273'		     # Author: MLY
+hcuot "Jun 21 09:08:21 1984" 'window/supdup.lisp.274'		     # Author: RG
+hcuot "Jun 25 00:38:41 1984" 'window/supdup.lisp.275'		     # Author: RMS
+hcuot "Jun 12 19:37:59 1984" 'window/supdup.qfasl.271'		     # Author: RMS
+hcuot "Jun 18 04:29:44 1984" 'window/supdup.qfasl.272'		     # Author: MLY
+hcuot "Jun 21 09:00:50 1984" 'window/supdup.qfasl.273'		     # Author: MLY
+hcuot "Nov 29 05:56:40 1983" 'window/sysmen.lisp.173'		     # Author: RMS
+hcuot "Mar 18 04:49:43 1984" 'window/sysmen.lisp.176'		     # Author: MLY
+hcuot "Jun  6 11:46:38 1984" 'window/sysmen.lisp.177'		     # Author: MLY
+hcuot "Jun 12 16:48:40 1984" 'window/sysmen.qfasl.177'		     # Author: RMS
+hcuot "Jun 29 09:51:17 1982" 'window/task.list.1'		     # Author: RMS
+hcuot "Dec 26 03:16:03 1983" 'window/tscrol.lisp.69'		     # Author: RMS
+hcuot "Jun  6 11:47:06 1984" 'window/tscrol.lisp.70'		     # Author: MLY
+hcuot "Jun  6 08:39:29 1984" 'window/tscrol.qfasl.69'		     # Author: RMS
+hcuot "Jun 12 19:25:15 1984" 'window/tscrol.qfasl.70'		     # Author: RMS
+hcuot "Nov 20 12:48:36 1983" 'window/tvdefs.lisp.277'		     # Author: RMS
+hcuot "Apr  7 19:54:59 1984" 'window/tvdefs.lisp.278'		     # Author: MLY
+hcuot "Jun 17 13:39:06 1984" 'window/tvdefs.lisp.281'		     # Author: RG
+hcuot "Jun  6 06:00:00 1984" 'window/tvdefs.lisp.282'		     # Author: RG
+hcuot "Jun 12 16:19:52 1984" 'window/tvdefs.qfasl.280'		     # Author: RMS
+hcuot "Jun 17 14:03:59 1984" 'window/tvdefs.qfasl.282'		     # Author: RG
+hcuot "Aug 20 14:24:51 1983" 'window/typwin.lisp.105'		     # Author: RMS
+hcuot "Mar  4 08:08:46 1984" 'window/typwin.lisp.117'		     # Author: MLY
+hcuot "May  1 23:22:28 1984" 'window/typwin.lisp.118'		     # Author: MLY
+hcuot "Jun  6 08:36:19 1984" 'window/typwin.qfasl.118'		     # Author: RMS
+hcuot "Nov 12 03:33:28 1983" 'window/wholin.lisp.84'		     # Author: RMS
+hcuot "Jan 18 20:56:57 1984" 'window/wholin.lisp.85'		     # Author: RPK
+hcuot "Jun  6 11:02:31 1984" 'window/wholin.lisp.86'		     # Author: MLY
+hcuot "Jun 17 13:03:11 1984" 'window/wholin.lisp.87'		     # Author: RG
+hcuot "Jun  6 08:00:00 1984" 'window/wholin.qfasl.85'		     # Author: RMS
+hcuot "Jun 12 16:44:13 1984" 'window/wholin.qfasl.86'		     # Author: RMS
+hcuot "Jun 17 13:03:32 1984" 'window/wholin.qfasl.87'		     # Author: RG
+hcuot "Dec  9 23:26:17 1983" 'window/winddoc.lisp.2'		     # Author: DANIEL.G.MLY
+hcuot "Jun  6 06:10:18 1984" 'zmail/bug.zmail.1'		     # Author: RMS
+hcuot "Apr 14 07:50:23 1983" 'zmail/button.lisp.21'		     # Author: RMS
+hcuot "Feb 19 14:39:57 1984" 'zmail/button.lisp.22'		     # Author: MLY
+hcuot "Apr 11 03:28:22 1984" 'zmail/button.lisp.23'		     # Author: MLY
+hcuot "Nov 15 10:36:26 1983" 'zmail/button.qfasl.21'		     # Author: RMS
+hcuot "Feb 14 11:23:32 1983" 'zmail/cometh.lisp.49'		     # Author: RMS
+hcuot "Sep 23 08:01:04 1983" 'zmail/cometh.lisp.50'		     # Author: RMS
+hcuot "Apr  7 15:57:16 1984" 'zmail/cometh.lisp.51'		     # Author: MLY
+hcuot "Nov 24 00:17:41 1983" 'zmail/cometh.qfasl.50'		     # Author: RMS
+hcuot "Nov 15 10:44:02 1983" 'zmail/comnds.lisp.567'		     # Author: RMS
+hcuot "Dec 31 03:02:15 1983" 'zmail/comnds.lisp.572'		     # Author: DANIEL.G.MLY
+hcuot "Apr 18 09:42:20 1984" 'zmail/comnds.lisp.578'		     # Author: RPK
+hcuot "Apr 22 00:16:43 1984" 'zmail/comnds.lisp.579'		     # Author: RMS
+hcuot "Nov 22 11:19:13 1983" 'zmail/comnds.qfasl.567'		     # Author: RMS
+hcuot "Aug 17 20:36:10 1983" 'zmail/defs.lisp.268'		     # Author: RMS
+hcuot "Dec 11 02:49:48 1983" 'zmail/defs.lisp.269'		     # Author: DANIEL.G.MLY
+hcuot "Apr 18 09:42:50 1984" 'zmail/defs.lisp.270'		     # Author: RPK
+hcuot "Nov 15 08:58:36 1983" 'zmail/defs.qfasl.268'		     # Author: RMS
+hcuot "Oct 28 07:04:23 1983" 'zmail/filter.lisp.343'		     # Author: RMS
+hcuot "Nov 28 13:49:03 1983" 'zmail/filter.lisp.346'		     # Author: RMS
+hcuot "Feb 23 13:39:32 1984" 'zmail/filter.lisp.350'		     # Author: MLY
+hcuot "Apr 11 06:36:04 1984" 'zmail/filter.lisp.352'		     # Author: MLY
+hcuot "Nov 28 14:03:40 1983" 'zmail/filter.qfasl.346'		     # Author: RMS
+hcuot "Jun 29 11:22:50 1982" 'zmail/info.mail.1'		     # Author: RMS
+hcuot "Nov 22 10:13:20 1983" 'zmail/lex733.lisp.10'		     # Author: RMS
+hcuot "Dec  3 14:55:46 1983" 'zmail/lex733.lisp.13'		     # Author: RMS
+hcuot "Apr 30 15:49:02 1984" 'zmail/lex733.lisp.14'		     # Author: MLY
+hcuot "Dec  3 14:56:06 1983" 'zmail/lex733.qfasl.5'		     # Author: RMS
+hcuot "Jun 29 11:23:06 1982" 'zmail/lm.lisp.3'			     # Author: RMS
+hcuot "Apr  7 15:57:50 1984" 'zmail/lm.lisp.4'			     # Author: MLY
+hcuot "Jun 29 11:23:09 1982" 'zmail/lmcsrv.lisp.4'		     # Author: RMS
+hcuot "Apr  7 15:58:15 1984" 'zmail/lmcsrv.lisp.5'		     # Author: MLY
+hcuot "Sep 21 04:59:02 1983" 'zmail/lmfile.lisp.3'		     # Author: RMS
+hcuot "Apr  7 15:59:55 1984" 'zmail/lmfile.lisp.4'		     # Author: MLY
+hcuot "Dec 18 08:47:50 1983" 'zmail/lmfile.qfasl.3'		     # Author: RMS
+hcuot "Oct 24 03:34:02 1983" 'zmail/mail.lisp.299'		     # Author: RMS
+hcuot "Apr 22 00:16:27 1984" 'zmail/mail.lisp.306'		     # Author: RMS
+hcuot "Apr 30 15:49:21 1984" 'zmail/mail.lisp.307'		     # Author: MLY
+hcuot "May 16 11:06:22 1984" 'zmail/mail.lisp.308'		     # Author: RMS
+hcuot "Nov 15 10:08:53 1983" 'zmail/mail.qfasl.299'		     # Author: RMS
+hcuot "Sep 21 23:30:47 1983" 'zmail/mfhost.lisp.55'		     # Author: EB.TFC
+hcuot "Oct  9 11:09:21 1983" 'zmail/mfhost.lisp.56'		     # Author: RMS
+hcuot "Apr  7 16:02:19 1984" 'zmail/mfhost.lisp.57'		     # Author: MLY
+hcuot "Nov 15 09:51:50 1983" 'zmail/mfhost.qfasl.56'		     # Author: RMS
+hcuot "Dec  3 22:47:32 1983" 'zmail/mfiles.lisp.320'		     # Author: RMS
+hcuot "Dec 11 10:55:49 1983" 'zmail/mfiles.lisp.321'		     # Author: DANIEL.G.MLY
+hcuot "Apr 11 06:35:11 1984" 'zmail/mfiles.lisp.322'		     # Author: MLY
+hcuot "Nov 15 09:44:21 1983" 'zmail/mfiles.qfasl.319'		     # Author: RMS
+hcuot "Mar 23 11:01:45 1983" 'zmail/mult.lisp.22'		     # Author: RMS
+hcuot "Jun 16 10:40:07 1983" 'zmail/mult.lisp.23'		     # Author: RMS
+hcuot "Apr  7 16:02:56 1984" 'zmail/mult.lisp.24'		     # Author: MLY
+hcuot "Nov 15 10:34:39 1983" 'zmail/mult.qfasl.23'		     # Author: RMS
+hcuot "Dec 10 23:37:49 1983" 'zmail/parse.lisp.52'		     # Author: DANIEL.G.MLY
+hcuot "Nov 15 11:02:07 1983" 'zmail/patch.directory.13'		     # Author: RMS
+hcuot "Oct 28 07:03:34 1983" 'zmail/patch-51.directory.21'	     # Author: RMS
+hcuot "Aug 23 00:25:50 1983" 'zmail/patch-51-1.lisp.1'		     # Author: RMS
+hcuot "Aug 23 00:25:56 1983" 'zmail/patch-51-1.qfasl.1'		     # Author: RMS
+hcuot "Sep  7 21:56:01 1983" 'zmail/patch-51-2.lisp.1'		     # Author: RMS
+hcuot "Sep  7 21:56:11 1983" 'zmail/patch-51-2.qfasl.1'		     # Author: RMS
+hcuot "Sep 21 23:30:38 1983" 'zmail/patch-51-3.lisp.6'		     # Author: EB.TFC
+hcuot "Sep 21 23:49:06 1983" 'zmail/patch-51-3.qfasl.6'		     # Author: EB.TFC
+hcuot "Sep 21 23:26:54 1983" 'zmail/patch-51-4.lisp.2'		     # Author: EB.TFC
+hcuot "Sep 21 23:52:02 1983" 'zmail/patch-51-4.qfasl.2'		     # Author: EB.TFC
+hcuot "Sep 23 08:11:23 1983" 'zmail/patch-51-5.lisp.2'		     # Author: RMS
+hcuot "Sep 23 08:11:28 1983" 'zmail/patch-51-5.qfasl.2'		     # Author: RMS
+hcuot "Sep 26 05:52:32 1983" 'zmail/patch-51-6.lisp.1'		     # Author: RMS
+hcuot "Sep 26 05:52:40 1983" 'zmail/patch-51-6.qfasl.1'		     # Author: RMS
+hcuot "Oct 14 07:56:33 1983" 'zmail/patch-51-7.lisp.1'		     # Author: DANIEL.G.MLY
+hcuot "Oct 14 07:56:39 1983" 'zmail/patch-51-7.qfasl.1'		     # Author: DANIEL.G.MLY
+hcuot "Oct 22 08:30:39 1983" 'zmail/patch-51-8.lisp.1'		     # Author: DANIEL.G.MLY
+hcuot "Oct 22 08:30:48 1983" 'zmail/patch-51-8.qfasl.1'		     # Author: DANIEL.G.MLY
+hcuot "Oct 28 07:02:36 1983" 'zmail/patch-51-9.lisp.1'		     # Author: RMS
+hcuot "Oct 28 07:02:49 1983" 'zmail/patch-51-9.qfasl.1'		     # Author: RMS
+hcuot "Apr 23 17:32:33 1984" 'zmail/patch-53.directory.46'	     # Author: MLY
+hcuot "Apr 26 05:12:09 1984" 'zmail/patch-53.directory.47'	     # Author: MLY
+hcuot "Dec  7 12:43:09 1983" 'zmail/patch-53-1.lisp.2'		     # Author: RMS
+hcuot "Dec  7 12:43:52 1983" 'zmail/patch-53-1.qfasl.2'		     # Author: RMS
+hcuot "Jan 30 06:21:26 1984" 'zmail/patch-53-10.lisp.1'		     # Author: RPK
+hcuot "Jan 30 06:21:32 1984" 'zmail/patch-53-10.qfasl.1'	     # Author: RPK
+hcuot "Feb 16 07:57:45 1984" 'zmail/patch-53-11.lisp.2'		     # Author: MLY
+hcuot "Feb 16 07:57:48 1984" 'zmail/patch-53-11.qfasl.2'	     # Author: MLY
+hcuot "Feb 23 13:40:40 1984" 'zmail/patch-53-12.lisp.2'		     # Author: MLY
+hcuot "Feb 23 13:40:45 1984" 'zmail/patch-53-12.qfasl.2'	     # Author: MLY
+hcuot "Mar  4 08:41:33 1984" 'zmail/patch-53-13.lisp.1'		     # Author: MLY
+hcuot "Mar  4 08:41:37 1984" 'zmail/patch-53-13.qfasl.1'	     # Author: MLY
+hcuot "Mar 24 17:24:31 1984" 'zmail/patch-53-14.lisp.2'		     # Author: RMS
+hcuot "Mar 24 17:24:35 1984" 'zmail/patch-53-14.qfasl.2'	     # Author: RMS
+hcuot "Apr 11 07:05:23 1984" 'zmail/patch-53-15.lisp.3'		     # Author: MLY
+hcuot "Apr 11 07:05:32 1984" 'zmail/patch-53-15.qfasl.3'	     # Author: MLY
+hcuot "Apr 18 09:41:32 1984" 'zmail/patch-53-16.lisp.1'		     # Author: RPK
+hcuot "Apr 18 09:41:38 1984" 'zmail/patch-53-16.qfasl.1'	     # Author: RPK
+hcuot "Apr 22 00:46:53 1984" 'zmail/patch-53-17.lisp.2'		     # Author: RMS
+hcuot "Apr 22 00:47:01 1984" 'zmail/patch-53-17.qfasl.2'	     # Author: RMS
+hcuot "Dec  6 05:18:26 1983" 'zmail/patch-53-2.lisp.1'		     # Author: RMS
+hcuot "Dec  6 05:18:36 1983" 'zmail/patch-53-2.qfasl.1'		     # Author: RMS
+hcuot "Dec 13 06:15:17 1983" 'zmail/patch-53-3.lisp.2'		     # Author: RMS
+hcuot "Dec 13 06:15:23 1983" 'zmail/patch-53-3.qfasl.2'		     # Author: RMS
+hcuot "Dec 14 08:54:56 1983" 'zmail/patch-53-5.lisp.1'		     # Author: RMS
+hcuot "Dec 14 08:55:02 1983" 'zmail/patch-53-5.qfasl.1'		     # Author: RMS
+hcuot "Jan  3 18:55:45 1984" 'zmail/patch-53-6.lisp.2'		     # Author: PGS
+hcuot "Jan  3 18:55:54 1984" 'zmail/patch-53-6.qfasl.2'		     # Author: PGS
+hcuot "Jan  1 01:08:53 1984" 'zmail/patch-53-7.lisp.3'		     # Author: DANIEL.G.MLY
+hcuot "Jan  1 01:09:00 1984" 'zmail/patch-53-7.qfasl.3'		     # Author: DANIEL.G.MLY
+hcuot "Jan  1 15:59:26 1984" 'zmail/patch-53-8.lisp.3'		     # Author: DANIEL.G.MLY
+hcuot "Jan  1 15:59:30 1984" 'zmail/patch-53-8.qfasl.3'		     # Author: DANIEL.G.MLY
+hcuot "Jan  1 16:00:18 1984" 'zmail/patch-53-9.lisp.2'		     # Author: DANIEL.G.MLY
+hcuot "Jan  1 16:00:22 1984" 'zmail/patch-53-9.qfasl.2'		     # Author: DANIEL.G.MLY
+hcuot "Jun 29 11:28:11 1982" 'zmail/poop.text.35'		     # Author: RMS
+hcuot "Mar  1 21:59:09 1983" 'zmail/profil.lisp.104'		     # Author: RMS
+hcuot "Mar 24 17:25:30 1984" 'zmail/profil.lisp.117'		     # Author: RMS
+hcuot "Apr 11 03:29:40 1984" 'zmail/profil.lisp.118'		     # Author: MLY
+hcuot "Apr 16 21:36:09 1984" 'zmail/profil.lisp.119'		     # Author: MLY
+hcuot "Jun 21 02:53:43 1984" 'zmail/profil.lisp.120'		     # Author: MLY
+hcuot "Nov 28 14:14:24 1983" 'zmail/profil.qfasl.110'		     # Author: RMS
+hcuot "Feb 14 10:57:47 1983" 'zmail/refer.lisp.5'		     # Author: RMS
+hcuot "Apr  7 16:03:55 1984" 'zmail/refer.lisp.6'		     # Author: MLY
+hcuot "Nov 15 09:57:14 1983" 'zmail/refer.qfasl.5'		     # Author: RMS
+hcuot "Jun 24 05:45:55 1983" 'zmail/rfc733.lisp.54'		     # Author: GUMBY
+hcuot "Nov 22 11:12:10 1983" 'zmail/rfc733.lisp.55'		     # Author: RMS
+hcuot "Apr 30 14:38:24 1984" 'zmail/rfc733.lisp.56'		     # Author: MLY
+hcuot "Nov 22 11:32:32 1983" 'zmail/rfc733.qfasl.55'		     # Author: RMS
+hcuot "Dec  8 07:00:35 1982" 'zmail/top.lisp.497'		     # Author: RMS
+hcuot "Apr 16 07:17:47 1983" 'zmail/top.lisp.540'		     # Author: RMS
+hcuot "Aug 17 20:36:16 1983" 'zmail/top.lisp.546'		     # Author: RMS
+hcuot "Dec 31 03:02:48 1983" 'zmail/top.lisp.551'		     # Author: DANIEL.G.MLY
+hcuot "Jun 15 17:35:56 1984" 'zmail/top.lisp.552'		     # Author: MERMAN.JAN
+hcuot "Nov 24 00:24:32 1983" 'zmail/top.qfasl.549'		     # Author: RMS
+hcuot "Nov  8 08:17:55 1983" 'zmail/window.lisp.333'		     # Author: RMS
+hcuot "Dec 31 03:03:32 1983" 'zmail/window.lisp.339'		     # Author: DANIEL.G.MLY
+hcuot "Apr 11 06:35:53 1984" 'zmail/window.lisp.340'		     # Author: MLY
+hcuot "Nov 15 10:17:12 1983" 'zmail/window.qfasl.333'		     # Author: RMS
+hcuot "Jun 29 11:04:18 1982" 'zwei/.comnd.text.1'		     # Author: RMS
+hcuot "Jun 29 11:04:27 1982" 'zwei/atsign.xfile.1'		     # Author: RMS
+hcuot "Mar 16 12:02:10 1983" 'zwei/bdired.lisp.39'		     # Author: HANSON
+hcuot "Dec 28 08:42:04 1983" 'zwei/bdired.lisp.40'		     # Author: RMS
+hcuot "Jun  9 13:24:16 1984" 'zwei/bdired.lisp.41'		     # Author: MLY
+hcuot "Jun  6 10:55:53 1984" 'zwei/bdired.qfasl.40'		     # Author: RMS
+hcuot "Jun 12 19:59:33 1984" 'zwei/bdired.qfasl.41'		     # Author: RMS
+hcuot "Jan 27 19:35:00 1983" 'zwei/bug.bugs7.1'			     # Author: RMS
+hcuot "Jun 26 01:05:20 1984" 'zwei/bug.zwei.1'			     # Author: OPERATOR
+hcuot "Oct  8 10:11:11 1983" 'zwei/bug-zwei.text.1'		     # Author: TIM
+hcuot "Jun 29 11:04:29 1982" 'zwei/bugs.bugs.1'			     # Author: RMS
+hcuot "Jun 29 11:05:20 1982" 'zwei/bugs.bugs6.1'		     # Author: RMS
+hcuot "Jun 29 11:05:52 1982" 'zwei/bugs.status.1'		     # Author: RMS
+hcuot "Feb 19 15:27:21 1984" 'zwei/coma.lisp.100'		     # Author: MLY
+hcuot "Mar 15 09:23:53 1984" 'zwei/coma.lisp.101'		     # Author: TIM
+hcuot "Jun  6 10:25:29 1984" 'zwei/coma.qfasl.101'		     # Author: RMS
+hcuot "Nov  7 05:37:56 1983" 'zwei/comb.lisp.91'		     # Author: RMS
+hcuot "Apr  5 18:02:13 1984" 'zwei/comb.lisp.92'		     # Author: MLY
+hcuot "Apr 30 15:47:59 1984" 'zwei/comb.lisp.93'		     # Author: MLY
+hcuot "Jun  6 10:28:35 1984" 'zwei/comb.qfasl.93'		     # Author: RMS
+hcuot "Feb 16 01:16:24 1984" 'zwei/comc.lisp.196'		     # Author: MLY
+hcuot "Jun  5 03:44:12 1984" 'zwei/comc.lisp.199'		     # Author: MLY
+hcuot "Jun  6 07:02:27 1984" 'zwei/comc.lisp.200'		     # Author: MLY
+hcuot "Jun  9 13:24:12 1984" 'zwei/comc.lisp.201'		     # Author: MLY
+hcuot "Jun  6 10:31:54 1984" 'zwei/comc.qfasl.200'		     # Author: RMS
+hcuot "Jun 12 19:57:27 1984" 'zwei/comc.qfasl.201'		     # Author: RMS
+hcuot "Jan  2 02:23:32 1984" 'zwei/comd.lisp.158'		     # Author: RMS
+hcuot "Apr 11 03:27:57 1984" 'zwei/comd.lisp.159'		     # Author: MLY
+hcuot "May 26 00:21:29 1984" 'zwei/comd.lisp.160'		     # Author: MLY
+hcuot "Jun  6 06:58:32 1984" 'zwei/comd.lisp.161'		     # Author: MLY
+hcuot "Jun  6 10:34:36 1984" 'zwei/comd.qfasl.161'		     # Author: RMS
+hcuot "Dec 13 05:42:14 1983" 'zwei/come.lisp.132'		     # Author: RMS
+hcuot "Apr  5 17:57:40 1984" 'zwei/come.lisp.133'		     # Author: MLY
+hcuot "Jun  6 10:38:00 1984" 'zwei/come.qfasl.133'		     # Author: RMS
+hcuot "Mar 24 17:00:22 1984" 'zwei/comf.lisp.95'		     # Author: RMS
+hcuot "May 16 11:06:54 1984" 'zwei/comf.lisp.96'		     # Author: RMS
+hcuot "Jun  6 10:40:15 1984" 'zwei/comf.qfasl.96'		     # Author: RMS
+hcuot "Jul 10 09:07:15 1983" 'zwei/comg.lisp.37'		     # Author: RMS
+hcuot "Mar 13 07:14:44 1984" 'zwei/comg.lisp.38'		     # Author: RMS
+hcuot "Jun  5 03:52:51 1984" 'zwei/comg.lisp.39'		     # Author: MLY
+hcuot "Jun  6 10:43:09 1984" 'zwei/comg.qfasl.39'		     # Author: RMS
+hcuot "Mar 31 15:25:45 1984" 'zwei/comh.lisp.7'			     # Author: MLY
+hcuot "Apr 16 21:22:48 1984" 'zwei/comh.lisp.8'			     # Author: MLY
+hcuot "Jun  3 21:52:14 1984" 'zwei/comh.lisp.9'			     # Author: MLY
+hcuot "Jun  6 06:26:27 1984" 'zwei/comh.lisp.10'		     # Author: MLY
+hcuot "Jun  6 10:45:05 1984" 'zwei/comh.qfasl.10'		     # Author: RMS
+hcuot "Mar 31 13:33:54 1984" 'zwei/coms.lisp.81'		     # Author: MLY
+hcuot "Apr 22 04:59:03 1984" 'zwei/coms.lisp.82'		     # Author: RMS
+hcuot "May 16 11:06:10 1984" 'zwei/coms.lisp.83'		     # Author: RMS
+hcuot "Jun 24 17:05:08 1984" 'zwei/coms.lisp.84'		     # Author: MLY
+hcuot "Jun  6 10:46:26 1984" 'zwei/coms.qfasl.83'		     # Author: RMS
+hcuot "Dec 27 08:12:23 1983" 'zwei/comtab.lisp.301'		     # Author: RMS
+hcuot "Mar 31 15:25:07 1984" 'zwei/comtab.lisp.307'		     # Author: MLY
+hcuot "May 26 00:40:29 1984" 'zwei/comtab.lisp.308'		     # Author: MLY
+hcuot "Jun  5 06:32:26 1984" 'zwei/comtab.lisp.309'		     # Author: MLY
+hcuot "Jun  6 07:23:51 1984" 'zwei/comtab.lisp.310'		     # Author: MLY
+hcuot "Jun 21 02:53:00 1984" 'zwei/comtab.lisp.311'		     # Author: MLY
+hcuot "Jun 21 09:42:03 1984" 'zwei/comtab.lisp.312'		     # Author: RG
+hcuot "Jun 24 17:04:41 1984" 'zwei/comtab.lisp.313'		     # Author: MLY
+hcuot "Jun  6 09:51:01 1984" 'zwei/comtab.qfasl.310'		     # Author: RMS
+hcuot "Jun 21 09:32:51 1984" 'zwei/comtab.qfasl.311'		     # Author: MLY
+hcuot "Jun 21 10:05:23 1984" 'zwei/comtab.qfasl.312'		     # Author: MLY
+hcuot "Jan 19 21:30:52 1984" 'zwei/defs.lisp.144'		     # Author: MLY
+hcuot "Mar 18 04:51:40 1984" 'zwei/defs.lisp.145'		     # Author: MLY
+hcuot "Jun  6 07:54:47 1984" 'zwei/defs.lisp.146'		     # Author: MLY
+hcuot "Jun  9 13:23:57 1984" 'zwei/defs.lisp.147'		     # Author: MLY
+hcuot "Jun 12 17:45:35 1984" 'zwei/defs.lisp.148'		     # Author: RMS
+hcuot "Jun 12 17:47:16 1984" 'zwei/defs.lisp.149'		     # Author: RMS
+hcuot "Jun 12 17:53:09 1984" 'zwei/defs.lisp.150'		     # Author: RMS
+hcuot "Jun 21 02:53:12 1984" 'zwei/defs.lisp.151'		     # Author: MLY
+hcuot "Jun  6 09:21:38 1984" 'zwei/defs.qfasl.146'		     # Author: RMS
+hcuot "Jun 12 17:53:40 1984" 'zwei/defs.qfasl.150'		     # Author: RMS
+hcuot "Jun 21 09:11:01 1984" 'zwei/defs.qfasl.151'		     # Author: MLY
+hcuot "Feb  9 19:45:22 1984" 'zwei/dired.lisp.299'		     # Author: RMS
+hcuot "Apr 30 15:48:15 1984" 'zwei/dired.lisp.300'		     # Author: MLY
+hcuot "May 28 11:58:08 1984" 'zwei/dired.lisp.301'		     # Author: MLY
+hcuot "Jun  6 06:26:45 1984" 'zwei/dired.lisp.302'		     # Author: MLY
+hcuot "Jun  6 10:49:26 1984" 'zwei/dired.qfasl.302'		     # Author: RMS
+hcuot "Dec 27 08:59:04 1983" 'zwei/displa.lisp.149'		     # Author: RMS
+hcuot "Feb  7 13:56:37 1984" 'zwei/displa.lisp.151'		     # Author: MLY
+hcuot "Jun  5 06:32:38 1984" 'zwei/displa.lisp.152'		     # Author: MLY
+hcuot "Jun  9 13:24:03 1984" 'zwei/displa.lisp.153'		     # Author: MLY
+hcuot "Jun  6 09:54:42 1984" 'zwei/displa.qfasl.152'		     # Author: RMS
+hcuot "Jun 12 19:50:49 1984" 'zwei/displa.qfasl.153'		     # Author: RMS
+hcuot "Apr  8 07:11:15 1983" 'zwei/doc.lisp.67'			     # Author: RMS.G.DEVON
+hcuot "Feb 19 15:26:09 1984" 'zwei/doc.lisp.72'			     # Author: MLY
+hcuot "Mar 13 07:14:21 1984" 'zwei/doc.lisp.73'			     # Author: RMS
+hcuot "Jun 21 02:53:18 1984" 'zwei/doc.lisp.74'			     # Author: MLY
+hcuot "Jun  6 10:57:16 1984" 'zwei/doc.qfasl.73'		     # Author: RMS
+hcuot "Jun 21 09:36:39 1984" 'zwei/doc.qfasl.74'		     # Author: MLY
+hcuot "Jun 29 11:10:53 1982" 'zwei/emacs.comdif.1'		     # Author: RMS
+hcuot "Aug 10 10:28:26 1983" 'zwei/fasupd.lisp.29'		     # Author: RMS
+hcuot "Apr  7 16:04:21 1984" 'zwei/fasupd.lisp.30'		     # Author: MLY
+hcuot "Apr  7 16:05:03 1984" 'zwei/fasupd.lisp.31'		     # Author: MLY
+hcuot "Jun  6 10:59:09 1984" 'zwei/fasupd.qfasl.31'		     # Author: RMS
+hcuot "Jan  4 00:13:46 1984" 'zwei/files.lisp.192'		     # Author: RMS
+hcuot "Mar 31 14:05:40 1984" 'zwei/files.lisp.193'		     # Author: MLY
+hcuot "Jun  9 13:24:21 1984" 'zwei/files.lisp.194'		     # Author: MLY
+hcuot "Jun  6 10:59:51 1984" 'zwei/files.qfasl.193'		     # Author: RMS
+hcuot "Jun 12 20:01:07 1984" 'zwei/files.qfasl.194'		     # Author: RMS
+hcuot "Feb  2 10:15:30 1984" 'zwei/font.lisp.86'		     # Author: RMS
+hcuot "May  9 11:50:27 1984" 'zwei/font.lisp.87'		     # Author: MLY
+hcuot "May 22 00:58:47 1984" 'zwei/font.lisp.88'		     # Author: MLY
+hcuot "Jun  6 10:18:08 1984" 'zwei/font.qfasl.88'		     # Author: RMS
+hcuot "Dec 31 01:48:22 1983" 'zwei/for.lisp.60'			     # Author: RMS
+hcuot "Jun  6 09:59:00 1984" 'zwei/for.qfasl.60'		     # Author: RMS
+hcuot "Jan  4 00:50:12 1984" 'zwei/history.lisp.15'		     # Author: RMS
+hcuot "Jun  6 10:16:42 1984" 'zwei/history.qfasl.15'		     # Author: RMS
+hcuot "Dec 22 10:01:04 1983" 'zwei/host.lisp.20'		     # Author: DANIEL.G.MLY
+hcuot "Jun  6 11:04:19 1984" 'zwei/host.qfasl.20'		     # Author: RMS
+hcuot "Oct 25 23:06:09 1983" 'zwei/indent.lisp.103'		     # Author: RMS
+hcuot "Jun  8 20:12:23 1984" 'zwei/indent.lisp.104'		     # Author: MLY
+hcuot "Jun  6 10:01:41 1984" 'zwei/indent.qfasl.103'		     # Author: RMS
+hcuot "Jun 12 19:55:04 1984" 'zwei/indent.qfasl.104'		     # Author: RMS
+hcuot "Jan 16 21:21:27 1984" 'zwei/info.zwei.1'			     # Author: RMS
+hcuot "Jul 20 11:20:46 1983" 'zwei/insert.lisp.32'		     # Author: RMS
+hcuot "Apr  7 16:06:12 1984" 'zwei/insert.lisp.33'		     # Author: MLY
+hcuot "Jun  6 10:04:08 1984" 'zwei/insert.qfasl.33'		     # Author: RMS
+hcuot "Dec 13 05:41:54 1983" 'zwei/ispell.lisp.39'		     # Author: RMS
+hcuot "May 16 11:06:43 1984" 'zwei/ispell.lisp.40'		     # Author: RMS
+hcuot "Jun  6 11:05:37 1984" 'zwei/ispell.qfasl.40'		     # Author: RMS
+hcuot "Dec 28 21:06:08 1983" 'zwei/kbdmac.lisp.46'		     # Author: DANIEL.G.MLY
+hcuot "Jun  6 07:17:18 1984" 'zwei/kbdmac.lisp.47'		     # Author: MLY
+hcuot "Jun  6 10:20:12 1984" 'zwei/kbdmac.qfasl.47'		     # Author: RMS
+hcuot "Dec 24 08:43:28 1983" 'zwei/lparse.lisp.31'		     # Author: RMS
+hcuot "Jun  6 11:06:47 1984" 'zwei/lparse.qfasl.31'		     # Author: RMS
+hcuot "Mar 15 09:24:11 1984" 'zwei/macros.lisp.137'		     # Author: TIM
+hcuot "May 16 22:12:00 1984" 'zwei/macros.lisp.139'		     # Author: MLY
+hcuot "Jun 18 17:18:16 1984" 'zwei/macros.lisp.141'		     # Author: MLY
+hcuot "Jun  6 09:25:29 1984" 'zwei/macros.qfasl.140'		     # Author: RMS
+hcuot "Jun 21 09:15:13 1984" 'zwei/macros.qfasl.141'		     # Author: MLY
+hcuot "Jan 29 23:12:53 1984" 'zwei/meth.lisp.45'		     # Author: MLY
+hcuot "Mar 18 09:39:19 1984" 'zwei/meth.lisp.47'		     # Author: MLY
+hcuot "Jun  6 07:17:09 1984" 'zwei/meth.lisp.48'		     # Author: MLY
+hcuot "Jun  6 10:06:00 1984" 'zwei/meth.qfasl.48'		     # Author: RMS
+hcuot "Jan  2 02:23:39 1984" 'zwei/modes.lisp.127'		     # Author: RMS
+hcuot "May 25 20:16:25 1984" 'zwei/modes.lisp.130'		     # Author: MLY
 
 # tid/5237
 
