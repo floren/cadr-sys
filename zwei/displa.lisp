@@ -299,35 +299,6 @@ Returns a LINE and an INDEX indicating where to start redisplay,
 STOP-X is hpos to stop scanning at; then second value is stopping index in STRING.
 CONTINUATION means to take account of continuation lines.
 WINDOW defaults to *WINDOW*."
-
-*** MERGE LOSSAGE ***
-*** File OZ:KANSAS:<L.ZWEI>DISPLA.LISP.158 HAS:
-  (IF (NOT (TYPEP WINDOW 'WINDOW))
-      (SEND WINDOW :EDITOR-STRING-LENGTH STRING FROM TO CONTINUATION STOP-X)
-    ;; This is just to bum the time it takes to send the message.
-    ;; Perhaps for system 95 this can be optimized in another way.
-    (IF CONTINUATION
-	(MULTIPLE-VALUE-BIND (END-X NIL END-INDEX)
-	    (TV:SHEET-COMPUTE-MOTION WINDOW 0 0 STRING FROM TO NIL
-				     (OR STOP-X 0) (AND STOP-X 0)	;STOP-X, STOP-Y
-				     NIL NIL NIL
-				     (TV:SHEET-LINE-HEIGHT WINDOW)
-				     (IF *TAB-WIDTH*
-					 (* *TAB-WIDTH* (TV:SHEET-CHAR-WIDTH WINDOW))
-				       (TV:SHEET-TAB-WIDTH WINDOW)))
-	  (VALUES END-X END-INDEX))
-      (TV:SHEET-STRING-LENGTH WINDOW STRING FROM TO
-			      STOP-X NIL 0
-			      (IF *TAB-WIDTH*
-				  (* *TAB-WIDTH* (TV:SHEET-CHAR-WIDTH WINDOW))
-				(TV:SHEET-TAB-WIDTH WINDOW))))))
-
-(DEFUN WINDOW-CHAR-WIDTH (WINDOW &OPTIONAL CHARACTER)
-  "Return width of CHARACTER in WINDOW."
-  (IF (AND CHARACTER (CHAR= CHARACTER #/TAB) *TAB-WIDTH*)
-      (SEND WINDOW :EDITOR-TAB-WIDTH)
-    (SEND WINDOW :CHARACTER-WIDTH CHARACTER)))
-*** File PREP: /u/rms/temp/displa.lisp HAS:
   (COND ((NOT (TYPEP WINDOW 'WINDOW))
 	 (SEND WINDOW :EDITOR-STRING-LENGTH STRING FROM TO CONTINUATION STOP-X))
 	;; This is just to bum the time it takes to send the message.
@@ -356,7 +327,6 @@ WINDOW defaults to *WINDOW*."
   (IF (AND CHARACTER (EQL CHARACTER (CHAR-INT #/TAB)) *TAB-WIDTH*)
       (SEND WINDOW :EDITOR-TAB-WIDTH)
       (SEND WINDOW :CHARACTER-WIDTH CHARACTER)))
-*** END OF MERGE LOSSAGE ***
 
 ;;;; Most of the following stuff is just for sheet windows.
 
