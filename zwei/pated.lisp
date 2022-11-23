@@ -350,7 +350,7 @@ Type P to patch all the rest of the changed sections with no more questions." ()
 		       (CASE (FQUERY '(:CHOICES
 					(((:PROCEED "Proceed.") #/P)
 					 ((:QUIT "Quit") #/Q #/c-G #/Abort)
-					 . #,FORMAT:;Y-OR-N-P-CHOICES))
+					 . #,FORMAT:Y-OR-N-P-CHOICES))
 				     "Add ~S to patch? " NAME)
 			 (:PROCEED (SETQ PROCEED-FLAG T))
 			 (:QUIT (RETURN-FROM ADD-PATCH-BUFFER-CHANGED-FUNCTIONS :QUIT))
