@@ -274,7 +274,7 @@ If function is entirely on screen, positions it at the top
 	     (RCHARMAP-SET-CHAR (LET* ((CHAR (RCHARMAP-CHARACTER))
 				       (FONT (CHAR-FONT CHAR))
 				       (CODE (CHAR-CODE CHAR)))
-				  (MAKE-CHAR (SHIFT-CHARACTER CH-CHAR) 0 FONT)))
+				  (MAKE-CHAR (SHIFT-CHARACTER CODE) 0 FONT)))
 	     (RCHARMAP-RETURN NIL)))))
   DIS-TEXT)
 
