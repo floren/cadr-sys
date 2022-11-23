@@ -245,7 +245,7 @@ Type a subcommand to document (or * for all):~%")
 	  ((NULL CT) T)
 	(IF (ARRAYP (SETQ KBD (COMTAB-KEYBOARD-ARRAY CT)))
 	    (RETURN NIL))
-	(SETQ CHARS (SI:UNION-EQ CHARS (MAPCAR #'CAR KBD))))
+	(SETQ CHARS (UNION CHARS (MAPCAR 'CAR KBD))))
       ;; Every level of comtab we indirect to is a sparse one.
       (DOLIST (CHAR CHARS)
 	(PRINT-SHORT-DOC-FOR-TABLE CHAR COMTAB 3))
