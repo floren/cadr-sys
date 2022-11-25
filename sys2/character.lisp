@@ -154,7 +154,7 @@ but it affects whether NIL is returned."
     (let ((char1 (car tail)))
       (dolist (char2 (cdr tail))
 	(if (char-equal char1 char2)
-	    (return-from char-not-equal nil)))))))
+	    (return-from char-not-equal nil))))))
 
 ;; compiled code usually calls the char-equal microinstruction
 (defun char-equal (&rest chars)
