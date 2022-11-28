@@ -807,6 +807,7 @@ If CLOSURE does not contain a binding for it, the current binding is tested."
   (ETYPECASE PTR
     (SYMBOL (SETQ PTR (LOCF (SYMBOL-VALUE PTR))))
     (LOCATIVE))
+  (SETQ PTR1 (IF (SYMBOLP PTR) (LOCF (SYMBOL-VALUE PTR)) PTR))
   (DO ((L (CDR (%MAKE-POINTER DTP-LIST CLOSURE)) (CDDR L)))
       ((NULL L)
        (LOCATION-BOUNDP PTR1))
@@ -1064,7 +1065,7 @@ If ARRAY is NIL, a new list as big as SOURCE is created."
 		   (T
 		    (USING-RESOURCE (DEST-INDEX-ARRAY FILLARRAY-INDEX-ARRAYS)
 		      (DOTIMES (I 8.)
-			(SETF (AREF DEST-INDEX-ARRAY) I 0))
+			(SETF (AREF DEST-INDEX-ARRAY I) 0))
 		      (DOTIMES (I (ARRAY-LENGTH ARRAY))
 			(FILLARRAY-PUT (CAR SOURCE) ARRAY DEST-INDEX-ARRAY DEST-NDIMS)
 			(IF (NOT (NULL (CDR SOURCE))) (SETQ SOURCE (CDR SOURCE))))))))))
@@ -1148,7 +1149,7 @@ Uses GLOBAL:AREF, so will get fixnums out of strings."
 		 (SETQ L (CDR L))))))
 	  (T
 	   (USING-RESOURCE (INDEX-ARRAY FILLARRAY-INDEX-ARRAYS)
-	     (DOTIMES (I 10) (SETF (AREF INDEX-ARRAY) I 0))
+	     (DOTIMES (I 10) (SETF (AREF INDEX-ARRAY I) 0))
 	     (DOTIMES (I TIMES)
 	       (SETF (CAR L) (FILLARRAY-GET ARRAY INDEX-ARRAY NDIMS))
 	       (SETQ L (CDR L))))))
@@ -2245,7 +2246,7 @@ adjustments to the indentation."
 		       (IF (EQ ORDER :BASE-FLAVOR-FIRST) (REVERSE FLAVORS) FLAVORS)
 		       INDENT ORDER))
 
-(DEF-COMBINED-METHOD-DOCUMENTATION-HANDLER :MIN
+(DEFINE-COMBINED-METHOD-DOCUMENTATION-HANDLER :MIN
   (COMBINED-DOC-STRING STRING (ASSQ NIL DERIVATION)
 		       (IF (EQ ORDER :BASE-FLAVOR-FIRST) (REVERSE FLAVORS) FLAVORS)
 		       INDENT ORDER))
@@ -2628,7 +2629,7 @@ TYPE specifies the new array type, DIMLIST its new dimensions,
 DISPLACEDP the target it should point to (array, locative or fixnum),
 INDEX-OFFSET the new offset in the new target."
   (CHECK-TYPE ARRAY (AND ARRAY (SATISFIES ARRAY-DISPLACED-P)) "a displaced array")
-  (CHECK-TYPE DISPLACEDP (OR ARRAYP INTEGERP LOCATIVEP)
+  (CHECK-TYPE DISPLACEDP (OR ARRAY INTEGER LOCATIVE)
 	      "an array or physical address to which to indirect")
   (CHECK-ARG TYPE				;TEM gets the numeric array type
 	     (SETQ TEM (COND ((NUMBERP TYPE) (LDB %%ARRAY-TYPE-FIELD TYPE))
