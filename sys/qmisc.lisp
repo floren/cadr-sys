@@ -3,52 +3,50 @@
 ; Miscellaneous functions not worthy of being in qfctns, or not able to be in the cold load.
 ;	** (c) Copyright 1980 Massachusetts Institute of Technology **
 
-(DEFVAR ROOM '(WORKING-STORAGE-AREA MACRO-COMPILED-PROGRAM)
-  "Areas to mention when ROOM is called with no args.")
-
 (DEFUN ROOM-GET-AREA-LENGTH-USED (AREA)
   (DO ((REGION (AREA-REGION-LIST AREA) (REGION-LIST-THREAD REGION))
        (N-REGIONS 0 (1+ N-REGIONS))
        (LENGTH 0 (+ LENGTH (%POINTER-UNSIGNED (REGION-LENGTH REGION))))
        (USED 0 (+ USED (%POINTER-UNSIGNED (REGION-FREE-POINTER REGION)))))
       ((MINUSP REGION)
-       (RETURN LENGTH USED N-REGIONS))))
+       (VALUES LENGTH USED N-REGIONS))))
 
 (DEFUN %POINTER-UNSIGNED (N)
   "Convert the fixnum N, regarded as unsigned number, into number (maybe big) with same value.
 If the argument is negative (if regarded as signed), it is expanded into a bignum."
   (IF (MINUSP N) (+ N (ASH (%LOGDPB 1 %%Q-BOXED-SIGN-BIT 0) 1)) N))
-(DEFF 24-BIT-UNSIGNED '%POINTER-UNSIGNED)
-(compiler:make-obsolete 24-bit-unsigned "use %POINTER-UNSIGNED")
 
 (DEFUN %MAKE-POINTER-UNSIGNED (N)
   "Convert N to a fixnum which, regarded as unsigned, has same value as N.
 Thus, a number just too big to be a signed fixnum
 becomes a fixnum which, if regarded as signed, would be negative."
-  (IF (FIXNUMP N) N
+  (IF (FIXNUMP N)
+      N
     (LOGIOR (LDB (1- %%Q-POINTER) N)
 	    (ROT (LDB (BYTE 1 (1- %%Q-POINTER)) N) -1))))
-(DEFF MAKE-24-BIT-UNSIGNED '%MAKE-POINTER-UNSIGNED)
-(compiler:make-obsolete make-24-bit-unsigned "use %MAKE-POINTER-UNSIGNED")
 
-(DEFUN ROOM-PRINT-AREA (AREA
-			&AUX LENGTH USED N-REGIONS (*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM")))
-  (COND ((NOT (NULL (AREA-NAME AREA)))
-	 (MULTIPLE-VALUE (LENGTH USED N-REGIONS) (ROOM-GET-AREA-LENGTH-USED AREA))
-	 (IF (= (LDB %%REGION-SPACE-TYPE (REGION-BITS (AREA-REGION-LIST AREA)))
-		%REGION-SPACE-FIXED)
-	     (FORMAT T "~51,1,1,'.<~S~;(~D region~:P)~> ~O//~O used.  ~D% free.~%"
-		     (AREA-NAME AREA) N-REGIONS USED LENGTH
-		     (COND ((ZEROP LENGTH)
-			    0)
-			   ((< LENGTH #o40000)
-			    (TRUNCATE (* 100. (- LENGTH USED)) LENGTH))
-			   (T
-			    (TRUNCATE (- LENGTH USED) (TRUNCATE LENGTH 100.))) ))
-	     (FORMAT T "~51,1,1,'.<~S~;(~D region~:P)~> ~DK allocated, ~DK used.~%"
-		     (AREA-NAME AREA) N-REGIONS
-		     (CEILING LENGTH #o2000) (CEILING USED #o2000)))))
+;>> *print-package*
+(DEFUN ROOM-PRINT-AREA (AREA &AUX (*PACKAGE* (PKG-FIND-PACKAGE 'SYSTEM)))
+  (UNLESS (NULL (AREA-NAME AREA))
+    (MULTIPLE-VALUE-BIND (LENGTH USED N-REGIONS)
+	(ROOM-GET-AREA-LENGTH-USED AREA)
+      (IF (= (LDB %%REGION-SPACE-TYPE (REGION-BITS (AREA-REGION-LIST AREA)))
+	     %REGION-SPACE-FIXED)
+	  (FORMAT T "~51,1,1,'.<~S~;(~D region~:P)~> ~O//~O used.  ~D% free.~%"
+		  (AREA-NAME AREA) N-REGIONS USED LENGTH
+		  (COND ((ZEROP LENGTH)
+			 0)
+			((< LENGTH #o40000)
+			 (TRUNCATE (* 100. (- LENGTH USED)) LENGTH))
+			(T
+			 (TRUNCATE (- LENGTH USED) (TRUNCATE LENGTH 100.))) ))
+	(FORMAT T "~51,1,1,'.<~S~;(~D region~:P)~> ~DK allocated, ~DK used.~%"
+		(AREA-NAME AREA) N-REGIONS
+		(CEILING LENGTH #o2000) (CEILING USED #o2000)))))
   T)
+
+(DEFVAR ROOM '(WORKING-STORAGE-AREA MACRO-COMPILED-PROGRAM)
+  "Areas to mention when ROOM is called with no args.")
 
 ;;; (ROOM) tells about the default areas
 ;;; (ROOM area1 area2...) tells about those areas
@@ -74,9 +72,9 @@ NIL as arg means print a header but mention no areas."
 	((EQUAL ARGS '(T))
 	 (FORMAT T "Unless otherwise noted, area names are in the SYSTEM package~%")
 	 (SETQ ARGS AREA-LIST)))
-  (COND ((NOT (EQUAL ARGS '(NIL)))
-	 (DOLIST (AREA ARGS)
-	   (ROOM-PRINT-AREA (IF (SYMBOLP AREA) (SYMEVAL AREA) AREA))))))
+  (UNLESS (EQUAL ARGS '(NIL))
+    (DOLIST (AREA ARGS)
+      (ROOM-PRINT-AREA (IF (SYMBOLP AREA) (SYMBOL-VALUE AREA) AREA)))))
 
 (DEFUN COUNT-WIRED-PAGES ()
   (DECLARE (VALUES NUMBER-OF-WIRED-PAGES NUMBER-OF-FIXED-WIRED-PAGES))
@@ -88,29 +86,30 @@ NIL as arg means print a header but mention no areas."
 	    (N (TRUNCATE (SYSTEM-COMMUNICATION-AREA %SYS-COM-MEMORY-SIZE) PAGE-SIZE) (1- N))
 	    (N-FIXED-WIRED 0))
 	   ((ZEROP N)
-	    (RETURN (+ N-WIRED N-FIXED-WIRED) N-FIXED-WIRED))
+	    (RETURN (VALUES (+ N-WIRED N-FIXED-WIRED)
+			    N-FIXED-WIRED)))
 	 (AND (= (%P-LDB #o0020 ADR) #o177777)
 	      ( (%P-LDB #o2020 ADR) #o177777)
 	      (SETQ N-FIXED-WIRED (1+ N-FIXED-WIRED)))))
     (AND (NOT (ZEROP (%P-LDB %%PHT1-VALID-BIT ADR)))
 	 (= (%P-LDB %%PHT1-SWAP-STATUS-CODE ADR) %PHT-SWAP-STATUS-WIRED)
-	 (SETQ N-WIRED (1+ N-WIRED)))))
+	 (INCF N-WIRED))))
 
 (DEFUN PRINT-AREAS-OF-WIRED-PAGES ()
   (DO ((ADR (REGION-ORIGIN PAGE-TABLE-AREA) (+ ADR 2))
        (N (TRUNCATE (SYSTEM-COMMUNICATION-AREA %SYS-COM-PAGE-TABLE-SIZE) 2) (1- N)))
       ((ZEROP N))
-    (COND ((AND (NOT (ZEROP (%P-LDB %%PHT1-VALID-BIT ADR)))
-		(= (%P-LDB %%PHT1-SWAP-STATUS-CODE ADR) %PHT-SWAP-STATUS-WIRED))
-	   (FORMAT T "~S " (AREF (FUNCTION SYS:AREA-NAME)
-				 (%AREA-NUMBER
-				  (ASH (%P-LDB %%PHT1-VIRTUAL-PAGE-NUMBER ADR) 8))))))))
+    (WHEN (AND (NOT (ZEROP (%P-LDB %%PHT1-VALID-BIT ADR)))
+	       (= (%P-LDB %%PHT1-SWAP-STATUS-CODE ADR) %PHT-SWAP-STATUS-WIRED))
+      (FORMAT T "~S " (AREF (SYMBOL-FUNCTION 'SYS:AREA-NAME)
+			    (%AREA-NUMBER
+			      (ASH (%P-LDB %%PHT1-VIRTUAL-PAGE-NUMBER ADR) 8)))))))
 
 
 (DEFUN DESCRIBE-FEF-ADL (FEF &AUX (ADL (GET-MACRO-ARG-DESC-POINTER FEF)))
   (PROG (OPT-Q INIT-OPTION (ARGNUM 0) (LOCALNUM 0) ARGP
 	 ARG-SYNTAX)
-     L	(COND ((NULL ADL) (RETURN NIL)))
+     L	(IF (NULL ADL) (RETURN NIL))
     	(SETQ OPT-Q (CAR ADL) ADL (CDR ADL))
 	(SETQ ARG-SYNTAX (NTH (LDB %%FEF-ARG-SYNTAX OPT-Q)
 			      FEF-ARG-SYNTAX))
@@ -144,15 +143,15 @@ NIL as arg means print a header but mention no areas."
 ;			       FEF-DES-DT))
 	(SETQ INIT-OPTION (NTH (LDB %%FEF-INIT-OPTION OPT-Q)
 			       FEF-INIT-OPTION))
-	(SELECTQ INIT-OPTION
+	(CASE INIT-OPTION
 	  (FEF-INI-NIL (FORMAT T "initialized to NIL."))
 	  (FEF-INI-NONE (FORMAT T "not initialized."))
 	  (FEF-INI-SELF (FORMAT T "initialized by binding it to itself."))
 	  (FEF-INI-COMP-C (FORMAT T "initialized by execution of the function."))
 	  (FEF-INI-PNTR
 	   (PRINC "initialized to ")
-	   (LET ((COMPILER:DISASSEMBLE-OBJECT-OUTPUT-FUN NIL))
-	     (COMPILER:DISASSEMBLE-POINTER FEF (%POINTER-DIFFERENCE ADL FEF) 0))
+	   (LET ((COMPILER::DISASSEMBLE-OBJECT-OUTPUT-FUN NIL))
+	     (COMPILER::DISASSEMBLE-POINTER FEF (%POINTER-DIFFERENCE ADL FEF) 0))
 	   (PRINC ".")
 	   (POP ADL))
 	  (FEF-INI-C-PNTR
@@ -160,7 +159,7 @@ NIL as arg means print a header but mention no areas."
 		 (STR (%FIND-STRUCTURE-HEADER (CAR ADL))))
 	     (COND ((SYMBOLP STR)
 		    (FORMAT T "initialized to the ~A of ~S."
-			    (SELECTQ (%POINTER-DIFFERENCE LOC STR)
+			    (CASE (%POINTER-DIFFERENCE LOC STR)
 			      (1 "value")
 			      (2 "function definition")
 			      (3 "property list")
@@ -174,7 +173,7 @@ NIL as arg means print a header but mention no areas."
 	  (FEF-INI-EFF-ADR
 	   (FORMAT T "initialized to the value of ")
 	   (LET ((SLOT (LOGAND #o77 (CAR ADL))))
-	     (IF (= (LOGAND #o700 (CAR ADL)) (GET 'COMPILER:LOCBLOCK 'COMPILER:QLVAL))
+	     (IF (= (LOGAND #o700 (CAR ADL)) (GET 'COMPILER::LOCBLOCK 'COMPILER::QLVAL))
 		 (FORMAT T "local ~D (~S)." SLOT (EH:LOCAL-NAME FEF SLOT))
 	       (FORMAT T "arg ~D (~S)." SLOT (EH:ARG-NAME FEF SLOT))))
 	   (POP ADL))
@@ -203,8 +202,7 @@ NIL as arg means print a header but mention no areas."
 	  (SG-SWAP-SV-OF-SG-THAT-CALLS-ME SG))
   (FORMAT T "~%SG-INST-DISP: ~D (~:*~[Normal~;Debug~;Single-step~;Single-step done~])"
 	    (SG-INST-DISP SG))
-  (FORMAT T 
-      "~%SG-PREVIOUS-STACK-GROUP ~S, SG-CALLING-ARGS-NUMBER ~S, SG-CALLING-ARGS-POINTER ~S"
+  (FORMAT T "~%SG-PREVIOUS-STACK-GROUP ~S, SG-CALLING-ARGS-NUMBER ~S, SG-CALLING-ARGS-POINTER ~S"
           (SG-PREVIOUS-STACK-GROUP SG)
 	  (SG-CALLING-ARGS-NUMBER SG)
 	  (SG-CALLING-ARGS-POINTER SG))
@@ -222,58 +220,57 @@ NIL as arg means print a header but mention no areas."
 	 (FORMAT T "~%SG-UCODE ~S" TEM))))
 
 (DEFUN DESCRIBE-FEF (FEF &AUX HEADER NAME FAST-ARG SV MISC LENGTH DBI)
-   (COND ((SYMBOLP FEF)
-	  (DESCRIBE-FEF (CAR (FUNCTION-CELL-LOCATION FEF))))
-	 ((not (compiled-function-p fef))
-	  (FERROR NIL "~S is not a FEF (a compiled function)" FEF))
-	 (T
-	  (SETQ HEADER (%P-LDB-OFFSET %%HEADER-REST-FIELD FEF %FEFHI-IPC))
-	  (SETQ LENGTH (%P-CONTENTS-OFFSET FEF %FEFHI-STORAGE-LENGTH))
-	  (SETQ NAME (%P-CONTENTS-OFFSET FEF %FEFHI-FCTN-NAME))
-	  (SETQ FAST-ARG (%P-CONTENTS-OFFSET FEF %FEFHI-FAST-ARG-OPT))
-	  (SETQ SV (%P-CONTENTS-OFFSET FEF %FEFHI-SV-BITMAP))
-	  (SETQ MISC (%P-CONTENTS-OFFSET FEF %FEFHI-MISC))
-	  
-	  (FORMAT T "~%FEF for function ~S~%" NAME)
-	  (UNLESS (ZEROP (%P-LDB %%FEFH-GET-SELF-MAPPING-TABLE FEF))
-	    (FORMAT T "This is a method of flavor ~S.~%"
-		    (%P-CONTENTS-OFFSET FEF (1- (%P-LDB-OFFSET %%FEFHI-MS-ARG-DESC-ORG
-							       FEF %FEFHI-MISC)))))
-	  (FORMAT T "Initial relative PC: ~S halfwords.~%" (LDB %%FEFH-PC HEADER))
-	  ;; -- Print out the fast arg option
-	  (FORMAT T "The Fast Argument Option is ~A"
-		    (IF (ZEROP (LDB %%FEFH-FAST-ARG HEADER))
-			"not active, but here it is anyway:"
-		      "active:"))
-	  (DESCRIBE-NUMERIC-DESCRIPTOR-WORD FAST-ARG)
-	  ;; -- Randomness.
-	  (FORMAT T "~%The length of the local block is ~S~%"
-		    (LDB %%FEFHI-MS-LOCAL-BLOCK-LENGTH MISC))
-	  (FORMAT T "The total storage length of the FEF is ~S~%"
-		    LENGTH)
-	  ;; -- Special variables
-	  (IF (ZEROP (LDB %%FEFH-SV-BIND HEADER))
-	      (PRINC "There are no special variables present.")
-	    (PRINC "There are special variables, ")
-	    (TERPRI)
-	    (IF (ZEROP (LDB %%FEFHI-SVM-ACTIVE SV))
-		(PRINC "but the S-V bit map is not active. ")
-	      (FORMAT T "and the S-V bit map is active and contains: ~O"
-		      (LDB %%FEFHI-SVM-BITS SV))))
-          (TERPRI)
-	  ;; -- ADL.
-	  (COND ((ZEROP (LDB %%FEFH-NO-ADL HEADER))
-		 (FORMAT T "There is an ADL:  It is ~S long, and starts at ~S"
-			   (LDB %%FEFHI-MS-BIND-DESC-LENGTH MISC)
-			   (LDB %%FEFHI-MS-ARG-DESC-ORG MISC))
-		 (DESCRIBE-FEF-ADL FEF))
-		(T (PRINC "There is no ADL.")))
-	  (TERPRI)
-	  (WHEN (SETQ DBI (FUNCTION-DEBUGGING-INFO FEF))
-	    (FORMAT T "Debugging info:~%")
-	    (DOLIST (ITEM DBI)
-	      (FORMAT T "  ~S~%" ITEM)))
-	  )))
+  (TYPECASE FEF
+    (SYMBOL (DESCRIBE-FEF (SYMBOL-FUNCTION FEF)))
+    (COMPILED-FUNCTION
+     (SETQ HEADER (%P-LDB-OFFSET %%HEADER-REST-FIELD FEF %FEFHI-IPC))
+     (SETQ LENGTH (%P-CONTENTS-OFFSET FEF %FEFHI-STORAGE-LENGTH))
+     (SETQ NAME (%P-CONTENTS-OFFSET FEF %FEFHI-FCTN-NAME))
+     (SETQ FAST-ARG (%P-CONTENTS-OFFSET FEF %FEFHI-FAST-ARG-OPT))
+     (SETQ SV (%P-CONTENTS-OFFSET FEF %FEFHI-SV-BITMAP))
+     (SETQ MISC (%P-CONTENTS-OFFSET FEF %FEFHI-MISC))
+     
+     (FORMAT T "~%FEF for function ~S~%" NAME)
+     (UNLESS (ZEROP (%P-LDB %%FEFH-GET-SELF-MAPPING-TABLE FEF))
+       (FORMAT T "This is a method of flavor ~S.~%"
+	       (%P-CONTENTS-OFFSET FEF (1- (%P-LDB-OFFSET %%FEFHI-MS-ARG-DESC-ORG
+							  FEF %FEFHI-MISC)))))
+     (FORMAT T "Initial relative PC: ~S halfwords.~%" (LDB %%FEFH-PC HEADER))
+     ;; -- Print out the fast arg option
+     (FORMAT T "The Fast Argument Option is ~A"
+	     (IF (ZEROP (LDB %%FEFH-FAST-ARG HEADER))
+		 "not active, but here it is anyway:"
+	       "active:"))
+     (DESCRIBE-NUMERIC-DESCRIPTOR-WORD FAST-ARG)
+     ;; -- Randomness.
+     (FORMAT T "~%The length of the local block is ~S~%"
+	     (LDB %%FEFHI-MS-LOCAL-BLOCK-LENGTH MISC))
+     (FORMAT T "The total storage length of the FEF is ~S~%"
+	     LENGTH)
+     ;; -- Special variables
+     (IF (ZEROP (LDB %%FEFH-SV-BIND HEADER))
+	 (PRINC "There are no special variables present.")
+       (PRINC "There are special variables, ")
+       (TERPRI)
+       (IF (ZEROP (LDB %%FEFHI-SVM-ACTIVE SV))
+	   (PRINC "but the S-V bit map is not active. ")
+	 (FORMAT T "and the S-V bit map is active and contains: ~O"
+		 (LDB %%FEFHI-SVM-BITS SV))))
+     (TERPRI)
+     ;; -- ADL.
+     (COND ((ZEROP (LDB %%FEFH-NO-ADL HEADER))
+	    (FORMAT T "There is an ADL:  It is ~S long, and starts at ~S"
+		    (LDB %%FEFHI-MS-BIND-DESC-LENGTH MISC)
+		    (LDB %%FEFHI-MS-ARG-DESC-ORG MISC))
+	    (DESCRIBE-FEF-ADL FEF))
+	   (T (PRINC "There is no ADL.")))
+     (TERPRI)
+     (WHEN (SETQ DBI (FUNCTION-DEBUGGING-INFO FEF))
+       (FORMAT T "Debugging info:~%")
+       (DOLIST (ITEM DBI)
+	 (FORMAT T "  ~S~%" ITEM))))
+    (T (FERROR NIL "~S is not a FEF (a compiled function)" FEF))))
+
 
 (DEFUN DESCRIBE-NUMERIC-DESCRIPTOR-WORD (N &AUX (MIN (LDB %%ARG-DESC-MIN-ARGS N))
 					 	(MAX (LDB %%ARG-DESC-MAX-ARGS N)))
@@ -295,11 +292,11 @@ NIL as arg means print a header but mention no areas."
 (DEFUN DESCRIBE-ARRAY (ARRAY &AUX ARRAYDIMS NDIMS LONG-LENGTH-FLAG)
   (COND ((SYMBOLP ARRAY)
 	 (COND ((AND (BOUNDP ARRAY)
-		     (ARRAYP (SYMEVAL ARRAY)))
-		(DESCRIBE-ARRAY (SYMEVAL ARRAY)))
+		     (ARRAYP (SYMBOL-VALUE ARRAY)))
+		(DESCRIBE-ARRAY (SYMBOL-VALUE ARRAY)))
 	       ((AND (FBOUNDP ARRAY)
-		     (ARRAYP (FSYMEVAL ARRAY)))
-		(DESCRIBE-ARRAY (FSYMEVAL ARRAY)))
+		     (ARRAYP (SYMBOL-FUNCTION ARRAY)))
+		(DESCRIBE-ARRAY (SYMBOL-FUNCTION ARRAY)))
 	       (T NIL)))
 	((ARRAYP ARRAY)
 	 (FORMAT T "~%This is an ~S type array." (ARRAY-TYPE ARRAY))
@@ -421,7 +418,7 @@ This is a good way to find out more than the printed representation says."
       (ignore-errors
 	(format t "~%The function definition of ~S is ~S: ~S"
 		sym (symbol-function sym) (arglist sym))))
-	 (describe-1 (fsymeval sym)))
+	 (describe-1 (symbol-function sym)))
   (do ((pl (symbol-plist sym) (cddr pl))
        (*print-level* 2)
        (*print-length* 3))
@@ -501,7 +498,7 @@ describing themselves."
        (UNLESS (NULL ML)
 	 (FORMAT T "~%   anything else to ~S" ML)
 	 (IF (AND (SYMBOLP ML) (BOUNDP ML))
-	   (FORMAT T "  -> ~S" (SYMEVAL ML)))))	;class cruft...
+	   (FORMAT T "  -> ~S" (SYMBOL-VALUE ML)))))	;class cruft...
     (IF (ATOM (CAR ML))
 	(FORMAT T "~%   subroutine ~S" (CAR ML))
       (FORMAT T "~%   ~S: ~34T" (CAAR ML))
@@ -613,9 +610,10 @@ describing themselves."
 
 (defun describe-character (character)
   (setq character (cli:character character))
-  (format t "~&~S is a character with code ~D.
+  (format t "~&~S is a character with integer representation ~D, and code ~D
 Its control-bits are ~D~:[~4*~; (~@[Control~*~]~@[Meta~*~]~@[Super~*~]~@[Hyper~*~])~]. Its font is ~D"
-	  character (char-code character) (char-bits character) ( 0 (char-bits character))
+	  character (char-int character)
+	  (char-code character) (char-bits character) ( 0 (char-bits character))
 	  (char-bit character :control) (char-bit character :meta)
 	  (char-bit character :super) (char-bit character :hyper)
 	  (char-font character))
@@ -670,27 +668,27 @@ CDR of a number is ~A.
 CAR of a symbol is ~A.
 CDR of a symbol is a ~A.
 Trapping is ~A.~%"
-	  (SELECTQ (LDB %%M-FLAGS-CAR-NUM-MODE EM)
-	      (0 "an error")
-	      (1 "NIL")
-	      (OTHERWISE "in an unknown state"))
-	  (SELECTQ (LDB %%M-FLAGS-CDR-NUM-MODE EM)
-	      (0 "an error")
-	      (1 "NIL")
-	      (OTHERWISE "in an unknown state"))
-	  (SELECTQ (LDB %%M-FLAGS-CAR-SYM-MODE EM)
-	      (0 "an error")
-	      (1 "NIL if the symbol is NIL, otherwise an error")
-	      (2 "NIL")
-	      (3 "its print-name"))
-	  (SELECTQ (LDB %%M-FLAGS-CDR-SYM-MODE EM)
-	      (0 "an error")
-	      (1 "NIL if the symbol is NIL, otherwise an error")
-	      (2 "NIL")
-	      (3 "its property list"))
-	  (SELECTQ (LDB %%M-FLAGS-TRAP-ENABLE EM)
-	      (0 "disabled")
-	      (1 "enabled"))
+	  (CASE (LDB %%M-FLAGS-CAR-NUM-MODE EM)
+	    (0 "an error")
+	    (1 "NIL")
+	    (OTHERWISE "in an unknown state"))
+	  (CASE (LDB %%M-FLAGS-CDR-NUM-MODE EM)
+	    (0 "an error")
+	    (1 "NIL")
+	    (OTHERWISE "in an unknown state"))
+	  (CASE (LDB %%M-FLAGS-CAR-SYM-MODE EM)
+	    (0 "an error")
+	    (1 "NIL if the symbol is NIL, otherwise an error")
+	    (2 "NIL")
+	    (3 "its print-name"))
+	  (CASE (LDB %%M-FLAGS-CDR-SYM-MODE EM)
+	    (0 "an error")
+	    (1 "NIL if the symbol is NIL, otherwise an error")
+	    (2 "NIL")
+	    (3 "its property list"))
+	  (CASE (LDB %%M-FLAGS-TRAP-ENABLE EM)
+	    (0 "disabled")
+	    (1 "enabled"))
 	  ))
 
 (DEFUN APROPOS-LIST (SUBSTRING &OPTIONAL PKG)
@@ -698,7 +696,6 @@ Trapping is ~A.~%"
 Like APROPOS with :DONT-PRINT specified as non-NIL."
   (APROPOS SUBSTRING PKG :DONT-PRINT T))
 
-;;; not patched in 98.
 (DEFUN APROPOS (SUBSTRING
 		&OPTIONAL (PKG *ALL-PACKAGES*)
 		&KEY (INHERITORS NIL) (INHERITED T) DONT-PRINT PREDICATE BOUNDP FBOUNDP)
@@ -794,7 +791,7 @@ More precisely, the value which is visible within CLOSURE is returned.
 If CLOSURE does not contain a binding for it, the current value is returned."
   (CHECK-TYPE CLOSURE (OR CLOSURE ENTITY))
   (ETYPECASE PTR
-    (SYMBOL (SETQ PTR (VALUE-CELL-LOCATION PTR)))
+    (SYMBOL (SETQ PTR (LOCF (SYMBOL-VALUE PTR))))
     (LOCATIVE))
   (DO ((L (CDR (%MAKE-POINTER DTP-LIST CLOSURE)) (CDDR L)))
       ((NULL L)
@@ -808,9 +805,8 @@ More precisely, the binding which is visible within CLOSURE is tested.
 If CLOSURE does not contain a binding for it, the current binding is tested."
   (CHECK-TYPE CLOSURE (OR CLOSURE ENTITY))
   (ETYPECASE PTR
-    (SYMBOL (SETQ PTR (VALUE-CELL-LOCATION PTR)))
+    (SYMBOL (SETQ PTR (LOCF (SYMBOL-VALUE PTR))))
     (LOCATIVE))
-  (SETQ PTR1 (IF (SYMBOLP PTR) (LOCF (SYMEVAL PTR)) PTR))
   (DO ((L (CDR (%MAKE-POINTER DTP-LIST CLOSURE)) (CDDR L)))
       ((NULL L)
        (LOCATION-BOUNDP PTR1))
@@ -822,16 +818,16 @@ If CLOSURE does not contain a binding for it, the current binding is tested."
 More precisely, the binding which is visible within CLOSURE is made unbound.
 If CLOSURE does not contain a binding for it, the current binding is made unbound."
   (CHECK-TYPE CLOSURE (OR CLOSURE ENTITY))
-  (ETYPECASE PTR
-    (SYMBOL (SETQ PTR (VALUE-CELL-LOCATION PTR)))
-    (LOCATIVE))
-  (SETQ PTR1 (IF (SYMBOLP PTR) (LOCF (SYMEVAL PTR)) PTR))
+  (SETQ PTR1 (ETYPECASE PTR
+	       (SYMBOL (LOCF (SYMBOL-VALUE PTR)))
+	       (LOCATIVE PTR)))
   (DO ((L (CDR (%MAKE-POINTER DTP-LIST CLOSURE)) (CDDR L)))
       ((NULL L)
-       (IF (SYMBOLP PTR) (MAKUNBOUND PTR)
-	 (LOCATION-MAKUNBOUND PTR)))
-    (COND ((EQ (CAR L) PTR1)
-	   (RETURN (LOCATION-MAKUNBOUND (CADR L))))))
+       (IF (SYMBOLP PTR)
+	   (MAKUNBOUND PTR)
+	   (LOCATION-MAKUNBOUND PTR)))
+    (IF (EQ (CAR L) PTR1)
+	(RETURN (LOCATION-MAKUNBOUND (CADR L)))))
   NIL)
 
 (DEFUN LOCATE-IN-CLOSURE (CLOSURE PTR)
@@ -841,7 +837,7 @@ If CLOSURE does not contain a binding for it, the value cell
 locative itself, or the symbol's value cell location, is returned."
   (CHECK-TYPE CLOSURE (OR CLOSURE ENTITY))
   (ETYPECASE PTR
-    (SYMBOL (SETQ PTR (VALUE-CELL-LOCATION PTR)))
+    (SYMBOL (SETQ PTR (LOCF (SYMBOL-VALUE PTR))))
     (LOCATIVE))
   (DO ((L (CDR (%MAKE-POINTER DTP-LIST CLOSURE)) (CDDR L)))
       ((NULL L)
@@ -855,14 +851,13 @@ More precisely, the binding which is visible within CLOSURE is set.
 If CLOSURE does not contain a binding for it, the current binding is set."
   (CHECK-TYPE CLOSURE (OR CLOSURE ENTITY))
   (ETYPECASE PTR
-    (SYMBOL (SETQ PTR (VALUE-CELL-LOCATION PTR)))
+    (SYMBOL (SETQ PTR (LOCF (SYMBOL-VALUE PTR))))
     (LOCATIVE))
   (DO ((L (CDR (%MAKE-POINTER DTP-LIST CLOSURE)) (CDDR L)))
       ((NULL L)
-       (RPLACA PTR VAL))
-    (COND ((EQ (CAR L) PTR)
-	   (RETURN (RPLACA (CADR L) VAL)))))
-  VAL)
+       (SETF (CONTENTS PTR) VAL))
+    (IF (EQ (CAR L) PTR)
+	(RETURN (SETF (CONTENTS (CADR L)) VAL)))))
 
 ;;;; Here are some random functions for poking around in ENTITYs and CLOSUREs.
 
@@ -888,8 +883,8 @@ Storing into the alist cdr's does not affect the values in the closure."
     (DO ((L (CDR (%MAKE-POINTER DTP-LIST CLOSURE)) (CDDR L))
 	 (ANS))
 	((NULL L) ANS)
-      (PUSH (CONS (%MAKE-POINTER-OFFSET DTP-SYMBOL (CAR L) -1) NIL)
-	    ANS)
+      ;; value-cell is offset 1 from symbol pointer
+      (PUSH (CONS (%MAKE-POINTER-OFFSET DTP-SYMBOL (CAR L) -1) NIL) ANS)
       ;; Copy (CAADR L) into (CDAR ANS)
       (%BLT-TYPED (CADR L) (CDR-LOCATION-FORCE (CAR ANS)) 1 1))))
 
@@ -913,18 +908,18 @@ However, the new and old closures do not share the same external value cells."
   (SETQ CLOSURE1 (%MAKE-POINTER DTP-LIST CLOSURE))
   (IF (AND (CDR (%MAKE-POINTER DTP-LIST CLOSURE))
 	   (NULL (CDDR (%MAKE-POINTER DTP-LIST CLOSURE))))
-      (%MAKE-POINTER DTP-CLOSURE (COPYLIST CLOSURE1))
+      (%MAKE-POINTER DTP-CLOSURE (COPY-LIST CLOSURE1))
     (LET ((ANS (MAKE-LIST (LENGTH CLOSURE1))))
-      (RPLACA ANS (CAR CLOSURE1))		;CLOSE OVER SAME FCTN
+      (SETF (CAR ANS) (CAR CLOSURE1))		;Close over same fctn
       (DO ((L (CDR CLOSURE1) (CDDR L))
 	   (N (CDR ANS) (CDDR N)))
 	  ((NULL L) (%MAKE-POINTER (%DATA-TYPE CLOSURE) ANS))
-	(RPLACA N (CAR L))			;SAME INTERNAL VALUE CELL
+	(SETF (CAR N) (CAR L))			;Same internal value cell
 	(LET ((NEW-EXVC (MAKE-LIST 1)))
 	  (IF (NOT (LOCATION-BOUNDP (CADR L)))
 	      (LOCATION-MAKUNBOUND NEW-EXVC)
-	    (RPLACA NEW-EXVC (CAR (CADR L))))
-	  (RPLACA (CDR N) NEW-EXVC))))))
+	    (SETF (CAR NEW-EXVC) (CAR (CADR L))))
+	  (SETF (CADR N) NEW-EXVC))))))
 
 (DEFVAR ARRAY-ORDER-INITIALIZATION-LIST NIL
   "Initialization list run after changing the value of ARRAY-INDEX-ORDER.")
@@ -955,19 +950,19 @@ For an ART-Q-LIST array, the cdr codes are updated so that the overlayed list
 no longer contains the element removed. Signals an error if ARRAY is empty
 /(has fill-pointer 0)
 Uses CLI:AREF, so will pop character objects out of strings."
-  (LET* ((INHIBIT-SCHEDULING-FLAG T)
-	 (INDEX (1- (FILL-POINTER ARRAY)))	;1- because fill-pointer is # active elements
-	 (ARRAY-TYPE (CLI:AREF (FUNCTION ARRAY-TYPES)
-			       (%P-LDB-OFFSET %%ARRAY-TYPE-FIELD ARRAY 0)))
-	 VAL)
-    (WHEN (MINUSP INDEX)
-      (FERROR NIL "~S Overpopped" ARRAY))
-    (SETQ VAL (CLI:AREF ARRAY INDEX))
-    (SETF (FILL-POINTER ARRAY) INDEX)
-    (WHEN (AND (EQ ARRAY-TYPE 'ART-Q-LIST)
-	       (NOT (ZEROP INDEX)))
-      (%P-DPB CDR-NIL %%Q-CDR-CODE (ALOC ARRAY (1- INDEX))))
-    VAL))
+  (WITHOUT-INTERRUPTS
+    (LET* ((INDEX (1- (FILL-POINTER ARRAY)))	;1- because fill-pointer is # active elements
+	   (ARRAY-TYPE (AREF (SYMBOL-FUNCTION 'ARRAY-TYPES)
+			     (%P-LDB-OFFSET %%ARRAY-TYPE-FIELD ARRAY 0)))
+	   VAL)
+      (WHEN (MINUSP INDEX)
+	(FERROR NIL "~S Overpopped" ARRAY))
+      (SETQ VAL (CLI:AREF ARRAY INDEX))
+      (SETF (FILL-POINTER ARRAY) INDEX)
+      (WHEN (AND (EQ ARRAY-TYPE 'ART-Q-LIST)
+		 (NOT (ZEROP INDEX)))
+	(%P-DPB CDR-NIL %%Q-CDR-CODE (LOCF (AREF ARRAY (1- INDEX)))))
+      VAL)))
 
 (DEFUN ARRAY-POP (ARRAY)
   "Returns the last used element of ARRAY, and decrements the fill pointer.
@@ -975,19 +970,19 @@ For an ART-Q-LIST array, the cdr codes are updated so that the overlayed list
 no longer contains the element removed. Signals an error if ARRAY is empty
 /(has fill-pointer 0)
 Uses GLOBAL:AREF, so will pop fixnums out of strings."
-  (LET* ((INHIBIT-SCHEDULING-FLAG T)
-	 (INDEX (1- (FILL-POINTER ARRAY)))	;1- because fill-pointer is # active elements
-	 (ARRAY-TYPE (CLI:AREF (FUNCTION ARRAY-TYPES)
-			       (%P-LDB-OFFSET %%ARRAY-TYPE-FIELD ARRAY 0)))
-	 VAL)
-    (WHEN (MINUSP INDEX)
-      (FERROR NIL "~S Overpopped" ARRAY))
-    (SETQ VAL (GLOBAL:AREF ARRAY INDEX))
-    (SETF (FILL-POINTER ARRAY) INDEX)
-    (WHEN (AND (EQ ARRAY-TYPE 'ART-Q-LIST)
-	       (NOT (ZEROP INDEX)))
-      (%P-DPB CDR-NIL %%Q-CDR-CODE (ALOC ARRAY (1- INDEX))))
-    VAL))
+  (WITHOUT-INTERRUPTS
+    (LET* ((INDEX (1- (FILL-POINTER ARRAY)))	;1- because fill-pointer is # active elements
+	   (ARRAY-TYPE (AREF (SYMBOL-FUNCTION ARRAY-TYPES)
+			     (%P-LDB-OFFSET %%ARRAY-TYPE-FIELD ARRAY 0)))
+	   VAL)
+      (WHEN (MINUSP INDEX)
+	(FERROR NIL "~S Overpopped" ARRAY))
+      (SETQ VAL (GLOBAL:AREF ARRAY INDEX))
+      (SETF (FILL-POINTER ARRAY) INDEX)
+      (WHEN (AND (EQ ARRAY-TYPE 'ART-Q-LIST)
+		 (NOT (ZEROP INDEX)))
+	(%P-DPB CDR-NIL %%Q-CDR-CODE (LOCF (AREF ARRAY (1- INDEX)))))
+      VAL)))
 
 ;;; The following definitions of FILLARRAY and LISTARRAY should be completely
 ;;; compatible with Maclisp.  Slow, maybe, but compatible.
@@ -1000,7 +995,7 @@ Uses GLOBAL:AREF, so will pop fixnums out of strings."
 
 (DEFRESOURCE FILLARRAY-INDEX-ARRAYS ()
   "Resource of vectors used by FILLARRAY and LISTARRAY"
-  :CONSTRUCTOR (MAKE-ARRAY 8)
+  :CONSTRUCTOR (MAKE-ARRAY 8.)
   :INITIAL-COPIES 2)
 
 (DEFUN FILLARRAY (ARRAY SOURCE)
@@ -1019,8 +1014,8 @@ If ARRAY is NIL, a new list as big as SOURCE is created."
 					      "Unable to default destination array"))))))
 		    ((AND (SYMBOLP ARRAY)
 			  (FBOUNDP ARRAY)
-			  (ARRAYP (FSYMEVAL ARRAY)))
-		     (FSYMEVAL ARRAY))
+			  (ARRAYP (SYMBOL-FUNCTION ARRAY)))
+		     (SYMBOL-FUNCTION ARRAY))
 		    (T ARRAY))))
     (CHECK-TYPE ARRAY ARRAY)
     (CHECK-TYPE SOURCE (OR ARRAY LIST))
@@ -1030,7 +1025,7 @@ If ARRAY is NIL, a new list as big as SOURCE is created."
 	     (LET ((SOURCE-NDIMS (ARRAY-RANK SOURCE)))
 	       (COND ((AND (= DEST-NDIMS 1)
 			   (= SOURCE-NDIMS 1))
-		      ;; One-D array into a one-D array is in microcode!
+		      ;; 1d array into a 1d array is in microcode!
 		      (LET ((N-ELEMENTS (MIN (ARRAY-LENGTH SOURCE)
 					     (ARRAY-LENGTH ARRAY))))
 			(COPY-ARRAY-PORTION SOURCE 0 N-ELEMENTS ARRAY 0 N-ELEMENTS)))
@@ -1039,8 +1034,8 @@ If ARRAY is NIL, a new list as big as SOURCE is created."
 		      (USING-RESOURCE (SOURCE-INDEX-ARRAY FILLARRAY-INDEX-ARRAYS)
 			(USING-RESOURCE (DEST-INDEX-ARRAY FILLARRAY-INDEX-ARRAYS)
 			  (DOTIMES (I 10)
-			    (ASET 0 SOURCE-INDEX-ARRAY I)
-			    (ASET 0 DEST-INDEX-ARRAY I))
+			    (SETF (AREF SOURCE-INDEX-ARRAY I) 0)
+			    (SETF (AREF DEST-INDEX-ARRAY I) 0))
 			  (LET ((SOURCE-ELEMENTS (ARRAY-LENGTH SOURCE))
 				(DEST-ELEMENTS (ARRAY-LENGTH ARRAY)))
 			    (DOTIMES (I (MIN SOURCE-ELEMENTS DEST-ELEMENTS))
@@ -1053,23 +1048,23 @@ If ARRAY is NIL, a new list as big as SOURCE is created."
 	     ;; Source is a list.
 	     (COND ((= DEST-NDIMS 1)
 		    (DOTIMES (X (ARRAY-DIMENSION ARRAY 0))
-		      (ASET (CAR SOURCE) ARRAY X)
+		      (SETF (AREF ARRAY X) (CAR SOURCE))
 		      (IF (NOT (NULL (CDR SOURCE))) (SETQ SOURCE (CDR SOURCE)))))
 		   ((= DEST-NDIMS 2)
 		    (DOTIMES (X (ARRAY-DIMENSION ARRAY 0))
 		      (DOTIMES (Y (ARRAY-DIMENSION ARRAY 1))
-			(ASET (CAR SOURCE) ARRAY X Y)
+			(SETF (AREF ARRAY X Y) (CAR SOURCE))
 			(IF (NOT (NULL (CDR SOURCE))) (SETQ SOURCE (CDR SOURCE))))))
 		   ((= DEST-NDIMS 3)
 		    (DOTIMES (X (ARRAY-DIMENSION ARRAY 0))
 		      (DOTIMES (Y (ARRAY-DIMENSION ARRAY 1))
 			(DOTIMES (Z (ARRAY-DIMENSION ARRAY 2))
-			  (ASET (CAR SOURCE) ARRAY X Y Z)
+			  (SETF (AREF ARRAY X Y Z) (CAR SOURCE))
 			  (IF (NOT (NULL (CDR SOURCE))) (SETQ SOURCE (CDR SOURCE)))))))
 		   (T
 		    (USING-RESOURCE (DEST-INDEX-ARRAY FILLARRAY-INDEX-ARRAYS)
-		      (DOTIMES (I 8)
-			(ASET 0 DEST-INDEX-ARRAY I))
+		      (DOTIMES (I 8.)
+			(SETF (AREF DEST-INDEX-ARRAY) I 0))
 		      (DOTIMES (I (ARRAY-LENGTH ARRAY))
 			(FILLARRAY-PUT (CAR SOURCE) ARRAY DEST-INDEX-ARRAY DEST-NDIMS)
 			(IF (NOT (NULL (CDR SOURCE))) (SETQ SOURCE (CDR SOURCE))))))))))
@@ -1099,21 +1094,22 @@ If ARRAY is NIL, a new list as big as SOURCE is created."
       ((< DIM 0))
     (LET ((VAL (1+ (GLOBAL:AREF INDEX-ARRAY DIM))))
       (COND ((< VAL (ARRAY-DIMENSION ARRAY DIM))
-	     (ASET VAL INDEX-ARRAY DIM)
+	     (SETF (AREF INDEX-ARRAY DIM) VAL)
 	     (RETURN))
 	    (T
-	     (ASET 0 INDEX-ARRAY DIM))))))
+	     (SETF (AREF INDEX-ARRAY DIM) 0))))))
 
 ;;; LISTARRAY of a one-dimensional array respects the fill pointer, but
 ;;; for multi-dimensional arrays it ignores the fill pointer.
 (DEFUN LISTARRAY (ARRAY &OPTIONAL LIMIT)
   "Return a list of the elements of ARRAY, up to index LIMIT.
 If LIMIT is NIL, the array size is used; for one-dimensional arrays,
-the fill pointer is used if there is one."
+the fill pointer is used if there is one.
+Uses GLOBAL:AREF, so will get fixnums out of strings."
   (IF (AND (SYMBOLP ARRAY)
 	   (FBOUNDP ARRAY)
-	   (ARRAYP (FSYMEVAL ARRAY)))
-      (SETQ ARRAY (FSYMEVAL ARRAY)))
+	   (ARRAYP (SYMBOL-FUNCTION ARRAY)))
+      (SETQ ARRAY (SYMBOL-FUNCTION ARRAY)))
   (CHECK-TYPE ARRAY ARRAY)
   (CHECK-TYPE LIMIT (OR NULL INTEGER))
   (LET* ((NDIMS (ARRAY-RANK ARRAY))
@@ -1152,7 +1148,7 @@ the fill pointer is used if there is one."
 		 (SETQ L (CDR L))))))
 	  (T
 	   (USING-RESOURCE (INDEX-ARRAY FILLARRAY-INDEX-ARRAYS)
-	     (DOTIMES (I 10) (ASET 0 INDEX-ARRAY I))
+	     (DOTIMES (I 10) (SETF (AREF INDEX-ARRAY) I 0))
 	     (DOTIMES (I TIMES)
 	       (SETF (CAR L) (FILLARRAY-GET ARRAY INDEX-ARRAY NDIMS))
 	       (SETQ L (CDR L))))))
@@ -1162,8 +1158,8 @@ the fill pointer is used if there is one."
   "Return a list of the contents of ARRAY's leader, up to LIMIT."
   (IF (AND (SYMBOLP ARRAY)
 	   (FBOUNDP ARRAY)
-	   (ARRAYP (FSYMEVAL ARRAY)))
-      (SETQ ARRAY (FSYMEVAL ARRAY)))
+	   (ARRAYP (SYMBOL-FUNCTION ARRAY)))
+      (SETQ ARRAY (SYMBOL-FUNCTION ARRAY)))
   (CHECK-TYPE ARRAY ARRAY)
   (IF (NULL LIMIT)
       (SETQ LIMIT (OR (ARRAY-LEADER-LENGTH ARRAY) 0)))
@@ -1172,18 +1168,18 @@ the fill pointer is used if there is one."
 	 (L LIST (CDR L)))
 	(( I LIMIT)
 	 LIST)
-      (RPLACA L (ARRAY-LEADER ARRAY I)))))
+      (SETF (CAR L) (ARRAY-LEADER ARRAY I)))))
 
 ;;; isn't compatibility wonderful?
-(DEFVAR *RSET NIL)
-(DEFUN *RSET (&OPTIONAL (NEW-MODE T))
-  (SETQ *RSET NEW-MODE))
+;(DEFVAR *RSET NIL)
+;(DEFUN *RSET (&OPTIONAL (NEW-MODE T))
+;  (SETQ *RSET NEW-MODE))
 
 (DEFF ARRAY-/#-DIMS 'ARRAY-RANK)
 (COMPILER:MAKE-OBSOLETE ARRAY-/#-DIMS "use ARRAY-RANK")
 
 (COMPILER:MAKE-OBSOLETE ARRAY-DIMENSION-N
-			"use ARRAY-DIMENSION (with a different calling sequence)")
+			 "use ARRAY-DIMENSION (with a different calling sequence)")
 (DEFUN ARRAY-DIMENSION-N (N ARRAY)
   "Return the length of dimension N of ARRAY.  The first dimension is N=1.
 If N is 0, the leader length is returned.  Use ARRAY-LEADER-LENGTH instead."
@@ -1208,29 +1204,29 @@ If N is 0, the leader length is returned.  Use ARRAY-LEADER-LENGTH instead."
 ;;; Facilities for looking through all functions in the world
 ;;; and finding out what they do.
 
-(DEFUN WHO-CALLS (SYMBOL &OPTIONAL PKG (INHERITORS T) (INHERITED T) &AUX RETURN-LIST)
+(DEFUN WHO-CALLS (SYMBOL &OPTIONAL PKG (INHERITORS T) (INHERITED T))
   "Find all symbols in package PKG whose values, definitions or properties use SYMBOL.
 PKG defaults to NIL, which means search all packages.
 The packages which inherit from PKG are processed also, unless INHERITORS is NIL.
 The packages PKG inherits from are processed also, unless INHERITED is NIL.
 /(Other packages which merely inherit from the same ones are NOT processed.)
 The symbols are printed and a list of them is returned."
-  (DECLARE (SPECIAL RETURN-LIST))
-  (FIND-CALLERS-OF-SYMBOLS SYMBOL PKG
-	#'(LAMBDA (CALLER CALLEE HOW)
-	    (FORMAT T "~&~S" CALLER)
-	    (FORMAT T (SELECTQ HOW
-			(:VARIABLE " uses ~S as a variable.")
-			(:FUNCTION " calls ~S as a function.")
-			(:MISC-FUNCTION " calls ~S via a 'misc' instruction.")
-			(:CONSTANT " uses ~S as a constant.")
-			(:FLAVOR " uses ~S's flavor definition.")
-			(:UNBOUND-FUNCTION " calls ~S, an undefined function.")
-			(NIL ", an interpreted function, uses ~S somehow."))
-		    CALLEE)
-	    (PUSH CALLER RETURN-LIST))
-	INHERITORS INHERITED)
-  RETURN-LIST)
+  (LET ((RETURN-LIST ()))
+    (FIND-CALLERS-OF-SYMBOLS SYMBOL PKG
+      #'(LAMBDA (CALLER CALLEE HOW)
+	  (FORMAT T "~&~S" CALLER)
+	  (FORMAT T (CASE HOW
+		      (:VARIABLE " uses ~S as a variable.")
+		      (:FUNCTION " calls ~S as a function.")
+		      (:MISC-FUNCTION " calls ~S via a 'misc' instruction.")
+		      (:CONSTANT " uses ~S as a constant.")
+		      (:FLAVOR " uses ~S's flavor definition.")
+		      (:UNBOUND-FUNCTION " calls ~S, an undefined function.")
+		      (NIL ", an interpreted function, uses ~S somehow."))
+		  CALLEE)
+	  (PUSHNEW CALLER RETURN-LIST :TEST #'EQ))
+      INHERITORS INHERITED)
+    RETURN-LIST))
 (DEFF WHO-USES 'WHO-CALLS)			;old bogus name
 
 (DEFUN WHAT-FILES-CALL (SYMBOL-OR-SYMBOLS &OPTIONAL PKG (INHERITORS T) (INHERITED T))
@@ -1242,11 +1238,11 @@ The packages PKG inherits from are processed also, unless INHERITED is NIL.
 The files are printed and a list of them is returned."
   (LET ((L NIL))
     (FIND-CALLERS-OF-SYMBOLS SYMBOL-OR-SYMBOLS PKG
-			     #'(LAMBDA (CALLER IGNORE IGNORE)
-				 (AND (SETQ CALLER (GET-SOURCE-FILE-NAME CALLER 'DEFUN))
-				      (NOT (MEMQ CALLER L))
-				      (PUSH CALLER L)))
-			     INHERITORS INHERITED)
+       #'(LAMBDA (CALLER IGNORE IGNORE)
+	   (AND (SETQ CALLER (GET-SOURCE-FILE-NAME CALLER 'DEFUN))
+		(NOT (MEMQ CALLER L))
+		(PUSHNEW CALLER L :TEST #'EQ)))
+       INHERITORS INHERITED)
     L))
 
 (DEFUN FIND-CALLERS-OF-SYMBOLS (SYMBOL PKG FUNCTION
@@ -1274,12 +1270,6 @@ The symbol :UNBOUND-FUNCTION is treated specially."
       (SETQ SYMBOL (ADD-SYMBOLS-OPTIMIZED-INTO SYMBOL (LIST SYMBOL)))
     (DOLIST (SYM SYMBOL)
       (SETQ SYMBOL (ADD-SYMBOLS-OPTIMIZED-INTO SYM SYMBOL))))
-  ;; If one of the symbols is :PUTPROP, say, make sure we look for GLOBAL:PUTPROP too.
-  (LET (TEM)
-    (DOLIST (SYM SYMBOL)
-      (AND (EQ (SYMBOL-PACKAGE SYM) PKG-KEYWORD-PACKAGE)
-	   (SETQ TEM (INTERN-SOFT SYM PKG-GLOBAL-PACKAGE))
-	   (PUSH TEM SYMBOL))))
   (COND (PKG
 	 (MAPATOMS #'FIND-CALLERS-OF-SYMBOLS-AUX PKG INHERITED)
 	 (AND INHERITORS
@@ -1291,7 +1281,7 @@ The symbol :UNBOUND-FUNCTION is treated specially."
 
 (DEFUN ADD-SYMBOLS-OPTIMIZED-INTO (SYM LIST)
   (IF (SYMBOLP LIST) (SETQ LIST (LIST LIST)))
-  (DOLIST (SYM1 (GET SYM 'COMPILER:OPTIMIZED-INTO))
+  (DOLIST (SYM1 (GET SYM 'COMPILER::OPTIMIZED-INTO))
     (UNLESS (MEMQ SYM1 LIST)
       (SETQ LIST (ADD-SYMBOLS-OPTIMIZED-INTO SYM1 (CONS SYM1 LIST)))))
   LIST)
@@ -1301,27 +1291,27 @@ The symbol :UNBOUND-FUNCTION is treated specially."
   ;; Ignore all symbols which are forwarded to others, to avoid duplication.
   (AND ( (%P-LDB-OFFSET %%Q-DATA-TYPE CALLER 2) DTP-ONE-Q-FORWARD)
        (FBOUNDP CALLER)
-       (FIND-CALLERS-OF-SYMBOLS-AUX1 CALLER (FSYMEVAL CALLER)))
-  (COND (( (%P-LDB-OFFSET %%Q-DATA-TYPE CALLER 3) DTP-ONE-Q-FORWARD)
-	 ;; Also look for properties
-	 (DO ((L (PLIST CALLER) (CDDR L)))
-	     ((NULL L))
-	   (COND ((= (%DATA-TYPE (CADR L)) DTP-FEF-POINTER)
-		  (FIND-CALLERS-OF-SYMBOLS-AUX-FEF
-		    (LIST :PROPERTY CALLER (CAR L)) (CADR L)))))
-	 ;; Also look for flavor methods
-	 (AND (SETQ FL (GET CALLER 'FLAVOR))
-	      (ARRAYP FL)		;Could be T
-	      (DOLIST (MTE (FLAVOR-METHOD-TABLE FL))
-		(DOLIST (METH (CDDDR MTE))
-		  (IF (METH-DEFINEDP METH)
-		      (FIND-CALLERS-OF-SYMBOLS-AUX1 (METH-FUNCTION-SPEC METH)
-						    (METH-DEFINITION METH))))))
-	 ;; Also look for initializations
-	 (IF (GET CALLER 'INITIALIZATION-LIST)
-	     ;; It is an initialization list.
-	     (DOLIST (INIT-LIST-ENTRY (SYMEVAL CALLER))
-	       (FIND-CALLERS-OF-SYMBOLS-AUX-LIST CALLER (INIT-FORM INIT-LIST-ENTRY)))))))
+       (FIND-CALLERS-OF-SYMBOLS-AUX1 CALLER (SYMBOL-FUNCTION CALLER)))
+  (UNLESS (= (%P-LDB-OFFSET %%Q-DATA-TYPE CALLER 3) DTP-ONE-Q-FORWARD)
+    ;; Also look for properties
+    (DO ((L (PLIST CALLER) (CDDR L)))
+	((NULL L))
+      (IF (TYPEP (CADR L) 'COMPILED-FUNCTION)
+	  (FIND-CALLERS-OF-SYMBOLS-AUX-FEF
+	    (LIST :PROPERTY CALLER (CAR L)) (CADR L))))
+    ;; Also look for flavor methods
+    (AND (SETQ FL (GET CALLER 'SI:FLAVOR))
+	 (ARRAYP FL)				;Could be T
+	 (DOLIST (MTE (FLAVOR-METHOD-TABLE FL))
+	   (DOLIST (METH (CDDDR MTE))
+	     (IF (METH-DEFINEDP METH)
+		 (FIND-CALLERS-OF-SYMBOLS-AUX1 (METH-FUNCTION-SPEC METH)
+					       (METH-DEFINITION METH))))))
+    ;; Also look for initializations
+    (IF (GET CALLER 'INITIALIZATION-LIST)
+	;; It is an initialization list.
+	(DOLIST (INIT-LIST-ENTRY (SYMBOL-VALUE CALLER))
+	  (FIND-CALLERS-OF-SYMBOLS-AUX-LIST CALLER (INIT-FORM INIT-LIST-ENTRY))))))
 
 (DEFUN FIND-CALLERS-OF-SYMBOLS-AUX1 (CALLER DEFN)
   (DECLARE (SPECIAL SYMBOL FUNCTION))
@@ -1395,8 +1385,8 @@ The symbol :UNBOUND-FUNCTION is treated specially."
 
 ;;; See if this FEF uses a certain MISC instruction
 (DEFUN FEF-CALLS-MISC-FUNCTION (FEF SYM &AUX TEM INST)
-  (AND (GET SYM 'COMPILER:QINTCMP)
-       (SETQ TEM (GET SYM 'COMPILER:QLVAL))
+  (AND (GET SYM 'COMPILER::QINTCMP)
+       (SETQ TEM (GET SYM 'COMPILER::QLVAL))
        (DO ((MISCINST				;Misc instruction sought
 	      (IF ( TEM #o1000)
 		  (+ #o35_11 (LOGAND #o777 TEM))
@@ -1463,12 +1453,10 @@ The symbol :UNBOUND-FUNCTION is treated specially."
 					;N-WORDS SHOULD DEFAULT TO (SIZE LOCATION)
   "Set trap on reference to N-WORDS words starting at LOCATION.
 N-WORDS defaults to 1.  CYCLE-TYPE is T, :READ or :WRITE."
-  (SETQ CYCLE-TYPE
-	(SELECTQ CYCLE-TYPE
-	   (:READ 1)
-	   (:WRITE 2)
-	   ((T) 3)
-	   (OTHERWISE (FERROR NIL "~S is not a valid CYCLE-TYPE" CYCLE-TYPE))))
+  (SETQ CYCLE-TYPE (ECASE CYCLE-TYPE
+		     (:READ 1)
+		     (:WRITE 2)
+		     ((T) 3)))
   (CLEAR-MAR)					;Clear old mar
   (SETQ %MAR-HIGH (+ (1- N-WORDS) (SETQ %MAR-LOW (%POINTER LOCATION))))
   ;; If MAR'ed pages are in core, set up their traps
@@ -1480,13 +1468,13 @@ N-WORDS defaults to 1.  CYCLE-TYPE is T, :READ or :WRITE."
   T)
 
 (DEFUN MAR-MODE ()
-   (LET ((MODE (LDB %%M-FLAGS-MAR-MODE %MODE-FLAGS)))
-     (SELECTQ MODE
-	(0 NIL)
-	(1 :READ)
-	(2 :WRITE)
-	(3 T)
-	(OTHERWISE (FERROR NIL "The MAR mode, ~D, is invalid." MODE)))))
+  (LET ((MODE (LDB %%M-FLAGS-MAR-MODE %MODE-FLAGS)))
+    (CASE MODE
+      (0 NIL)
+      (1 :READ)
+      (2 :WRITE)
+      (3 T)
+      (OTHERWISE (FERROR NIL "The MAR mode, ~D, is invalid." MODE)))))
 
 (DEFUN DEL-IF-NOT (PRED LIST)
   "Destructively remove all elements of LIST that don't satisfy PRED."
@@ -1502,7 +1490,7 @@ N-WORDS defaults to 1.  CYCLE-TYPE is T, :READ or :WRITE."
 	      ((FUNCALL PRED (CAR LST))
 	       (SETQ OLST LST))
 	      (T
-	       (RPLACD OLST (CDR LST))))
+	       (SETF (CDR OLST) (CDR LST))))
 	(GO B)))
 
 (DEFUN DEL-IF (PRED LIST)
@@ -1516,7 +1504,7 @@ N-WORDS defaults to 1.  CYCLE-TYPE is T, :READ or :WRITE."
      B  (SETQ LST (CDR LST))
 	(COND ((ATOM LST) (RETURN LIST))
 	      ((FUNCALL PRED (CAR LST))
-	       (RPLACD OLST (CDR LST)))
+	       (SETF (CDR OLST) (CDR LST)))
 	      (T
 	       (SETQ OLST LST)))
 	(GO B)))
@@ -1528,9 +1516,11 @@ If X is too small, all of it is returned."
   ;; Get number of significant bits
   (SETQ TEM (HAULONG (SETQ X (ABS X))))
   ;; Positive N means get high N bits, or as many as there are
-  (COND	((> N 0) (SETQ TEM (- N TEM))	;minus number of low bits to discard
-		 (COND ((< TEM 0) (ASH X TEM))
-		       (T X)))
+  (COND	((> N 0)				;minus number of low bits to discard
+	 (SETQ TEM (- N TEM))
+	 (IF (< TEM 0)
+	     (ASH X TEM)
+	   X))
 	;; Zero N means return no bits
 	((= N 0) 0)
 	;; Negative N means get low -N bits, or as many as there are
@@ -1542,22 +1532,22 @@ If X is too small, all of it is returned."
   "Read-macroexpand-print loop, for seeing how macros expand.
 MEXP reads s-expressions and macroexpands each one, printing the expansion.
 Type NIL to exit (or Abort)."
-    (DO-FOREVER
-      (UNLESS FORM
-	(FORMAT T "~2%Macro form ")
-	(SEND *STANDARD-INPUT* :UNTYI (SEND *STANDARD-INPUT* :TYI)));Allow abort to exit
-      (CATCH-ERROR-RESTART ((SYS:ABORT ERROR) "Return to MEXP input loop.")
-	(SETQ EXP (OR FORM (READ-FOR-TOP-LEVEL)))
-	(AND (SYMBOLP EXP) (RETURN NIL))
-	(DO ((LAST NIL EXP))
-	    ((EQ EXP LAST))
-	  (SETQ EXP (MACROEXPAND-1 EXP))
-	  (PRINC "  ")
-	  (GRIND-TOP-LEVEL EXP))
-	(UNLESS (EQUAL EXP (SETQ EXP (MACROEXPAND-ALL EXP)))
-	  (PRINC "  ")
-	  (GRIND-TOP-LEVEL EXP)))
-      (WHEN FORM (RETURN '*))))
+  (DO-FOREVER
+    (UNLESS FORM
+      (FORMAT T "~2%Macro form ")
+      (SEND *STANDARD-INPUT* :UNTYI (SEND *STANDARD-INPUT* :TYI)))	;Allow abort to exit
+    (CATCH-ERROR-RESTART ((SYS:ABORT ERROR) "Return to MEXP input loop.")
+      (SETQ EXP (OR FORM (READ-FOR-TOP-LEVEL)))
+      (AND (SYMBOLP EXP) (RETURN NIL))
+      (DO ((LAST NIL EXP))
+	  ((EQ EXP LAST))
+	(SETQ EXP (MACROEXPAND-1 EXP))
+	(PRINC "  ")
+	(GRIND-TOP-LEVEL EXP))
+      (UNLESS (EQUAL EXP (SETQ EXP (MACROEXPAND-ALL EXP)))
+	(PRINC "  ")
+	(GRIND-TOP-LEVEL EXP)))
+    (WHEN FORM (RETURN '*))))
 
 
 
@@ -1588,7 +1578,7 @@ Type NIL to exit (or Abort)."
 
 (DEFUN RETURN-STATUS (STATUS-LIST ITEM ITEM-P)
        (COND ((NOT ITEM-P) STATUS-LIST)
-	     ((NUMBERP ITEM) (SYS:MEMBER-EQUAL ITEM STATUS-LIST))
+	     ((NUMBERP ITEM) (MEMBER-EQUAL ITEM STATUS-LIST))
 	     (T (NOT (NULL (MEM #'STRING-EQUAL ITEM STATUS-LIST))))))
 
 (DEFUN STATUS (&QUOTE STATUS-FUNCTION &OPTIONAL (ITEM NIL ITEM-P))
@@ -1607,7 +1597,7 @@ list,  otherwise NIL.
 		  (NOT (RETURN-STATUS *FEATURES* ITEM ITEM-P)))
     (('STATUS) (RETURN-STATUS STATUS-STATUS-LIST ITEM ITEM-P))
     (('SSTATUS) (RETURN-STATUS STATUS-SSTATUS-LIST ITEM ITEM-P))
-    (('TABSIZE) 8)
+    (('TABSIZE) 8.)
     (('USERID) USER-ID)
     (('SITE) LOCAL-HOST-NAME)
     (('OPSYS) :LISPM)
@@ -1621,9 +1611,9 @@ New programs should use the variable *FEATURES*"
   (IF (SYMBOLP ITEM)
       (SETQ ITEM (INTERN (STRING ITEM) PKG-KEYWORD-PACKAGE)))	;These are all keywords
   (SELECTOR STATUS-FUNCTION STRING-EQUAL
-    (('FEATURE) (PUSHNEW ITEM *FEATURES* :TEST 'EQUAL)
+    (('FEATURE) (PUSHNEW ITEM *FEATURES* :TEST #'EQUAL)
 		ITEM)
-    (('NOFEATURE) (IF (SYS:MEMBER-EQUAL ITEM *FEATURES*)
+    (('NOFEATURE) (IF (SI:MEMBER-EQUAL ITEM *FEATURES*)
 		      (SETQ *FEATURES* (DEL #'EQUAL ITEM *FEATURES*)))
 		  ITEM)
     (OTHERWISE (FERROR NIL "~S is not a legal SSTATUS request." STATUS-FUNCTION))))
@@ -1641,7 +1631,8 @@ New programs should use the variable *FEATURES*"
   "Alist of site option keywords as specified in SYS:SITE;SITE LISP")
 
 (DEFVAR HOST-OVERRIDDEN-SITE-OPTION-ALIST NIL
-  "Alist of site-keywords overridden on a per-machine basis, specified in SYS:SITE;LMLOCS LISP")
+  "Alist of site-keywords overridden on a per-machine basis,
+as specified in SYS:SITE;LMLOCS LISP")
 
 (DEFVAR SITE-INITIALIZATION-LIST NIL
   "Initializations run after new site tables are loaded.")
@@ -1661,7 +1652,7 @@ New programs should use the variable *FEATURES*"
 
 (DEFUN GET-SITE-OPTION (KEY)
   "Return the value at this site for site option KEY (a symbol in the keyword package).
-The values of site options are specified in the file SYS: SITE; SITE LISP."
+The values of site options are specified in the file SYS:SITE;SITE LISP."
   (CDR (OR (ASSQ KEY HOST-OVERRIDDEN-SITE-OPTION-ALIST)
 	   (ASSQ KEY SITE-OPTION-ALIST))))
 
@@ -1735,103 +1726,6 @@ for finding the site files, in case the system does not know that host yet."
        (= (SECOND LOCAL-FLOOR-LOCATION) FLOOR)))
 |#
 
-;;;; Special floating arithmetic functions.
-
-(DEFUN FLOAT (NUMBER &OPTIONAL OTHER)
-  "Convert NUMBER to floating point, of same precision as OTHER.
-If OTHER is omitted, a full size flonum is returned."
-  (IF (SMALL-FLOATP OTHER)
-      (SMALL-FLOAT NUMBER)
-    (FLOAT NUMBER)))
-
-(DEFUN FFLOOR (DIVIDEND &OPTIONAL DIVISOR)
-  "Like FLOOR but converts first value to a float."
-  (DECLARE (VALUES QUOTIENT REMAINDER))
-  (MULTIPLE-VALUE-BIND (QUOTIENT REMAINDER)
-      (FLOOR DIVIDEND (OR DIVISOR 1))
-    (VALUES (FLOAT QUOTIENT) REMAINDER)))
-
-(DEFUN FCEILING (DIVIDEND &OPTIONAL DIVISOR)
-  "Like CEILING but converts first value to a float."
-  (DECLARE (VALUES QUOTIENT REMAINDER))
-  (MULTIPLE-VALUE-BIND (QUOTIENT REMAINDER)
-      (CEILING DIVIDEND (OR DIVISOR 1))
-    (VALUES (FLOAT QUOTIENT) REMAINDER)))
-
-(DEFUN FTRUNCATE (DIVIDEND &OPTIONAL DIVISOR)
-  "Like TRUNCATE but converts first value to a float."
-  (DECLARE (VALUES QUOTIENT REMAINDER))
-  (MULTIPLE-VALUE-BIND (QUOTIENT REMAINDER)
-      (TRUNCATE DIVIDEND (OR DIVISOR 1))
-    (VALUES (FLOAT QUOTIENT) REMAINDER)))
-
-(DEFUN FROUND (DIVIDEND &OPTIONAL DIVISOR)
-  "Like ROUND but converts first value to a float."
-  (DECLARE (VALUES QUOTIENT REMAINDER))
-  (MULTIPLE-VALUE-BIND (QUOTIENT REMAINDER)
-      (ROUND DIVIDEND (OR DIVISOR 1))
-    (VALUES (FLOAT QUOTIENT) REMAINDER)))
-
-(DEFUN FLOAT-RADIX (FLOAT)
-  "Returns the radix of the exponent of a float.  That is always 2."
-  (CHECK-TYPE FLOAT FLOAT)
-  2)
-
-(DEFUN FLOAT-DIGITS (FLOAT)
-  "Returns the number of bits of fraction part FLOAT has.
-This depends only on the data type of FLOAT (single-float vs short-float)."
-  (TYPECASE FLOAT
-    (SHORT-FLOAT SHORT-FLOAT-MANTISSA-LENGTH)
-    (T           SINGLE-FLOAT-MANTISSA-LENGTH)))
-
-(DEFUN FLOAT-PRECISION (FLOAT)
-  "Returns the number of significant bits of fraction part FLOAT has.
-For normalized arguments this is defined to be the same as FLOAT-DIGITS,
-and all floats are normalized on the Lisp machine, so they are identical."
-  (TYPECASE FLOAT
-    (SHORT-FLOAT SHORT-FLOAT-MANTISSA-LENGTH)
-    (T           SINGLE-FLOAT-MANTISSA-LENGTH)))
-
-(DEFUN DECODE-FLOAT (FLOAT)
-  "Returns three values describing the fraction part, exponent, and sign of FLOAT.
-The first is a float between 1/2 and 1 (but zero if the arg is zero).
-This value, times two to a suitable power, equals FLOAT except in sign.
-The second value is an integer, the exponent of two needed for that calculation.
-The third value is a float whose sign and type match FLOAT's
-and whose magnitude is 1."
-  (DECLARE (VALUES FRACTION-FLONUM EXPONENT SIGN-FLONUM))
-  (VALUES (ABS (FLOAT-FRACTION FLOAT))
-	  (FLOAT-EXPONENT FLOAT)
-	  (IF (MINUSP FLOAT)
-	      (IF (SMALL-FLOATP FLOAT) -1.0s0 -1.0)
-	      (IF (SMALL-FLOATP FLOAT) 1.0s0 1.0))))
-
-(DEFUN INTEGER-DECODE-FLOAT (FLOAT)
-  "Returns three values describing the fraction part, exponent, and sign of FLOAT.
-The first is an integer representing the fraction part of FLOAT.
-This value floated, times two to a suitable power, equals FLOAT except in sign.
-The second value is an integer, the exponent of two needed for that calculation.
-The third value is a float whose sign and type match FLOAT's
-and whose magnitude is 1."
-  (DECLARE (VALUES FRACTION EXPONENT SIGN-FLONUM))
-  (VALUES (FLONUM-MANTISSA (ABS FLOAT))
-	  (FLONUM-EXPONENT (ABS FLOAT))
-	  (IF (MINUSP FLOAT)
-	      (IF (SMALL-FLOATP FLOAT) -1.0s0 -1.0)
-	      (IF (SMALL-FLOATP FLOAT) 1.0s0 1.0))))
-
-(DEFUN FLOAT-SIGN (SIGN-FLONUM &OPTIONAL MAGNITUDE-FLONUM)
-  "Returns a float whose sign matches SIGN-FLONUM and magnitude matches MAGNITUDE-FLONUM.
-If MAGNITUDE-FLONUM is omitted, it defaults to 1.
-The type of float returned matches MAGNITUDE-FLONUM
-if that is specified; else SIGN-FLONUM."
-  (IF MAGNITUDE-FLONUM
-      (IF (EQ (MINUSP SIGN-FLONUM) (MINUSP MAGNITUDE-FLONUM))
-	  MAGNITUDE-FLONUM (- MAGNITUDE-FLONUM))
-    (IF (MINUSP SIGN-FLONUM)
-	(IF (SMALL-FLOATP SIGN-FLONUM) -1.0s0 -1.0)
-        (IF (SMALL-FLOATP SIGN-FLONUM) 1.0s0 1.0))))
-
 ;;;; Stuff for function specs
 
 ;;; These are here because they must be loaded after the package system is operational
@@ -1853,7 +1747,7 @@ if that is specified; else SIGN-FLONUM."
 (DEFUN FDEFINITION-LOCATION (FUNCTION-SPEC &AUX HANDLER)
   "Returns a locative pointer to the cell containing FUNCTION-SPEC's definition."
   ;; First, validate the function spec and determine its type
-  (COND ((SYMBOLP FUNCTION-SPEC) (LOCF (FSYMEVAL FUNCTION-SPEC)))
+  (COND ((SYMBOLP FUNCTION-SPEC) (LOCF (SYMBOL-FUNCTION FUNCTION-SPEC)))
 	((AND (CONSP FUNCTION-SPEC)
 	      (SETQ HANDLER (GET (CAR FUNCTION-SPEC) 'FUNCTION-SPEC-HANDLER)))
 	 (FUNCALL HANDLER 'FDEFINITION-LOCATION FUNCTION-SPEC))
@@ -1861,7 +1755,7 @@ if that is specified; else SIGN-FLONUM."
 		   "The function spec ~S is invalid." FUNCTION-SPEC))))
 
 (DEFUN FUNCTION-PARENT (FUNCTION-SPEC &AUX DEF TEM)
-  (DECLARE (RETURN-LIST NAME TYPE))
+  (DECLARE (VALUES NAME TYPE))
   "Returns NIL or the name of another definition which has the same source code.
 The second value is the type of that definition (which can be NIL).
 This is used for things like internal functions, methods automatically
@@ -1877,7 +1771,7 @@ created by a defflavor, and macros automatically created by a defstruct."
 	 (FUNCALL DEF FUNCTION-SPEC))
 	((CONSP FUNCTION-SPEC)
 	 (FUNCALL (GET (CAR FUNCTION-SPEC) 'FUNCTION-SPEC-HANDLER)
-		  'FUNCTION-PARENT FUNCTION-SPEC))))
+		  #'FUNCTION-PARENT FUNCTION-SPEC))))
 
 ;;; (:LOCATION locative-or-list-pointer) refers to the CDR of the pointer.
 ;;; This is for pointing at an arbitrary place which there is no special
@@ -1891,7 +1785,7 @@ created by a defflavor, and macros automatically created by a defstruct."
 	(UNLESS (EQ FUNCTION 'VALIDATE-FUNCTION-SPEC)
 	  (FERROR 'SYS:INVALID-FUNCTION-SPEC
 		  "The function spec ~S is invalid." FUNCTION-SPEC))
-      (SELECTQ FUNCTION
+      (CASE FUNCTION
 	(VALIDATE-FUNCTION-SPEC T)
 	(FDEFINE (RPLACD LOC ARG1))
 	(FDEFINITION (CDR LOC))
@@ -1923,9 +1817,11 @@ created by a defflavor, and macros automatically created by a defstruct."
 ;;; (no problems or user says ok), NIL to leave it unchanged.
 (DEFUN QUERY-ABOUT-REDEFINITION (FUNCTION-SPEC NEW-PATHNAME TYPE OLD-PATHNAME)
   ;; Detect any cross-file redefinition worth complaining about.
-  (IF (OR (EQ (IF (STRINGP OLD-PATHNAME) OLD-PATHNAME
+  (IF (OR (EQ (IF (STRINGP OLD-PATHNAME)
+		  OLD-PATHNAME
 		(AND OLD-PATHNAME (SEND OLD-PATHNAME :TRANSLATED-PATHNAME)))
-	      (IF (STRINGP NEW-PATHNAME) NEW-PATHNAME
+	      (IF (STRINGP NEW-PATHNAME)
+		  NEW-PATHNAME
 		(AND NEW-PATHNAME (SEND NEW-PATHNAME :TRANSLATED-PATHNAME))))
 	  (MEMQ OLD-PATHNAME
 		(IF NEW-PATHNAME
@@ -1937,22 +1833,22 @@ created by a defflavor, and macros automatically created by a defstruct."
     ;; record a warning.
     (WHEN (AND (VARIABLE-BOUNDP FILE-WARNINGS-DATUM) FILE-WARNINGS-DATUM)
       (RECORD-AND-PRINT-WARNING 'REDEFINITION :PROBABLE-ERROR NIL
-				(IF NEW-PATHNAME
-				    "~A ~S being redefined by file ~A.
+	(IF NEW-PATHNAME
+	    "~A ~S being redefined by file ~A.
  It was previously defined by file ~A."
-				  "~A ~S being redefined;~* it was previously defined by file ~A.")
-				(OR (GET TYPE 'DEFINITION-TYPE-NAME) TYPE) FUNCTION-SPEC
-				NEW-PATHNAME OLD-PATHNAME))
+	  "~A ~S being redefined;~* it was previously defined by file ~A.")
+	(OR (GET TYPE 'DEFINITION-TYPE-NAME) TYPE) FUNCTION-SPEC
+	NEW-PATHNAME OLD-PATHNAME))
     (LET (CONDITION CHOICE)
       (SETQ CONDITION
 	    (MAKE-CONDITION 'SYS:REDEFINITION
-			    (IF NEW-PATHNAME
-				"~A ~S being redefined by file ~A.
+	      (IF NEW-PATHNAME
+		  "~A ~S being redefined by file ~A.
 It was previously defined by file ~A."
-			      "~A ~S being redefined;~* it was previously defined by file ~A.")
-			    (OR (GET TYPE 'DEFINITION-TYPE-NAME) TYPE)
-			    FUNCTION-SPEC
-			    NEW-PATHNAME OLD-PATHNAME))
+		"~A ~S being redefined;~* it was previously defined by file ~A.")
+	      (OR (GET TYPE 'DEFINITION-TYPE-NAME) TYPE)
+	      FUNCTION-SPEC
+	      NEW-PATHNAME OLD-PATHNAME))
       (SETQ CHOICE (SIGNAL CONDITION))
       (UNLESS CHOICE
 	(UNLESS (AND INHIBIT-FDEFINE-WARNINGS
@@ -1973,7 +1869,7 @@ It was previously defined by file ~A."
 				   :CLEAR-INPUT T
 				   :FRESH-LINE NIL)
 			" OK? "))))
-      (SELECTQ CHOICE
+      (CASE CHOICE
 	((T :NO-ACTION) T)
 	((NIL :INHIBIT-DEFINITION) NIL)
 	(ERROR
@@ -2001,7 +1897,7 @@ It was previously defined by file ~A."
 If TYPE is NIL, the most recent definition is used, regardless of type.
 FUNCTION-SPEC really is a function spec only if TYPE is DEFUN;
 for example, if TYPE is DEFVAR, FUNCTION-SPEC is a variable name."
-  (DECLARE (RETURN-LIST PATHNAME TYPE))
+  (DECLARE (VALUES PATHNAME TYPE))
   (LET ((PROPERTY (FUNCTION-SPEC-GET FUNCTION-SPEC :SOURCE-FILE-NAME)))
     (COND ((NULL PROPERTY) NIL)
 	  ((ATOM PROPERTY)
@@ -2035,10 +1931,13 @@ Documentation strings are installed by SETFing a call to DOCUMENTATION."
 	      (GET SYMBOL :DOCUMENTATION)))
 	((AND (SYMBOLP SYMBOL)
 	      (LET ((DOC-PROP (GET SYMBOL 'DOCUMENTATION-PROPERTY)))
-		(CDR (SYS:ASSOC-EQUAL (STRING DOC-TYPE) DOC-PROP)))))
+		(CDR (ASSOC-EQUAL (STRING DOC-TYPE) DOC-PROP)))))
 	((AND (EQ DOC-TYPE 'TYPE)
 	      (GET SYMBOL 'TYPE-EXPANDER)
 	      (DOCUMENTATION (GET SYMBOL 'TYPE-EXPANDER) 'FUNCTION)))
+	((AND (EQ DOC-TYPE 'SETF)
+	      (GET SYMBOL 'SETF-METHOD)
+	      (DOCUMENTATION (GET SYMBOL 'SETF-METHOD) 'FUNCTION)))
 	((NEQ DOC-TYPE 'FUNCTION) NIL)
 	((SYMBOLP SYMBOL)
 	 (IF (FBOUNDP SYMBOL)
@@ -2047,18 +1946,21 @@ Documentation strings are installed by SETFing a call to DOCUMENTATION."
 	 (IF (FUNCTIONP SYMBOL T)
 	     (IF (EQ (CAR SYMBOL) 'MACRO)
 		 (DOCUMENTATION (CDR SYMBOL))
-	       (MULTIPLE-VALUE-BIND (NIL NIL DOC)
-		   (EXTRACT-DECLARATIONS (CDR (LAMBDA-EXP-ARGS-AND-BODY SYMBOL)) NIL T)
-		 DOC))
+	       (OR (CADR (ASSQ 'DOCUMENTATION (DEBUGGING-INFO SYMBOL)))
+		   ;; old name
+		   (CADR (ASSQ :DOCUMENTATION (DEBUGGING-INFO SYMBOL)))
+		   (NTH-VALUE 2 (EXTRACT-DECLARATIONS
+				  (CDR (LAMBDA-EXP-ARGS-AND-BODY SYMBOL)) NIL T NIL))))
 	   (AND (FDEFINEDP SYMBOL)
 		(DOCUMENTATION (FDEFINITION (UNENCAPSULATE-FUNCTION-SPEC SYMBOL))))))
 	((COMPILED-FUNCTION-P SYMBOL)
 	 (IF (ASSQ 'COMBINED-METHOD-DERIVATION (DEBUGGING-INFO SYMBOL))
-	     ;; its a fef for a combined method, so do special handling
+	     ;; its an FEF for a combined method, so do special handling
 	     (COMBINED-METHOD-DOCUMENTATION SYMBOL)
-	   (CADR (ASSQ :DOCUMENTATION (DEBUGGING-INFO SYMBOL)))))))
+	   (OR (CADR (ASSQ 'DOCUMENTATION (DEBUGGING-INFO SYMBOL)))
+	       (CADR (ASSQ :DOCUMENTATION (DEBUGGING-INFO SYMBOL))))))))
 ;;; Old name.
-(DEFF FUNCTION-DOCUMENTATION 'DOCUMENTATION)
+;(DEFF FUNCTION-DOCUMENTATION 'DOCUMENTATION)
 (MAKE-OBSOLETE FUNCTION-DOCUMENTATION
 	       "use DOCUMENTATION with a second argument of 'FUNCTION.")
 
@@ -2085,8 +1987,8 @@ This documentation string will have the format:
       ...
 
       etc. { the rest depends on which type of method combination is used.
-             see SI:DEF-COMBINED-METHOD-DOCUMENTATION-HANDLER, SI:COMBINED-DOC-STRING, and
-             (:property SI:COMBINED-METHOD-DOCUMENTATION <method combination keyword>) }
+             see SI::DEFINE-COMBINED-METHOD-DOCUMENTATION-HANDLER, SI::COMBINED-DOC-STRING,
+	     and (:PROPERTY SI::COMBINED-METHOD-DOCUMENTATION <method combination keyword>) }
 
 the ordering for component flavors is the order in which the components are combined to form
 the combined method.  Note that the following orders always hold:
@@ -2096,7 +1998,7 @@ the combined method.  Note that the following orders always hold:
    :after methods    :base-flavor-first
 
 A handler for the method-combination type used by the combined method must exist
-/(see SI:DEF-COMBINED-METHOD-DOCUMENTATION-HANDLER to define new ones)."
+/(see SI::DEFINE-COMBINED-METHOD-DOCUMENTATION-HANDLER to define new ones)."
   (LET* ((TEMP (CADR (ASSQ 'COMBINED-METHOD-DERIVATION (DEBUGGING-INFO METHOD))))
 	 (TYPE (OR (CADR TEMP) :DAEMON))	; :daemon is default type
 	 (HANDLER (GET 'COMBINED-METHOD-DOCUMENTATION TYPE))
@@ -2109,7 +2011,7 @@ A handler for the method-combination type used by the combined method must exist
       (FERROR NIL "No combined method doc handler for ~S method combination." TYPE))
     (IF (OR (STREAMP STREAM) (EQ STREAM T)) (SETQ STRING STREAM)
       ;; only need string if no stream
-      (SETQ STRING (MAKE-STRING (* 100 (LENGTH DERIVATION)) :FILL-POINTER 0))
+      (SETQ STRING (MAKE-STRING (* #o100 (LENGTH DERIVATION)) :FILL-POINTER 0))
       (SETQ STREAM NIL))
     ;; put in header
     (SETQ ST (FORMAT STREAM "~@[~&~*~]method combination is ~S~@[, order is ~S~]"
@@ -2176,28 +2078,30 @@ string is returned, or it can be a stream."
   "Returns the symbol which is the flavor for Method.
 Method may be either a method spec (ie. (:method flavor type operation suboperation)) or an
 FEF for a method.  Error if Method is not a defined method."
-  (IF (= (%DATA-TYPE METHOD) DTP-FEF-POINTER)
-      ;; get name of method from fef and extract flavor
-      (CADR (NAME-OF-METHOD METHOD))
-    (IF (CONSP (SETQ METHOD (FDEFINITION (UNENCAPSULATE-FUNCTION-SPEC METHOD))))
-	(IF (EQ (CAR METHOD) 'MACRO) (FLAVOR-OF-METHOD (CDR METHOD))
-	  (CADR (ASSQ :SELF-FLAVOR		; named-lambda
-		      (NTH-VALUE 1 (EXTRACT-DECLARATIONS
-				     (CDR (LAMBDA-EXP-ARGS-AND-BODY METHOD)) NIL T)))))
-      (FLAVOR-OF-METHOD METHOD))))		; fef returned by fdefinition, try again
+  (COND ((TYPEP METHOD 'COMPILED-FUNCTION)
+	 ;; get name of method from fef and extract flavor
+	 (CADR (NAME-OF-METHOD METHOD)))
+	((CONSP (SETQ METHOD (FDEFINITION (UNENCAPSULATE-FUNCTION-SPEC METHOD))))
+	 (IF (EQ (CAR METHOD) 'MACRO)
+	     (FLAVOR-OF-METHOD (CDR METHOD))
+	   (CADR (ASSQ :SELF-FLAVOR		; named-lambda
+		       (NTH-VALUE 1 (EXTRACT-DECLARATIONS
+				      (CDR (LAMBDA-EXP-ARGS-AND-BODY METHOD)) NIL T NIL))))))
+	(T (FLAVOR-OF-METHOD METHOD))))		; fef returned by fdefinition, try again
 
 (DEFUN NAME-OF-METHOD (METHOD)
   "Returns the list which is the function spec for the method.
 Method may be either a method spec (ie. (:method flavor type operation suboperation)) or an
 FEF for a method.  Error if Method is not a defined method."
-  (IF (= (%DATA-TYPE METHOD) DTP-FEF-POINTER)
-      (%P-CONTENTS-OFFSET METHOD %FEFHI-FCTN-NAME)
-    (IF (CONSP (SETQ METHOD (FDEFINITION (UNENCAPSULATE-FUNCTION-SPEC METHOD))))
-	(IF (EQ (CAR METHOD) 'MACRO) (NAME-OF-METHOD (CDR METHOD))
-	  (CAADR METHOD))			; named-lambda
-      (NAME-OF-METHOD METHOD))))		; fef, try again
+  (COND ((TYPEP METHOD 'COMPILED-FUNCTION)
+	 (%P-CONTENTS-OFFSET METHOD %FEFHI-FCTN-NAME))
+	((CONSP (SETQ METHOD (FDEFINITION (UNENCAPSULATE-FUNCTION-SPEC METHOD))))
+	 (IF (EQ (CAR METHOD) 'MACRO)
+	     (NAME-OF-METHOD (CDR METHOD))
+	   (CAADR METHOD)))			; named-lambda
+	(T (NAME-OF-METHOD METHOD))))		; fef, try again
 
-(DEFMACRO DEF-COMBINED-METHOD-DOCUMENTATION-HANDLER ((TYPE) &BODY BODY)
+(DEFMACRO DEFINE-COMBINED-METHOD-DOCUMENTATION-HANDLER (TYPE &BODY BODY)
   "Expands to define (:property si:combined-method-documentation <combination type>).
 Body can reference the following variables (they are the args to the handler):
  String      the documentation string to be modified (use STRING-NCONC).
@@ -2209,17 +2113,17 @@ Body can reference the following variables (they are the args to the handler):
 Typically, Body consists of some number of calls to SI:COMBINED-DOC-STRING interspersed with
 adjustments to the indentation."
   (DECLARE (ARGLIST (METHOD-COMBINATION-TYPE) &BODY BODY))
-  (SETQ TYPE (INTERN (STRING-UPCASE TYPE) PKG-KEYWORD-PACKAGE))
+  (CHECK-TYPE TYPE SYMBOL)
   (MULTIPLE-VALUE-BIND (BODY DECLARATIONS DOCUMENTATION)
-      (EXTRACT-DECLARATIONS BODY NIL T)
+      (EXTRACT-DECLARATIONS BODY NIL T NIL)
     `(DEFUN (COMBINED-METHOD-DOCUMENTATION ,TYPE) (STRING DERIVATION FLAVORS INDENT ORDER)
        ,(FORMAT NIL "Add documentation to string according to ~S method combination.~@[~%~A~]"
 		TYPE DOCUMENTATION)
-       . ,(APPEND (MAPCAR #'LIST (CIRCULAR-LIST 'DECLARE) DECLARATIONS)
-		  BODY))))
+       (DECLARE . ,DECLARATIONS)
+       . ,BODY)))
 
 ;;; define combined-method-documentation handlers for each type of method combination
-(DEF-COMBINED-METHOD-DOCUMENTATION-HANDLER (:DAEMON)
+(DEFINE-COMBINED-METHOD-DOCUMENTATION-HANDLER :DAEMON
   "Format is --
   :BEFORE methods
     :PRIMARY method
@@ -2231,7 +2135,7 @@ adjustments to the indentation."
   (DECF INDENT 2)
   (COMBINED-DOC-STRING STRING (ASSQ :AFTER DERIVATION) (REVERSE FLAVORS) INDENT))
 
-(DEF-COMBINED-METHOD-DOCUMENTATION-HANDLER (:DAEMON-WITH-OR)
+(DEFINE-COMBINED-METHOD-DOCUMENTATION-HANDLER :DAEMON-WITH-OR
   "Format is --
   :BEFORE methods
     :OR methods
@@ -2248,7 +2152,7 @@ adjustments to the indentation."
   (DECF INDENT 2)
   (COMBINED-DOC-STRING STRING (ASSQ :AFTER DERIVATION) (REVERSE FLAVORS) INDENT))
 
-(DEF-COMBINED-METHOD-DOCUMENTATION-HANDLER (:DAEMON-WITH-AND)
+(DEFINE-COMBINED-METHOD-DOCUMENTATION-HANDLER :DAEMON-WITH-AND
   "Format is --
   :BEFORE methods
     :AND methods
@@ -2265,7 +2169,7 @@ adjustments to the indentation."
   (DECF INDENT 2)
   (COMBINED-DOC-STRING STRING (ASSQ :AFTER DERIVATION) (REVERSE FLAVORS) INDENT))
 
-(DEF-COMBINED-METHOD-DOCUMENTATION-HANDLER (:DAEMON-WITH-OVERRIDE)
+(DEFINE-COMBINED-METHOD-DOCUMENTATION-HANDLER :DAEMON-WITH-OVERRIDE
   "Format is --
   :OVERRIDE methods
     :BEFORE methods
@@ -2281,7 +2185,7 @@ adjustments to the indentation."
   (DECF INDENT 2)
   (COMBINED-DOC-STRING STRING (ASSQ :AFTER DERIVATION) (REVERSE FLAVORS) INDENT))
 
-(DEF-COMBINED-METHOD-DOCUMENTATION-HANDLER (:CASE)
+(DEFINE-COMBINED-METHOD-DOCUMENTATION-HANDLER :CASE
   "Format is --
   :OR methods
     :CASE methods
@@ -2296,57 +2200,57 @@ adjustments to the indentation."
   (WHEN (ASSQ :CASE DERIVATION) (INCF INDENT 2))
   (COMBINED-DOC-STRING STRING (ASSQ NIL DERIVATION) FLAVORS INDENT))
 
-(DEF-COMBINED-METHOD-DOCUMENTATION-HANDLER (:PROGN)
+(DEFINE-COMBINED-METHOD-DOCUMENTATION-HANDLER :PROGN
   (COMBINED-DOC-STRING STRING (ASSQ NIL DERIVATION)
 		       (IF (EQ ORDER :BASE-FLAVOR-FIRST) (REVERSE FLAVORS) FLAVORS)
 		       INDENT ORDER))
 
-(DEF-COMBINED-METHOD-DOCUMENTATION-HANDLER (:OR)
+(DEFINE-COMBINED-METHOD-DOCUMENTATION-HANDLER :OR
   (COMBINED-DOC-STRING STRING (ASSQ NIL DERIVATION)
 		       (IF (EQ ORDER :BASE-FLAVOR-FIRST) (REVERSE FLAVORS) FLAVORS)
 		       INDENT ORDER))
 
-(DEF-COMBINED-METHOD-DOCUMENTATION-HANDLER (:AND)
+(DEFINE-COMBINED-METHOD-DOCUMENTATION-HANDLER :AND
   (COMBINED-DOC-STRING STRING (ASSQ NIL DERIVATION)
 		       (IF (EQ ORDER :BASE-FLAVOR-FIRST) (REVERSE FLAVORS) FLAVORS)
 		       INDENT ORDER))
 
-(DEF-COMBINED-METHOD-DOCUMENTATION-HANDLER (:APPEND)
+(DEFINE-COMBINED-METHOD-DOCUMENTATION-HANDLER :APPEND
   (COMBINED-DOC-STRING STRING (ASSQ NIL DERIVATION)
 		       (IF (EQ ORDER :BASE-FLAVOR-FIRST) (REVERSE FLAVORS) FLAVORS)
 		       INDENT ORDER))
 
-(DEF-COMBINED-METHOD-DOCUMENTATION-HANDLER (:NCONC)
+(DEFINE-COMBINED-METHOD-DOCUMENTATION-HANDLER :NCONC
   (COMBINED-DOC-STRING STRING (ASSQ NIL DERIVATION)
 		       (IF (EQ ORDER :BASE-FLAVOR-FIRST) (REVERSE FLAVORS) FLAVORS)
 		       INDENT ORDER))
 
-(DEF-COMBINED-METHOD-DOCUMENTATION-HANDLER (:LIST)
+(DEFINE-COMBINED-METHOD-DOCUMENTATION-HANDLER :LIST
   (COMBINED-DOC-STRING STRING (ASSQ NIL DERIVATION)
 		       (IF (EQ ORDER :BASE-FLAVOR-FIRST) (REVERSE FLAVORS) FLAVORS)
 		       INDENT ORDER))
 
-(DEF-COMBINED-METHOD-DOCUMENTATION-HANDLER (:INVERSE-LIST)
+(DEFINE-COMBINED-METHOD-DOCUMENTATION-HANDLER :INVERSE-LIST
   (COMBINED-DOC-STRING STRING (ASSQ NIL DERIVATION)
 		       (IF (EQ ORDER :BASE-FLAVOR-FIRST) (REVERSE FLAVORS) FLAVORS)
 		       INDENT ORDER))
 
-(DEF-COMBINED-METHOD-DOCUMENTATION-HANDLER (:PASS-ON)
+(DEFINE-COMBINED-METHOD-DOCUMENTATION-HANDLER :PASS-ON
   (COMBINED-DOC-STRING STRING (ASSQ NIL DERIVATION)
 		       (IF (EQ ORDER :BASE-FLAVOR-FIRST) (REVERSE FLAVORS) FLAVORS)
 		       INDENT ORDER))
 
-(DEF-COMBINED-METHOD-DOCUMENTATION-HANDLER (:MAX)
+(DEFINE-COMBINED-METHOD-DOCUMENTATION-HANDLER :MAX
   (COMBINED-DOC-STRING STRING (ASSQ NIL DERIVATION)
 		       (IF (EQ ORDER :BASE-FLAVOR-FIRST) (REVERSE FLAVORS) FLAVORS)
 		       INDENT ORDER))
 
-(DEF-COMBINED-METHOD-DOCUMENTATION-HANDLER (:MIN)
+(DEF-COMBINED-METHOD-DOCUMENTATION-HANDLER :MIN
   (COMBINED-DOC-STRING STRING (ASSQ NIL DERIVATION)
 		       (IF (EQ ORDER :BASE-FLAVOR-FIRST) (REVERSE FLAVORS) FLAVORS)
 		       INDENT ORDER))
 
-(DEF-COMBINED-METHOD-DOCUMENTATION-HANDLER (:+)
+(DEFINE-COMBINED-METHOD-DOCUMENTATION-HANDLER :+
   (COMBINED-DOC-STRING STRING (ASSQ NIL DERIVATION)
 		       (IF (EQ ORDER :BASE-FLAVOR-FIRST) (REVERSE FLAVORS) FLAVORS)
 		       INDENT ORDER))
@@ -2384,7 +2288,7 @@ adjustments to the indentation."
 	(SETQ INIT (+ INIT DELTA))
 	(GO L)))
 
-(DEFUN GET-FROM-ALTERNATING-LIST (L KEY) 
+(DEFSUBST GET-FROM-ALTERNATING-LIST (L KEY) 
   "Retreive associated item from an alternating list
 Like GET, but no initial CAR"
   (GETF L KEY))
@@ -2399,16 +2303,17 @@ The user should alway use this value unless he is
 certain there is a current association."
   (PROG (PNTR)
 	(SETQ PNTR L)
-     L  (COND ((NULL L) (RETURN (CONS KEY (CONS ITEM L))))
+     L  (COND ((NULL L)
+	       (RETURN (CONS KEY (CONS ITEM L))))
 	      ((EQ KEY (CAR L))
-	       (RPLACA (CDR L) ITEM)
+	       (SETF (CADR L) ITEM)
 	       (RETURN L)))
 	(SETQ L (CDDR L))
 	(GO L)))
 (COMPILER:MAKE-OBSOLETE PUT-ON-ALTERNATING-LIST "This function is a crock")
 
 (DEFUN CALL (FN &REST ALTERNATES
-		&AUX (MAX-ARGS 100) (ARGS-INF (ARGS-INFO FN)))
+		&AUX (MAX-ARGS #o100) (ARGS-INF (ARGS-INFO FN)))
   "The first argument is a function to call.
 The remaining arguments are in pairs, consisting of a descriptor arg and a data arg.
 The descriptor arg says what to do with the data arg.
@@ -2427,27 +2332,28 @@ The allowed keywords are :SPREAD and :OPTIONAL.
     (%OPEN-CALL-BLOCK FN 0 4)
     (DO ((Y ALTERNATES (CDDR Y)) (OPTIONAL-FLAG) (SPREAD-FLAG NIL NIL))
 	((NULL Y))
-	(IF (AND (SYMBOLP (CAR Y)) (CAR Y))
-	    (SELECTQ (CAR Y)
-	      (:SPREAD (SETQ SPREAD-FLAG T))
-	      (:OPTIONAL (SETQ OPTIONAL-FLAG T))
-	      (OTHERWISE (FERROR NIL "Invalid CALL keyword ~S." (CAR Y))))
-	  (DOLIST (X (CAR Y))
-	    (CASE X
-	      (:SPREAD (SETQ SPREAD-FLAG T))
-	      (:OPTIONAL (SETQ OPTIONAL-FLAG T))
-	      (OTHERWISE (FERROR NIL "Invalid CALL keyword ~S." X)))))
-	(AND OPTIONAL-FLAG ( MAX-ARGS 0)
-	     (RETURN NIL))
-	(IF SPREAD-FLAG
-	    (DOLIST (X (CADR Y))
-	      (WHEN (AND OPTIONAL-FLAG ( MAX-ARGS 0)) (RETURN))
+      (IF (AND (SYMBOLP (CAR Y)) (CAR Y))
+	  (CASE (CAR Y)
+	    (:SPREAD (SETQ SPREAD-FLAG T))
+	    (:OPTIONAL (SETQ OPTIONAL-FLAG T))
+	    (OTHERWISE (FERROR NIL "Invalid ~S keyword ~S." 'CALL (CAR Y))))
+	(DOLIST (X (CAR Y))
+	  (CASE X
+	    (:SPREAD (SETQ SPREAD-FLAG T))
+	    (:OPTIONAL (SETQ OPTIONAL-FLAG T))
+	    (OTHERWISE (FERROR NIL "Invalid ~S keyword ~S." 'CALL X)))))
+      (AND OPTIONAL-FLAG ( MAX-ARGS 0)
+	   (RETURN NIL))
+      (IF SPREAD-FLAG
+	  (DOLIST (X (CADR Y))
+	    (IF (AND OPTIONAL-FLAG ( MAX-ARGS 0))
+		(RETURN)
 	      (%ASSURE-PDL-ROOM 1)
 	      (%PUSH X)
-	      (SETQ MAX-ARGS (1- MAX-ARGS)))
-	  (%ASSURE-PDL-ROOM 1)
-	  (%PUSH (CADR Y))
-		 (SETQ MAX-ARGS (1- MAX-ARGS))))
+	      (DECF MAX-ARGS)))
+	(%ASSURE-PDL-ROOM 1)
+	(%PUSH (CADR Y))
+	(DECF MAX-ARGS)))
     (%ACTIVATE-OPEN-CALL-BLOCK))
 
 ;;; This is not a macro, for the sake of the compiler's definition of it,
@@ -2473,31 +2379,32 @@ You cannot successfully DISK-RESTORE a world that will not work
 with the microcode that is running."
   (LET ((L (DISK-RESTORE-DECODE PARTITION)) (RQB NIL) BLOCK)
     (UNWIND-PROTECT
-      (PROGN (SETQ RQB (GET-DISK-LABEL-RQB))
-	     (READ-DISK-LABEL RQB 0)
-	     (SETQ NAME (IF PARTITION
-			    (STRING-APPEND (LDB #o0010 (CADR L)) (LDB #o1010 (CADR L))
-					   (LDB #o0010 (CAR L)) (LDB #o1010 (CAR L)))
-			    (GET-DISK-STRING RQB 7 4)))
-	     (SETQ BLOCK (FIND-DISK-PARTITION-FOR-READ NAME RQB)
-		   COMMENT (PARTITION-COMMENT NAME 0))
-	     (MULTIPLE-VALUE-BIND (BASE-BAND VALID-FLAG)
-		 (INC-BAND-BASE-BAND NAME 0)
-	       (WHEN (AND BASE-BAND (NOT VALID-FLAG))
-		 (FERROR NIL "Band ~A is incremental, and the base band ~A is no longer valid."
-			 NAME BASE-BAND)))
-	     (SETQ DESIRED-UCODE (GET-UCODE-VERSION-OF-BAND NAME)))
+      (PROGN
+	(SETQ RQB (GET-DISK-LABEL-RQB))
+	(READ-DISK-LABEL RQB 0)
+	(SETQ NAME (IF PARTITION
+		       (STRING-APPEND (LDB #o0010 (CADR L)) (LDB #o1010 (CADR L))
+				      (LDB #o0010 (CAR L)) (LDB #o1010 (CAR L)))
+		     (GET-DISK-STRING RQB 7 4)))
+	(SETQ BLOCK (FIND-DISK-PARTITION-FOR-READ NAME RQB)
+	      COMMENT (PARTITION-COMMENT NAME 0))
+	(MULTIPLE-VALUE-BIND (BASE-BAND VALID-FLAG)
+	    (INC-BAND-BASE-BAND NAME 0)
+	  (WHEN (AND BASE-BAND (NOT VALID-FLAG))
+	    (FERROR NIL "Band ~A is incremental, and the base band ~A is no longer valid."
+		    NAME BASE-BAND)))
+	(SETQ DESIRED-UCODE (GET-UCODE-VERSION-OF-BAND NAME)))
       (RETURN-DISK-RQB RQB))
     (AND ( DESIRED-UCODE %MICROCODE-VERSION-NUMBER)
 	 (NOT (ZEROP DESIRED-UCODE))		;Not stored yet
 	 (FORMAT *QUERY-IO*
 		 "~&That band prefers microcode ~D but the running microcode is ~D.~%"
 		 DESIRED-UCODE %MICROCODE-VERSION-NUMBER))
-    (COND ((FQUERY FORMAT:YES-OR-NO-QUIETLY-P-OPTIONS
-		   "Do you really want to reload ~A (~A)? " NAME COMMENT)
-	   (AND (FBOUNDP 'TV:CLOSE-ALL-SERVERS)
-		(TV:CLOSE-ALL-SERVERS "Disk-Restoring"))
-	   (%DISK-RESTORE (CAR L) (CADR L))))))
+       (WHEN (FQUERY FORMAT:YES-OR-NO-QUIETLY-P-OPTIONS
+		     "Do you really want to reload ~A (~A)? " NAME COMMENT)
+	 (AND (FBOUNDP 'TV:CLOSE-ALL-SERVERS)
+	      (TV:CLOSE-ALL-SERVERS "Disk-Restoring"))
+	 (%DISK-RESTORE (CAR L) (CADR L)))))
 
 (DEFVAR WHO-LINE-JUST-COLD-BOOTED-P NIL) ;Set to T upon cold boot for who-line's benefit
 
@@ -2670,33 +2577,33 @@ will take a few minutes.")
   (%POINTER-UNSIGNED (REGION-FREE-POINTER REGION)))
 
 (DEFUN DISK-RESTORE-DECODE (PARTITION &AUX LOW-16-BITS HI-16-BITS)
-    (COND ((NULL PARTITION)
-	   (SETQ LOW-16-BITS 0 HI-16-BITS 0))
-	  ((NUMBERP PARTITION)
-	   (SETQ LOW-16-BITS (+ #/L (LSH #/O 8)))
-	   (SETQ HI-16-BITS (+ #/D (LSH (+ #/0 PARTITION) 8))))
-	  ((OR (SYMBOLP PARTITION) (STRINGP PARTITION))
-	   (IF (= (STRING-LENGTH PARTITION) 1)
-	       (SETQ PARTITION (STRING-APPEND "LOD" PARTITION))
-	     (SETQ PARTITION (STRING PARTITION)))
-	   (SETQ LOW-16-BITS (+ (CHAR-UPCASE (AREF PARTITION 0))
-				(LSH (CHAR-UPCASE (AREF PARTITION 1)) 8)))
-	   (SETQ HI-16-BITS (+ (CHAR-UPCASE (AREF PARTITION 2))
-			       (LSH (CHAR-UPCASE (AREF PARTITION 3)) 8))))
-	  (T (FERROR NIL "~S is not a valid partition name." PARTITION)))
-    (LIST HI-16-BITS LOW-16-BITS))
+  (COND ((NULL PARTITION)
+	 (SETQ LOW-16-BITS 0 HI-16-BITS 0))
+	((NUMBERP PARTITION)
+	 (SETQ LOW-16-BITS (+ #/L (LSH #/O 8)))
+	 (SETQ HI-16-BITS (+ #/D (LSH (+ #/0 PARTITION) 8))))
+	((OR (SYMBOLP PARTITION) (STRINGP PARTITION))
+	 (IF (= (STRING-LENGTH PARTITION) 1)
+	     (SETQ PARTITION (STRING-APPEND "LOD" PARTITION))
+	   (SETQ PARTITION (STRING PARTITION)))
+	 (SETQ LOW-16-BITS (+ (CHAR-UPCASE (AREF PARTITION 0))
+			      (LSH (CHAR-UPCASE (AREF PARTITION 1)) 8)))
+	 (SETQ HI-16-BITS (+ (CHAR-UPCASE (AREF PARTITION 2))
+			     (LSH (CHAR-UPCASE (AREF PARTITION 3)) 8))))
+	(T (FERROR NIL "~S is not a valid partition name." PARTITION)))
+  (LIST HI-16-BITS LOW-16-BITS))
 
 (DEFUN READ-METER (NAME)
   "Returns the current value of the A Memory metering location named NAME.
 A-MEMORY-COUNTER-BLOCK-NAMES is a list of meter names.
 A meter stores 32 significant bits."
-   (LET ((A-OFF (+ %COUNTER-BLOCK-A-MEM-ADDRESS
-		   (OR (FIND-POSITION-IN-LIST NAME A-MEMORY-COUNTER-BLOCK-NAMES)
-		       (FERROR NIL "~S is not a valid counter name." NAME)))))
-      (WITHOUT-INTERRUPTS			;Try not to get inconsistent numbers
-	  (DPB (%P-LDB #o2020 (%POINTER-PLUS A-MEMORY-VIRTUAL-ADDRESS A-OFF))
-	       #o2020
-	       (%P-LDB #o0020 (%POINTER-PLUS A-MEMORY-VIRTUAL-ADDRESS A-OFF))))))
+  (LET ((A-OFF (+ %COUNTER-BLOCK-A-MEM-ADDRESS
+		  (OR (FIND-POSITION-IN-LIST NAME A-MEMORY-COUNTER-BLOCK-NAMES)
+		      (FERROR NIL "~S is not a valid counter name." NAME)))))
+    (WITHOUT-INTERRUPTS				;Try not to get inconsistent numbers
+      (DPB (%P-LDB #o2020 (%POINTER-PLUS A-MEMORY-VIRTUAL-ADDRESS A-OFF))
+	   #o2020
+	   (%P-LDB #o0020 (%POINTER-PLUS A-MEMORY-VIRTUAL-ADDRESS A-OFF))))))
 
 (DEFUN WRITE-METER (NAME VAL)
   "Sets the value of the A Memory metering location named NAME to integer VAL.
@@ -2713,25 +2620,23 @@ A meter stores 32 significant bits."
 	      #o0020
 	      (%POINTER-PLUS A-MEMORY-VIRTUAL-ADDRESS A-OFF)))))
 
-(DEFUN CHANGE-INDIRECT-ARRAY (ARRAY TYPE DIMLIST DISPLACED-P INDEX-OFFSET
+(DEFUN CHANGE-INDIRECT-ARRAY (ARRAY TYPE DIMLIST DISPLACEDP INDEX-OFFSET
 			      &AUX INDEX-LENGTH NDIMS INDIRECT-LENGTH TEM
 				   OLD-NDIMS OLD-INDIRECT-LENGTH)
   "Change an indirect array ARRAY's type, size, or target pointed at.
 TYPE specifies the new array type, DIMLIST its new dimensions,
-DISPLACED-P the target it should point to (array, locative or fixnum),
+DISPLACEDP the target it should point to (array, locative or fixnum),
 INDEX-OFFSET the new offset in the new target."
-  (CHECK-TYPE ARRAY ARRAY)
-  (OR (= (%P-LDB-OFFSET %%ARRAY-DISPLACED-BIT ARRAY 0) 1)
-      (FERROR NIL "~S is not a displaced array." ARRAY))
-  (CHECK-ARG DISPLACED-P (OR (ARRAYP DISPLACED-P) (INTEGERP DISPLACED-P)
-			     (LOCATIVEP DISPLACED-P))
-	     "an array or physical address to indirect to")
+  (CHECK-TYPE ARRAY (AND ARRAY (SATISFIES ARRAY-DISPLACED-P)) "a displaced array")
+  (CHECK-TYPE DISPLACEDP (OR ARRAYP INTEGERP LOCATIVEP)
+	      "an array or physical address to which to indirect")
   (CHECK-ARG TYPE				;TEM gets the numeric array type
 	     (SETQ TEM (COND ((NUMBERP TYPE) (LDB %%ARRAY-TYPE-FIELD TYPE))
 			     ((FIND-POSITION-IN-LIST TYPE ARRAY-TYPES))))
 	     "an array type")
   (SETQ TYPE TEM)
-  (IF (NLISTP DIMLIST)
+  (IF (NOT (CONSP DIMLIST))
+      ;>> ** BRAINDAMAGE ALERT **
       (SETQ NDIMS 1 INDEX-LENGTH (EVAL DIMLIST))
     (SETQ NDIMS (LENGTH DIMLIST)
 	  INDEX-LENGTH (LIST-PRODUCT DIMLIST)))
@@ -2753,7 +2658,7 @@ INDEX-OFFSET the new offset in the new target."
 	   ((< N 2))
 	 (%P-STORE-CONTENTS-OFFSET (EVAL (CAR DIMLIST)) ARRAY I)
 	 (SETQ DIMLIST (CDR DIMLIST))))
-  (%P-STORE-CONTENTS-OFFSET DISPLACED-P ARRAY NDIMS)
+  (%P-STORE-CONTENTS-OFFSET DISPLACEDP ARRAY NDIMS)
   (%P-STORE-CONTENTS-OFFSET INDEX-LENGTH ARRAY (1+ NDIMS))
   (WHEN INDEX-OFFSET
     (%P-STORE-CONTENTS-OFFSET INDEX-OFFSET ARRAY (+ NDIMS 2)))
@@ -2763,7 +2668,7 @@ INDEX-OFFSET the new offset in the new target."
   "Call FUNCTION like LEXPR-FUNCALL but provide mapping table TABLE.
 If FUNCTION is a flavor method, this saves it from having to find
 the correct flavor mapping table, but it will lose if you give the wrong one."
-  TABLE
+  (DECLARE (IGNORE TABLE))
   (APPLY #'LEXPR-FUNCALL FUNCTION ARGS))
 (DEFF LEXPR-FUNCALL-WITH-MAPPING-TABLE-INTERNAL 'LEXPR-FUNCALL-WITH-MAPPING-TABLE)
 
@@ -2771,7 +2676,7 @@ the correct flavor mapping table, but it will lose if you give the wrong one."
   "Call FUNCTION like FUNCALL but provide mapping table TABLE.
 If FUNCTION is a flavor method, this saves it from having to find
 the correct flavor mapping table, but it will lose if you give the wrong one."
-  TABLE
+  (DECLARE (IGNORE TABLE))
   (APPLY FUNCTION ARGS))
 (DEFF FUNCALL-WITH-MAPPING-TABLE-INTERNAL 'FUNCALL-WITH-MAPPING-TABLE)
 
@@ -2805,7 +2710,7 @@ the correct flavor mapping table, but it will lose if you give the wrong one."
 
 (defmacro string-io-add-character (ch)
   `(progn (maybe-grow-io-string *string-io-index*)
-	  (setf (aref *string-io-string* *string-io-index*) ,ch)
+	  (setf (char *string-io-string* *string-io-index*) ,ch)
 	  (incf *string-io-index*)))
 
 (defmacro string-io-add-line (string start end)
@@ -2822,46 +2727,53 @@ the correct flavor mapping table, but it will lose if you give the wrong one."
 	    (prog1 (global:aref *string-io-string* *string-io-index*)
 		   (incf *string-io-index*))
 	  (and eof (ferror 'sys:end-of-file-1 "End of file on ~S." *string-io-stream*))))
-  (:untyi (ignore)
-	  (if (minusp (setq *string-io-index* (1- *string-io-index*)))
-	      (error "Attempt to :UNTYI past beginning -- STRING-IO")))
-  (:tyo (ch)
-	(string-io-add-character ch))
-  (:string-out (string &optional start end)
-	       (or start (setq start 0))
-	       (or end (setq end (array-active-length string)))
-	       (string-io-add-line string start end))
-  (:line-out (string &optional start end)
-	     (or start (setq start 0))
-	     (or end (setq end (array-active-length string)))
-	     (string-io-add-line string start end)
-	     (string-io-add-character #/Return))
+  (:read-char (&optional (eof-error-p t) eof-value)
+    (if (< *string-io-index* *string-io-limit*)
+	(prog1 (char *string-io-string* *string-io-index*)
+	       (incf *string-io-index*))
+      (if eof-error-p
+	  (ferror 'sys:end-of-file-1 "End of file on ~S." *string-io-stream*)
+	eof-value)))
+  ((:untyi :unread-char) (ignore)
+   (if (minusp (decf *string-io-index*))
+       (error "Attempt ~S past beginning -- ~S" :unread-char 'string-io)))
+  ((:write-char :tyo) (ch)
+   (string-io-add-character ch))
+  (:string-out (string &optional (start 0) end)
+    (or end (setq end (length string)))
+    (string-io-add-line string start end))
+  (:line-out (string &optional (start 0) end)
+    (or end (setq end (length string)))
+    (string-io-add-line string start end)
+    (string-io-add-character #/Newline))
   (:fresh-line ()
-	       (and (plusp *string-io-index*)
-		    ( (aref *string-io-string* *string-io-index*) #/Return)
-		    (string-io-add-character #/Return)))
-  (:read-pointer () *string-io-index*)
+    (and (plusp *string-io-index*)
+	 ( (char *string-io-string* *string-io-index*) #/Newline)
+	 (string-io-add-character #/Newline)))
+  (:read-pointer ()
+    *string-io-index*)
   (:set-pointer (ptr)
-		(and (neq *string-io-direction* :in)
-		     (< ptr *string-io-limit*)
-		     (error "Attempt to :SET-POINTER beyond end of string -- STRING-IO"))
-		(setq *string-io-index* ptr))
-  (:untyo-mark () *string-io-index*)
-  (:untyo (mark) (setq *string-io-index* mark))
+    (and (neq *string-io-direction* :in)
+	 (< ptr *string-io-limit*)
+	 (error "Attempt to ~S beyond end of string -- ~S" :set-pointer 'string-io))
+    (setq *string-io-index* ptr))
+  (:untyo-mark ()
+    *string-io-index*)
+  (:untyo (mark)
+    (setq *string-io-index* mark))
   (:read-cursorpos (&optional (units :pixel))
-		   (string-io-confirm-movement-units units)
-		   (let ((string-io-return-index
-			   (string-reverse-search-char #/Return *string-io-string*
-						       *string-io-index*)))
-		     (if string-io-return-index
-			 (- *string-io-index* string-io-return-index)
-		       *string-io-index*)))
+    (string-io-confirm-movement-units units)
+    (let ((string-io-return-index
+	    (string-reverse-search-char #/Newline *string-io-string* *string-io-index*)))
+      (if string-io-return-index
+	  (- *string-io-index* string-io-return-index)
+	*string-io-index*)))
   (:increment-cursorpos (x ignore &optional (units :pixel))
-			(string-io-confirm-movement-units units)
-			(dotimes (i x) (string-io-add-character #/Space)))
+    (string-io-confirm-movement-units units)
+    (dotimes (i x) (string-io-add-character #/Space)))
   (:constructed-string ()
     ;; Don't change allocated size if we have a fill pointer!
-    (if (array-has-leader-p *string-io-string*)
+    (if (array-has-fill-pointer-p *string-io-string*)
 	(setf (fill-pointer *string-io-string*) *string-io-index*)
       (setq *string-io-string*
 	    (adjust-array-size *string-io-string* *string-io-index*)))))
@@ -2878,20 +2790,20 @@ the correct flavor mapping table, but it will lose if you give the wrong one."
 
 (DEFVAR *MODULES* NIL
   "List of modules marked present with PROVIDE.
-All systems loaded with MAKE-SYSTEM are also present.")
+All systems loaded with MAKE-SYSTEM are also present.
+Keyed by STRING=")
 
 (DEFUN PROVIDE (MODULE)
   "Mark MODULE as being already loaded."
-  (PUSHNEW (STRING MODULE) *MODULES* ':TEST 'STRING=))
+  (PUSHNEW (STRING MODULE) *MODULES* :TEST #'STRING=))
 
 (DEFUN REQUIRE (MODULE &OPTIONAL PATHNAMES)
   "Cause MODULE to be loaded if it isn't yet.
 If PATHNAMES is specified, it should be a pathname or a list of pathnames;
  those files are loaded.
 Otherwise, MAKE-SYSTEM is done on MODULE."
-  (UNLESS (MEM 'STRING= MODULE *MODULES*)
+  (UNLESS (MEM #'STRING= MODULE *MODULES*)
     (COND ((CONSP PATHNAMES)
-	   (MAPC 'LOAD PATHNAMES))
+	   (MAPC #'LOAD PATHNAMES))
 	  (PATHNAMES (LOAD PATHNAMES))
 	  (T (MAKE-SYSTEM MODULE)))))
-
