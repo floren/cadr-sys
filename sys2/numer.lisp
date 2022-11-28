@@ -356,6 +356,103 @@ ARRAY can be an array used for data by the random number generator (and updated)
 ;;; Force *RANDOM-STATE* to get a value.
 (RANDOM)
 
+;;;; Special floating arithmetic functions.
+
+(DEFUN FLOAT (NUMBER &OPTIONAL OTHER)
+  "Convert NUMBER to floating point, of same precision as OTHER.
+If OTHER is omitted, a full size flonum is returned."
+  (IF (SMALL-FLOATP OTHER)
+      (SMALL-FLOAT NUMBER)
+    (FLOAT NUMBER)))
+
+(DEFUN FFLOOR (DIVIDEND &OPTIONAL DIVISOR)
+  "Like FLOOR but converts first value to a float."
+  (DECLARE (VALUES QUOTIENT REMAINDER))
+  (MULTIPLE-VALUE-BIND (QUOTIENT REMAINDER)
+      (FLOOR DIVIDEND (OR DIVISOR 1))
+    (VALUES (FLOAT QUOTIENT) REMAINDER)))
+
+(DEFUN FCEILING (DIVIDEND &OPTIONAL DIVISOR)
+  "Like CEILING but converts first value to a float."
+  (DECLARE (VALUES QUOTIENT REMAINDER))
+  (MULTIPLE-VALUE-BIND (QUOTIENT REMAINDER)
+      (CEILING DIVIDEND (OR DIVISOR 1))
+    (VALUES (FLOAT QUOTIENT) REMAINDER)))
+
+(DEFUN FTRUNCATE (DIVIDEND &OPTIONAL DIVISOR)
+  "Like TRUNCATE but converts first value to a float."
+  (DECLARE (VALUES QUOTIENT REMAINDER))
+  (MULTIPLE-VALUE-BIND (QUOTIENT REMAINDER)
+      (TRUNCATE DIVIDEND (OR DIVISOR 1))
+    (VALUES (FLOAT QUOTIENT) REMAINDER)))
+
+(DEFUN FROUND (DIVIDEND &OPTIONAL DIVISOR)
+  "Like ROUND but converts first value to a float."
+  (DECLARE (VALUES QUOTIENT REMAINDER))
+  (MULTIPLE-VALUE-BIND (QUOTIENT REMAINDER)
+      (ROUND DIVIDEND (OR DIVISOR 1))
+    (VALUES (FLOAT QUOTIENT) REMAINDER)))
+
+(DEFUN FLOAT-RADIX (FLOAT)
+  "Returns the radix of the exponent of a float.  That is always 2."
+  (CHECK-TYPE FLOAT FLOAT)
+  2)
+
+(DEFUN FLOAT-DIGITS (FLOAT)
+  "Returns the number of bits of fraction part FLOAT has.
+This depends only on the data type of FLOAT (single-float vs short-float)."
+  (TYPECASE FLOAT
+    (SHORT-FLOAT SHORT-FLOAT-MANTISSA-LENGTH)
+    (T           SINGLE-FLOAT-MANTISSA-LENGTH)))
+
+(DEFUN FLOAT-PRECISION (FLOAT)
+  "Returns the number of significant bits of fraction part FLOAT has.
+For normalized arguments this is defined to be the same as FLOAT-DIGITS,
+and all floats are normalized on the Lisp machine, so they are identical."
+  (TYPECASE FLOAT
+    (SHORT-FLOAT SHORT-FLOAT-MANTISSA-LENGTH)
+    (T           SINGLE-FLOAT-MANTISSA-LENGTH)))
+
+(DEFUN DECODE-FLOAT (FLOAT)
+  "Returns three values describing the fraction part, exponent, and sign of FLOAT.
+The first is a float between 1/2 and 1 (but zero if the arg is zero).
+This value, times two to a suitable power, equals FLOAT except in sign.
+The second value is an integer, the exponent of two needed for that calculation.
+The third value is a float whose sign and type match FLOAT's
+and whose magnitude is 1."
+  (DECLARE (VALUES FRACTION-FLONUM EXPONENT SIGN-FLONUM))
+  (VALUES (ABS (FLOAT-FRACTION FLOAT))
+	  (FLOAT-EXPONENT FLOAT)
+	  (IF (MINUSP FLOAT)
+	      (IF (SMALL-FLOATP FLOAT) -1.0s0 -1.0)
+	      (IF (SMALL-FLOATP FLOAT) 1.0s0 1.0))))
+
+(DEFUN INTEGER-DECODE-FLOAT (FLOAT)
+  "Returns three values describing the fraction part, exponent, and sign of FLOAT.
+The first is an integer representing the fraction part of FLOAT.
+This value floated, times two to a suitable power, equals FLOAT except in sign.
+The second value is an integer, the exponent of two needed for that calculation.
+The third value is a float whose sign and type match FLOAT's
+and whose magnitude is 1."
+  (DECLARE (VALUES FRACTION EXPONENT SIGN-FLONUM))
+  (VALUES (FLONUM-MANTISSA (ABS FLOAT))
+	  (FLONUM-EXPONENT (ABS FLOAT))
+	  (IF (MINUSP FLOAT)
+	      (IF (SMALL-FLOATP FLOAT) -1.0s0 -1.0)
+	      (IF (SMALL-FLOATP FLOAT) 1.0s0 1.0))))
+
+(DEFUN FLOAT-SIGN (SIGN-FLONUM &OPTIONAL MAGNITUDE-FLONUM)
+  "Returns a float whose sign matches SIGN-FLONUM and magnitude matches MAGNITUDE-FLONUM.
+If MAGNITUDE-FLONUM is omitted, it defaults to 1.
+The type of float returned matches MAGNITUDE-FLONUM
+if that is specified; else SIGN-FLONUM."
+  (IF MAGNITUDE-FLONUM
+      (IF (EQ (MINUSP SIGN-FLONUM) (MINUSP MAGNITUDE-FLONUM))
+	  MAGNITUDE-FLONUM (- MAGNITUDE-FLONUM))
+    (IF (MINUSP SIGN-FLONUM)
+	(IF (SMALL-FLOATP SIGN-FLONUM) -1.0s0 -1.0)
+        (IF (SMALL-FLOATP SIGN-FLONUM) 1.0s0 1.0))))
+
 (defconst pi 3.1415926535
   "The mathematical constant PI.")
 
