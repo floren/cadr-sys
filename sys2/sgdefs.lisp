@@ -23,7 +23,7 @@
   (INITIAL-FUNCTION-INDEX nil :documentation
     "Index into PDL of initial M-AP. (3 unless initial call has adi)")
   (PLIST nil :documentation "Not clear yet. Debugger uses this for communication")
-  (TRAP-TAG nil :documenation
+  (TRAP-TAG nil :documentation
     "Symbolic tag corresponding to SG-TRAP-MICRO-PC.
 Gotten via MICROCODE-ERROR-TABLE, etc.  Properties off this symbol drive error recovery.")
   (RECOVERY-HISTORY nil :documentation
@@ -90,7 +90,7 @@ of the main stack group. (Preventing it from being lost when the foothold is run
   AC-B
   AC-A
   AC-ZR
-  (AC-2 0 documentation "Pointer field of M-2 as fixnum")
+  (AC-2 0 :documentation "Pointer field of M-2 as fixnum")
   (AC-1 0 :documentation "Pointer field of M-1 as fixnum")
   (VMA-M1-M2-TAGS 0 :documentation "Tag fields of VMA, M-1, M-2 packed into a fixnum")
   (SAVED-VMA nil :documentation "Pointer field of VMA as a locative")
