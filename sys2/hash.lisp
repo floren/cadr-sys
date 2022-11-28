@@ -46,6 +46,7 @@ These will get rounded up to the next appropriate size.")
   (hash-table-gc-generation-number %gc-generation-number :documentation
     "Used to decide when rehash required because the GC may have moved
 some objects, changing their %POINTER and hence their hash code.")
+;>> need to record highest votility level of hash keys
   (hash-table-modulus nil :documentation
     "The number of blocks. Used for remainder to get hash code.")
   (hash-table-fullness 0 :documentation
@@ -66,6 +67,7 @@ slot that has never been used.")
     "This function compares an object key with a key in the table.")
   (hash-table-instance nil :documentation
     "This is the instance whose HASH-ARRAY this hash table is."))
+
 
 (defun make-hash-array (&key (size #o100) area
 			((:rehash-function rhf) 'hash-table-rehash)
@@ -100,7 +102,7 @@ slot that has never been used.")
 	    (t (ferror nil "Argument TEST is not EQ, EQL or EQUAL.")))))
   (if (integerp rehash-threshold)
       (setq rehash-threshold
-	    (cli:// (float rehash-threshold) actual-size)))
+	    (cl:// (float rehash-threshold) actual-size)))
   (setq blen (+ 1 number-of-values (if hash-function 1 0)))
   (setq ht (make-hash-array-internal
 	     :make-array (:length (* size blen) :area area :type art-q-list)
@@ -125,6 +127,14 @@ slot that has never been used.")
 	       (not (zerop (\ size 7)))))
     (incf size 2))
   size)
+
+(defsubst hash-table-maximal-fullness (hash-table)
+  (values (floor (* (if (floatp (hash-table-rehash-threshold hash-table))
+			(hash-table-rehash-threshold hash-table)
+		      ;; never a fixnum, as make-hash-array coerces fixnums to floats,
+		      ;;  so non-float presumably means the value is NIL
+		      0.7s0)
+		    (- (hash-table-modulus hash-table) 2)))))
 
 ;;; This is a separate function from the :CLEAR-HASH operation
 ;;; for the sake of bootstrapping flavors.
@@ -168,13 +178,26 @@ slot that has never been used.")
 	 (length (array-length self)))
 	(( i length))
       (%p-store-cdr-code (locf (cli:aref self (+ i blen -1))) cdr-nil)))
+  (:describe (self)
+    (describe-defstruct self)
+    (format t "~&   Maximum fullness before rehash: ~S" (hash-table-maximal-fullness self)))
   (:print-self (self stream &optional ignore ignore)
-    (printing-random-object (self stream)
-      (format stream "~S-~A"
-	      (function-name (hash-table-compare-function self))
-	      (if (hash-table-funcallable-p self)
-		  "HASH-ARRAY (Funcallable)"
-		  "HASH-ARRAY")))))
+    (printing-random-object (self stream :type)
+      (print-hash-array self stream nil))))
+
+(defun print-hash-array (hash-array stream for-print-hashtable-p)
+  (format stream "~S~:[+~S~;~*~]//~S~@[ :test ~S~]~@[~A~]"
+	  (hash-table-fullness hash-array)
+	  (zerop (hash-table-number-of-deleted-entries hash-array))
+	  (hash-table-number-of-deleted-entries hash-array)
+	  (hash-table-maximal-fullness hash-array)
+	  (let ((compare-function (hash-table-compare-function hash-array)))
+	    (if (or for-print-hashtable-p
+		    (and (neq compare-function 'eq) (neq compare-function #'eq)))
+		(function-name compare-function)))
+	  (and (not for-print-hashtable-p)
+	       (hash-table-funcallable-p hash-array)
+	       " (Funcallable)")))
 
 ;;;; Rehashing of hash arrays.
 
@@ -238,7 +261,7 @@ slot that has never been used.")
 						(if (hash-table-hash-function hash-table)
 						    1 0))
 			   :rehash-threshold (hash-table-rehash-threshold hash-table))))
-;   (declare (special new-hash-table))		;why is this special?
+;   (declare (special new-hash-table))		;why was this special?
     ;; Scan the old hash table and find all nonempty entries.
     (do ((p (%make-pointer-offset dtp-locative hash-table
 				  (1+ (%p-ldb %%array-long-length-flag hash-table)))
@@ -333,20 +356,20 @@ slot that has never been used.")
 		      (ferror nil "~S claims to need rehash due to gc." hash-table))
 		     (( (+ (hash-table-fullness hash-table)
 			    (hash-table-number-of-deleted-entries hash-table))
-			 (fix (* (if (floatp (hash-table-rehash-threshold hash-table))
-				     (hash-table-rehash-threshold hash-table)
-				     0.7s0)
-				 (- (hash-table-modulus hash-table) 2))))
+			 (hash-table-maximum-fullness hash-table))
 		      (ferror nil "~S is too full." hash-table))
 		     (t				;Add to table using empty slot found
 		      (%p-store-contents emptyp hash-code)
-		      (cond (hash-function
-			     (%p-store-contents-offset key emptyp 1)
-			     (do ((i 2 (1+ i))) ((= i blen))
-			       (%p-store-contents-offset (pop values-left) emptyp i)))
-			    (t
-			     (do ((i 1 (1+ i))) ((= i blen))
-			       (%p-store-contents-offset (pop values-left) emptyp i))))
+;>> have to check for volatility level of key here and inform hash-array that may
+;>> need to rehash on a gc of that volatility
+		      (without-interrupts
+			(cond (hash-function
+			       (%p-store-contents-offset key emptyp 1)
+			       (do ((i 2 (1+ i))) ((= i blen))
+				 (%p-store-contents-offset (pop values-left) emptyp i)))
+			      (t
+			       (do ((i 1 (1+ i))) ((= i blen))
+				 (%p-store-contents-offset (pop values-left) emptyp i)))))
 		      (incf (hash-table-fullness hash-table))
 		      ;; If reusing a deleted slot, decrement number of them slots.
 		      (or (eq emptyp p)
