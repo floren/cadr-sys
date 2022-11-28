@@ -356,7 +356,7 @@ slot that has never been used.")
 		      (ferror nil "~S claims to need rehash due to gc." hash-table))
 		     (( (+ (hash-table-fullness hash-table)
 			    (hash-table-number-of-deleted-entries hash-table))
-			 (hash-table-maximum-fullness hash-table))
+			 (hash-table-maximal-fullness hash-table))
 		      (ferror nil "~S is too full." hash-table))
 		     (t				;Add to table using empty slot found
 		      (%p-store-contents emptyp hash-code)
