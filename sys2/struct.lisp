@@ -982,7 +982,7 @@ Options:
 			       "Unknown DEFSTRUCT slot-option" (CAR L))))))))
     (LET (PP SS)
       (IF (LIST-MATCH-P PPSS `(BYTE ,SS ,PP))
-	  (SETQ PPSS (BYTE PP SS))))
+	  (SETQ PPSS (BYTE SS PP))))
     (IF (NULL SLOT-DESCRIPTION)
 	(CONS IT (MAKE-DEFSTRUCT-SLOT-DESCRIPTION
 		   :NUMBER NUMBER
