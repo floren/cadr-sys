@@ -1615,6 +1615,12 @@ it will not take effect until after they are finished."
   `(LET ((INHIBIT-SCHEDULING-FLAG T))
      . ,BODY))
 
+(DEFMACRO WITHOUT-FLOATING-UNDERFLOW-TRAPS (&BODY BODY)
+  "Executes BODY with floating-point underflow traps disabled.
+If a floating-point operation within body would normally underflow, zero is used instead."
+  `(LET ((ZUNDERFLOW T))
+     . ,BODY))
+
 (DEFMACRO DOLIST ((VAR LIST RESULTFORM) &BODY BODY)
   "Iterate BODY with VAR bound to successive elements of the value of LIST.
 If LIST is exhausted, RESULTFORM is executed and returned.
