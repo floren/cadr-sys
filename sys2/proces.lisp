@@ -210,7 +210,7 @@ unwinding it."
 				   (EH:UNWIND-SG (PROCESS-INITIAL-STACK-GROUP CURRENT-PROCESS)
 						 #'PROCESS-TOP-LEVEL NIL NIL)))))
     ;; Wake up
-    (SETQ WHOSTATE "Run")
+    (SETQ WAIT-WHOSTATE "Run")
     (SET-PROCESS-WAIT SELF #'TRUE NIL)
     (COND ((EQ SELF CURRENT-PROCESS)
 	   (IF (EQ UNWIND-OPTION ':ALWAYS)
@@ -245,7 +245,7 @@ unwinding it."
   UNWIND-OPTION	;ignored -- there is no stack group
   (WITHOUT-INTERRUPTS
     (SETQ STACK-GROUP (CAR INITIAL-FORM))	;Reset to initial function
-    (SETQ WHOSTATE "Run")			;and un-block
+    (SETQ WAIT-WHOSTATE "Run")			;and un-block
     (SET-PROCESS-WAIT SELF #'TRUE NIL)
     (COND (KILL
 	   (PROCESS-DISABLE SELF)		;Killing: remove from scheduler lists
@@ -331,7 +331,7 @@ unwinding it."
 is reset."
   (COND ((EQ SELF CURRENT-PROCESS))
 	(T
-	 (SETQ WHOSTATE "Flushed")
+	 (SETQ WAIT-WHOSTATE "Flushed")
 	 (SET-PROCESS-WAIT SELF 'FLUSHED-PROCESS NIL))))
 
 (DEFUN PROCESS-BLAST (&OPTIONAL (PROC CURRENT-PROCESS))
