@@ -52,7 +52,7 @@ The global value of QC-FILE-REL-FORMAT controls the output file format.")
 
 (DEFUN QC-FILE-LOAD (&REST QC-FILE-ARGS)
   "Compile a file and then load the binary file."
-  (LOAD (APPLY 'QC-FILE QC-FILE-ARGS)))
+  (LOAD (APPLY #'QC-FILE QC-FILE-ARGS)))
 
 (ADD-INITIALIZATION "QC-FILE warm boot" '(QC-FILE-RESET) '(:WARM))
 
@@ -124,9 +124,8 @@ COMPILING-WHOLE-FILE-P should be T if you are processing all of the file."
      (AND PACKAGE-SPEC (SETQ *PACKAGE* (PKG-FIND-PACKAGE PACKAGE-SPEC)))
      ;; Override the generic pathname
      (SETQ FDEFINE-FILE-PATHNAME
-	   (LET ((PATHNAME (AND (MEMQ ':PATHNAME (SEND INPUT-STREAM ':WHICH-OPERATIONS))
-				(SEND INPUT-STREAM ':PATHNAME))))
-	     (AND PATHNAME (SEND PATHNAME ':GENERIC-PATHNAME))))
+	   (LET ((PATHNAME (SEND INPUT-STREAM :SEND-IF-HANDLES :PATHNAME)))
+	     (AND PATHNAME (SEND PATHNAME :GENERIC-PATHNAME))))
      ;; Having bound the variables, process the file.
      (LET ((QC-FILE-IN-PROGRESS T)
 	   (UNDO-DECLARATIONS-FLAG (NOT QC-FILE-LOAD-FLAG))
@@ -140,7 +139,7 @@ COMPILING-WHOLE-FILE-P should be T if you are processing all of the file."
        (WHEN FASD-FLAG
 	 ;; Copy all suitable file properties into the fasl file
 	 ;; Suitable means those that are lambda-bound when you read in a file.
-	 (LET ((PLIST (COPYLIST (SEND GENERIC-PATHNAME ':PLIST))))
+	 (LET ((PLIST (COPY-LIST (SEND GENERIC-PATHNAME :PLIST))))
 	   ;; Remove unsuitable properties
 	   (DO ((L (LOCF PLIST)))
 	       ((NULL (CDR L)))
@@ -154,36 +153,30 @@ COMPILING-WHOLE-FILE-P should be T if you are processing all of the file."
 	   (UNLESS (AND (NOT (ATOM (GETF PLIST ':PACKAGE)))
 			(STRING= (PACKAGE-NAME *PACKAGE*)
 				 (CAR (GETF PLIST ':PACKAGE))))
-	     (PUTPROP (LOCF PLIST)
-		      (INTERN (PACKAGE-NAME *PACKAGE*) SI:PKG-KEYWORD-PACKAGE)
-		      ':PACKAGE))
+	     (SETF (GETF PLIST ':PACKAGE)
+		   (INTERN (PACKAGE-NAME *PACKAGE*) SI:PKG-KEYWORD-PACKAGE)))
 	   (AND INPUT-STREAM
-		(MEMQ ':TRUENAME (SEND INPUT-STREAM ':WHICH-OPERATIONS))
-		(SETQ SOURCE-FILE-UNIQUE-ID (SEND INPUT-STREAM ':TRUENAME))
-		(PUTPROP (LOCF PLIST)
-			 SOURCE-FILE-UNIQUE-ID
-			 ':QFASL-SOURCE-FILE-UNIQUE-ID))
+		(SEND INPUT-STREAM :OPERATION-HANDLED-P :TRUENAME)
+		(SETQ SOURCE-FILE-UNIQUE-ID (SEND INPUT-STREAM :TRUENAME))
+		(SETF (GETF PLIST ':QFASL-SOURCE-FILE-UNIQUE-ID) SOURCE-FILE-UNIQUE-ID))
 	   ;; If a file is being compiled across directories, remember where the
 	   ;; source really came from.
 	   (AND FDEFINE-FILE-PATHNAME FASD-STREAM
-		(LET ((OUTFILE (AND (MEMQ ':PATHNAME
-					  (SEND FASD-STREAM ':WHICH-OPERATIONS))
-				    (SEND FASD-STREAM ':PATHNAME))))
-		  (COND (OUTFILE
-			 (SETQ OUTFILE (SEND OUTFILE ':GENERIC-PATHNAME))
-			 (AND (NEQ OUTFILE FDEFINE-FILE-PATHNAME)
-			      (PUTPROP (LOCF PLIST) FDEFINE-FILE-PATHNAME
-				       ':SOURCE-FILE-GENERIC-PATHNAME))))))
+		(LET ((OUTFILE (SEND FASD-STREAM :SEND-IF-HANDLES :PATHNAME)))
+		  (WHEN OUTFILE
+		    (SETQ OUTFILE (SEND OUTFILE :GENERIC-PATHNAME))
+		    (AND (NEQ OUTFILE FDEFINE-FILE-PATHNAME)
+			 (SETF (GETF PLIST ':SOURCE-FILE-GENERIC-PATHNAME)
+			       FDEFINE-FILE-PATHNAME)))))
 	   (MULTIPLE-VALUE-BIND (MAJOR MINOR)
 	       (SI:GET-SYSTEM-VERSION "System")
-	     (PUTPROP (LOCF PLIST)
-		      `(,USER-ID
-			,SI:LOCAL-PRETTY-HOST-NAME
-			,(TIME:GET-UNIVERSAL-TIME)
-			,MAJOR ,MINOR
-			(NEW-DESTINATIONS T	; NOT :new-destinations!!
-			 :SITE ,SI:SITE-NAME))
-		      ':COMPILE-DATA))
+	     (SETF (GETF PLIST ':COMPILE-DATA)
+		   `(,USER-ID
+		     ,SI:LOCAL-PRETTY-HOST-NAME
+		     ,(TIME:GET-UNIVERSAL-TIME)
+		     ,MAJOR ,MINOR
+		     (NEW-DESTINATIONS T	; NOT :new-destinations!!
+		      :SITE ,SI:SITE-NAME))))
 	   ;; First thing in QFASL file must be property list
 	   ;; These properties wind up on the GENERIC-PATHNAME.
 	   (COND (QC-FILE-REL-FORMAT
@@ -199,12 +192,12 @@ COMPILING-WHOLE-FILE-P should be T if you are processing all of the file."
 	 ;; Detect EOF by peeking ahead, and also get an error now
 	 ;; if the stream is wedged.  We really want to get an error
 	 ;; in that case, not make a warning.
-	 (LET ((CH (SEND INPUT-STREAM ':TYI)))
+	 (LET ((CH (SEND INPUT-STREAM :TYI)))
 	   (OR CH (RETURN))
-	   (SEND INPUT-STREAM ':UNTYI CH))
-	 (setq si:premature-warnings
-	       (append si:premature-warnings si:premature-warnings-this-object))
-	 (let ((si:premature-warnings nil))
+	   (SEND INPUT-STREAM :UNTYI CH))
+	 (SETQ SI::PREMATURE-WARNINGS
+	       (APPEND SI::PREMATURE-WARNINGS SI::PREMATURE-WARNINGS-THIS-OBJECT))
+	 (LET ((SI::PREMATURE-WARNINGS NIL))
 	   (SETQ FORM
 		 (LET ((READ-AREA (IF QC-FILE-LOAD-FLAG DEFAULT-CONS-AREA
 				    QCOMPILE-TEMPORARY-AREA))
@@ -212,7 +205,7 @@ COMPILING-WHOLE-FILE-P should be T if you are processing all of the file."
 		       (QC-FILE-READ-IN-PROGRESS FASD-FLAG))	;looked at by XR-#,-MACRO
 		   (WARN-ON-ERRORS ('READ-ERROR "Error in reading")
 		     (FUNCALL READ-FUNCTION INPUT-STREAM EOF))))
-	   (setq si:premature-warnings-this-object si:premature-warnings))
+	   (SETQ SI::PREMATURE-WARNINGS-THIS-OBJECT SI::PREMATURE-WARNINGS))
 	 (AND (EQ FORM EOF) (RETURN))
 	 ;; Start a new whack if FASD-TABLE is getting too big.
 	 (AND FASD-FLAG
@@ -234,26 +227,26 @@ COMPILING-WHOLE-FILE-P should be T if you are processing all of the file."
   (DOLIST (FREF FUNCTIONS-REFERENCED)
     (DOLIST (CALLER (CDR FREF))
       (OBJECT-OPERATION-WITH-WARNINGS (CALLER NIL T)
-	(RECORD-WARNING 'UNDEFINED-FUNCTION-USED ':PROBABLE-ERROR NIL
+	(RECORD-WARNING 'UNDEFINED-FUNCTION-USED :PROBABLE-ERROR NIL
 			"The undefined function ~S was called"
 			(CAR FREF)))))
   ;; Now print messages describing the undefined functions used.
   (WHEN FUNCTIONS-REFERENCED
     (FORMAT *ERROR-OUTPUT*
 	    "~&The following functions were referenced but don't seem defined:")
-    (IF (SEND *ERROR-OUTPUT* ':OPERATION-HANDLED-P ':ITEM)
+    (IF (SEND *ERROR-OUTPUT* :OPERATION-HANDLED-P :ITEM)
 	(DOLIST (X FUNCTIONS-REFERENCED)
 	  (FORMAT *ERROR-OUTPUT* "~& ~S referenced by " (CAR X))
 	  (DO ((L (CDR X) (CDR L))
-	       (LINEL (OR (SEND *ERROR-OUTPUT* ':SEND-IF-HANDLES ':SIZE-IN-CHARACTERS)
+	       (LINEL (OR (SEND *ERROR-OUTPUT* :SEND-IF-HANDLES :SIZE-IN-CHARACTERS)
 			  95.)))
 	      ((NULL L))
-	    (IF (> (+ (SEND *ERROR-OUTPUT* ':READ-CURSORPOS ':CHARACTER)
+	    (IF (> (+ (SEND *ERROR-OUTPUT* :READ-CURSORPOS :CHARACTER)
 		      (FLATSIZE (CAR L))
 		      3)
 		   LINEL)
 		(FORMAT *ERROR-OUTPUT* "~%  "))
-	    (SEND *ERROR-OUTPUT* ':ITEM 'ZWEI:FUNCTION-NAME (CAR L)
+	    (SEND *ERROR-OUTPUT* :ITEM 'ZWEI::FUNCTION-NAME (CAR L)
 		  "~S" (CAR L))
 	    (AND (CDR L) (PRINC ", " *ERROR-OUTPUT*)))
 	  (FORMAT *ERROR-OUTPUT* "~&"))
@@ -265,13 +258,14 @@ COMPILING-WHOLE-FILE-P should be T if you are processing all of the file."
 (DEFUN COMPILE-FILE (&OPTIONAL INPUT-FILENAME
 		     &KEY OUTPUT-FILENAME
 		     (SET-DEFAULT-PATHNAME T)
-		     ((:PACKAGE PACKAGE-SPEC)))
+		     ((:PACKAGE PACKAGE-SPEC)) LOAD)
   "Compile file INPUT-FILE to a QFASL file named OUTPUT-FILE.
 OUTPUT-FILE defaults based on INPUT-FILE, which defaults using the standard defaults.
 SET-DEFAULT-PATHNAME if NIL means do not set the defaults.
-PACKAGE if non-NIL is the package to compile in."
+PACKAGE if non-NIL is the package to compile in.
+LOAD means to load the compiled file."
   (QC-FILE (OR INPUT-FILENAME "") OUTPUT-FILENAME
-	   NIL NIL PACKAGE-SPEC NIL
+	   LOAD NIL PACKAGE-SPEC NIL
 	   (NOT SET-DEFAULT-PATHNAME)))
 
 (DEFUN QC-FILE (INFILE &OPTIONAL OUTFILE LOAD-FLAG IN-CORE-FLAG PACKAGE-SPEC
@@ -291,30 +285,30 @@ READ-THEN-PROCESS-FLAG says read the entire file before compiling (less thrashin
   (SETQ INFILE (FS:MERGE-PATHNAME-DEFAULTS INFILE FS:LOAD-PATHNAME-DEFAULTS NIL))
   (WITH-OPEN-STREAM (INPUT-STREAM
 		      (FILE-RETRY-NEW-PATHNAME (INFILE FS:FILE-ERROR)
-			(SEND INFILE ':OPEN-CANONICAL-DEFAULT-TYPE ':LISP)))
+			(SEND INFILE :OPEN-CANONICAL-DEFAULT-TYPE :LISP)))
     ;; The input pathname might have been changed by the user in response to an error.
     ;; Also, find out what type field was actually found.
-    (SETQ INFILE (SEND INPUT-STREAM ':PATHNAME))
+    (SETQ INFILE (SEND INPUT-STREAM :PATHNAME))
     (OR DONT-SET-DEFAULT-P (FS:SET-DEFAULT-PATHNAME INFILE FS:LOAD-PATHNAME-DEFAULTS))
-    (SETQ GENERIC-PATHNAME (SEND INFILE ':GENERIC-PATHNAME))
+    (SETQ GENERIC-PATHNAME (SEND INFILE :GENERIC-PATHNAME))
     (SETQ OUTFILE
-	  (COND ((TYPEP OUTFILE 'FS:PATHNAME)
-		 (IF (SEND OUTFILE ':VERSION)
+	  (COND ((TYPEP OUTFILE 'PATHNAME)
+		 (IF (SEND OUTFILE :VERSION)
 		     OUTFILE
-		   (SEND OUTFILE ':NEW-PATHNAME ':VERSION
-			 (SEND (SEND INPUT-STREAM ':TRUENAME) ':VERSION))))
+		   (SEND OUTFILE :NEW-PATHNAME
+			 	 :VERSION (SEND (SEND INPUT-STREAM :TRUENAME) :VERSION))))
 		(OUTFILE
 		 (FS:MERGE-PATHNAME-DEFAULTS
 		   OUTFILE INFILE (SI:PATHNAME-DEFAULT-BINARY-FILE-TYPE GENERIC-PATHNAME)
-		   (SEND (SEND INPUT-STREAM ':TRUENAME) ':VERSION)))
+		   (SEND (SEND INPUT-STREAM :TRUENAME) :VERSION)))
 		(T
-		 (SEND INFILE ':NEW-PATHNAME
-		       	      ':TYPE (SI:PATHNAME-DEFAULT-BINARY-FILE-TYPE GENERIC-PATHNAME)
-			      ':VERSION (SEND (SEND INPUT-STREAM ':TRUENAME) ':VERSION)))))
+		 (SEND INFILE :NEW-PATHNAME
+		       	      :TYPE (SI:PATHNAME-DEFAULT-BINARY-FILE-TYPE GENERIC-PATHNAME)
+			      :VERSION (SEND (SEND INPUT-STREAM :TRUENAME) :VERSION)))))
     ;; Get the file property list again, in case we don't have it already or it changed
     (FS:READ-ATTRIBUTE-LIST GENERIC-PATHNAME INPUT-STREAM)
     (OR QC-FILE-REL-FORMAT-OVERRIDE
-	(SELECTQ (SEND GENERIC-PATHNAME ':GET ':FASL)
+	(CASE (SEND GENERIC-PATHNAME :GET :FASL)
 	  (:REL (SETQ QC-FILE-REL-FORMAT T))
 	  (:FASL (SETQ QC-FILE-REL-FORMAT NIL))
 	  (NIL)
@@ -327,13 +321,14 @@ READ-THEN-PROCESS-FLAG says read the entire file before compiling (less thrashin
 	       (LET ((FASD-STREAM NIL))	;REL compiling doesn't work the same way
 		 (LOCKING-RESOURCES
 		   (QFASL-REL:DUMP-START)
-		   (COMPILE-STREAM INPUT-STREAM GENERIC-PATHNAME FASD-STREAM 'QC-FILE-WORK-COMPILE
+		   (COMPILE-STREAM INPUT-STREAM GENERIC-PATHNAME FASD-STREAM
+				   'QC-FILE-WORK-COMPILE
 				   LOAD-FLAG IN-CORE-FLAG PACKAGE-SPEC
 				   FILE-LOCAL-DECLARATIONS READ-THEN-PROCESS-FLAG)
 		   ;; Output a record of the macros expanded and their current sxhashes.
 		   (WHEN QC-FILE-MACROS-EXPANDED
 		     (QFASL-REL:DUMP-FORM
-		       `(SI:FASL-RECORD-FILE-MACROS-EXPANDED
+		       `(SI::FASL-RECORD-FILE-MACROS-EXPANDED
 			  ',QC-FILE-MACROS-EXPANDED)))
 		   (LET ((*PACKAGE* QC-FILE-PACKAGE))
 		     (QFASL-REL:WRITE-REL-FILE OUTFILE)))))
@@ -342,10 +337,11 @@ READ-THEN-PROCESS-FLAG says read the entire file before compiling (less thrashin
 					    :DIRECTION :OUTPUT :CHARACTERS NIL :BYTE-SIZE 16.
 					    :IF-EXISTS :SUPERSEDE)
 		 (LOCKING-RESOURCES
-		   (SETQ OUTFILE (SEND FASD-STREAM ':PATHNAME))
+		   (SETQ OUTFILE (SEND FASD-STREAM :PATHNAME))
 		   (FASD-INITIALIZE)
 		   (FASD-START-FILE)
-		   (COMPILE-STREAM INPUT-STREAM GENERIC-PATHNAME FASD-STREAM 'QC-FILE-WORK-COMPILE
+		   (COMPILE-STREAM INPUT-STREAM GENERIC-PATHNAME FASD-STREAM
+				   'QC-FILE-WORK-COMPILE
 				   LOAD-FLAG IN-CORE-FLAG PACKAGE-SPEC
 				   FILE-LOCAL-DECLARATIONS READ-THEN-PROCESS-FLAG
 				   T)
@@ -474,7 +470,7 @@ READ-THEN-PROCESS-FLAG says read the entire file before compiling (less thrashin
 
 ;;; Process one form, for COMPILE-DRIVER.
 (DEFUN FASL-UPDATE-FORM (FORM TYPE)
-    (SELECTQ TYPE
+    (CASE TYPE
       (SPECIAL (FASD-FORM FORM NIL))
       (DECLARE)		;Ignore DECLAREs -- this may not always be right!
       ((DEFUN MACRO)	;Don't compile -- send over whatever is already compiled
@@ -514,7 +510,7 @@ READ-THEN-PROCESS-FLAG says read the entire file before compiling (less thrashin
 ;;; override-fn may be NIL.
 
 (DEFUN COMPILE-DRIVER (FORM PROCESS-FN OVERRIDE-FN &OPTIONAL COMPILE-TIME-TOO (TOP-LEVEL-P T))
-  (PROG TOP (FN (OFORM FORM))
+  (PROG (FN (OFORM FORM))
     ;; The following loop is essentially MACROEXPAND,
     ;; but for each expansion, we create an appropriate warn-on-errors message
     ;; containing the name of the macro about to be (perhaps) expanded this time.
@@ -522,7 +518,7 @@ READ-THEN-PROCESS-FLAG says read the entire file before compiling (less thrashin
 	(())
       (IF (AND OVERRIDE-FN
 	       (FUNCALL OVERRIDE-FN FORM))
-	  (RETURN-FROM TOP NIL))
+	  (RETURN-FROM COMPILE-DRIVER NIL))
       (IF (ATOM FORM) (RETURN NIL))
       ;; Don't expand LOCALLY into PROGN here!
       ;; This way, we protect DECLAREs inside the LOCALLY
@@ -533,6 +529,8 @@ READ-THEN-PROCESS-FLAG says read the entire file before compiling (less thrashin
       (SETQ NFORM
 	    (WARN-ON-ERRORS ('MACRO-EXPANSION-ERROR "Error expanding macro ~S at top level"
 			     (CAR FORM))
+;>> Need current compilation macroenvironment!
+;>> this presently uses the declared-definition crock implicitly within mexcrexpand-1. Bletch.
 	      (MACROEXPAND-1 FORM)))
       (IF (EQ FORM NFORM) (RETURN)
 	(SETQ FORM NFORM)))
@@ -653,7 +651,6 @@ must be a list of EVAL, LOAD, and//or COMPILE."
 			 ((EQ S 'DECLARATION)
 			  )
 			 (T
-			  ;;just ignore unknown declarations to preserve user's sanity
 			  )))))))
 	DECL-LIST))
 
@@ -758,11 +755,10 @@ If no change has been made, the cdr of the value will be EQ to the argument."
 
 (DEFVAR LAST-ERROR-FUNCTION)
 
-(DEFSIGNAL-EXPLICIT INTERNAL-ERROR (ERROR) (EXP REASON CAUSE)
+(DEFSIGNAL-EXPLICIT INTERNAL-ERROR (ERROR) (EXP REASON)
   "Signalled for a compiler bug or fatal condition"
   :FORMAT-STRING "~A: ~S"
-  :FORMAT-ARGS (LIST REASON EXP)
-  :ERROR-CAUSE CAUSE)
+  :FORMAT-ARGS (LIST REASON EXP))
 
 (DEFUN BARF (EXP REASON SEVERITY)
   "This is the old way to record a compiler warning.  Use COMPILER:WARN now.
@@ -776,7 +772,7 @@ Both BARF and DATA enter the error handler."
       (FORMAT *ERROR-OUTPUT* "~%<< While compiling ~S >>" LAST-ERROR-FUNCTION))
     (IF (EQ SEVERITY 'WARN)
 	(WARN 'COMPILATION-WARNING :FATAL "~A: ~S" REASON EXP)
-      (SIGNAL 'INTERNAL-ERROR EXP REASON SEVERITY))))
+      (SIGNAL 'INTERNAL-ERROR EXP REASON))))
 
 ;;; This is the modern way for the compiler to issue a warning.
 (DEFUN WARN (TYPE SEVERITY FORMAT-STRING &REST ARGS)
