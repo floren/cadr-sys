@@ -168,6 +168,14 @@ P1VALUE is an integer n when compiling for at most n values (1  most-positive-f
 P1VSALUE is T when compiling for all the values which the form will return.
 On pass 2, /"destinations/" are used instead, with many more alternatives.")
 
+(DEFVAR *CHECK-STYLE-P* T
+  "During pass 1, means to perform style checking on the current outermost form being
+compiler. Inner forms will have their style checked regardless of this flag, unless
+somebody arranges otherwise.")
+
+(DEFVAR SELF-REFERENCES-PRESENT :UNBOUND
+  "Set to T during pass 1 if any SELF-REFs are generated.")
+
 (DEFVAR PEEP-ENABLE T
   "PEEP-ENABLE, if T, means that the peephole optimizer should be used.
 The only reason for setting this to NIL is f you suspect a bug in peephole optimization.")
@@ -220,7 +228,7 @@ run in Maclisp anymore.")
 		    '(:WARM))
 
 (DEFUN COMPILER-WARM-BOOT ()
-  (SI:DEALLOCATE-WHOLE-RESOURCE 'COMPILER-TEMPORARIES-RESOURCE)
+  (DEALLOCATE-WHOLE-RESOURCE 'COMPILER-TEMPORARIES-RESOURCE)
   (SETQ QCOMPILE-TEMPORARY-AREA NIL)
   (SETQ INSIDE-QC-TRANSLATE-FUNCTION NIL)
   (SETQ COMPILER-WARNINGS-CONTEXT NIL))
@@ -358,7 +366,7 @@ are used to create those warnings, together with the error message."
   (IF SI:OBJECT-WARNINGS-OBJECT-NAME
       (PROGN (SI:MAYBE-PRINT-OBJECT-WARNINGS-HEADER)
 	     (FORMAT T "~%Warning: ")
-	     (APPLY 'FORMAT T ERROR-WARNING-ARGS))
+	     (APPLY #'FORMAT T ERROR-WARNING-ARGS))
     (PRINT-ERROR-WARNING-HEADER))
   (UNLESS EH:ERRSET-STATUS
     (COND ((AND (MEMQ 'SYS:PARSE-ERROR CONDITION-NAMES)
@@ -388,16 +396,16 @@ are used to create those warnings, together with the error message."
 		  'WARN-ON-ERRORS))))))
   
 (DEFUN PRINT-ERROR-WARNING-HEADER ()
-  (FORMAT T "~%<< ~A >>"  (APPLY 'FORMAT NIL ERROR-WARNING-ARGS)))
+  (FORMAT T "~%<< ~A >>"  (APPLY #'FORMAT NIL ERROR-WARNING-ARGS)))
 
 
-(defun add-optimizer-internal (target-function optimizer-name optimized-into)
+(defun add-optimizer-internal (target-function optimizer-name &optional optimized-into)
   (let ((opts (get target-function 'optimizers)))
     (or (memq optimizer-name opts)
 	(putprop target-function (nconc opts (ncons optimizer-name)) 'optimizers))
     (setq opts (get target-function 'optimized-into))
     (dolist (into optimized-into)
-      (pushnew into opts :test 'eq))
+      (pushnew into opts :test #'eq))
     (and opts
 	 (putprop target-function opts 'optimized-into))
     target-function))
@@ -412,17 +420,19 @@ Optimizations added latest get called first."
   `(add-optimizer-internal ',target-function ',optimizer-name ',optimized-into))
 
 (defmacro defoptimizer (optimizer-name function-to-optimize
-			&optional ((&rest optimizes-into)) arglist &body body)
-  "(defoptimizer foo-optimizer foo (optfoo1 optfoo2) (form)
+			&optional #|| ((&rest optimizes-into)) ||# arglist &body body)
+  "(defoptimizer foo-optimizer foo (form)
      (if (eq (cadr form) 'foo)
          `(and (optfoo . ,(cadr form))
                (optfoo2 . (caddr form)))
         form))
 OR
-/(defoptimizer foo-optimizer foo (optfoo1 optfoo2))"
+/(defoptimizer foo-optimizer foo)"
   (if (null arglist)
-      `(add-optimizer-internal ',function-to-optimize ',optimizer-name ',optimizes-into)
-    `(progn (add-optimizer-internal ',function-to-optimize ',optimizer-name ',optimizes-into)
+      `(add-optimizer-internal ',function-to-optimize ',optimizer-name
+			       nil #||',optimizes-into||#)
+    `(progn (add-optimizer-internal ',function-to-optimize ',optimizer-name
+				    nil #||',optimizes-into||#)
 	    (defun ,optimizer-name ,arglist
 	      (declare (function-parent ,optimizer-name defoptimizer))
 	      . ,body))))
@@ -435,13 +445,15 @@ OR
 	  (defun ,rewriter ,arglist
 	      (declare (function-parent ,rewriter defrewrite))
 	      . ,body)))
-
+	    
+;; this is 
 (defmacro defcompiler-synonym (function synonym-function)
   "Make the compiler substitute SYNONYM-FUNCTION for FUNCTION when compiling.
 eg (defcompiler-synonym plus +)"
-  `(defoptimizer ,(intern (string-append function "-TO-" synonym-function)) ,function
-                           (,synonym-function) (form)
+  `(defrewrite ,(intern (string-append function "-TO-" synonym-function)) ,function
+	       #|| (,synonym-function) ||# (form)
      (cons ',synonym-function (cdr form))))
+
 
 ;;;; Variables data bases:
 
@@ -713,14 +725,8 @@ that are passed to %LOCATE-IN-HIGHER-CONTEXT.")
 (DEFVAR *OUTER-CONTEXT-PROGDESC-ENVIRONMENT* :UNBOUND
   "Used to initialize *PROGDESC-ENVIRONMENT* for compilation of one function.")
 
-;(DEFVAR *OUTER-CONTEXT-RETPROGDESC* :UNBOUND
-;  "Used to initialize RETPROGDESC for compilation of one function.")
-
 (DEFVAR *OUTER-CONTEXT-GOTAG-ENVIRONMENT* :UNBOUND
   "Used to initialize *GOTAG-ENVIRONMENT* for compilation of one function.")
-
-;(DEFVAR *OUTER-CONTEXT-MACRO-ENVIRONMENT* :UNBOUND
-;  "Used to initialize *COMPILER-MACRO-ENVIRONMENT* for compilation of one function.")
 
 (DEFVAR *FUNCTION-ENVIRONMENT* :UNBOUND
   "List of frames describing local macro and function definitions.
@@ -730,21 +736,9 @@ The format of this object is the same as that of SI::*INTERPRETER-FUNCTION-ENVIR
   "Alist of elements (local-function-name vars-entry function-definition)
 It records, for each local function name (defined by FLET or LABELS)
 the local variable in which the function definition actually lives.")
-
-;(DEFVAR *COMPILER-MACRO-ENVIRONMENT* :UNBOUND
-;  "List of frames describing local macro definitions and shadowed functions.
-;The format of this object is the same as that of SI::*INTERPRETER-FUNCTION-ENVIRONMENT*,
-;except that only local macros really have definitions recorded.
-;Local functions that are not macros have NIL recorded as their definitions.
-;Such local functions are present only to record that they shadow
-;more global definitions of the same function names.
-;This turns out to be just what you want to pass to CW-TOP-LEVEL and such.")
 
-(defun fsymeval-in-function-environment (symbol
-					 &optional (fenv *function-environment*)
-					 &aux mumble)
-  "Returns SYMBOL's function or macro definition within FENV,
-or NIL if it is not defined by the environment."
-  (dolist (frame fenv)
-    (and (setq mumble (get-location-or-nil (locf frame) (locf (symbol-function symbol))))
-	 (return (car mumble)))))
+(defun fsymeval-in-function-environment (symbol &optional (fenv *function-environment*))
+  "Returns SYMBOL's function or macro definition within the function environment FENV,
+or NIL if it is not defined *by* the environment."
+  (with-stack-list (env fenv)
+    (fsymeval-in-environment symbol env nil)))
