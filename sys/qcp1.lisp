@@ -8,9 +8,6 @@
 
 (PROCLAIM '(SPECIAL MC-HOLDPROG ULAP-DEBUG LAP-DEBUG))
 
-(DEFVAR SELF-REFERENCES-PRESENT :UNBOUND
-  "Set to T during pass 1 if any SELF-REFs are generated.")
-
 ;;; Initialize all global variables and compiler switches, and make sure
 ;;; that some built in variables are known to be special
 ;;; (logically, the cold load would contain SPECIAL properties for them,
