@@ -1,4 +1,4 @@
-;;; -*- Mode: LISP;  Package: SYSTEM-INTERNALS;  Base: 8 -*-
+;;; -*- Mode:LISP; Package:SYSTEM-INTERNALS; Base:8; Readtable:ZL -*-
 
 ;;; Processes
 
@@ -41,7 +41,11 @@ Variables in this list should be [some criterion which I haven't figured out yet
   (WAIT-ARGUMENT-LIST NIL)	;Arguments passed to above (use an arg to avoid a closure)
 				; This will often be a rest argument in somebody's stack,
 				; but it will always be used in a safe manner.
-  (WHOSTATE "Just Created")	;The "WHOSTATE" string for the who line, etc.
+  (WAIT-WHOSTATE "Just Created");The "whostate" string for the who line for use when the
+				; process is waiting to run. Set to NIL by the scheduler
+				; whenever the process runs.
+; this ivar not patched in 99
+  (RUN-WHOSTATE "Run")		;The whostate string to be used when the process is running.
   INITIAL-STACK-GROUP		;The stack group which PROCESS-RESET (q.v.) will reset to.
   INITIAL-FORM			;Form to preset the initial stack group to when proc is reset.
 				; Really cons of function and evaluated args.
@@ -76,13 +80,13 @@ Variables in this list should be [some criterion which I haven't figured out yet
   :ORDERED-INSTANCE-VARIABLES
   :OUTSIDE-ACCESSIBLE-INSTANCE-VARIABLES
   (:GETTABLE-INSTANCE-VARIABLES NAME STACK-GROUP WAIT-FUNCTION WAIT-ARGUMENT-LIST
-				WHOSTATE INITIAL-STACK-GROUP INITIAL-FORM
+				INITIAL-STACK-GROUP INITIAL-FORM
 				RUN-REASONS ARREST-REASONS QUANTUM QUANTUM-REMAINING
 				PRIORITY WARM-BOOT-ACTION SIMPLE-P
 				LAST-TIME-RUN PAGE-FAULT-COUNT)
-  (:SETTABLE-INSTANCE-VARIABLES WARM-BOOT-ACTION)
+  (:SETTABLE-INSTANCE-VARIABLES WARM-BOOT-ACTION WAIT-WHOSTATE RUN-WHOSTATE)
   (:INITABLE-INSTANCE-VARIABLES NAME STACK-GROUP WAIT-FUNCTION WAIT-ARGUMENT-LIST
-				WHOSTATE INITIAL-STACK-GROUP INITIAL-FORM
+				INITIAL-STACK-GROUP INITIAL-FORM
 				RUN-REASONS ARREST-REASONS QUANTUM
 				PRIORITY WARM-BOOT-ACTION SIMPLE-P)
   (:INIT-KEYWORDS :FLAVOR
@@ -90,29 +94,38 @@ Variables in this list should be [some criterion which I haven't figured out yet
 		  :SG-AREA :REGULAR-PDL-AREA :SPECIAL-PDL-AREA :REGULAR-PDL-SIZE
 		  :SPECIAL-PDL-SIZE :CAR-SYM-MODE :CAR-NUM-MODE :CDR-SYM-MODE :CDR-NUM-MODE
 		  :SWAP-SV-ON-CALL-OUT :SWAP-SV-OF-SG-THAT-CALLS-ME :TRAP-ENABLE :SAFE
-		  :CLOSURE-VARIABLES)
+		  :CLOSURE-VARIABLES
+		  :WHOSTATE)			;for compatibility
   (:DEFAULT-INIT-PLIST :CLOSURE-VARIABLES *DEFAULT-PROCESS-CLOSURE-VARIABLES*))
+;; methods are in SYS2; PROCES
 
-(SETF (DOCUMENTATION 'PROCESS-WHOSTATE 'FUNCTION)
-      "The /"Whostate/" string for the wholine, etc.")
+
+(SETF (DOCUMENTATION 'PROCESS-WAIT-WHOSTATE 'FUNCTION)
+  "The /"Whostate/" string for the wholine, etc to be displayed when the process is
+waiting to run. NIL when the process is running.")
+(deff process-whostate 'process-wait-whostate)
+(compiler:make-obsolete process-whostate "this function is now SI:PROCESS-WAIT-WHOSTATE")
+
+(SETF (DOCUMENTATION 'PROCESS-RUN-WHOSTATE 'FUNCTION)
+  "The /"Whostate/" string to be displayed when the process is running")
 
 (SETF (DOCUMENTATION 'PROCESS-WAIT-ARGUMENT-LIST 'FUNCTION)
-      "Arguments passed to PROCESS-WAIT-FUNCTION")
+  "Arguments passed to PROCESS-WAIT-FUNCTION")
 
 (SETF (DOCUMENTATION 'PROCESS-NAME 'FUNCTION)
-      "Prints the name of PROCESS.")
+  "The name of PROCESS (a string)")
 
 (SETF (DOCUMENTATION 'PROCESS-WAIT-FUNCTION 'FUNCTION)
-      "Predicate to determine if PROCESS is runnable.")
+  "Predicate to determine if PROCESS is runnable.")
 
 (SETF (DOCUMENTATION 'PROCESS-INITIAL-FORM 'FUNCTION)
-      "Returns the initial form the stack group is preset to when PROCESS is reset.")
+  "Returns the initial form the stack group is preset to when PROCESS is reset.")
 
 (SETF (DOCUMENTATION 'PROCESS-INITIAL-STACK-GROUP 'FUNCTION)
-      "Returns the stack group which PROCESS-RESET will reset to.")
+  "Returns the stack group which PROCESS-RESET will reset to.")
 
 (SETF (DOCUMENTATION 'PROCESS-STACK-GROUP 'FUNCTION)
-      "Returns the stack group currently executing on behalf of PROCESS.")
+  "Returns the stack group currently executing on behalf of PROCESS.")
 
 (DEFFLAVOR SIMPLE-PROCESS () (PROCESS)
   (:DEFAULT-INIT-PLIST :SIMPLE-P T
