@@ -1,4 +1,4 @@
-;;; -*- Mode:LISP; Package:SI; Base:8; Readtable:T -*-
+;;; -*- Mode:LISP; Package:SI; Base:8; Readtable:ZL -*-
 
 ;;; hash table flavors.
 
@@ -6,11 +6,11 @@
 ;;; The flavor instance serves only to point to that.
 ;;; Hash arrays are defined in the file HASH.
 
-(defvar hash-tables-rehash-before-cold nil
+(defvar *hash-tables-rehash-before-cold* nil
   "List of hash tables to rehash when DISK-SAVE is done.")
 
 (add-initialization 'rehash-hash-tables
-		    '(dolist (h hash-tables-rehash-before-cold)
+		    '(dolist (h *hash-tables-rehash-before-cold*)
 		       (gethash h nil))
 		    '(:before-cold))
 
@@ -33,8 +33,8 @@
     (setq hash-array
 	  (apply #'make-hash-array :instance self (contents plist))))
   (setf (hash-table-instance hash-array) self)
-  (if (get plist :rehash-before-cold)
-      (push self hash-tables-rehash-before-cold)))
+  (if (get plist ':rehash-before-cold)
+      (push self *hash-tables-rehash-before-cold*)))
 
 (defmethod (hash-table :fasd-form) ()
   (let ((array (make-array (array-length hash-array)
@@ -48,7 +48,7 @@
     ;; Get rid of circularity.
     (setf (hash-table-instance array) nil)
     (make-array-into-named-structure array 'hash-array)
-    `(make-instance ',(typep self) :hash-array ',array)))
+    `(make-instance ',(type-of self) :hash-array ',array)))
 
 (defmethod (hash-table :size) ()
   (hash-table-modulus hash-array))
@@ -56,30 +56,9 @@
 (defmethod (hash-table :filled-entries) ()
   (hash-table-fullness hash-array))
 
-(defmethod (hash-table :clear-hash) (&optional ignore &aux (hash-table hash-array))
-  "Clear out a hash table; leave it with no entries."
-  (with-lock ((hash-table-lock hash-table))
-    ;; Set all of hash table to NIL with cdr-next.
-    (setf (aref hash-table 0) nil)
-    (%p-store-cdr-code (aloc hash-table 0) cdr-next)
-    (%blt (aloc hash-table 0) (aloc hash-table 1) (1- (array-length hash-table)) 1)
-    ;; Set first word of each group to DTP-NULL, 0.
-    (let ((elt-0 (aloc hash-table 0))
-	  (blen (hash-table-block-length hash-table)))
-      (%p-store-pointer elt-0 0)
-      (%p-store-data-type elt-0 dtp-null)
-      (%blt-typed elt-0 (%make-pointer-offset dtp-locative elt-0 blen)
-		  (1- (truncate (array-length hash-table) blen))
-		  blen)
-      ;; Set last word of each group to CDR-NIL.
-      (%p-store-cdr-code (aloc hash-table (+ blen -1)) cdr-nil)
-      (%blt-typed (aloc hash-table (+ blen -1)) (aloc hash-table (+ blen blen -1))
-		  (1- (truncate (array-length hash-table) blen))
-		  blen))
-    (setf (hash-table-fullness hash-table) 0)
-    (setf (hash-table-number-of-deleted-entries hash-table) 0)
-    (setf (hash-table-gc-generation-number hash-table) %gc-generation-number)
-    hash-table))
+(defmethod (hash-table :print-self) (stream &rest ignore)
+  (printing-random-object (self stream :type)
+    (print-hash-array hash-array stream t)))
 
 (defmethod (hash-table :describe) ()
   (format t "~&~S is a hash-table with ~D entries out of a possible ~D (~D%).~%"
@@ -87,9 +66,11 @@
 	  (truncate (* (hash-table-fullness hash-array) 100.)
 		    (hash-table-modulus hash-array)))
   (if (and (hash-table-lock hash-array) (car (hash-table-lock hash-array)))
-      (format t "Locked by ~s~%" (hash-table-lock hash-array)))
-  (if (hash-table-funcallable-p hash-array)
-      (format t "FUNCALLing it hashes on the first argument to get a function to call.~%"))
+      (format t "Locked by ~S~%" (hash-table-lock hash-array)))
+; But FUNCALLing the hashtable is the same as SENDing it! [sigh]
+; This information pertains just to the hash-array itself
+;  (if (hash-table-funcallable-p hash-array)
+;      (format t "FUNCALLing it hashes on the first argument to get a function to call.~%"))
   (format t "There are ~D formerly used entries now deleted~%"
 	  (hash-table-number-of-deleted-entries hash-array))
   (if (floatp (hash-table-rehash-threshold hash-array))
@@ -111,12 +92,38 @@
 		 #'(lambda (key &rest values)
 		     (format t "~& ~S -> ~S~%" key values)))
 	 (let ((l nil))
-	   (send self :map-hash
-		 #'(lambda (key &rest values)
-		     (push (list key (copylist values)) l)))
+	   (send self :map-hash #'(lambda (key &rest values)
+				    (push (list key (copy-list values)) l)))
 	   (setq l (sortcar l #'alphalessp))
 	   (format t "~&~:{ ~S -> ~S~%~}" l)))))
 
+(defmethod (hash-table :clear-hash) (&optional ignore &aux (hash-table hash-array))
+  "Clear out a hash table; leave it with no entries."
+  (with-lock ((hash-table-lock hash-table))
+    ;; Set all of hash table to NIL with cdr-next.
+    (setf (aref hash-table 0) nil)
+    (%p-store-cdr-code (locf (aref hash-table 0)) cdr-next)
+    (%blt (locf (aref hash-table 0)) (locf (aref hash-table 1))
+	  (1- (array-length hash-table)) 1)
+    ;; Set first word of each group to DTP-NULL, 0.
+    (let ((elt-0 (locf (aref hash-table 0)))
+	  (blen (hash-table-block-length hash-table)))
+      (%p-store-pointer elt-0 0)
+      (%p-store-data-type elt-0 dtp-null)
+      (%blt-typed elt-0 (%make-pointer-offset dtp-locative elt-0 blen)
+		  (1- (truncate (array-length hash-table) blen))
+		  blen)
+      ;; Set last word of each group to CDR-NIL.
+      (%p-store-cdr-code (locf (aref hash-table (+ blen -1))) cdr-nil)
+      (%blt-typed (locf (aref hash-table (+ blen -1)))
+		  (locf (aref hash-table (+ blen blen -1)))
+		  (1- (truncate (array-length hash-table) blen))
+		  blen))
+    (setf (hash-table-fullness hash-table) 0)
+    (setf (hash-table-number-of-deleted-entries hash-table) 0)
+    (setf (hash-table-gc-generation-number hash-table) %gc-generation-number)
+    hash-table))
+
 (defmethod (hash-table :get-hash)
 	   (key &optional default-value
 	    &aux
@@ -160,7 +167,8 @@
 ;;; note that SETF cannot hope to give get-hash multiple VALUEs
 (defmethod (hash-table :case :set :get-hash) (key &rest values)
   (declare (arglist (key value)))
-  ;; use car last is to ignore optional default eg from "(push zap (send foo :get-hash bar))"
+  ;; use (car (last ...)) is to ignore optional default
+  ;;  eg from "(push zap (send foo :get-hash bar baz))"
   (lexpr-send self :put-hash key (car (last values))))
 
 (defmethod (hash-table :put-hash)
@@ -193,7 +201,10 @@
 	       (setq old-value (%p-contents-offset p value-index))
 	       (do ((i value-index (1+ i))) ((= i blen))
 		 (%p-store-contents-offset (pop values-left) p i))
-	       (return (car values) old-value t (%make-pointer-offset dtp-list p (1- value-index)))))
+	       (return (values (car values)
+			       old-value
+			       t
+			       (%make-pointer-offset dtp-list p (1- value-index))))))
 	    ((= (%p-data-type p) dtp-null)
 	     (or emptyp (setq emptyp p))
 	     (when (zerop (%p-pointer p))
@@ -206,23 +217,23 @@
 		     ;; Don't allow the hash table to become full.
 		     (( (+ (hash-table-fullness hash-table)
 			    (hash-table-number-of-deleted-entries hash-table))
-			 (fix (* (if (floatp (hash-table-rehash-threshold hash-table))
-				     (hash-table-rehash-threshold hash-table)
-				     0.7s0)
-				 (- (hash-table-modulus hash-table) 2))))
+			 (hash-table-maximal-fullness hash-table))
 		      (setq hash-array
 			    (funcall (hash-table-rehash-function hash-table) hash-table
 				     (hash-table-rehash-size hash-table)))
 		      (return (lexpr-send self :put-hash key values)))
 		     (t				;Add to table using empty slot found
 		      (%p-store-contents emptyp hash-code)
-		      (cond (hash-function
-			     (%p-store-contents-offset key emptyp 1)
-			     (do ((i 2 (1+ i))) ((= i blen))
-			       (%p-store-contents-offset (pop values-left) emptyp i)))
-			    (t
-			     (do ((i 1 (1+ i))) ((= i blen))
-			       (%p-store-contents-offset (pop values-left) emptyp i))))
+;>> have to check for volatility level of key here and inform hash-array that may
+;>> need to rehash on a gc of that volatility
+		      (without-interrupts
+			(cond (hash-function
+			       (%p-store-contents-offset key emptyp 1)
+			       (do ((i 2 (1+ i))) ((= i blen))
+				 (%p-store-contents-offset (pop values-left) emptyp i)))
+			      (t
+			       (do ((i 1 (1+ i))) ((= i blen))
+				 (%p-store-contents-offset (pop values-left) emptyp i)))))
 		      (incf (hash-table-fullness hash-table))
 		      ;; If reusing a deleted slot, decrement number of them slots.
 		      (or (eq emptyp p)
@@ -283,16 +294,18 @@
       (lexpr-send self :put-hash key values)
     (values old-value old-value-p location)))
 
+;>> returns HASH-TABLE. CL maphash returns NIL. Should this?
 (defmethod (hash-table :map-hash) (function &rest extra-args &aux (hash-table hash-array))
+; (declare (values hash-table))
   (with-lock ((hash-table-lock hash-table))
     (do ((blen (hash-table-block-length hash-table))
 	 (block-offset (if (hash-table-hash-function hash-table) 1 0))
 	 (i 0 (+ i blen))
 	 (n (array-length hash-table)))
 	(( i n))
-      (when ( (%p-data-type (aloc hash-table i)) dtp-null)
+      (when ( (%p-data-type (locf (aref hash-table i))) dtp-null)
 	(%open-call-block function 0 0)
-	(dolist (i (%make-pointer-offset dtp-list (aloc hash-table i) block-offset))
+	(dolist (i (%make-pointer-offset dtp-list (locf (aref hash-table i)) block-offset))
 	  (%push i))
 	(dolist (i extra-args)
 	  (%push i))
@@ -300,50 +313,41 @@
     hash-table))
 
 (defmethod (hash-table :map-hash-return) (function &optional (return-function 'list)
-					     &aux values (hash-table hash-array))
+					  &aux values (hash-table hash-array))
   (with-lock ((hash-table-lock hash-table))
     (do ((blen (hash-table-block-length hash-table))
 	 (block-offset (if (hash-table-hash-function hash-table) 1 0))
 	 (i 0 (+ i blen))
 	 (n (array-length hash-table)))
 	(( i n))
-      (cond (( (%p-data-type (aloc hash-table i)) dtp-null)
-	     (let ((value (apply function
-				 (%make-pointer-offset dtp-list (aloc hash-table i)
-						       block-offset))))
-	       (selectq return-function
-		 (nconc (setq values (nconc value values)))
-		 (t (push value values)))))))
+      (when ( (%p-data-type (locf (aref hash-table i))) dtp-null)
+	(let ((value (apply function
+			    (%make-pointer-offset dtp-list (locf (aref hash-table i))
+						  block-offset))))
+	  (case return-function
+	    (nconc (setq values (nconc value values)))
+	    (t (push value values))))))
     (if (memq return-function '(list nconc))
 	values
 	(apply return-function values))))
-
-;Used by old compilations of WITH-LOCK
-;(DEFUN SEIZE-LOCK (LOCK-LOCATION &OPTIONAL (RECURSIVE T))
-;  ;; Initially locks are NIL, and the first call to SIEZE-LOCK sets it up properly
-;  (AND (%STORE-CONDITIONAL LOCK-LOCATION NIL '(T))
-;       (SETF (CDR LOCK-LOCATION) (CONS NIL 0)))
-;  (COND ((EQ (CADR LOCK-LOCATION) CURRENT-PROCESS)
-;	 (IF RECURSIVE
-;	     (INCF (CDDR LOCK-LOCATION))
-;	   (FERROR NIL "Attempt to lock ~S recursively" LOCK-LOCATION)))
-;	(T
-;	 (DO-FOREVER
-;	  (IF (%STORE-CONDITIONAL (CDR LOCK-LOCATION) NIL CURRENT-PROCESS)
-;	      (RETURN (SETF (CADR LOCK-LOCATION) CURRENT-PROCESS))
-;	    (PROCESS-WAIT "Lock"
-;			  #'(LAMBDA (LOCK-LOCATION)
-;			      (NULL (CADR LOCK-LOCATION))) LOCK-LOCATION)))
-;	 (INCF (CDDR LOCK-LOCATION))))
-;  NIL)
 
-;(DEFUN RELEASE-LOCK (LOCK-LOCATION &OPTIONAL (ERROR T))
-;  (IF (NEQ (CADR LOCK-LOCATION) CURRENT-PROCESS)
-;      (AND ERROR
-;	   (FERROR NIL "Lock ~S is not locked by this process." LOCK-LOCATION))
-;    (DECF (CDDR LOCK-LOCATION))
-;    (IF (ZEROP (CDDR LOCK-LOCATION))
-;	(SETF (CADR LOCK-LOCATION) NIL))))
+
+(defflavor without-interrupts-hash-table ()
+	   (hash-table)
+  (:documentation "Hashing operations on this hash table happen uninterruptably")
+  )
+
+(defwrapper (without-interrupts-hash-table :get-hash) (ignore . body)
+  `(without-interrupts
+     . ,body))
+(defwrapper (without-interrupts-hash-table :put-hash) (ignore . body)
+  `(without-interrupts
+     . ,body))
+(defwrapper (without-interrupts-hash-table :clear-hash) (ignore . body)
+  `(without-interrupts
+     . ,body))
+
+(compile-flavor-methods hash-table equal-hash-table without-interrupts-hash-table)
 
 ;;;; Compatibility functions.
 
@@ -358,32 +362,39 @@ TEST: Common Lisp way to specify the compare-function.
  It must be EQ, EQL (the default) or EQUAL.
  A suitable hash function will be used automatically.
 AREA: area to cons the table in.
-SIZE: lower bound for number of entries (rounded up).
- Note that the table cannot actually hold that many keys.
+SIZE: lower bound for number of entries (this may be rounded up).
+ Note that the table cannot actually hold that many keys; this value merely serves
+ as an approximation of the expected number of keys.
 ACTUAL-SIZE: precise number of entries worth of size to use.
 NUMBER-OF-VALUES: number of values to associate with each key (default 1).
  Each PUTHASH can set all the values, and GETHASH retrieves them all.
-REHASH-THRESHOLD: a flonum between 0 and 1 (default 0.7).
- When that fraction of the table is full, it is made larger.
+ Note that SETF of GETHASH can only set one value.
 REHASH-FUNCTION: a function which accepts a hash table
  and returns a larger one.
+REHASH-THRESHOLD: determines what /"fullness/" will make a growth of the hashtable
+ and corresponding rehash necessary.
+ Either a flonum between 0 and 1 (default 0.7), meaning that rehash occurs
+ if more than that fraction full, or a fixnum, meaning rehash if more than that
+ number of slots are filled. If a fixnum, it is automatically proportionally
+ increased when the hashtable grows.
 REHASH-SIZE: the ratio by which the default REHASH-FUNCTION
  will increase the size of the table.  By default, 1.3.
- The keyword :GROWTH-FACTOR is synonymous with this."
+ This may also be a fixnum, in which case it determines the number of extra slots
+ which are added to the hastable's size when it grows."
   (declare (arglist &key (test #'eql) compare-function hash-function
 		         area size actual-size number-of-values
 			 rehash-threshold rehash-function rehash-size))
   (apply #'make-instance 'hash-table options))
 
-(defun hash-table-count (hash-table)
+(defsubst hash-table-count (hash-table)
   "Returns the number of associations currently stored in HASH-TABLE."
   (send hash-table :filled-entries))
 
-(defun clrhash (hash-table &optional ignore)
-  "Clear out a hash table; leave it with no entries."
+(defsubst clrhash (hash-table &optional ignore)
+  "Clear out a hash table; leave it with no entries. Returns HASH-TABLE"
   (send hash-table :clear-hash))
 
-(defun gethash (key hash-table &optional default-value)
+(defsubst gethash (key hash-table &optional default-value)
   "Read the values associated with KEY in HASH-TABLE.
 Returns:
  1) The primary value associated with KEY (DEFAULT-VALUE if KEY is not found),
@@ -394,11 +405,12 @@ Returns:
   (declare (values value key-found-flag entry-pointer))
   (send hash-table :get-hash key default-value))
 
-;;;Used by SETF of GETHASH.
-(defun sethash (key hash-table value)
+;;; Used by SETF of GETHASH.
+;;;  Can't hope to win with multiple values
+(defsubst sethash (key hash-table value)
   (send hash-table :put-hash key value))
 
-(defun puthash (key value hash-table &rest additional-values)
+(defsubst puthash (key value hash-table &rest additional-values)
   "Set the values associated with KEY in HASH-TABLE.
 The first value is set from VALUE.  If the hash table associates more
 than one value with each key, the remaining values are set from ADDITIONAL-VALUES.
@@ -419,17 +431,19 @@ The values returned by SWAPHASH are the same as those of GETHASH."
       (lexpr-send hash-table :put-hash key value additional-values)
     (values old-value old-value-p location)))
 
-(defun remhash (key hash-table)
+(defsubst remhash (key hash-table)
   "Delete any entry for KEY in HASH-TABLE.  Return T if there was one."
   (send hash-table :rem-hash key))
 
-(defun maphash (function hash-table &rest extra-args)
+(defsubst maphash (function hash-table &rest extra-args)
   "Apply FUNCTION to each item in HASH-TABLE; ignore values.
 FUNCTION's arguments are the key followed by the values associated with it,
- followed by the EXTRA-ARGS."
-  (lexpr-send hash-table :map-hash function extra-args))
+ followed by the EXTRA-ARGS.
+Returns NIL."
+  (lexpr-send hash-table :map-hash function extra-args)
+  nil)
 
-(defun maphash-return (function hash-table &optional (return-function 'list))
+(defsubst maphash-return (function hash-table &optional (return-function 'list))
   "Apply FUNCTION to each item in HASH-TABLE; apply RETURN-FUNCTION to list of results.
 FUNCTION's arguments are the key followed by the values associated with it.
 The values returned by FUNCTION are put in a list.
@@ -468,9 +482,7 @@ the key is the code."
       (sxhash key)
       key))
 
-;;; Bootstrapping of flavor hash tables.
-
-(compile-flavor-methods hash-table equal-hash-table)
+;;;; Bootstrapping of flavor hash tables.
 
 ;;; This is what the flavor system calls to puthash into a hash array
 
@@ -478,7 +490,7 @@ the key is the code."
 (defun puthash-array (key value hash-array &rest additional-values)
   (let ((instance (hash-table-instance hash-array)))
     (if instance (lexpr-send instance :put-hash key value additional-values)
-      (apply 'puthash-bootstrap key value hash-array additional-values))))
+      (apply #'puthash-bootstrap key value hash-array additional-values))))
 
 ;;; Create a hash table suitable for a flavor's method hash table
 ;;; and return its hash array.
@@ -505,7 +517,7 @@ the key is the code."
 		  (null (hash-table-instance mht))
 		  (setf (hash-table-instance mht)
 			(instantiate-flavor 'hash-table
-					    (list nil :hash-array mht)
+					    `(nil :hash-array ,mht)
 					    t nil permanent-storage-area))))))))
 
 (add-initialization 'hash-flavor-install '(hash-flavor-install) '(:once))
@@ -523,34 +535,36 @@ the key is the code."
     (setq hash-elements-path-added t)
     (define-loop-path hash-elements hash-elements-path-function (with-key of))))
 
-(defun hash-elements-path-function (ignore variable ignore prep-phrases inclusive? ignore ignore)
-  (if inclusive?
-      (ferror nil "Inclusive stepping not supported in HASH-ELEMENTS path for ~S."
-	      variable))
-  (unless (loop-tassoc 'of prep-phrases)
-    (ferror nil "No OF phrase in HASH-ELEMENTS path for ~S." variable))
-  (let (bindings prologue steps post-endtest pseudo-steps
-	(blen-var (gensym))
-	(ht-var (gensym))
-	(i-var (gensym))
-	(len-var (gensym))
-	(tem (gensym))
-	(key-var (or (cadr (loop-tassoc 'with-key prep-phrases)) (gensym)))
-	(offset-var (gensym)))
-    (setq bindings `((,ht-var (send ,(cadr (loop-tassoc 'of prep-phrases)) :hash-array))
-		     (,blen-var nil) (,offset-var nil) (,variable nil)
-		     (,i-var nil) (,key-var nil) (,len-var nil))
-	  prologue `((setq ,blen-var
-			   (hash-table-block-length ,ht-var))
-		     (setq ,i-var (- ,blen-var))
-		     (setq ,offset-var (if (hash-table-hash-function ,ht-var) 1 0))
-		     (setq ,len-var (array-length ,ht-var)))
-	  steps `(,i-var
-		  (do ((,tem (+ ,blen-var ,i-var) (+ ,blen-var ,tem)))
-		      ((or ( ,tem ,len-var)
-			   ( (%p-data-type (aloc ,ht-var ,tem)) dtp-null))
-		       ,tem)))
-	  post-endtest `( ,i-var ,len-var)
-	  pseudo-steps `(,key-var (aref ,ht-var (+ ,i-var ,offset-var))
-			 ,variable (aref ,ht-var (+ ,i-var ,offset-var 1))))
-    (list bindings prologue nil steps post-endtest pseudo-steps)))
+;; now in sys2; loop
+;(defun hash-elements-path-function (ignore variable ignore prep-phrases
+;				    inclusive? ignore ignore)
+;  (if inclusive?
+;      (ferror nil "Inclusive stepping not supported in HASH-ELEMENTS path for ~S."
+;	      variable))
+;  (unless (loop-tassoc 'of prep-phrases)
+;    (ferror nil "No OF phrase in HASH-ELEMENTS path for ~S." variable))
+;  (let (bindings prologue steps post-endtest pseudo-steps
+;	(blen-var (gensym))
+;	(ht-var (gensym))
+;	(i-var (gensym))
+;	(len-var (gensym))
+;	(tem (gensym))
+;	(key-var (or (cadr (loop-tassoc 'with-key prep-phrases)) (gensym)))
+;	(offset-var (gensym)))
+;    (setq bindings `((,ht-var (send ,(cadr (loop-tassoc 'of prep-phrases)) :hash-array))
+;		     (,blen-var nil) (,offset-var nil) (,variable nil)
+;		     (,i-var nil) (,key-var nil) (,len-var nil))
+;	  prologue `((setq ,blen-var
+;			   (hash-table-block-length ,ht-var))
+;		     (setq ,i-var (- ,blen-var))
+;		     (setq ,offset-var (if (hash-table-hash-function ,ht-var) 1 0))
+;		     (setq ,len-var (array-length ,ht-var)))
+;	  steps `(,i-var
+;		  (do ((,tem (+ ,blen-var ,i-var) (+ ,blen-var ,tem)))
+;		      ((or ( ,tem ,len-var)
+;			   ( (%p-data-type (locf (aref ,ht-var ,tem))) dtp-null))
+;		       ,tem)))
+;	  post-endtest `( ,i-var ,len-var)
+;	  pseudo-steps `(,key-var (aref ,ht-var (+ ,i-var ,offset-var))
+;			 ,variable (aref ,ht-var (+ ,i-var ,offset-var 1))))
+;    (list bindings prologue nil steps post-endtest pseudo-steps)))
