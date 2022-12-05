@@ -3060,7 +3060,7 @@ because that variable is globally special~%"
 		      ALIST))
 	  ;; This keyword does not just initialize an instance variable.
 	  (UNLESS (GETF REMAINING-DEFAULT-PLIST KEYWORD)
-	    (SETF (GETF REMAINING-DEFAULT-PLIST KEYWORD) VALUE))
+	    (SETF (GETF REMAINING-DEFAULT-PLIST KEYWORD) ARG))
 	  (UNLESS (MEMQ KEYWORD REMAINING-INIT-KEYWORDS)
 	    (PUSHNEW KEYWORD UNHANDLED-INIT-KEYWORDS :TEST #'EQ))))))
   (SETF (FLAVOR-UNHANDLED-INIT-KEYWORDS FL) UNHANDLED-INIT-KEYWORDS)
@@ -3942,7 +3942,7 @@ The vector may not be forwarded.")
       (ARRAY
        ;; Set function to NIL or named-structure handler
        (SETQ FUNCTION (GET (NAMED-STRUCTURE-P FUNCTION) 'NAMED-STRUCTURE-INVOKE)))
-      (FUNCTION
+      (SYMBOL
        (OR (FBOUNDP FUNCTION) (RETURN NIL))
        (SETQ FUNCTION (SYMBOL-FUNCTION FUNCTION)))
       ((OR ENTITY CLOSURE)
