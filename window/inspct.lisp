@@ -1,4 +1,4 @@
-;;; -*- Mode: LISP;  Package: TV;  Base: 8 -*-
+;;; -*- Mode:LISP; Package:TV; Base:8; Readtable:T -*-
 ;;;	** (c) Copyright 1980 Massachusetts Institute of Technology **
 
 ;;;; Inspect structures
@@ -8,20 +8,18 @@
   STACK-FRAME-AP
   STACK-FRAME-FUNCTION-NAME)
 
-(DEFPROP STACK-FRAME STACK-FRAME-NAMED-STRUCTURE-INVOKE NAMED-STRUCTURE-INVOKE)
-(DEFSELECT STACK-FRAME-NAMED-STRUCTURE-INVOKE
+(DEFSELECT ((:PROPERTY STACK-FRAME NAMED-STRUCTURE-INVOKE))
   ((:PRINT-SELF) (SF STREAM &REST IGNORE &AUX (AP (STACK-FRAME-AP SF))
 					      (RP (SG-REGULAR-PDL (STACK-FRAME-SG SF)))
 					      (FUNCTION (RP-FUNCTION-WORD RP AP))
-					      (PC (AND (EQ (%DATA-TYPE FUNCTION)
-							   DTP-FEF-POINTER)
-						       (RP-EXIT-PC RP AP))))
+					      (PC (IF (TYPEP FUNCTION 'COMPILED-FUNCTION)
+						      (RP-EXIT-PC RP AP))))
    (LET ((*PRINT-LENGTH* 5) (*PRINT-LEVEL* 3))
      (SI:PRINTING-RANDOM-OBJECT (SF STREAM :NO-POINTER)
-       (FORMAT STREAM "Stack-Frame ~A ~[PC=~O~;microcoded~;interpreted~]"
+       (FORMAT STREAM "Stack-Frame ~A ~[PC=~D~;microcoded~;interpreted~]"
 	       (FUNCTION-NAME FUNCTION)
 	       (COND (PC 0)
-		     ((EQ (%DATA-TYPE FUNCTION) DTP-U-ENTRY) 1)
+		     ((TYPEP FUNCTION 'MICROCODE-FUNCTION) 1)
 		     (T 2))
 	       PC)))))
 
@@ -33,11 +31,11 @@
 	    WINDOW)
   (:DEFAULT-INIT-PLIST :MARGIN-SCROLL-REGIONS '((:TOP "Top of object")
 						(:BOTTOM "Bottom of object"))
-		       :FLASHY-SCROLLING-REGION '((20 0.40s0 0.60s0)
-						  (20 0.40s0 0.60s0))
+		       :FLASHY-SCROLLING-REGION '((16. 0.40s0 0.60s0)
+						  (16. 0.40s0 0.60s0))
 		       :LABEL (LIST NIL NIL NIL NIL FONTS:HL12B "Empty"))
-  (:DOCUMENTATION :COMBINATION "Scroll window for the inspector."))
-
+  (:DOCUMENTATION "Scroll window for the inspector."))
+
 (DEFFLAVOR BASIC-INSPECT ((CURRENT-OBJECT (NCONS NIL))
 			  (CURRENT-DISPLAY NIL)
 			  ;; For list structure hacking
@@ -46,19 +44,18 @@
 			  LIST-BLINKER DOCUMENTATION-STRINGS)
 	   ()
   :SETTABLE-INSTANCE-VARIABLES
-  (:GETTABLE-INSTANCE-VARIABLES MODIFY-MODE)
   (:REQUIRED-FLAVORS MOUSE-SENSITIVE-TEXT-SCROLL-WINDOW FUNCTION-TEXT-SCROLL-WINDOW)
   (:INIT-KEYWORDS :BUTTON-DOCUMENTATION))
 
 (DEFMETHOD (BASIC-INSPECT :SENSITIVE-ITEM-P) (ITEM)
-  (LET ((MODIFYING (OR MODIFY-MODE (KEY-STATE ':HYPER))))
+  (LET ((MODIFYING (OR MODIFY-MODE (KEY-STATE :HYPER))))
     (EQ (NOT (NULL (GET (DISPLAYED-ITEM-TYPE ITEM)
 			(IF MODIFYING
 			    'SET-FUNCTION 'ONLY-WHEN-MODIFY))))
 	(NOT (NULL MODIFYING)))))
 
 (DEFMETHOD (BASIC-INSPECT :AFTER :INIT) (PLIST)
-  (LET ((DOC (OR (GET PLIST ':BUTTON-DOCUMENTATION)
+  (LET ((DOC (OR (GET PLIST :BUTTON-DOCUMENTATION)
 		 '("Right finds function definition."))))
     (SETQ DOCUMENTATION-STRINGS
 	  (LIST (STRING-APPEND "Choose a CAR to be modified.  " (OR (SECOND DOC) ""))
@@ -67,13 +64,13 @@
 				(OR (SECOND DOC) ""))
 		(STRING-APPEND "Choose a value by pointing at the value.  "
 			       (OR (FIRST DOC) "")))))
-  (SETQ LIST-BLINKER (MAKE-BLINKER SELF 'FOLLOW-LIST-STRUCTURE-BLINKER ':VISIBILITY NIL)
-	SENSITIVE-ITEM-TYPES ':SENSITIVE-ITEM-P))
+  (SETQ LIST-BLINKER (MAKE-BLINKER SELF 'FOLLOW-LIST-STRUCTURE-BLINKER :VISIBILITY NIL)
+	SENSITIVE-ITEM-TYPES :SENSITIVE-ITEM-P))
 
 (DEFMETHOD (BASIC-INSPECT :WHO-LINE-DOCUMENTATION-STRING) ()
   (LET ((STRINGS DOCUMENTATION-STRINGS))
     (OR DISPLAYING-LIST (SETQ STRINGS (CDDR STRINGS)))
-    (OR MODIFY-MODE (KEY-STATE ':HYPER)
+    (OR MODIFY-MODE (KEY-STATE :HYPER)
 	(SETQ STRINGS (CDR STRINGS)))
     (CAR STRINGS)))
 
@@ -91,46 +88,61 @@
 ;;; 5 the top item number
 ;;; 6 the label
 ;;; 7 the ITEM-GENERATOR function (for TEXT-SCROLL-WINDOW), or NIL if none.
+
+(defstruct (inspector-display-list (:type :list) (:alterant nil) (:conc-name idlist-))
+  object
+  print-function
+  print-function-arg
+  line-display-list
+  top-item-number
+  label
+  item-generator)
+(defmacro idlist-display-cruft (idlist) `(cdr ,idlist))
+
 (DEFUN INSPECT-SETUP-OBJECT-DISPLAY-LIST (OBJECT WINDOW
 					  &OPTIONAL TOP-ITEM LABEL
 					  &AUX STR)
-  (MULTIPLE-VALUE-BIND (DISPLAY-LIST ARG ALT-PRINT-FUN FIRST-TOP-ITEM OBJ-LABEL ITEM-GENERATOR)
+  (MULTIPLE-VALUE-BIND (DISPLAY-LIST ARG ALT-PRINT-FUN
+			FIRST-TOP-ITEM OBJ-LABEL ITEM-GENERATOR)
       (SEND WINDOW
-	    (COND ((TYPEP OBJECT 'STACK-FRAME) ':OBJECT-STACK-FRAME)
-		  ((NAMED-STRUCTURE-P OBJECT) ':OBJECT-NAMED-STRUCTURE)
-		  (T
-		   (SELECTQ (DATA-TYPE OBJECT)
-		     (DTP-INSTANCE ':OBJECT-INSTANCE)
-		     (DTP-ARRAY-POINTER ':OBJECT-ARRAY)
-		     (DTP-LIST ':OBJECT-LIST)
-		     (DTP-SYMBOL ':OBJECT-SYMBOL)
-		     (DTP-SELECT-METHOD ':OBJECT-SELECT-METHOD)
-		     ((DTP-CLOSURE DTP-ENTITY) ':OBJECT-CLOSURE)
-		     (DTP-FEF-POINTER ':OBJECT-FEF)
-		     (DTP-LOCATIVE ':OBJECT-LOCATIVE)
-		     (OTHERWISE ':OBJECT-OTHER))))
+	    (IF (NAMED-STRUCTURE-P OBJECT) :OBJECT-NAMED-STRUCTURE
+	      (TYPECASE OBJECT
+		(STACK-FRAME :OBJECT-STACK-FRAME)
+		(INSTANCE :OBJECT-INSTANCE)
+		(ARRAY :OBJECT-ARRAY)
+		(LIST :OBJECT-LIST)
+		(SYMBOL :OBJECT-SYMBOL)
+		(SELECT :OBJECT-SELECT-METHOD)
+		((OR CLOSURE ENTITY) :OBJECT-CLOSURE)
+		(COMPILED-FUNCTION :OBJECT-FEF)
+		(LOCATIVE :OBJECT-LOCATIVE)
+		(T :OBJECT-OTHER)))
 	    OBJECT)
-    (LIST OBJECT
-	  (OR ALT-PRINT-FUN 'INSPECT-PRINTER)
-	  ARG DISPLAY-LIST (OR TOP-ITEM FIRST-TOP-ITEM 0)
-	  (OR LABEL
-	      OBJ-LABEL
-	      (LIST NIL NIL NIL NIL (LABEL-FONT (FUNCALL WINDOW ':LABEL))
-		    (IF (CONSP OBJECT)
-			"a list"
-			(NSUBSTRING (SETQ STR (FORMAT NIL "~S~%" OBJECT))
-				    0 (STRING-SEARCH-CHAR #/CR STR)))))
-	  ITEM-GENERATOR)))
+    (make-inspector-display-list
+      :object OBJECT
+      :print-function (OR ALT-PRINT-FUN 'INSPECT-PRINTER)
+      :print-function-arg ARG
+      :line-display-list DISPLAY-LIST
+      :top-item-number (OR TOP-ITEM FIRST-TOP-ITEM 0)
+      :label (OR LABEL
+		 OBJ-LABEL
+		 (LIST NIL NIL NIL NIL
+		       (LABEL-FONT (SEND WINDOW :LABEL))
+		       (IF (CONSP OBJECT)
+			   "a list"
+			 (NSUBSTRING (SETQ STR (FORMAT NIL "~S~%" OBJECT))
+				     0 (STRING-SEARCH-CHAR #/NEWLINE STR)))))
+      :item-generator ITEM-GENERATOR)))
 
 (DEFUN INSPECT-SETUP-OBJECT (OBJECT WINDOW &OPTIONAL TOP-ITEM)
   (LET ((DISP (INSPECT-SETUP-OBJECT-DISPLAY-LIST OBJECT WINDOW TOP-ITEM)))
-    (SEND WINDOW ':SETUP (CDR DISP))
-    (SEND WINDOW ':SET-CURRENT-OBJECT (CAR DISP))
+    (SEND WINDOW :SETUP (idlist-display-cruft DISP))
+    (SEND WINDOW :SET-CURRENT-OBJECT (idlist-object DISP))
     DISP))
 
 (DEFMETHOD (BASIC-INSPECT :SETUP-OBJECT) (SL)
-  (SEND SELF ':SETUP (CDR SL))
-  (SEND SELF ':SET-CURRENT-OBJECT (CAR SL))
+  (SEND SELF :SETUP (idlist-display-cruft SL))
+  (SEND SELF :SET-CURRENT-OBJECT (idlist-object SL))
   SL)
 
 (DEFUN INSPECT-PRINTER (LINE ARG STREAM ITEM-NO)
@@ -153,15 +165,15 @@ LINE is a list of elements telling us what to print:
 	   (FORMAT STREAM "~VT" ELT))
 	  ((STRINGP ELT)
 	   (PRINC ELT STREAM))
-	  ((NLISTP ELT)
+	  ((ATOM ELT)
 	   (FERROR NIL "Unknown element type: ~S" ELT))
 	  ((STRINGP (CAR ELT))
-	   (APPLY 'FORMAT STREAM ELT))
+	   (APPLY #'FORMAT STREAM ELT))
 	  (T
-	   (SELECTQ (FIRST ELT)
+	   (CASE (FIRST ELT)
 	     (:FUNCTION (APPLY (SECOND ELT) ARG STREAM ITEM-NO (CDDR ELT)))
 	     (:COLON (FORMAT STREAM ":~VT " (SECOND ELT)))
-	     (:ITEM1 (SEND STREAM ':ITEM1 ELT (SECOND ELT)
+	     (:ITEM1 (SEND STREAM :ITEM1 ELT (SECOND ELT)
 			   #'(LAMBDA (ELT &REST ARGS)
 			       (APPLY (OR (FOURTH ELT) 'PRINT-ITEM-CONCISELY)
 				      (THIRD ELT) ARGS))))
@@ -176,21 +188,21 @@ LINE is a list of elements telling us what to print:
 	  (:ITEM1 NAMED-STRUCTURE-SYMBOL ,NSS))
 	RESULT)
   (PUSH '("") RESULT)
-  (COND ((SETQ D (GET NSS 'SI:DEFSTRUCT-DESCRIPTION))
-	 (SETQ ALIST (SI:DEFSTRUCT-DESCRIPTION-SLOT-ALIST D))
-	 (DO L ALIST (CDR L) (NULL L)
-	     (SETQ MAXL (MAX (FLATSIZE (CAAR L)) MAXL)))
+  (COND ((SETQ D (GET NSS 'SI::DEFSTRUCT-DESCRIPTION))
+	 (SETQ ALIST (SI::DEFSTRUCT-DESCRIPTION-SLOT-ALIST D))
+	 (DO ((L ALIST (CDR L))) ((NULL L))
+	   (SETQ MAXL (MAX (FLATSIZE (CAAR L)) MAXL)))
 	 ;; For a named structure, each line contains the name and the value
 	 (DO L ALIST (CDR L) (NULL L)
 	     (PUSH `((:ITEM1 NAMED-STRUCTURE-SLOT ,(CAAR L))
 		     (:COLON ,(+ 2 MAXL))
 		     (:ITEM1 NAMED-STRUCTURE-VALUE
 			,(CATCH-ERROR
-			   (FUNCALL (SI:DEFSTRUCT-SLOT-DESCRIPTION-REF-MACRO-NAME (CDAR L))
+			   (FUNCALL (SI::DEFSTRUCT-SLOT-DESCRIPTION-REF-MACRO-NAME (CDAR L))
 				    OBJ)
 			   NIL)))
 		   RESULT)))
-	((SETQ DEFSTRUCT-ITEMS (GET NSS 'SI:DEFSTRUCT-ITEMS))
+	((SETQ DEFSTRUCT-ITEMS (GET NSS 'SI::DEFSTRUCT-ITEMS))
 	 (DOLIST (ELT DEFSTRUCT-ITEMS)
 	   (SETQ MAXL (MAX (FLATSIZE ELT) MAXL)))
 	 ;; For a named structure, each line contains the name and the value
@@ -201,30 +213,30 @@ LINE is a list of elements telling us what to print:
 		 RESULT))))
   (IF (AND (ARRAYP OBJ)
 	   (ARRAY-HAS-LEADER-P OBJ))
-      (SEND SELF ':OBJECT-ARRAY OBJ NIL (NREVERSE RESULT))
+      (SEND SELF :OBJECT-ARRAY OBJ NIL (NREVERSE RESULT))
     (VALUES (NREVERSE RESULT) OBJ 'INSPECT-PRINTER)))
 
-(DEFUN (NAMED-STRUCTURE-SLOT SET-FUNCTION) (ITEM NEW-VALUE OBJECT
-					    &AUX (SLOTNAME (THIRD (SECOND ITEM)))
-						 (REFMAC SLOTNAME)
-						 TEM)
-  (AND (SETQ TEM (GET (NAMED-STRUCTURE-P OBJECT) 'SI:DEFSTRUCT-DESCRIPTION))
-       (SETQ TEM (ASSQ SLOTNAME (SI:DEFSTRUCT-DESCRIPTION-SLOT-ALIST TEM)))
-       (SETQ REFMAC (SI:DEFSTRUCT-SLOT-DESCRIPTION-REF-MACRO-NAME (CDR TEM))))
+(DEFUN (:PROPERTY NAMED-STRUCTURE-SLOT SET-FUNCTION) (ITEM NEW-VALUE OBJECT
+						      &AUX (SLOTNAME (THIRD (SECOND ITEM)))
+						      (REFMAC SLOTNAME)
+						      TEM)
+  (AND (SETQ TEM (GET (NAMED-STRUCTURE-P OBJECT) 'SI::DEFSTRUCT-DESCRIPTION))
+       (SETQ TEM (ASSQ SLOTNAME (SI::DEFSTRUCT-DESCRIPTION-SLOT-ALIST TEM)))
+       (SETQ REFMAC (SI::DEFSTRUCT-SLOT-DESCRIPTION-REF-MACRO-NAME (CDR TEM))))
   (EVAL `(SETF (,REFMAC ',OBJECT) ',NEW-VALUE)))
 
 (DEFPROP NAMED-STRUCTURE-SLOT T ONLY-WHEN-MODIFY)
 
 
 (DEFMETHOD (BASIC-INSPECT :OBJECT-INSTANCE) (OBJ &AUX (MAXL -1) RESULT FLAVOR)
-  (SETQ FLAVOR (SI:INSTANCE-FLAVOR OBJ))
+  (SETQ FLAVOR (SI::INSTANCE-FLAVOR OBJ))
   (OR (TYPEP FLAVOR 'SI:FLAVOR) (SETQ FLAVOR NIL))
   (SETQ RESULT (LIST '("")
 		     `("An object of flavor "
-		       (:ITEM1 FLAVOR ,(TYPEP OBJ))
+		       (:ITEM1 flavor ,flavor ,#'(lambda (f s) (prin1 (si::flavor-name f) s)))
 		       ".  Function is "
 		       (:ITEM1 FLAVOR-FUNCTION
-			,(SI:INSTANCE-FUNCTION OBJ)))))
+			       ,(SI::INSTANCE-FUNCTION OBJ)))))
   (LET ((IVARS (IF FLAVOR (SI:FLAVOR-ALL-INSTANCE-VARIABLES FLAVOR)
 		   (%P-CONTENTS-OFFSET (%P-CONTENTS-AS-LOCATIVE-OFFSET OBJ 0)
 				       %INSTANCE-DESCRIPTOR-BINDINGS))))
@@ -245,55 +257,72 @@ LINE is a list of elements telling us what to print:
 	    RESULT)))
   (NREVERSE RESULT))
 
-(DEFUN (INSTANCE-SLOT SET-FUNCTION) (ITEM NEW-VALUE OBJECT)
-  (LET* ((SLOT (THIRD (SECOND ITEM)))
-	 (MESSAGE-NAME (INTERN (STRING-APPEND "SET-" SLOT) "")))
+(DEFUN (:PROPERTY INSTANCE-SLOT SET-FUNCTION) (ITEM NEW-VALUE OBJECT)
+  (LET* ((SLOT (THIRD (SECOND ITEM))))
     (IF (GET-HANDLER-FOR MESSAGE-NAME OBJECT)
-	(CATCH-ERROR (SEND OBJECT MESSAGE-NAME NEW-VALUE) T)
-	(SET-IN-INSTANCE OBJECT SLOT NEW-VALUE))))
+	(CATCH-ERROR (SEND OBJECT :SET (INTERN SLOT SI:PKG-KEYWORD-PACKAGE) NEW-VALUE) T)
+      (SET-IN-INSTANCE OBJECT SLOT NEW-VALUE))))
 
 (DEFPROP INSTANCE-SLOT T ONLY-WHEN-MODIFY)
 
 
-(DEFMETHOD (BASIC-INSPECT :OBJECT-CLOSURE) (OBJ &AUX RESULT (C (%MAKE-POINTER DTP-LIST OBJ)))
-  (SETQ RESULT `("Function is "
-		 (:ITEM1 CLOSURE-FUNCTION ,(INSPECT-FUNCTION-FROM (CAR C)))))
-  (COND ((ENTITYP OBJ)
-	 (PUSH '(".  ") RESULT)
-	 (PUSH `(:ITEM1 TYPE ,(TYPEP OBJ)) RESULT)
-	 (PUSH '("An object of type ") RESULT)))
-  (SETQ RESULT (LIST '("") RESULT))
-  (LET ((SYM NIL)
-	(MAXL -1))
-    (DO L (CDR C) (CDDR L) (NULL L)
-	(SETQ SYM (%FIND-STRUCTURE-HEADER (CAR L)))
-	(SETQ MAXL (MAX (FLATSIZE SYM) MAXL)))
-    (DO L (CDR C) (CDDR L) (NULL L)
-	(SETQ SYM (%FIND-STRUCTURE-HEADER (CAR L)))
-	(PUSH `((:ITEM1 CLOSURE-SLOT ,SYM)
-		(:COLON ,(+ 2 MAXL))
-		,(IF (= (%P-DATA-TYPE (CADR L)) DTP-NULL)
-		     "void"
-		     `(:ITEM1 CLOSURE-VALUE ,(CAADR L))))
-	      RESULT))
-    (NREVERSE RESULT)))
-
 (DEFUN INSPECT-FUNCTION-FROM (FROM)
   (DO-FOREVER
     (COND ((SYMBOLP FROM)
-	   (AND (NOT (FBOUNDP FROM))
-		(RETURN FROM))
-	   (SETQ FROM (FSYMEVAL FROM)))
+	   (UNLESS (FBOUNDP FROM)
+	     (RETURN FROM))
+	   (SETQ FROM (SYMBOL-VALUE FROM)))
 	  (T (RETURN FROM)))))
 
-(DEFUN (CLOSURE-SLOT SET-FUNCTION) (ITEM NEW-VALUE OBJECT)
-  (LET* ((SLOT (THIRD (SECOND ITEM)))
-	 (MESSAGE-NAME (INTERN (STRING-APPEND "SET-" SLOT) "")))
-    (IF (GET-HANDLER-FOR MESSAGE-NAME OBJECT)
-	(CATCH-ERROR (SEND OBJECT MESSAGE-NAME NEW-VALUE) T)
-	(SET-IN-CLOSURE OBJECT SLOT NEW-VALUE))))
+(DEFMETHOD (BASIC-INSPECT :OBJECT-CLOSURE) (OBJ &AUX RESULT)
+  (SETQ RESULT `("Function is "
+		 (:ITEM1 CLOSURE-FUNCTION ,(INSPECT-FUNCTION-FROM (closure-function obj)))))
+  (WHEN (ENTITYP OBJ)
+    (PUSH '(".  ") RESULT)
+    (PUSH `(:ITEM1 TYPE ,(TYPEP OBJ)) RESULT)
+    (PUSH '("An object of type ") RESULT))
+  (SETQ RESULT (LIST '("") RESULT))
+  (let ((bindings (closure-bindings obj)))
+    (case (length bindings)
+      (0 (push '(("(No bindings. Pretty dull closure, eh?)")) result))
+      (1 (push '(("Lexical slots")) result)
+	 (loop for x in (caar bindings)
+	       for i from 0
+	       do (push `((:item1 closure-slot ,i ,#'(lambda (i s) (format s "~2D" i)))
+			  (:colon 4)
+			  (:item1 closure-value ,x))
+			result)))
+      (t (LET ((MAXL (loop for x in bindings by 'cddr
+			   as h = (%find-structure-header x)
+			   maximize (if (symbolp h)
+					(case (%pointer-difference x h)
+					  ((0 3 4) 0)			;name plist package
+					  (1 (flatsize h))		;value
+					  (t (+  2 (flatsize h))))	;function
+				      0))))
+	   (loop for (x y) on bindings by 'cddr
+		 do (push `((:item1 closure-slot ,x
+				    ,#'(lambda (x s &aux (h (%find-structure-header x)))
+					 (if (symbolp h)
+					     (format s "~[Pname of ~;~;#'~;~
+							Plist of ~;Package of ~]~S"
+						     (%pointer-difference x h) h)
+					   (prin1 x s))))
+			    (:COLON ,(+ 4 MAXL))
+			    ,(IF (location-boundp y)
+				 `(:ITEM1 CLOSURE-VALUE ,(contents y))
+			         "void"))
+			  result))))))
+    (NREVERSE RESULT))
 
-(DEFPROP CLOSURE-SLOT T ONLY-WHEN-MODIFY)
+(DEFUN (:PROPERTY CLOSURE-SLOT SET-FUNCTION) (ITEM NEW-VALUE OBJECT)
+  (LET ((SLOT (THIRD (SECOND ITEM)))
+	(bindings (closure-bindings object)))
+    (if (fixnump slot)				;lexiclosure
+	(setf (nth slot (caar bindings)) new-value)
+      (with-stack-list (s slot)
+	(setf (contents (cadr (getl bindings s))) new-value)))))
+;(DEFPROP CLOSURE-SLOT T ONLY-WHEN-MODIFY)
 
 
 (DEFMETHOD (BASIC-INSPECT :OBJECT-SELECT-METHOD) (SM &AUX (RESULT NIL))
@@ -319,26 +348,26 @@ LINE is a list of elements telling us what to print:
 	  (SETQ K KWDS)
 	  (SETQ KWDS NIL))		
       (PUSH `((:ITEM1 SELECT-METHOD-KEYWORD ,K)
-	      ,(LIST ':COLON 0)
+	      ,(LIST :COLON 0)
 	      (:ITEM1 SELECT-METHOD-FUNCTION ,(CDAR S)))
 	      RESULT)
       (SETQ MAXL (MAX MAXL (FLATSIZE K))))))
 
-(DEFUN (SELECT-METHOD-TAIL-POINTER SET-FUNCTION) (IGNORE NEW-VALUE SM)
-  (RPLACD (LAST (%MAKE-POINTER DTP-LIST SM)) NEW-VALUE))
+(DEFUN (:PROPERTY SELECT-METHOD-TAIL-POINTER SET-FUNCTION) (IGNORE NEW-VALUE SM)
+  (SETF (CDR (LAST (%MAKE-POINTER DTP-LIST SM))) NEW-VALUE))
 
 (DEFPROP SELECT-METHOD-TAIL-POINTER T ONLY-WHEN-MODIFY)
 
-(DEFUN (SELECT-METHOD-KEYWORD SET-FUNCTION) (ITEM NEW-VALUE SM)
+(DEFUN (:PROPERTY SELECT-METHOD-KEYWORD SET-FUNCTION) (ITEM NEW-VALUE SM)
   (SETQ SM (%MAKE-POINTER DTP-LIST SM)
 	ITEM (THIRD (SECOND ITEM)))
   (DO ((S SM (CDR S)))
       ((SYMBOLP S))
-    (COND ((IF (SYMBOLP (CAAR S))
-	       (EQ (CAAR S) ITEM)
-	       (MEMQ ITEM (CAAR S)))
-	   (SETF (CDAR S) NEW-VALUE)
-	   (RETURN)))))
+    (WHEN (IF (SYMBOLP (CAAR S))
+	      (EQ (CAAR S) ITEM)
+	    (MEMQ ITEM (CAAR S)))
+      (SETF (CDAR S) NEW-VALUE)
+      (RETURN))))
 
 (DEFPROP SELECT-METHOD-KEYWORD T ONLY-WHEN-MODIFY)
 
@@ -346,29 +375,29 @@ LINE is a list of elements telling us what to print:
 (DEFMETHOD (BASIC-INSPECT :OBJECT-SYMBOL) (OBJ)
   `(((:ITEM1 SYMBOL-VALUE-CELL "Value is " PRINC)
      ,(IF (BOUNDP OBJ)
-	  `(:ITEM1 SYMBOL-VALUE ,(SYMEVAL OBJ))
+	  `(:ITEM1 SYMBOL-VALUE ,(SYMBOL-VALUE OBJ))
 	  "void"))
     ((:ITEM1 SYMBOL-FUNCTION-CELL "Function is " PRINC)
      ,(IF (FBOUNDP OBJ)
-	  `(:ITEM1 SYMBOL-FUNCTION ,(FSYMEVAL OBJ))
+	  `(:ITEM1 SYMBOL-FUNCTION ,(SYMBOL-VALUE OBJ))
 	  "void"))
     ((:ITEM1 SYMBOL-PROPERTY-CELL "Property list: " PRINC)
      (:ITEM1 SYMBOL-PROPERTY-LIST ,(PLIST OBJ)))
     ("Package: "
      (:ITEM1 SYMBOL-PACKAGE ,(CAR (PACKAGE-CELL-LOCATION OBJ))))))
 
-(DEFUN (SYMBOL-VALUE-CELL SET-FUNCTION) (IGNORE NEW-VALUE OBJECT)
-  (SET OBJECT NEW-VALUE))
+(DEFUN (:PROPERTY SYMBOL-VALUE-CELL SET-FUNCTION) (IGNORE NEW-VALUE OBJECT)
+  (SETF (SYMBOL-VALUE OBJECT) NEW-VALUE))
 
 (DEFPROP SYMBOL-VALUE-CELL T ONLY-WHEN-MODIFY)
 
-(DEFUN (SYMBOL-FUNCTION-CELL SET-FUNCTION) (IGNORE NEW-VALUE OBJECT)
-  (FSET OBJECT NEW-VALUE))
+(DEFUN (:PROPERTY SYMBOL-FUNCTION-CELL SET-FUNCTION) (IGNORE NEW-VALUE OBJECT)
+  (SETF (SYMBOL-FUNCTION OBJECT) NEW-VALUE))
 
 (DEFPROP SYMBOL-FUNCTION-CELL T ONLY-WHEN-MODIFY)
 
-(DEFUN (SYMBOL-PROPERTY-CELL SET-FUNCTION) (IGNORE NEW-VALUE OBJECT)
-  (SETPLIST OBJECT NEW-VALUE))
+(DEFUN (:PROPERTY SYMBOL-PROPERTY-CELL SET-FUNCTION) (IGNORE NEW-VALUE OBJECT)
+  (SETF (PLIST OBJECT) NEW-VALUE))
 
 (DEFPROP SYMBOL-PROPERTY-CELL T ONLY-WHEN-MODIFY)
 
@@ -380,16 +409,15 @@ LINE is a list of elements telling us what to print:
   (LET* ((RP (SG-REGULAR-PDL (STACK-FRAME-SG SF)))
 	 (AP (STACK-FRAME-AP SF))
 	 (FUNCTION (RP-FUNCTION-WORD RP AP)))
-    (COND ((CONSP FUNCTION)
-	   (SEND SELF ':OBJECT-LIST FUNCTION))
-	  ((EQ (%DATA-TYPE FUNCTION) DTP-FEF-POINTER)
-	   (FEF-DISPLAY-LIST FUNCTION SELF (RP-EXIT-PC RP AP)
-			     (STACK-FRAME-FUNCTION-NAME SF))))))
+    (TYPECASE FUNCTION
+      (CONS (SEND SELF :OBJECT-LIST FUNCTION))
+      (COMPILED-FUNCTION
+       (FEF-DISPLAY-LIST FUNCTION SELF (RP-EXIT-PC RP AP) (STACK-FRAME-FUNCTION-NAME SF))))))
 
 (DEFUN FEF-DISPLAY-LIST (FEF WINDOW &OPTIONAL PC-NOW LABEL &AUX LIST PC-IDX)
   (DO ((I 0 (1+ I))
        (PC (FEF-INITIAL-PC FEF) (+ PC (COMPILER:DISASSEMBLE-INSTRUCTION-LENGTH FEF PC)))
-       (LIM-PC (COMPILER:DISASSEMBLE-LIM-PC FEF)))
+       (LIM-PC (COMPILER::DISASSEMBLE-LIM-PC FEF)))
       (( PC LIM-PC)
        (COND ((EQ PC PC-NOW)			;PC off the end
 	      (SETQ PC-IDX I)
@@ -408,17 +436,20 @@ LINE is a list of elements telling us what to print:
 (DEFUN PRINT-FEF-INSTRUCTION (PC FEF-AND-PC-IDX *STANDARD-OUTPUT* ITEM-NO
 			      &AUX (FEF (FIRST FEF-AND-PC-IDX))
 				   (PC-IDX (SECOND FEF-AND-PC-IDX)))
-  (SEND *STANDARD-OUTPUT* ':STRING-OUT (IF (EQ ITEM-NO PC-IDX) "=> " "   "))
-  (LET ((COMPILER:DISASSEMBLE-OBJECT-OUTPUT-FUN
+  (SEND *STANDARD-OUTPUT* :STRING-OUT (IF (EQ ITEM-NO PC-IDX) "=> " "   "))
+  (LET ((COMPILER::DISASSEMBLE-OBJECT-OUTPUT-FUN
 	 #'(LAMBDA (OBJ PREFIX LOC FUN-P)
-	     (SEND *STANDARD-OUTPUT* ':ITEM1 (LIST OBJ LOC)
-		   (IF FUN-P 'FEF-FUNCTION 'FEF-CONSTANT)
-		   'PRINT-FEF-CONSTANT PREFIX))))
-    (AND (NUMBERP PC) (COMPILER:DISASSEMBLE-INSTRUCTION FEF PC))))
+	     (IF ( (%P-DATA-TYPE LOC) DTP-SELF-REF-POINTER)
+		 (SEND *STANDARD-OUTPUT* :ITEM1 (LIST OBJ LOC)
+		       (IF FUN-P 'FEF-FUNCTION 'FEF-CONSTANT)
+		       'PRINT-FEF-CONSTANT PREFIX)
+	       (PRINC PREFIX *STANDARD-OUTPUT*)
+	       (PRIN1 OBJ *STANDARD-OUTPUT*)))))
+    (AND (NUMBERP PC) (COMPILER::DISASSEMBLE-INSTRUCTION FEF PC))))
 
 (DEFUN PRINT-FEF-CONSTANT (ITEM STREAM PREFIX)
   (PRINC PREFIX STREAM)
-  (SEND STREAM ':ITEM1 (FIRST ITEM) ':VALUE 'PRINT-ITEM-CONCISELY))
+  (SEND STREAM :ITEM1 (FIRST ITEM) :VALUE 'PRINT-ITEM-CONCISELY))
 
 (DEFPROP FEF-CONSTANT T ONLY-WHEN-MODIFY)
 
@@ -453,7 +484,7 @@ LINE is a list of elements telling us what to print:
 							START-XPOS END-XPOS MAX-X)
   (SETQ MAX-X (SHEET-INSIDE-RIGHT SHEET))
   (MULTIPLE-VALUE-BIND (ITEM-ARRAY TOP-ITEM BOTTOM-ITEM CHARW LINEH IL IT)
-      (SEND SHEET ':LIST-BLINKER-INFO)
+      (SEND SHEET :LIST-BLINKER-INFO)
     (SETQ ITEM (THIRD LIST-ITEM)
 	  START-XPOS (1- (SECOND LIST-ITEM))
 	  END-ITEM (FIFTH LIST-ITEM)
@@ -482,7 +513,7 @@ LINE is a list of elements telling us what to print:
 	     (%DRAW-LINE LAST-RIGHT-X (1+ Y)
 			 LAST-RIGHT-X (+ Y (1- LINEH))
 			 ALU-XOR T SHEET)))
-      (SETQ Y (+ Y LINEH))
+      (INCF Y LINEH)
       ;; If we just handled the side-bars for the last item, return
       (AND (OR (= ITEM END-ITEM) ( ITEM (1- BOTTOM-ITEM)))
 	   (RETURN))
@@ -514,15 +545,18 @@ LINE is a list of elements telling us what to print:
 		     ALU-XOR T SHEET))))
 
 (DEFMETHOD (FOLLOW-LIST-STRUCTURE-BLINKER :SIZE) ()
-  (PROG () (RETURN (SHEET-INSIDE-WIDTH SHEET) (SHEET-INSIDE-HEIGHT SHEET))))
+  (VALUES (SHEET-INSIDE-WIDTH SHEET)
+	  (SHEET-INSIDE-HEIGHT SHEET)))
 
 
 (DEFMETHOD (BASIC-INSPECT :LIST-BLINKER-INFO) ()
-  (PROG ()
-    (RETURN ITEMS
-	    TOP-ITEM (+ TOP-ITEM (SHEET-NUMBER-OF-INSIDE-LINES))
-	    CHAR-WIDTH LINE-HEIGHT
-	    (SHEET-INSIDE-LEFT) (SHEET-INSIDE-TOP))))
+  (VALUES ITEMS
+	  TOP-ITEM
+	  (+ TOP-ITEM (SHEET-NUMBER-OF-INSIDE-LINES))
+	  CHAR-WIDTH
+	  LINE-HEIGHT
+	  (SHEET-INSIDE-LEFT)
+	  (SHEET-INSIDE-TOP)))
 
 (DEFMETHOD (BASIC-INSPECT :AFTER :CHANGE-OF-SIZE-OR-MARGINS) (&REST IGNORE)
   (AND DISPLAYING-LIST
@@ -532,11 +566,11 @@ LINE is a list of elements telling us what to print:
 (DEFMETHOD (BASIC-INSPECT :MOUSE-MOVES) (X Y &AUX ITEM TYPE LEFT TOP BWIDTH BHEIGHT)
   (MOUSE-SET-BLINKER-CURSORPOS)
   (MULTIPLE-VALUE (ITEM TYPE LEFT BWIDTH TOP)
-    (SEND SELF ':MOUSE-SENSITIVE-ITEM X Y))
+    (SEND SELF :MOUSE-SENSITIVE-ITEM X Y))
   (COND ((MEMQ TYPE '(:LIST-STRUCTURE :LIST-STRUCTURE-TOP-LEVEL))
 	 (BLINKER-SET-VISIBILITY ITEM-BLINKER NIL)
 	 ;; LEFT, BWIDTH, TOP are invalid
-	 (SEND LIST-BLINKER ':SET-LIST-ITEM ITEM)
+	 (SEND LIST-BLINKER :SET-LIST-ITEM ITEM)
 	 (BLINKER-SET-VISIBILITY LIST-BLINKER T))
 	(TYPE
 	 (BLINKER-SET-VISIBILITY LIST-BLINKER NIL)
@@ -550,55 +584,81 @@ LINE is a list of elements telling us what to print:
 	   (BLINKER-SET-VISIBILITY ITEM-BLINKER NIL))))
 
 (DEFMETHOD (BASIC-INSPECT :MOUSE-SENSITIVE-ITEM) (X Y)
-  (PROG FOUND-ITEM (LILN)
-	(MULTIPLE-VALUE-BIND (ITEM TYPE LEFT BWIDTH TOP)
-	    (MOUSE-SENSITIVE-ITEM X Y)
-	  (COND (ITEM (RETURN-FROM FOUND-ITEM ITEM TYPE LEFT BWIDTH TOP))
-		((NOT DISPLAYING-LIST))
-		((AND ( Y (SHEET-INSIDE-TOP))
-		      (< Y (SHEET-INSIDE-BOTTOM)))
-		 ;; No explicit item on this line -- find list structure if it exists
-		 (LET ((LINE-NO (+ TOP-ITEM (SHEET-LINE-NO NIL Y))))
-		   ;; Starting from this line, work backwards until an enclosing
-		   ;; piece of structure is found
-		   (OR ( LINE-NO (ARRAY-ACTIVE-LENGTH ITEMS))
-		       (DOLIST (LI (FIRST (AREF ITEMS LINE-NO)))
-			 (AND (COND ((= LINE-NO (SETQ LILN (THIRD LI)))
-				     ;; Entry starts on this line -- within range on right?
-				     ( X (SECOND LI)))
-				    ((> LINE-NO LILN)
-				     ;; Entry starts on some previous line -- so we are ok
-				     T))
-			      (COND ((= LINE-NO (SETQ LILN (FIFTH LI)))
-				     ;; Entry ends on this line, within range on left?
-				     (< X (FOURTH LI)))
-				    ((< LINE-NO LILN)
-				     ;; Entry starts before -- so this is good
-				     T))
-			      (RETURN-FROM FOUND-ITEM
-				(IF (AND (OR MODIFY-MODE (KEY-STATE ':HYPER))
-					 (EQ (FIRST LI) ':TOP-LEVEL))
-				    NIL
-				  (VALUES LI
-					  (IF (EQ (FIRST LI) ':TOP-LEVEL)
-					      ':LIST-STRUCTURE-TOP-LEVEL
-					    ':LIST-STRUCTURE)))))))))))))
+  (BLOCK FOUND-ITEM
+    (PROG (LILN)
+	  (MULTIPLE-VALUE-BIND (ITEM TYPE LEFT BWIDTH TOP)
+	      (MOUSE-SENSITIVE-ITEM X Y)
+	    (COND (ITEM (RETURN-FROM FOUND-ITEM ITEM TYPE LEFT BWIDTH TOP))
+		  ((NOT DISPLAYING-LIST))
+		  ((AND ( Y (SHEET-INSIDE-TOP))
+			(< Y (SHEET-INSIDE-BOTTOM)))
+		   ;; No explicit item on this line -- find list structure if it exists
+		   (LET ((LINE-NO (+ TOP-ITEM (SHEET-LINE-NO NIL Y))))
+		     ;; Starting from this line, work backwards until an enclosing
+		     ;; piece of structure is found
+		     (OR ( LINE-NO (ARRAY-ACTIVE-LENGTH ITEMS))
+			 (DOLIST (LI (FIRST (AREF ITEMS LINE-NO)))
+			   (AND (COND ((= LINE-NO (SETQ LILN (THIRD LI)))
+				       ;; Entry starts on this line -- within range on right?
+				       ( X (SECOND LI)))
+				      ((> LINE-NO LILN)
+				       ;; Entry starts on some previous line -- so we are ok
+				       T))
+				(COND ((= LINE-NO (SETQ LILN (FIFTH LI)))
+				       ;; Entry ends on this line, within range on left?
+				       (< X (FOURTH LI)))
+				      ((< LINE-NO LILN)
+				       ;; Entry starts before -- so this is good
+				       T))
+				(RETURN-FROM FOUND-ITEM
+				  (IF (AND (OR MODIFY-MODE (KEY-STATE :HYPER))
+					   (EQ (FIRST LI) :TOP-LEVEL))
+				      NIL
+				    (VALUES LI
+					    (IF (EQ (FIRST LI) :TOP-LEVEL)
+						:LIST-STRUCTURE-TOP-LEVEL
+					        :LIST-STRUCTURE))))))))))))))
 
 (DEFMETHOD (BASIC-INSPECT :OBJECT-OTHER) (OB) OB NIL)
 
-(DEFMETHOD (BASIC-INSPECT :OBJECT-LOCATIVE) (LOC)
-  (SEND SELF ':OBJECT-LIST (LIST (CAR LOC))))
+(defun print-pointer (locative stream)
+  (format stream "#<~S ~O>"
+	  (or (q-data-types (%p-data-type locative)) (%p-data-type locative))
+	  (%pointer locative)))
+
+(defmethod (basic-inspect :object-locative) (obj)
+  `(((:item1 locative-cell "Contents : " princ)
+     ,(if (%p-contents-safe-p obj)
+	  `(:item1 locative-contents ,(contents obj))
+	(print-pointer obj nil)))
+    (" Offset " ,(format nil "~D" (%pointer-difference obj (%find-structure-header obj)))
+     " into "
+     (:item1 ,(data-type (%find-structure-header obj)) ,(%find-structure-header obj)))
+    ("%P-Cdr-Code : " ,(symbol-name (nth (%p-cdr-code obj) sys:q-cdr-codes)))
+    ("%P-Data-Type: " ,(symbol-name (q-data-types (%p-data-type obj))))
+    ("Area        : " ,(format nil "~O, ~S"
+			       (%area-number obj) (area-name (%area-number obj))))))
+(defun (:property locative-cell set-function) (ignore new-value object)
+  (setf (contents object) new-value))
+(defprop locative-cell t only-when-modify)
 
 (DEFCONST INSPECT-PRINLEVEL 8
   "This value of *PRINT-LEVEL* is used while grinding lists in INSPECT.")
-(DEFCONST INSPECT-PRINLENGTH 1000
+(DEFCONST INSPECT-PRINLENGTH 300.
   "This value of *PRINT-LENGTH* is used while grinding lists in INSPECT.")
 
 (DEFMETHOD (BASIC-INSPECT :OBJECT-LIST) (LIST)
   (MULTIPLE-VALUE-BIND (STRING-LIST ATOMIC-ITEMS LIST-ITEMS)
       (LET ((*PRINT-LENGTH* INSPECT-PRINLENGTH)
 	    (*PRINT-LEVEL* INSPECT-PRINLEVEL))
-	(GRIND-INTO-LIST LIST (TRUNCATE (SHEET-INSIDE-WIDTH) CHAR-WIDTH) T))
+	(condition-bind (((sys:cell-contents-error)
+			  #'(lambda (cond)
+			      (values :new-value
+				      (format nil "#<~S ~O>"
+					      (or (q-data-types (send cond :data-type))
+						  (send cond :data-type))
+					      (%pointer (send cond :address)))))))
+	  (GRIND-INTO-LIST LIST (TRUNCATE (SHEET-INSIDE-WIDTH) CHAR-WIDTH) T)))
     ;; Turn STRING-LIST into a list of elements, one for each line, of the form
     ;; (NIL contents-string atom-item-list line-contains-lozenged-characters-p).
     (DO ((L STRING-LIST (CDR L))
@@ -606,7 +666,7 @@ LINE is a list of elements telling us what to print:
 	((NULL L))
       (LET ((LOZENGED-CHARACTERS
 	      (DOTIMES (I (STRING-LENGTH (CAR L)))
-		(IF ( (AREF (CAR L) I) #o200)
+		(IF ( (CHAR (CAR L) I) #o200)
 		    (RETURN T)))))
 	;; Convert the start and end indices for each atom-item from characters to pixels.
 	;; If this line contains no lozenged characters,
@@ -620,7 +680,7 @@ LINE is a list of elements telling us what to print:
 			      (IF LOZENGED-CHARACTERS
 				  (SHEET-STRING-LENGTH SELF (CAR L) 0 (FOURTH I))
 				(* (FOURTH I) CHAR-WIDTH)))))
-	(RPLACA L (LIST NIL (CAR L) (CAR AIS) LOZENGED-CHARACTERS))))
+	(SETF (CAR L) (LIST NIL (CAR L) (CAR AIS) LOZENGED-CHARACTERS))))
     ;; Convert the starting and ending hpos of each list-item from characters to pixels
     ;; Must find the line which the start or end appears on
     ;; and see whether that line had any lozenged characters
@@ -650,8 +710,8 @@ LINE is a list of elements telling us what to print:
 	  ((OR (NULL CURRENT)
 	       ( (THIRD (CAR CURRENT)) LINE)))
 	(SETQ CURRENT (CDR CURRENT)))
-      (RPLACA (CAR (NTHCDR LINE STRING-LIST)) CURRENT))
-    (PROG () (RETURN STRING-LIST ':LIST-STRUCTURE 'INSPECT-LIST-PRINTER))))
+      (SETF (CAAR (NTHCDR LINE STRING-LIST)) CURRENT))
+    (VALUES STRING-LIST :LIST-STRUCTURE 'INSPECT-LIST-PRINTER)))
 
 (DEFMETHOD (BASIC-INSPECT :BEFORE :SETUP) (SL)
   (SETQ CURRENT-DISPLAY SL
@@ -659,29 +719,33 @@ LINE is a list of elements telling us what to print:
   (BLINKER-SET-VISIBILITY LIST-BLINKER NIL))
 
 (DEFMETHOD (BASIC-INSPECT :AFTER :SETUP) (NEW-SETUP)
-  (SETQ DISPLAYING-LIST (EQ (SECOND NEW-SETUP) ':LIST-STRUCTURE)))
+  (SETQ DISPLAYING-LIST (EQ (SECOND NEW-SETUP) :LIST-STRUCTURE)))
 
 (DEFMETHOD (BASIC-INSPECT :AFTER :HANDLE-MOUSE) (&REST IGNORE)
   (BLINKER-SET-VISIBILITY LIST-BLINKER NIL))
 
-(DECLARE-FLAVOR-INSTANCE-VARIABLES (BASIC-INSPECT)
 (DEFUN INSPECT-LIST-PRINTER (ITEM IGNORE STREAM ITEM-NO)
-  (ASET (THIRD ITEM) DISPLAYED-ITEMS (- ITEM-NO TOP-ITEM))
-  (SEND STREAM ':STRING-OUT (SECOND ITEM))))
+  (DECLARE (:SELF-FLAVOR BASIC-INSPECT))
+  (SETF (AREF DISPLAYED-ITEMS (- ITEM-NO TOP-ITEM)) (THIRD ITEM))
+  (SEND STREAM :STRING-OUT (SECOND ITEM)))
 
-(DEFUN (:LIST-STRUCTURE SET-FUNCTION) (ITEM NEW-VALUE IGNORE)
-  (RPLACA (FIRST (SECOND ITEM)) NEW-VALUE))
+(DEFUN (:PROPERTY :LIST-STRUCTURE SET-FUNCTION) (ITEM NEW-VALUE IGNORE)
+  (SETF (CAR (FIRST (SECOND ITEM))) NEW-VALUE))
 
-(DEFUN (:LOCATIVE SET-FUNCTION) (ITEM NEW-VALUE IGNORE)
-  (RPLACD (SECOND ITEM) NEW-VALUE))
+(DEFUN (:PROPERTY :LOCATIVE SET-FUNCTION) (ITEM NEW-VALUE IGNORE)
+  (SETF (CONTENTS (SECOND ITEM)) NEW-VALUE))
 
 ;;;; Array hacking
 
 ;;; Values are (DISPLAY-LIST ARG ALT-PRINT-FUN FIRST-TOP-ITEM OBJ-LABEL ITEM-GENERATOR)
 (DEFMETHOD (BASIC-INSPECT :OBJECT-ARRAY) (OBJ &OPTIONAL (MENTION-LEADER T) INITIAL-ITEMS)
   (SETQ INITIAL-ITEMS (APPEND INITIAL-ITEMS '((""))))
-  (VALUES NIL (LIST OBJ MENTION-LEADER INITIAL-ITEMS) 'INSPECT-ARRAY-PRINTER
-	  0 NIL 'INSPECT-ARRAY-ITEM-GENERATOR))
+  (VALUES NIL
+	  (LIST OBJ MENTION-LEADER INITIAL-ITEMS)
+	  'INSPECT-ARRAY-PRINTER
+	  0
+	  NIL
+	  'INSPECT-ARRAY-ITEM-GENERATOR))
 
 ;;; This is the item-generator function for displaying an array;
 ;;; Our item-list is effectively a list of consecutive integers;
@@ -719,52 +783,47 @@ LINE is a list of elements telling us what to print:
   (COND ((NOT (NUMBERP ITEM))
 	 (INSPECT-PRINTER ITEM OBJ STREAM ITEM-NUMBER))
 	((< ITEM LEADER-LENGTH-TO-MENTION)
-	 (SEND STREAM ':ITEM1 ITEM 'LEADER-SLOT
-	       #'(LAMBDA (ITEM STREAM)
-		   (FORMAT STREAM "Leader ~D" ITEM)))
+	 (SEND STREAM :ITEM1 ITEM 'LEADER-SLOT #'(LAMBDA (ITEM STREAM)
+						   (FORMAT STREAM "Leader ~D" ITEM)))
 	 (FORMAT STREAM ":~12T ")
-	 (SEND STREAM ':ITEM1 (ARRAY-LEADER OBJ ITEM) ':VALUE 'PRINT-ITEM-CONCISELY))
+	 (if (%p-contents-safe-p (locf (array-leader obj item)))
+	     (send stream :item1 (array-leader obj item) :value 'print-item-concisely)
+	   (print-pointer (locf (array-leader obj item)) stream)))
 	(T
 	 (LET ((ITEM (- ITEM LEADER-LENGTH-TO-MENTION))
 	       (RANK (ARRAY-RANK OBJ))
 	       INDICES)
 	   (OR (= RANK 1) (SETQ INDICES (ARRAY-INDICES-FROM-INDEX OBJ ITEM)))
-	   (SEND STREAM ':ITEM1 (CONS ITEM (IF (= RANK 1) ITEM INDICES)) 'ARRAY-SLOT
+	   (SEND STREAM :ITEM1 (CONS ITEM (IF (= RANK 1) ITEM INDICES)) 'ARRAY-SLOT
 		 #'(LAMBDA (DATUM STREAM)
 		     (FORMAT STREAM "Elt ~D" (CDR DATUM))))
 	   (FORMAT STREAM ":~9T ")
 	   (IF (OR (CDR (ASSQ (ARRAY-TYPE OBJ) ARRAY-BITS-PER-ELEMENT))
-		   (%P-CONTENTS-SAFE-P (AP-1-FORCE OBJ ITEM)))
+		   (%P-CONTENTS-SAFE-P (LOCF (CLI:AR-1-FORCE OBJ ITEM))))
 	       ;; Deal with data types that are objects, and with numeric arrays.
-	       (SEND STREAM
-		     ':ITEM1 (AR-1-FORCE OBJ ITEM)
-		     ':VALUE 'PRINT-ITEM-CONCISELY)
+	       (SEND STREAM :ITEM1 (cli:ar-1-force obj item)	;yes, I really mean cli:
+			    :VALUE 'PRINT-ITEM-CONCISELY)
 	     ;; Deal with data types that aren't really objects.
-	     (FORMAT STREAM "#<~A ~O>"
-		     (OR (NTH (%P-DATA-TYPE (AP-1-FORCE OBJ ITEM)) Q-DATA-TYPES)
-			 (%P-DATA-TYPE (AP-1-FORCE OBJ ITEM)))
-		     (%P-POINTER (AP-1-FORCE OBJ ITEM))))))))
+	     (print-pointer (locf (cli:ar-1-force obj item)) stream))))))
 
-(DEFUN (LEADER-SLOT SET-FUNCTION) (ITEM NEW-VALUE OBJECT)
-  (STORE-ARRAY-LEADER NEW-VALUE OBJECT (SECOND ITEM)))
+(DEFUN (:PROPERTY LEADER-SLOT SET-FUNCTION) (ITEM NEW-VALUE OBJECT)
+  (SETF (ARRAY-LEADER OBJECT (SECOND ITEM)) NEW-VALUE))
 
 (DEFPROP LEADER-SLOT T ONLY-WHEN-MODIFY)
 
-(DEFUN ARRAY-INDICES-FROM-INDEX (ARRAY INDEX)
+(defun array-indices-from-index (array index)
   "Given a single INDEX into ARRAY, compute the equivalent set of indices.
 The value is a list whose elements could be used with AREF and ARRAY,
 and be equivalent to (AR-1-FORCE ARRAY INDEX)."
-  (LET* ((DIMS (ARRAY-DIMENSIONS ARRAY))
-	 (INDEX1 INDEX)
-	 (INDICES (MAKE-LIST (LENGTH DIMS))))
-    (DO ((I INDICES (CDR I))
-	 (D DIMS (CDR D)))
-	((NULL D))
-      (SETF (CAR I) (\ INDEX1 (CAR D)))
-      (SETQ INDEX1 (TRUNCATE INDEX1 (CAR D))))
-    INDICES))
+  (let ((indicies ())
+	(index1 index))
+    (do ((i (1- (array-rank array)) (1- i)))
+	((< i 0) indicies)
+      ;; row-major-order!
+      (push (\ index1 (array-dimension array i)) indicies)
+      (setq index1 (truncate index1 (array-dimension array i))))))
 
-(DEFUN (ARRAY-SLOT SET-FUNCTION) (ITEM NEW-VALUE OBJECT)
+(DEFUN (:PROPERTY ARRAY-SLOT SET-FUNCTION) (ITEM NEW-VALUE OBJECT)
   (SETF (AR-1-FORCE OBJECT (CAR (SECOND ITEM))) NEW-VALUE))
 
 (DEFPROP ARRAY-SLOT T ONLY-WHEN-MODIFY)
@@ -773,20 +832,18 @@ and be equivalent to (AR-1-FORCE ARRAY INDEX)."
 (DEFFLAVOR INSPECT-HISTORY-WINDOW ((CACHE NIL))
 	   (LINE-AREA-TEXT-SCROLL-MIXIN
 	    FUNCTION-TEXT-SCROLL-WINDOW
-	    BASIC-SCROLL-BAR	;outside borders for thermometer effect
+	    BASIC-SCROLL-BAR			;outside borders for thermometer effect
 	    MOUSE-SENSITIVE-TEXT-SCROLL-WINDOW
 	    FLASHY-SCROLLING-MIXIN BORDERS-MIXIN
 	    MARGIN-REGION-MIXIN
 	    ANY-TYI-MIXIN WINDOW)
   :SETTABLE-INSTANCE-VARIABLES
-  :GETTABLE-INSTANCE-VARIABLES
   (:DEFAULT-INIT-PLIST :LABEL NIL
-    		       :FLASHY-SCROLLING-REGION '((20 0.40s0 0.60s0)
-						  (20 0.40s0 0.60s0))
-		       :LINE-AREA-WIDTH 24
+    		       :FLASHY-SCROLLING-REGION '((16. 0.40s0 0.60s0)
+						  (16. 0.40s0 0.60s0))
+		       :LINE-AREA-WIDTH 18.
 		       :SCROLL-BAR-ALWAYS-DISPLAYED T)
-  (:DOCUMENTATION :COMBINATION
-		  "History window for the inspector, but no margin scroll region"))
+  (:DOCUMENTATION "History window for the inspector, but no margin scroll region"))
 
 (DEFFLAVOR INSPECT-HISTORY-WINDOW-WITH-MARGIN-SCROLLING
 	()
@@ -805,33 +862,33 @@ and be equivalent to (AR-1-FORCE ARRAY INDEX)."
 						     &OPTIONAL TOP-ITEM-NO -LABEL-
 						               DONT-PROPOGATE)
   ;; First, remember current TOP-ITEM of inspector
-  (LET ((DISP (SEND INSPECTOR ':CURRENT-DISPLAY)))
+  (LET ((DISP (SEND INSPECTOR :CURRENT-DISPLAY)))
     (AND DISP
-	 (SETF (FOURTH DISP) (SEND INSPECTOR ':TOP-ITEM)))
+	 (SETF (FOURTH DISP) (SEND INSPECTOR :TOP-ITEM)))
     (OR (DOTIMES (I (ARRAY-ACTIVE-LENGTH ITEMS))
 	  (COND ((NEQ OBJECT (AREF ITEMS I)))
 		(DONT-PROPOGATE (RETURN T))
-		(T (SEND SELF ':DELETE-ITEM I)
+		(T (SEND SELF :DELETE-ITEM I)
 		   (RETURN NIL))))
-	(SEND SELF ':APPEND-ITEM OBJECT))
-    (SEND SELF ':PUT-ITEM-IN-WINDOW OBJECT)
+	(SEND SELF :APPEND-ITEM OBJECT))
+    (SEND SELF :PUT-ITEM-IN-WINDOW OBJECT)
     (LET ((CE (ASSQ OBJECT CACHE)))
       (OR CE
-	  (PUSH (SETQ CE
-		      (INSPECT-SETUP-OBJECT-DISPLAY-LIST OBJECT INSPECTOR TOP-ITEM-NO -LABEL-))
+	  (PUSH (SETQ CE (INSPECT-SETUP-OBJECT-DISPLAY-LIST
+			   OBJECT INSPECTOR TOP-ITEM-NO -LABEL-))
 		CACHE))
       (OR (EQ (CDR CE) DISP)
-	  (SEND INSPECTOR ':SETUP-OBJECT CE)))))
+	  (SEND INSPECTOR :SETUP-OBJECT CE)))))
 
 (DEFMETHOD (INSPECT-HISTORY-WINDOW :FLUSH-OBJECT) (OBJ)
-  (SEND SELF ':FLUSH-OBJECT-FROM-CACHE OBJ)
+  (SEND SELF :FLUSH-OBJECT-FROM-CACHE OBJ)
   (DOTIMES (I (ARRAY-ACTIVE-LENGTH ITEMS))
     (AND (EQ OBJ (AREF ITEMS I))
-	 (RETURN (SEND SELF ':DELETE-ITEM I)))))
+	 (RETURN (SEND SELF :DELETE-ITEM I)))))
 
 (DEFMETHOD (INSPECT-HISTORY-WINDOW :AFTER :INIT) (IGNORE)
   (SETQ PRINT-FUNCTION #'(LAMBDA (LINE IGNORE STREAM IGNORE)
-			   (SEND STREAM ':ITEM1 LINE ':VALUE 'PRINT-ITEM-CONCISELY))
+			   (SEND STREAM :ITEM1 LINE :VALUE 'PRINT-ITEM-CONCISELY))
 	PRINT-FUNCTION-ARG NIL))
 
 (DEFMETHOD (INSPECT-HISTORY-WINDOW :FLUSH-OBJECT-FROM-CACHE) (OBJECT)
@@ -840,11 +897,11 @@ and be equivalent to (AR-1-FORCE ARRAY INDEX)."
 (DEFMETHOD (INSPECT-HISTORY-WINDOW :FLUSH-CONTENTS) ()
   (SETQ CACHE NIL
 	TOP-ITEM 0)
-  (STORE-ARRAY-LEADER 0 ITEMS 0)
+  (SETF (FILL-POINTER ITEMS) 0)
   (FILLARRAY DISPLAYED-ITEMS '(NIL))
-  (SEND SELF ':NEW-SCROLL-POSITION)
+  (SEND SELF :NEW-SCROLL-POSITION)
   (SHEET-FORCE-ACCESS (SELF :NO-PREPARE)
-    (SEND SELF ':CLEAR-SCREEN)))
+    (SEND SELF :CLEAR-SCREEN)))
 
 (DEFFLAVOR INSPECT-HISTORY-PANE () (INSPECT-HISTORY-WINDOW)
   :ALIAS-FLAVOR)
@@ -878,7 +935,7 @@ and be equivalent to (AR-1-FORCE ARRAY INDEX)."
 	    FRAME-DONT-SELECT-INFERIORS-WITH-MOUSE-MIXIN
 	    BASIC-CONSTRAINT-FRAME CONSTRAINT-FRAME-FORWARDING-MIXIN
 	    BORDERS-MIXIN LABEL-MIXIN BASIC-FRAME)
-  (:DEFAULT-INIT-PLIST :SAVE-BITS ':DELAYED :PROCESS '(INSPECT-TOP-LEVEL))
+  (:DEFAULT-INIT-PLIST :SAVE-BITS :DELAYED :PROCESS '(INSPECT-TOP-LEVEL))
   :GETTABLE-INSTANCE-VARIABLES
   (:INITABLE-INSTANCE-VARIABLES MENU)
   (:INIT-KEYWORDS :NUMBER-OF-INSPECTORS))
@@ -900,7 +957,7 @@ and be equivalent to (AR-1-FORCE ARRAY INDEX)."
   "Menu item-alist for the menu in the INSPECT frame.")
 
 (DEFMETHOD (INSPECT-FRAME :BEFORE :INIT) (PLIST &AUX IO-BUFFER)
-  (LET ((NOI (OR (GET PLIST ':NUMBER-OF-INSPECTORS) 3))
+  (LET ((NOI (OR (GET PLIST :NUMBER-OF-INSPECTORS) 3))
 	(NAMES NIL))
     (SETQ IO-BUFFER (MAKE-DEFAULT-IO-BUFFER))
     (SETQ PANES (LIST `(INTERACTOR INTERACTION-PANE :LABEL NIL
@@ -938,12 +995,12 @@ and be equivalent to (AR-1-FORCE ARRAY INDEX)."
 				  ((,(CAR NAMES) :EVEN))))))))
 
 (DEFMETHOD (INSPECT-FRAME :AFTER :INIT) (IGNORE &AUX INT)
-  (SEND SELF ':SELECT-PANE (SETQ INT (SEND SELF ':GET-PANE 'INTERACTOR)))
+  (SEND SELF :SELECT-PANE (SETQ INT (SEND SELF :GET-PANE 'INTERACTOR)))
   (DO ((IS INSPECTORS (CDR IS)))
       ((NULL IS))
-    (RPLACA IS (SEND SELF ':GET-PANE (CAR IS))))
-  (SETQ TYPEOUT-WINDOW (SEND (CAR INSPECTORS) ':TYPEOUT-WINDOW))
-  (SEND TYPEOUT-WINDOW ':SET-IO-BUFFER (SEND INT ':IO-BUFFER)))
+    (RPLACA IS (SEND SELF :GET-PANE (CAR IS))))
+  (SETQ TYPEOUT-WINDOW (SEND (CAR INSPECTORS) :TYPEOUT-WINDOW))
+  (SEND TYPEOUT-WINDOW :SET-IO-BUFFER (SEND INT :IO-BUFFER)))
 
 (DEFMETHOD (INSPECT-FRAME :NAME-FOR-SELECTION) () NAME)
 
@@ -951,22 +1008,22 @@ and be equivalent to (AR-1-FORCE ARRAY INDEX)."
 ;;; tell it about an initial object to inspect,
 ;;; This message is only sent to inspectors from the resource, by INSPECT.
 (DEFMETHOD (INSPECT-FRAME :PREPARE-FOR-USE) (OBJECT NEW-LABEL)
-  (SEND SELF ':SET-LABEL NEW-LABEL)
-  (LET ((HW (SEND SELF ':GET-PANE 'HISTORY)))
+  (SEND SELF :SET-LABEL NEW-LABEL)
+  (LET ((HW (SEND SELF :GET-PANE 'HISTORY)))
     (COND (OBJECT
 	   (WITH-SHEET-DEEXPOSED (SELF)
-	     (SEND HW ':FLUSH-CONTENTS)
-	     (SEND HW ':APPEND-ITEM OBJECT)
-	     (DOLIST (IW (SEND SELF ':INSPECTORS))
-	       (SEND IW ':SET-CURRENT-DISPLAY
-		     (SEND IW ':SETUP
+	     (SEND HW :FLUSH-CONTENTS)
+	     (SEND HW :APPEND-ITEM OBJECT)
+	     (DOLIST (IW (SEND SELF :INSPECTORS))
+	       (SEND IW :SET-CURRENT-DISPLAY
+		     (SEND IW :SETUP
 			   `(INSPECT-PRINTER NIL NIL NIL
 					     (NIL NIL NIL NIL
-						  ,(LABEL-FONT (SEND IW ':LABEL))
+						  ,(LABEL-FONT (SEND IW :LABEL))
 						  "Empty"))))
-	       (SEND IW ':SET-CURRENT-OBJECT (NCONS NIL))))))
-    (SEND (SEND SELF ':TYPEOUT-WINDOW) ':MAKE-COMPLETE)
-    (SEND HW ':CLEAR-INPUT)))
+	       (SEND IW :SET-CURRENT-OBJECT (NCONS NIL))))))
+    (SEND (SEND SELF :TYPEOUT-WINDOW) :MAKE-COMPLETE)
+    (SEND HW :CLEAR-INPUT)))
 
 (COMPILE-FLAVOR-METHODS INSPECT-FRAME INTERACTION-PANE
 			INSPECT-HISTORY-WINDOW INSPECT-HISTORY-WINDOW-WITH-MARGIN-SCROLLING
@@ -980,8 +1037,8 @@ The inspector runs in this process, so our special variable bindings are visible
 If you type End in the inspector, the last value inspected
 will be returned from the function INSPECT."
   (LET ((IFRAME (ALLOCATE-RESOURCE 'INSPECT-FRAME-RESOURCE DEFAULT-SCREEN)))
-    (SEND IFRAME ':PREPARE-FOR-USE OBJECT (FORMAT NIL "Inspector for ~A"
-						  (SEND CURRENT-PROCESS ':NAME)))
+    (SEND IFRAME :PREPARE-FOR-USE OBJECT
+	  	 (FORMAT NIL "Inspector for ~A" (SEND CURRENT-PROCESS :NAME)))
     (WINDOW-CALL (IFRAME :DEACTIVATE)
       (INSPECT-COMMAND-LOOP IFRAME))))
 
@@ -996,204 +1053,213 @@ will be returned from the function INSPECT."
   (DO-FOREVER 
     (ERROR-RESTART ((SYS:ABORT ERROR) "Return to inspector command level.")
       (INSPECT-COMMAND-LOOP FRAME))
-    (SEND FRAME ':BURY)))
+    (SEND FRAME :BURY)))
 
 ;;; The inspector top-level
 (DEFUN INSPECT-COMMAND-LOOP (FRAME &AUX USER IS HISTORY)
-  (SEND (SETQ USER (SEND FRAME ':GET-PANE 'INTERACTOR)) ':CLEAR-SCREEN)
-  (SEND (CAR (SETQ IS (SEND FRAME ':INSPECTORS))) ':FLUSH-TYPEOUT)
-  (SEND USER ':SET-OLD-TYPEAHEAD NIL)
-  (SETQ HISTORY (SEND FRAME ':GET-PANE 'HISTORY))
+  (SEND (SETQ USER (SEND FRAME :GET-PANE 'INTERACTOR)) :CLEAR-SCREEN)
+  (SEND (CAR (SETQ IS (SEND FRAME :INSPECTORS))) :FLUSH-TYPEOUT)
+  (SEND USER :SET-OLD-TYPEAHEAD NIL)
+  (SETQ HISTORY (SEND FRAME :GET-PANE 'HISTORY))
   ;; Flush remnants of modify mode
-  (SEND HISTORY ':SET-SENSITIVE-ITEM-TYPES T)
+  (SEND HISTORY :SET-SENSITIVE-ITEM-TYPES T)
   (DOLIST (I IS)
-    (SEND I ':SET-MODIFY-MODE NIL))
-  (LET* ((TYPEOUT-WINDOW (SEND FRAME ':TYPEOUT-WINDOW))
+    (SEND I :SET-MODIFY-MODE NIL))
+  (LET* ((TYPEOUT-WINDOW (SEND FRAME :TYPEOUT-WINDOW))
 	 (*TERMINAL-IO* TYPEOUT-WINDOW)
 	 * ** *** + ++ +++ \
-	 *PRINT-ARRAY*
+	 (*PRINT-ARRAY* NIL)
 	 (*STANDARD-INPUT* SI:SYN-TERMINAL-IO)
 	 (*STANDARD-OUTPUT* SI:SYN-TERMINAL-IO)
 	 (TV:KBD-INTERCEPTED-CHARACTERS
+; character lossage
 	   (REMOVE (ASSQ #/BREAK TV:KBD-INTERCEPTED-CHARACTERS)
 		   TV:KBD-INTERCEPTED-CHARACTERS))
 	 (THING) (TOP-ITEM))
     (DECLARE (SPECIAL \))
-    (DO-NAMED INSPECTOR ()
-	      (())
-      (LET ((ITEMS (SEND HISTORY ':ITEMS))
-	    (IW)
-	    (IDX))
-	(SETQ IDX (ARRAY-ACTIVE-LENGTH ITEMS))
-	;; Make sure the inspection windows reflect the state of the history buffer
-	(DOLIST (I IS)
-	  ;; Update datastructure to reflect current TOP-ITEMs
-	  (LET ((DISP (SEND I ':CURRENT-DISPLAY)))
-	    (AND DISP (SETF (FOURTH DISP) (SEND I ':TOP-ITEM)))))
-	(DOTIMES (I (LENGTH IS))
-	  (SETQ IDX (1- IDX))
-	  (SETQ IW (NTH I IS))
-	  (COND ((< IDX 0)
-		 (SEND IW ':SET-CURRENT-DISPLAY
-		       (SEND IW ':SETUP
-			     `(INSPECT-PRINTER NIL NIL NIL
-					       (NIL NIL NIL NIL
-							  ,(LABEL-FONT (SEND IW ':LABEL))
-							  "Empty"))))
-		 (SEND IW ':SET-CURRENT-OBJECT (NCONS NIL)))
-		(T (SEND HISTORY ':INSPECT-OBJECT (AREF ITEMS IDX) IW TOP-ITEM NIL T)
-		   (SETQ TOP-ITEM NIL)))))
-      
-      ;; Insure last item in history is on the screen
-      (SEND HISTORY ':PUT-LAST-ITEM-IN-WINDOW)
-      
-      ;; Give *, ** and *** the right values.
-      (SETQ *PRINT-ARRAY* NIL)
-      (LET* ((ITEMS (SEND HISTORY ':ITEMS))
-	     (NITEMS (IF ITEMS (ARRAY-ACTIVE-LENGTH ITEMS) 0)))
-	(AND ( NITEMS 1) (SETQ * (AREF ITEMS (- NITEMS 1))))
-	(AND ( NITEMS 2) (SETQ ** (AREF ITEMS (- NITEMS 2))))
-	(AND ( NITEMS 3) (SETQ *** (AREF ITEMS (- NITEMS 3)))))
-      
-      ;; Get input.
-      ;; Keyboard commands are processed inside this loop.
-      ;; Mouse commands exit the loop and go round the outer loop.
+    (BLOCK INSPECTOR
       (DO-FOREVER
-	(SETQ THING -1)
-	(SEND (CAR IS) ':FLUSH-TYPEOUT)
-	(SEND FRAME ':SELECT-PANE USER)
-	(SEND USER ':FRESH-LINE)
-	(OR (SEND USER ':OLD-TYPEAHEAD)
-	    (SETQ THING (SEND USER ':ANY-TYI)))
-	(UNLESS (NUMBERP THING)
-	  ;; Some sort of mouse command, just process
-	  (RETURN))
-	(SELECTQ THING
-	  ((#/C-Z #/ABORT)
-	   (SIGNAL EH:ABORT-OBJECT))
-	  (#/C-V
-	   (SEND (CAR IS) ':SCROLL-TO
-		 (- (TV:SHEET-NUMBER-OF-INSIDE-LINES (CAR IS)) 2)
-		 ':RELATIVE))
-	  (#/M-V
-	   (SEND (CAR IS) ':SCROLL-TO
-		 (- 2 (TV:SHEET-NUMBER-OF-INSIDE-LINES (CAR IS)))
-		 ':RELATIVE))
-	  (#/BREAK
-	   (SEND FRAME ':SELECT-PANE (CAR IS))
-	   (SEND *TERMINAL-IO* ':EXPOSE-FOR-TYPEOUT)
-	   (CATCH-ERROR-RESTART ((SYS:ABORT ERROR) "Return to inspector command loop.")
-	     (BREAK 'INSPECT))
-	   (SEND *TERMINAL-IO* ':MAKE-COMPLETE))
-	  ;; Clear-Screen decaches.
-	  (#/CLEAR-SCREEN
-	   (SEND HISTORY ':SET-CACHE NIL)
-	   (SEND FRAME ':CLEAR-SCREEN)
-	   (SEND FRAME ':REFRESH ':COMPLETE-REDISPLAY))
-	  ;; End returns *.
-	  (#/END
-	   (RETURN-FROM INSPECTOR *))
-	  (#/HELP
-	   (INSPECT-HELP)
-	   (FORMAT *TERMINAL-IO* "~%Type any character to continue:")
-	   (LET ((CH (SEND USER ':ANY-TYI)))
-	     (OR (= CH #/SP)
-		 (SEND USER ':UNTYI CH))))
-	  (#/DELETE
-	   (RETURN (SEND HISTORY ':FLUSH-CONTENTS)))
-	  ;;set \
-	  (#/C-\
-	   (FORMAT USER "~&Value to set \ to ")
-	   (MULTIPLE-VALUE-BIND (VALUE PUNT-P)
-	       (INSPECT-GET-VALUE-FROM-USER USER)
-	     (OR PUNT-P (SETQ \ VALUE))))
-	  (#/RUBOUT)
-	  (#/QUOTE
-	   (LET ((*TERMINAL-IO* USER)
-		 FLAG)
-	     (FORMAT USER "Eval: ")
-	     (MULTIPLE-VALUE (THING FLAG)
-	       (SEND USER ':RUBOUT-HANDLER
-			'((:FULL-RUBOUT :FULL-RUBOUT) (:ACTIVATION = #/END))
-			'SI:READ-FOR-TOP-LEVEL))
-	     (COND ((NEQ FLAG ':FULL-RUBOUT)
-		    (SETQ +++ ++ ++ + + THING)
-		    (MULTIPLE-VALUE (THING FLAG) (CATCH-ERROR (EVAL THING)))
-		    (OR FLAG
-			(LET ((*PRINT-LEVEL* 3) (*PRINT-LENGTH* 5))
-			  (PRINT THING USER)))))))
-	  (OTHERWISE
-	   (LET ((*TERMINAL-IO* USER)
-		 FLAG)
-	     (AND ( THING 0) (SEND USER ':UNTYI THING))
-	     (MULTIPLE-VALUE (THING FLAG)
-	       (SEND USER ':PREEMPTABLE-READ
-		     '((:FULL-RUBOUT :FULL-RUBOUT) (:ACTIVATION = #/END))
-		     'SI:READ-FOR-TOP-LEVEL))
-	     (COND ((EQ FLAG ':MOUSE-CHAR) (RETURN))
-		   ((NEQ FLAG ':FULL-RUBOUT)
-		    (SETQ +++ ++ ++ + + THING)
-		    (MULTIPLE-VALUE (THING FLAG) (CATCH-ERROR (EVAL THING)))
-		    (OR FLAG
-			(RETURN (SETQ THING `(:VALUE ,THING ,HISTORY))))))))))
-      (CATCH-ERROR-RESTART (SYS:ABORT "Return to inspector command loop.")
-	(COND
-	  ((NLISTP THING))
-	  ((EQ (CAR THING) ':MOUSE-BUTTON))	;random rodentry
-	  ((EQ (CAR THING) ':MENU)
-	   (SETF (SECOND THING) (SEND (FOURTH THING) ':EXECUTE (SECOND THING)))
-	   (SELECTQ (SECOND THING)
-	     (:EXIT (RETURN *))
-	     (:RETURN
-	      (FORMAT USER "~&Value to return ")
-	      (MULTIPLE-VALUE-BIND (VALUE PUNT-P)
-		  (INSPECT-GET-VALUE-FROM-USER USER)
-		(OR PUNT-P (RETURN VALUE))))
-	     (:FLUSH-CACHE
-	      (SEND HISTORY ':SET-CACHE NIL))
-	     (:MODIFY
-	      (SETQ TOP-ITEM (INSPECT-MODIFY-OBJECT USER HISTORY IS)))
-	     (:CLEAR
-	      (SEND HISTORY ':FLUSH-CONTENTS))
-	     (:SET-\
-	      (FORMAT USER "~&Value to set \ to ")
-	      (MULTIPLE-VALUE-BIND (VALUE PUNT-P)
-		  (INSPECT-GET-VALUE-FROM-USER USER)
-		(OR PUNT-P (SETQ \ VALUE))))
-	     (OTHERWISE (FORMAT USER "~&Unimplemented menu command ~A~%" (SECOND THING)))))
-	  (T
-	   (COND ((NULL (FIRST THING))
-		  ;; Type is NIL -- nothing under mouse
-		  (BEEP))
-		 ((AND (EQ (FIRST THING) ':LINE-AREA) (EQ (FOURTH THING) #/MOUSE-2-1))
-		  ;; Delete from line area
-		  (SEND HISTORY ':FLUSH-OBJECT (INSPECT-REAL-VALUE THING)))
-		 ((AND (EQ (FOURTH THING) #/MOUSE-2-1)
-		       (MEMQ (THIRD THING) IS))
-		  ;; Middle click means leave source in one of the windows
-		  (LET ((1ST-THING (INSPECT-REAL-VALUE THING))
-			(2ND-THING (SEND (THIRD THING) ':CURRENT-OBJECT)))
-		    ;; First flush item we will be inspecting
-		    (INSPECT-FLUSH-FROM-HISTORY 1ST-THING HISTORY)
-		    (INSPECT-FLUSH-FROM-HISTORY 2ND-THING HISTORY)
-		    (SEND HISTORY ':APPEND-ITEM 2ND-THING)
-		    (SEND HISTORY ':APPEND-ITEM 1ST-THING)))
-		 ((EQ (FOURTH THING) #/MOUSE-3-1)
-		  ;; Click on right button -- try to find function
-		  (SETQ THING (INSPECT-FIND-FUNCTION (INSPECT-REAL-VALUE THING)))
-		  (INSPECT-FLUSH-FROM-HISTORY THING HISTORY)
-		  (SEND HISTORY ':APPEND-ITEM THING))
-		 ((CHAR-BIT (FOURTH THING) ':HYPER)
-		  ;; HYPER means modify the slot we are pointing at.
-		  (LET ((*TERMINAL-IO* (THIRD THING)))
-		    (IF (OR (NULL (FIRST THING)) (NULL (GET (FIRST THING) 'SET-FUNCTION)))
-			(FORMAT *TERMINAL-IO* "~&Cannot set this component.")
-		      (INSPECT-SET-SLOT THING HISTORY USER))))
-		 (T
-		  ;; Otherwise inspect the thing we are pointing at.
-		  (SETQ THING (INSPECT-REAL-VALUE THING))
-		  (INSPECT-FLUSH-FROM-HISTORY THING HISTORY)
-		  (SEND HISTORY ':APPEND-ITEM THING)))))))))
+	(LET ((ITEMS (SEND HISTORY :ITEMS))
+	      (IW)
+	      (IDX))
+	  (SETQ IDX (ARRAY-ACTIVE-LENGTH ITEMS))
+	  ;; Make sure the inspection windows reflect the state of the history buffer
+	  (DOLIST (I IS)
+	    ;; Update datastructure to reflect current TOP-ITEMs
+	    (LET ((DISP (SEND I :CURRENT-DISPLAY)))
+	      (AND DISP (SETF (FOURTH DISP) (SEND I :TOP-ITEM)))))
+	  (DOTIMES (I (LENGTH IS))
+	    (SETQ IDX (1- IDX))
+	    (SETQ IW (NTH I IS))
+	    (COND ((< IDX 0)
+		   (SEND IW :SET-CURRENT-DISPLAY
+			 (SEND IW :SETUP
+			       `(INSPECT-PRINTER NIL NIL NIL
+						 (NIL NIL NIL NIL
+							    ,(LABEL-FONT (SEND IW :LABEL))
+							    "Empty"))))
+		   (SEND IW :SET-CURRENT-OBJECT (NCONS NIL)))
+		  (T (SEND HISTORY :INSPECT-OBJECT (AREF ITEMS IDX) IW TOP-ITEM NIL T)
+		     (SETQ TOP-ITEM NIL)))))
+	
+	;; Insure last item in history is on the screen
+	(SEND HISTORY :PUT-LAST-ITEM-IN-WINDOW)
+	
+	;; Give *, ** and *** the right values.
+	(SETQ *PRINT-ARRAY* NIL)
+	(LET* ((ITEMS (SEND HISTORY :ITEMS))
+	       (NITEMS (IF ITEMS (ARRAY-ACTIVE-LENGTH ITEMS) 0)))
+	  (AND ( NITEMS 1) (SETQ * (AREF ITEMS (- NITEMS 1))))
+	  (AND ( NITEMS 2) (SETQ ** (AREF ITEMS (- NITEMS 2))))
+	  (AND ( NITEMS 3) (SETQ *** (AREF ITEMS (- NITEMS 3)))))
+	
+	;; Get input.
+	;; Keyboard commands are processed inside this loop.
+	;; Mouse commands exit the loop and go round the outer loop.
+	(DO-FOREVER
+	  (SETQ THING -1)
+	  (SEND (CAR IS) :FLUSH-TYPEOUT)
+	  (SEND FRAME :SELECT-PANE USER)
+	  (SEND USER :FRESH-LINE)
+	  (OR (SEND USER :OLD-TYPEAHEAD)
+	      (SETQ THING (SEND USER :ANY-TYI)))
+	  (TYPECASE THING
+; character lossage
+	    (CHARACTER (SETQ THING (CHAR-INT THING)))
+	    (FIXNUM)
+	    ;; Some sort of mouse command, just process
+	    (T (RETURN)))
+	  (CASE THING
+	    ((#/C-Z #/ABORT)
+	     (SIGNAL EH:ABORT-OBJECT))
+	    (#/C-V
+	     (SEND (CAR IS) :SCROLL-TO
+		   (- (TV:SHEET-NUMBER-OF-INSIDE-LINES (CAR IS)) 2)
+		   :RELATIVE))
+	    (#/M-V
+	     (SEND (CAR IS) :SCROLL-TO
+		   (- 2 (TV:SHEET-NUMBER-OF-INSIDE-LINES (CAR IS)))
+		   :RELATIVE))
+	    (#/BREAK
+	     (SEND FRAME :SELECT-PANE (CAR IS))
+	     (SEND *TERMINAL-IO* :EXPOSE-FOR-TYPEOUT)
+	     (CATCH-ERROR-RESTART ((SYS:ABORT ERROR) "Return to inspector command loop.")
+	       (BREAK 'INSPECT))
+	     (SEND *TERMINAL-IO* :MAKE-COMPLETE))
+	    ;; Clear-Screen decaches.
+	    (#/CLEAR-SCREEN
+	     (SEND HISTORY :SET-CACHE NIL)
+	     (SEND FRAME :CLEAR-SCREEN)
+	     (SEND FRAME :REFRESH :COMPLETE-REDISPLAY))
+	    ;; End returns *.
+	    (#/END
+	     (RETURN-FROM INSPECTOR *))
+	    (#/HELP
+	     (INSPECT-HELP)
+	     (FORMAT *TERMINAL-IO* "~%Type any character to continue:")
+	     (LET ((CH (SEND USER :ANY-TYI)))
+	       (OR (= CH #/SP)
+		   (SEND USER :UNTYI CH))))
+	    (#/DELETE
+	     (RETURN (SEND HISTORY :FLUSH-CONTENTS)))
+	    ;;set \
+	    (#/C-\
+	     (FORMAT USER "~&Value to set \ to ")
+	     (MULTIPLE-VALUE-BIND (VALUE PUNT-P)
+		 (INSPECT-GET-VALUE-FROM-USER USER)
+	       (OR PUNT-P (SETQ \ VALUE))))
+	    (#/RUBOUT)
+	    (#/QUOTE
+	     (LET ((*TERMINAL-IO* USER)
+		   FLAG)
+	       (FORMAT USER "Eval: ")
+	       (MULTIPLE-VALUE-SETQ (THING FLAG)
+		 (SEND USER :RUBOUT-HANDLER
+			  '((:FULL-RUBOUT :FULL-RUBOUT) (:ACTIVATION = #/END))
+			  'SI:READ-FOR-TOP-LEVEL))
+	       (UNLESS (EQ FLAG :FULL-RUBOUT)
+		 (SETQ +++ ++ ++ + + THING)
+		 (MULTIPLE-VALUE-SETQ (THING FLAG)
+		   (CATCH-ERROR (SI:EVAL-SPECIAL-OK THING)))
+		 (OR FLAG
+		     (LET ((*PRINT-LEVEL* 3) (*PRINT-LENGTH* 5))
+		       (PRINT THING USER))))))
+	    (OTHERWISE
+	     (LET ((*TERMINAL-IO* USER)
+		   FLAG)
+	       (AND ( THING 0) (SEND USER :UNTYI THING))
+	       (MULTIPLE-VALUE (THING FLAG)
+		 (SEND USER :PREEMPTABLE-READ
+		       '((:FULL-RUBOUT :FULL-RUBOUT) (:ACTIVATION = #/END))
+		       'SI:READ-FOR-TOP-LEVEL))
+	       (COND ((EQ FLAG :MOUSE-CHAR) (RETURN))
+		     ((NEQ FLAG :FULL-RUBOUT)
+		      (SETQ +++ ++ ++ + + THING)
+		      (MULTIPLE-VALUE-SETQ (THING FLAG)
+			(CATCH-ERROR (SI:EVAL-SPECIAL-OK THING)))
+		      (OR FLAG
+			  (RETURN (SETQ THING `(:VALUE ,THING ,HISTORY))))))))))
+	(CATCH-ERROR-RESTART (SYS:ABORT "Return to inspector command loop.")
+	  (COND
+	    ((ATOM THING))
+	    ((EQ (CAR THING) :MOUSE-BUTTON))	;random rodentry
+	    ((EQ (CAR THING) :MENU)
+	     (SETF (SECOND THING) (SEND (FOURTH THING) :EXECUTE (SECOND THING)))
+	     (CASE (SECOND THING)
+	       (:EXIT (RETURN *))
+	       (:RETURN
+		(FORMAT USER "~&Value to return ")
+		(MULTIPLE-VALUE-BIND (VALUE PUNT-P)
+		    (INSPECT-GET-VALUE-FROM-USER USER)
+		  (OR PUNT-P (RETURN VALUE))))
+	       (:FLUSH-CACHE
+		(SEND HISTORY :SET-CACHE NIL))
+	       (:MODIFY
+		(SETQ TOP-ITEM (INSPECT-MODIFY-OBJECT USER HISTORY IS)))
+	       (:CLEAR
+		(SEND HISTORY :FLUSH-CONTENTS))
+	       (:SET-\
+		(FORMAT USER "~&Value to set \ to ")
+		(MULTIPLE-VALUE-BIND (VALUE PUNT-P)
+		    (INSPECT-GET-VALUE-FROM-USER USER)
+		  (OR PUNT-P (SETQ \ VALUE))))
+	       (OTHERWISE (FORMAT USER "~&Unimplemented menu command ~A~%" (SECOND THING)))))
+	    (T
+	     (COND ((NULL (FIRST THING))
+		    ;; Type is NIL -- nothing under mouse
+		    (BEEP))
+;character lossage
+		   ((LIST-MATCH-P THING `(:LINE-AREA ,IGNORE ,IGNORE #/MOUSE-2-1))
+		    ;; Delete from line area
+		    (SEND HISTORY :FLUSH-OBJECT (INSPECT-REAL-VALUE THING)))
+;character lossage
+		   ((AND (EQ (FOURTH THING) #/MOUSE-2-1)
+			 (MEMQ (THIRD THING) IS))
+		    ;; Middle click means leave source in one of the windows
+		    (LET ((1ST-THING (INSPECT-REAL-VALUE THING))
+			  (2ND-THING (SEND (THIRD THING) :CURRENT-OBJECT)))
+		      ;; First flush item we will be inspecting
+		      (INSPECT-FLUSH-FROM-HISTORY 1ST-THING HISTORY)
+		      (INSPECT-FLUSH-FROM-HISTORY 2ND-THING HISTORY)
+		      (SEND HISTORY :APPEND-ITEM 2ND-THING)
+		      (SEND HISTORY :APPEND-ITEM 1ST-THING)))
+;character lossage
+		   ((EQ (FOURTH THING) #/MOUSE-3-1)
+		    ;; Click on right button -- try to find function
+		    (SETQ THING (INSPECT-FIND-FUNCTION (INSPECT-REAL-VALUE THING)))
+		    (INSPECT-FLUSH-FROM-HISTORY THING HISTORY)
+		    (SEND HISTORY :APPEND-ITEM THING))
+		   ((CHAR-BIT (FOURTH THING) :HYPER)
+		    ;; HYPER means modify the slot we are pointing at.
+		    (LET ((*TERMINAL-IO* (THIRD THING)))
+		      (IF (OR (NULL (FIRST THING)) (NULL (GET (FIRST THING) 'SET-FUNCTION)))
+			  (FORMAT *TERMINAL-IO* "~&Cannot set this component.")
+			(INSPECT-SET-SLOT THING HISTORY USER))))
+		   (T
+		    ;; Otherwise inspect the thing we are pointing at.
+		    (SETQ THING (INSPECT-REAL-VALUE THING))
+		    (INSPECT-FLUSH-FROM-HISTORY THING HISTORY)
+		    (SEND HISTORY :APPEND-ITEM THING))))))))))
 
 (DEFUN INSPECT-SET-SLOT (SLOT HISTORY *TERMINAL-IO*)
   "Set the contents of SLOT to a value we obtain with the mouse or by reading.
@@ -1206,70 +1272,71 @@ we tell it to forget cached data on the slot."
 	(INSPECT-GET-VALUE-FROM-USER *TERMINAL-IO*)
       (OR PUNT-P
 	  (FUNCALL SET-FUNCTION SLOT NEW-VALUE
-		   (SEND (THIRD SLOT) ':CURRENT-OBJECT))))
+		   (SEND (THIRD SLOT) :CURRENT-OBJECT))))
     ;; We must recompute object we modified
-    (SEND HISTORY ':FLUSH-OBJECT-FROM-CACHE 
-	     (SEND (THIRD SLOT) ':CURRENT-OBJECT))
-    (PROG1 (SEND (THIRD SLOT) ':TOP-ITEM)
-	   (SEND (THIRD SLOT) ':SET-CURRENT-OBJECT (NCONS NIL)))))
+    (SEND HISTORY :FLUSH-OBJECT-FROM-CACHE 
+	     (SEND (THIRD SLOT) :CURRENT-OBJECT))
+    (PROG1 (SEND (THIRD SLOT) :TOP-ITEM)
+	   (SEND (THIRD SLOT) :SET-CURRENT-OBJECT (NCONS NIL)))))
 
 (DEFUN INSPECT-MODIFY-OBJECT (*TERMINAL-IO* HISTORY &OPTIONAL (INSPECTORS NIL) &AUX THING OSIT)
   "Handle the menu's MODIFY command.
 Lets user pick a slot with the mouse, then does INSPECT-SET-SLOT."
-  (SETQ OSIT (SEND HISTORY ':SENSITIVE-ITEM-TYPES))
+  (SETQ OSIT (SEND HISTORY :SENSITIVE-ITEM-TYPES))
   (UNWIND-PROTECT
     (PROGN
-      (SEND HISTORY ':SET-SENSITIVE-ITEM-TYPES NIL)
+      (SEND HISTORY :SET-SENSITIVE-ITEM-TYPES NIL)
       (DOLIST (I INSPECTORS)
-	(SEND I ':SET-MODIFY-MODE T))
+	(SEND I :SET-MODIFY-MODE T))
       (FORMAT *TERMINAL-IO* "~&Pick a slot, with the mouse, to modify")
-      (SETQ THING (SEND *TERMINAL-IO* ':LIST-TYI)))
-    (SEND HISTORY ':SET-SENSITIVE-ITEM-TYPES OSIT)
+      (SETQ THING (SEND *TERMINAL-IO* :LIST-TYI)))
+    (SEND HISTORY :SET-SENSITIVE-ITEM-TYPES OSIT)
     (DOLIST (I INSPECTORS)
-      (SEND I ':SET-MODIFY-MODE NIL)))
+      (SEND I :SET-MODIFY-MODE NIL)))
   (LET ((SET-FUNCTION (GET (FIRST THING) 'SET-FUNCTION)))
+;character lossage
     (IF (OR (NULL (FIRST THING)) (NULL SET-FUNCTION) (EQ (FOURTH THING) #/MOUSE-3-1))
 	(FORMAT *TERMINAL-IO* "~&Aborted.~%")
       (INSPECT-SET-SLOT THING HISTORY *TERMINAL-IO*))))
 
 (DEFUN INSPECT-FLUSH-FROM-HISTORY (THING HISTORY)
   "Remove object THING from the history.  HISTORY should be the INSPECT-HISTORY-PANE."
-  (LET ((ITEMS (SEND HISTORY ':ITEMS)))
+  (LET ((ITEMS (SEND HISTORY :ITEMS)))
     (DOTIMES (I (ARRAY-ACTIVE-LENGTH ITEMS))
       (AND (EQ THING (AREF ITEMS I))
-	   (RETURN (SEND HISTORY ':DELETE-ITEM I))))))
+	   (RETURN (SEND HISTORY :DELETE-ITEM I))))))
 
 (DEFUN INSPECT-REAL-VALUE (SLOT &AUX FUN)
   "Return the current contents of SLOT, a blip made by clicking on a mouse-sensitive item."
   (IF (SETQ FUN (GET (FIRST SLOT) 'VALUE-FUNCTION))
       (SEND FUN SLOT)
-    (SELECTQ (FIRST SLOT)
+    (CASE (FIRST SLOT)
       ((:VALUE :LINE-AREA 1D-ARRAY-SLOT LEADER-SLOT) (SECOND SLOT))
-      (:LOCATIVE (CDR (SECOND SLOT)))
-      (:LIST-STRUCTURE-TOP-LEVEL (SEND (THIRD SLOT) ':CURRENT-OBJECT))
+      (:LOCATIVE (CONTENTS (SECOND SLOT)))
+      (:LIST-STRUCTURE-TOP-LEVEL (SEND (THIRD SLOT) :CURRENT-OBJECT))
       (:LIST-STRUCTURE (CDR (FIRST (SECOND SLOT))))
       (OTHERWISE (THIRD (SECOND SLOT))))))
 
 (DEFUN INSPECT-GET-VALUE-FROM-USER (*TERMINAL-IO*)
   "Get a value either by the mouse pointing at it or by read and eval on *TERMINAL-IO*."
-  (PROG ()
-	(FORMAT *TERMINAL-IO* "(type a form to be evalled~%or select something with mouse):~&")
-	(LET ((THING (SEND *TERMINAL-IO* ':ANY-TYI)) ERROR)
-	  (COND ((CONSP THING)
-		 ;; Choose somthing with the mouse -- display it truncated and proceed
-		 (COND ((EQ (FIRST THING) ':MENU)
-			(FORMAT *TERMINAL-IO* "~&Cannot set value from the menu~%")
-			(RETURN NIL T)))
-		 (LET ((*PRINT-LEVEL* 3) (*PRINT-LENGTH* 5))
-		   (PRIN1 (SETQ THING (INSPECT-REAL-VALUE THING)) *TERMINAL-IO*)))
+  (FORMAT *TERMINAL-IO* "(type a form to be evalled~%or select something with mouse):~&")
+  (BLOCK FRED
+    (LET ((THING (SEND *TERMINAL-IO* :ANY-TYI)) ERROR)
+      (IF (CONSP THING)
+	  ;; Choose somthing with the mouse -- display it truncated and proceed
+	  (COND ((EQ (FIRST THING) :MENU)
+		 (FORMAT *TERMINAL-IO* "~&Cannot set value from the menu~%")
+		 (RETURN-FROM FRED (VALUES NIL T)))
 		(T
-		 (SEND *TERMINAL-IO* ':UNTYI THING)
-		 (MULTIPLE-VALUE (THING ERROR)
-		   (CATCH-ERROR (EVAL (LET ((*STANDARD-INPUT* *TERMINAL-IO*))
-					(SI:READ-FOR-TOP-LEVEL)))))
-		 (IF ERROR (RETURN NIL T))))	;Failed to eval, punt
-	  (TERPRI *TERMINAL-IO*)
-	  (RETURN THING))))
+		 (LET ((*PRINT-LEVEL* 3) (*PRINT-LENGTH* 5))
+		   (PRIN1 (SETQ THING (INSPECT-REAL-VALUE THING)) *TERMINAL-IO*))))
+	(SEND *TERMINAL-IO* :UNTYI THING)
+	(MULTIPLE-VALUE-SETQ (THING ERROR)
+	  (CATCH-ERROR (SI:EVAL-SPECIAL-OK (LET ((*STANDARD-INPUT* *TERMINAL-IO*))
+					     (SI:READ-FOR-TOP-LEVEL)))))
+	(IF ERROR (RETURN-FROM FRED (VALUES NIL T))))	;Failed to eval, punt
+      (TERPRI *TERMINAL-IO*)
+      THING)))
 
 (DEFUN INSPECT-FIND-FUNCTION (THING)
   "Given any object THING, return its /"function definition/", or anything like one."
@@ -1278,16 +1345,17 @@ Lets user pick a slot with the mouse, then does INSPECT-SET-SLOT."
 	  (TYPECASE THING
 	    (SYMBOL
 	     (IF (FBOUNDP THING)
-		 (FSYMEVAL THING)
+		 (SYMBOL-VALUE THING)
 	       (RETURN THING)))
 	    (INSTANCE
-	     (SI:INSTANCE-FUNCTION THING))
+	     (SI::INSTANCE-FUNCTION THING))
 	    ((OR ENTITY CLOSURE)
 	     (CLOSURE-FUNCTION THING))
 	    (CONS
 	     (IF (AND (VALIDATE-FUNCTION-SPEC THING)
 		      (FDEFINEDP THING))
 		 (FDEFINITION THING)
+	       ;; takes car of inspect-kludge case
 	       (RETURN THING)))
 	    (T (RETURN THING))))))
 
@@ -1297,7 +1365,7 @@ Lets user pick a slot with the mouse, then does INSPECT-SET-SLOT."
 You are in the /"INSPECTOR/", looking at the contents of some objects.
 Click left on an object with the mouse to display that object's contents.
 You can also type an expression to be evaluated; the contents of the
-value object will be displayed.  The values of *, ** and *** are always
+value object will be displayed.  The values of ~S, ~S and ~S are always
 the three last displayed objects, from the bottom up.
 
 You can scroll through an object's display with the scroll bar
@@ -1305,31 +1373,33 @@ by moving the mouse against the left margin until the cursor becomes
 an up-and-down arrow.  Refer then to the mouse documentation line.
 Or you can push the mouse against the /"More Below/" or /"More Above/"
 when they appear.  You can scroll the bottom pane a full screenful
-by typing Control-V or Meta-V.
+by typing ~:C or ~:C.
 
 To modify an object, hold down Hyper and click left on the slot to modify.
 You will then be asked for a value to store.  Type an expression whose value
 will be used, or point at the value to store with the mouse.
 
 The inspector remembers the contents of objects and does not constantly
-check to see if they change.  Type ~C to display the current contents.
+check to see if they change.  Type ~:C to display the current contents.
 
-To exit the inspector, type ~C.  The value of * will be returned
+To exit the inspector, type ~:C.  The value of ~S will be returned
 from the function INSPECT, if you called it.
 
 Clicking Right instead of Left on an object displays that object's
 function definition instead of the object itself.  This is useful with
 symbols, lists (function specs), closures and entities, and instances.
 
-Type ~C to discard everything from the history pane.
-Type ~C to read, evaluate and **print** a value instead of
-displaying it.  Type ~C to get a break loop.
+Type ~:C to discard everything from the history pane.
+Type ~:C to read, evaluate and **print** a value instead of
+displaying it.  Type ~:C to get a break loop.
 
 The menu items Exit, DeCache and Clear are equivalent to the
-keyboard commands ~C, ~C and ~C.  Modify is analogous
+keyboard commands ~:C, ~:C and ~:C.  Modify is analogous
 to using the Hyper key.  Return exits returning a value
 you specify with the keyboard or mouse, rather than the value of *.
-Set \ sets the variable \, bound inside the inspector, to the
+Set ~S sets the variable ~S, bound inside the inspector, to the
 value you specify.
-" #/CLEAR-SCREEN #/END #/DELETE #/QUOTE #/BREAK
-  #/END #/CLEAR-SCREEN #/DELETE))
+" '* '** '***
+#/Control-V #/Meta-V #/Clear-screen #/End #/Delete #/Quote #/Break
+  #/End '* #/Clear-screen #/Delete '\ '\))
+
