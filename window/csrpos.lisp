@@ -34,7 +34,7 @@
 	     (SEND STREAM :SET-CURSORPOS (OR (SECOND ARGS) X) (OR (FIRST ARGS) Y)
 					 :CHARACTER)))
 	  ((EQ (SETQ ARG1 (CHAR-UPCASE (CHAR (SYMBOL-NAME ARG1) 0))) #/F)
-	   (CURSORPOS-INTERNAL STREAM +1 0 #SPACE WO))	;F forward space
+	   (CURSORPOS-INTERNAL STREAM +1 0 #/SPACE WO))	;F forward space
 	  ((EQ ARG1 #/B)			;B backspace
 	   (CURSORPOS-INTERNAL STREAM -1 0 #/OVERSTRIKE WO))
 	  ((EQ ARG1 #/D)			;D down a line
