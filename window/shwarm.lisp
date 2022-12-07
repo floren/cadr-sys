@@ -1,30 +1,14 @@
-;;; -*- Mode: LISP; Package: TV; Base: 8 -*-
+;;; -*- Mode:LISP; Package:TV; Base:8; Readtable:ZL -*-
 ;;;	** (c) Copyright 1980, 1981 Massachusetts Institute of Technology **
 
 (DEFMACRO COERCE-FONT (FONT-VARIABLE SHEET)
   `(UNLESS (TYPEP ,FONT-VARIABLE 'FONT)
-     (SETQ ,FONT-VARIABLE (SEND (SHEET-GET-SCREEN ,SHEET) ':PARSE-FONT-SPECIFIER
+     (SETQ ,FONT-VARIABLE (SEND (SHEET-GET-SCREEN ,SHEET) :PARSE-FONT-SPECIFIER
 				,FONT-VARIABLE))))
 
-;;;Miscellaneous user functions
-(COMMENT
-(DEFUN SCREEN-CLEAR (&OPTIONAL (SCREEN DEFAULT-SCREEN))
-  "This function is obsolete, but may still be called."
-  ;; It isn't really obsolete, the initialization right below calls it
-  ;; No it doesn't!!
-  (WITHOUT-INTERRUPTS
-    (PREPARE-SHEET (SCREEN)
-      (%DRAW-RECTANGLE (SHEET-WIDTH SCREEN) (SHEET-HEIGHT SCREEN)
-		       0 0
-		       ALU-ANDCA SCREEN))
-    (AND (FBOUNDP 'WHO-LINE-CLOBBERED)
-	 (WHO-LINE-CLOBBERED))
-    (AND (FBOUNDP 'SCREEN-MANAGE-FLUSH-KNOWLEDGE)
-	 (SCREEN-MANAGE-FLUSH-KNOWLEDGE SCREEN)))))
-
-(DEFUN SCREEN-REDISPLAY (&OPTIONAL (TYPE ':COMPLETE-REDISPLAY) (SCREEN DEFAULT-SCREEN))
+(DEFUN SCREEN-REDISPLAY (&OPTIONAL (TYPE :COMPLETE-REDISPLAY) (SCREEN DEFAULT-SCREEN))
   "Redisplay the entire contents of SCREEN"
-  (FUNCALL SCREEN ':REFRESH TYPE)
+  (SEND SCREEN :REFRESH TYPE)
   (WHO-LINE-CLOBBERED))
 
 (DEFMETHOD (SCREEN :BEEP) (&OPTIONAL BEEP-TYPE)
@@ -32,16 +16,16 @@
   BEEP-TYPE  ;We wanted to make this soo hairy, that we punted until we could do it right
   (AND BEEP
        (WITHOUT-INTERRUPTS  ;otherwise might quit out and leave screen complemented
-	 (OR (EQ BEEP ':BEEP) (COMPLEMENT-BOW-MODE SELF))
-	 (IF (EQ BEEP ':FLASH)
+	 (OR (EQ BEEP :BEEP) (COMPLEMENT-BOW-MODE SELF))
+	 (IF (EQ BEEP :FLASH)
 	     (%BEEP 0 BEEP-DURATION)	;Delay same time without making any noise
 	   (BEEP BEEP-TYPE 'IGNORE))
-	 (OR (EQ BEEP ':BEEP) (COMPLEMENT-BOW-MODE SELF)))))
+	 (OR (EQ BEEP :BEEP) (COMPLEMENT-BOW-MODE SELF)))))
 
 (DEFMETHOD (SHEET :BEEP) (&OPTIONAL BEEP-TYPE)
-  (AND SUPERIOR (FUNCALL SUPERIOR ':BEEP BEEP-TYPE)))
+  (AND SUPERIOR (SEND SUPERIOR :BEEP BEEP-TYPE)))
 
-(DEFUN BEEP (&OPTIONAL BEEP-TYPE (STREAM TERMINAL-IO))
+(DEFUN BEEP (&OPTIONAL BEEP-TYPE (STREAM *TERMINAL-IO*))
   "Ring the bell and flash the screen.
 Works via the :BEEP operation on STREAM if STREAM supports it.
 The value of BEEP controls what this function does:
@@ -49,88 +33,85 @@ The value of BEEP controls what this function does:
  :BEEP means just make noise, :FLASH means just flash.
  NIL means do nothing.
 BEEP-TYPE says why the beep is being done.  Standard values are:
- ZWEI:CONVERSE-PROBLEM -- Converse was unable to send a message.
- ZWEI:CONVERSE-MESSAGE-RECEIVED -- A Converse message has come in.
- ZWEI:NO-COMPLETION -- Completion in a minibuffer failed.
+ ZWEI::CONVERSE-PROBLEM -- Converse was unable to send a message.
+ ZWEI::CONVERSE-MESSAGE-RECEIVED -- A Converse message has come in.
+ ZWEI::NO-COMPLETION -- Completion in a minibuffer failed.
  TV:NOTIFY -- A notification cannot be printed on the selected window.
- SUPDUP:TERMINAL-BELL -- ``Bell'' received for terminal
+ SUPDUP::TERMINAL-BELL -- ``Bell'' received for terminal
  FQUERY -- When a question needs to be answered
  NIL -- anything else.
 BEEP-TYPE does not have any effect, currently,
 but you can redefine BEEP to to different things for different beep types."
   (WHEN BEEP
-    (IF (MEMQ ':BEEP (FUNCALL STREAM ':WHICH-OPERATIONS))
-	(FUNCALL STREAM ':BEEP BEEP-TYPE)
+    (IF (OPERATION-HANDLED-P STREAM :BEEP)
+	(SEND STREAM :BEEP BEEP-TYPE)
       (%BEEP BEEP-WAVELENGTH BEEP-DURATION))))
 
 
 (DEFUN BLACK-ON-WHITE (&OPTIONAL (SCREEN DEFAULT-SCREEN))
   "Set SCREEN to display one bits as black and zeros as white."
-  (SELECT PROCESSOR-TYPE-CODE
-    (SI:CADR-TYPE-CODE
+  (SELECT-PROCESSOR
+    (:CADR
      (%XBUS-WRITE (SCREEN-CONTROL-ADDRESS SCREEN)
 		    (LOGIOR 4 (%XBUS-READ (SCREEN-CONTROL-ADDRESS SCREEN)))))
-    (SI:LAMBDA-TYPE-CODE
+    (:LAMBDA
      (%NUBUS-WRITE TV:TV-QUAD-SLOT 4
-		   (LOGIOR 20 (%NUBUS-READ TV:TV-QUAD-SLOT 4))))))
+		   (LOGIOR #o20 (%NUBUS-READ TV:TV-QUAD-SLOT 4))))))
 
 (DEFUN WHITE-ON-BLACK (&OPTIONAL (SCREEN DEFAULT-SCREEN))
   "Set SCREEN to display one bits as white and zeros as black."
-  (SELECT PROCESSOR-TYPE-CODE
-    (SI:CADR-TYPE-CODE
+  (SELECT-PROCESSOR
+    (:CADR
      (%XBUS-WRITE (SCREEN-CONTROL-ADDRESS SCREEN)
 		  (LOGAND -5 (%XBUS-READ (SCREEN-CONTROL-ADDRESS SCREEN))))) ;1's comp of 4
-    (SI:LAMBDA-TYPE-CODE
+    (:LAMBDA
      (%NUBUS-WRITE TV:TV-QUAD-SLOT 4
-		   (LOGAND (LOGNOT 20) (%NUBUS-READ TV:TV-QUAD-SLOT 4))))))
+		   (LOGAND (LOGNOT #o20) (%NUBUS-READ TV:TV-QUAD-SLOT 4))))))
 
 (DEFUN COMPLEMENT-BOW-MODE (&OPTIONAL (SCREEN DEFAULT-SCREEN))
   "Complement whether SCREEN displays one bits as white or as black."
-  (SELECT PROCESSOR-TYPE-CODE
-    (SI:CADR-TYPE-CODE
+  (SELECT-PROCESSOR
+    (:CADR
      (%XBUS-WRITE (SCREEN-CONTROL-ADDRESS SCREEN)
 		    (LOGXOR 4 (%XBUS-READ (SCREEN-CONTROL-ADDRESS SCREEN)))))
-    (SI:LAMBDA-TYPE-CODE
+    (:LAMBDA
      (%NUBUS-WRITE TV:TV-QUAD-SLOT 4
-		   (LOGXOR 20 (%NUBUS-READ TV:TV-QUAD-SLOT 4))))))
+		   (LOGXOR #o20 (%NUBUS-READ TV:TV-QUAD-SLOT 4))))))
 
 (DEFMETHOD (SHEET :DRAW-RECTANGLE) (RECTANGLE-WIDTH RECTANGLE-HEIGHT X Y
 				    &OPTIONAL (ALU CHAR-ALUF))
   (PREPARE-SHEET (SELF)
     (DRAW-RECTANGLE-INSIDE-CLIPPED RECTANGLE-WIDTH RECTANGLE-HEIGHT X Y ALU SELF)))
 
+
+;;; Didn't handle top-overrun and left-overrun correctly
+;;; For consistency, the two \'s below should be done by BITBLT itself  --TIM 10/84
+
 (DEFMETHOD (SHEET :BITBLT) (ALU WID HEI FROM-ARRAY FROM-X FROM-Y TO-X TO-Y
 				   &AUX (IL (SHEET-INSIDE-LEFT))
-				        (IR (SHEET-INSIDE-RIGHT))
-					(IT (SHEET-INSIDE-TOP))
-					(IB (SHEET-INSIDE-BOTTOM)))
-  (SETQ TO-X (+ IL TO-X) TO-Y (+ IT TO-Y))
-  (LET* ((CLIPPED-TO-X				
-	   (MIN (MAX IL TO-X) IR))
-	 (CLIPPED-TO-Y
-	   (MIN (MAX IT TO-Y) IB))
-	 (WID-SIGN (IF (MINUSP WID) -1 1))
-	 (HEI-SIGN (IF (MINUSP HEI) -1 1))
-	 (LEFT-OVERRUN
-	   (- CLIPPED-TO-X TO-X))
-	 (RIGHT-OVERRUN
-	   (MAX 0 (- (+ CLIPPED-TO-X (ABS WID)) IR)))
-	 (TOP-OVERRUN
-	   (- CLIPPED-TO-Y TO-Y))
-	 (BOTTOM-OVERRUN
-	   (MAX 0 (- (+ CLIPPED-TO-Y (ABS HEI)) IB)))
-	 (CLIPPED-WID
-	   (* WID-SIGN (MAX 0 (- (ABS WID) LEFT-OVERRUN RIGHT-OVERRUN))))
-	 (CLIPPED-HEI
-	   (* HEI-SIGN (MAX 0 (- (ABS HEI) TOP-OVERRUN BOTTOM-OVERRUN)))))
-
+				        (IT (SHEET-INSIDE-TOP))
+					(IW (SHEET-INSIDE-WIDTH))
+					(IH (SHEET-INSIDE-HEIGHT)))
+  (LET* ((ABS-WID (ABS WID))
+	 (ABS-HEI (ABS HEI))
+	 (LEFT-OVERRUN   (MAX 0 (- TO-X)))
+	 (RIGHT-OVERRUN  (MAX 0 (- (+ TO-X ABS-WID) IW)))
+	 (TOP-OVERRUN    (MAX 0 (- TO-Y)))
+	 (BOTTOM-OVERRUN (MAX 0 (- (+ TO-Y ABS-HEI) IH)))
+	 (CLIPPED-WID (* (IF (MINUSP WID) -1 1)
+			 (MAX 0 (- ABS-WID LEFT-OVERRUN RIGHT-OVERRUN))))
+	 (CLIPPED-HEI (* (IF (MINUSP HEI) -1 1)
+			 (MAX 0 (- ABS-HEI TOP-OVERRUN BOTTOM-OVERRUN)))))
     (AND (NOT (ZEROP CLIPPED-WID))				;bitblt errs when w=h=0
 	 (NOT (ZEROP CLIPPED-HEI))				;and dims are out of bounds
 	 (PREPARE-SHEET (SELF)
 	   (BITBLT ALU
 		   CLIPPED-WID CLIPPED-HEI
-		   FROM-ARRAY (+ FROM-X LEFT-OVERRUN) (+ FROM-Y TOP-OVERRUN)
-		   SCREEN-ARRAY CLIPPED-TO-X CLIPPED-TO-Y)))))
+		   FROM-ARRAY
+		   (\ (+ FROM-X LEFT-OVERRUN) (PIXEL-ARRAY-WIDTH FROM-ARRAY))  
+		   (\ (+ FROM-Y TOP-OVERRUN) (PIXEL-ARRAY-HEIGHT FROM-ARRAY))
+		   SCREEN-ARRAY
+		   (+ IL (MIN (MAX 0 TO-X) IW)) (+ IT (MIN (MAX 0 TO-Y) IH)))))))
 
 (DEFMETHOD (SHEET :BITBLT-FROM-SHEET) (ALU WID HEI FROM-X FROM-Y TO-ARRAY TO-X TO-Y
 					      &AUX (IL (SHEET-INSIDE-LEFT))
@@ -231,20 +212,20 @@ Sets exception flags according to new positions"
   "Set the current font of SHEET to FONT.
 The current font is what ordinary output is printed in.
 FONT may be a font object, a name of one, a name of a name, etc."
-  (FUNCALL SHEET ':SET-CURRENT-FONT FONT T))
+  (SEND SHEET :SET-CURRENT-FONT FONT T))
 
 (DEFMETHOD (SHEET :SIZE-IN-CHARACTERS) ()
   (VALUES (TRUNCATE (SHEET-INSIDE-WIDTH) CHAR-WIDTH) (SHEET-NUMBER-OF-INSIDE-LINES)))
 
 (DEFMETHOD (SHEET :SET-SIZE-IN-CHARACTERS) (WIDTH-IN-CHARS HEIGHT-IN-CHARS
 							   &OPTIONAL OPTION)
-   (FUNCALL-SELF ':SET-SIZE
-		 (DECODE-CHARACTER-WIDTH-SPEC WIDTH-IN-CHARS)
-		 (DECODE-CHARACTER-HEIGHT-SPEC HEIGHT-IN-CHARS)
-		 OPTION))
+   (SEND SELF :SET-SIZE
+	      (DECODE-CHARACTER-WIDTH-SPEC WIDTH-IN-CHARS)
+	      (DECODE-CHARACTER-HEIGHT-SPEC HEIGHT-IN-CHARS)
+	      OPTION))
 
-(DEFMETHOD (SHEET :SET-CURSORPOS) (X Y &OPTIONAL (UNIT ':PIXEL))
-  (SELECTQ UNIT
+(DEFMETHOD (SHEET :SET-CURSORPOS) (X Y &OPTIONAL (UNIT :PIXEL))
+  (CASE UNIT
     (:PIXEL)
     (:CHARACTER
       (AND X (SETQ X (* X CHAR-WIDTH)))
@@ -284,10 +265,10 @@ The arguments are `clipped' to stay inside the sheet's margins."
        T)
     (SETQ INHIBIT-SCHEDULING-FLAG NIL)
     (IF LOCK
-	(FUNCALL SHEET ':OUTPUT-HOLD-EXCEPTION)
+	(SEND SHEET :OUTPUT-HOLD-EXCEPTION)
 	(PROCESS-WAIT "Window Lock" #'SHEET-CAN-GET-LOCK SHEET))))
 
-(DEFMETHOD (SHEET :INCREMENT-CURSORPOS) (DX DY &OPTIONAL (UNIT ':PIXEL))
+(DEFMETHOD (SHEET :INCREMENT-CURSORPOS) (DX DY &OPTIONAL (UNIT :PIXEL))
   (SELECTQ UNIT
     (:PIXEL)
     (:CHARACTER
@@ -301,7 +282,7 @@ The arguments are `clipped' to stay inside the sheet's margins."
     (OR (ZEROP (SHEET-EXCEPTIONS)) (SHEET-HANDLE-EXCEPTIONS SELF))
     (SHEET-INCREMENT-BITPOS SELF DX DY)))
 
-(DEFMETHOD (SHEET :READ-CURSORPOS) (&OPTIONAL (UNIT ':PIXEL))
+(DEFMETHOD (SHEET :READ-CURSORPOS) (&OPTIONAL (UNIT :PIXEL))
   (SELECTQ UNIT
     (:PIXEL
      (VALUES (- CURSOR-X LEFT-MARGIN-SIZE)
@@ -314,7 +295,7 @@ The arguments are `clipped' to stay inside the sheet's margins."
 
 (DEFUN SHEET-READ-CURSORPOS (SHEET)
   "Return the cursor position in raster units relative to margins"
-  (DECLARE (RETURN-LIST CURSOR-X CURSOR-Y))
+  (DECLARE (VALUES CURSOR-X CURSOR-Y))
   (VALUES (- (SHEET-CURSOR-X SHEET) (SHEET-INSIDE-LEFT SHEET))
 	  (- (SHEET-CURSOR-Y SHEET) (SHEET-INSIDE-TOP SHEET))))
 
@@ -350,14 +331,16 @@ The arguments are `clipped' to stay inside the sheet's margins."
     (SHEET-CLEAR-EOL SHEET)))
 
 (DEFMETHOD (SHEET :LINE-OUT) (STRING &OPTIONAL (START 0) END)
-  (FUNCALL-SELF ':STRING-OUT STRING START END)
-  (FUNCALL-SELF ':TERPRI))
+  (SEND SELF :STRING-OUT STRING START END)
+  (SEND SELF :TERPRI))
 
 (DEFMETHOD (SHEET :FRESH-LINE) ()
-  (IF (= CURSOR-X (SHEET-INSIDE-LEFT))
-      (PROGN (SHEET-CLEAR-EOL SELF) NIL)
-    (SHEET-CRLF SELF)
-    T))
+  (COND ((= CURSOR-X (SHEET-INSIDE-LEFT))
+	 (SHEET-CLEAR-EOL SELF)
+	 NIL)
+	(T
+	 (SHEET-CRLF SELF)
+	 T)))
 
 (DEFMETHOD (SHEET :CLEAR-CHAR) (&OPTIONAL CHAR)
   (SHEET-CLEAR-CHAR SELF CHAR))
@@ -377,8 +360,12 @@ CHAR may be a character whose width controls how wide an area to clear."
 
 (DEFMETHOD (SHEET :CLEAR-EOL) ()
   (SHEET-CLEAR-EOL SELF))
+(compiler:make-obsolete :clear-eol
+			("~S is an obsolete window operation; use the ~S"
+			 :clear-eol :clear-rest-of-line)
+			message)
 
-(DEFMETHOD (SHEET :CLEAR-REST-OF-WINDOW) ()
+(DEFMETHOD (SHEET :CLEAR-REST-OF-LINE) ()
   (SHEET-CLEAR-EOL SELF))
 
 (DEFUN SHEET-CLEAR-EOL (SHEET)
@@ -420,10 +407,10 @@ to hold the characters of STRING on that line."
       (IF (>= (+ PSEUDO-CURSOR-Y LINE-HEIGHT) (SHEET-INSIDE-BOTTOM SHEET))
 	  (SETQ PSEUDO-CURSOR-Y (SHEET-INSIDE-TOP SHEET)))
       ;; Find end of this line of the string.
-      (SETQ LINE-END (OR (STRING-SEARCH-CHAR #\RETURN STRING LINE-START WHOLE-END)
+      (SETQ LINE-END (OR (STRING-SEARCH-CHAR #/RETURN STRING LINE-START WHOLE-END)
 			 WHOLE-END))
       ;; Does it fit in one screen-line?  If not, how much does?
-      (MULTIPLE-VALUE (NIL FINAL-INDEX MAXIMUM-X)
+      (MULTIPLE-VALUE-SETQ (NIL FINAL-INDEX MAXIMUM-X)
 	(SHEET-STRING-LENGTH SHEET STRING LINE-START LINE-END
 			     (SHEET-INSIDE-RIGHT SHEET)
 			     (SHEET-CURRENT-FONT SHEET)
@@ -483,6 +470,10 @@ but if on different lines, assumes screen wrap-around"
 
 (DEFMETHOD (SHEET :CLEAR-SCREEN) ()
   (SHEET-CLEAR SELF))
+(compiler:make-obsolete :clear-screen
+			("~S is an obsolete window operation, use the ~S message"
+			 :clear-window)
+			message)
 
 (DEFMETHOD (SHEET :CLEAR-WINDOW) ()
   (SHEET-CLEAR SELF))
@@ -506,6 +497,11 @@ but if on different lines, assumes screen wrap-around"
 (DEFMETHOD (SHEET :CLEAR-EOF) ()
   (SHEET-CLEAR-EOF SELF))
 
+(compiler:make-obsolete :clear-eof
+			("~S is an obsolete window operation, use the ~S message"
+			 :clear-rest-of-window)
+			message)
+
 (DEFUN SHEET-CLEAR-EOF (SHEET &AUX HT TEM)
   "Clear from SHEET's cursor to right margin, and all area below."
   (PREPARE-SHEET (SHEET)
@@ -518,10 +514,10 @@ but if on different lines, assumes screen wrap-around"
 			  (SHEET-INSIDE-LEFT SHEET) TEM
 			  (SHEET-ERASE-ALUF SHEET) SHEET))))
 
-(DEFMETHOD (SHEET :INSERT-LINE) (&OPTIONAL (LINE-COUNT 1) (UNIT ':CHARACTER))
+(DEFMETHOD (SHEET :INSERT-LINE) (&OPTIONAL (LINE-COUNT 1) (UNIT :CHARACTER))
   (SHEET-INSERT-LINE SELF LINE-COUNT UNIT))
 
-(DEFUN SHEET-INSERT-LINE (SHEET &OPTIONAL (LINE-COUNT 1) (UNIT ':CHARACTER))
+(DEFUN SHEET-INSERT-LINE (SHEET &OPTIONAL (LINE-COUNT 1) (UNIT :CHARACTER))
   "Make room for some line before the line the cursor is currently on.
 The data on this line and below is moved downward on the screen,
 and that near the bottom of SHEET is discarded.
@@ -535,7 +531,7 @@ by the window's line-height."
 	  (LINE-HEIGHT (SHEET-LINE-HEIGHT SHEET))
 	  HEIGHT
 	  DELTA-HEIGHT)
-      (SETQ HEIGHT (IF (EQ UNIT ':CHARACTER) (* LINE-COUNT LINE-HEIGHT) LINE-COUNT))
+      (SETQ HEIGHT (IF (EQ UNIT :CHARACTER) (* LINE-COUNT LINE-HEIGHT) LINE-COUNT))
       ;; Compute minus height of block to BLT
       (SETQ DELTA-HEIGHT
 	    (- HEIGHT (- (* LINE-HEIGHT (SHEET-NUMBER-OF-INSIDE-LINES SHEET))
@@ -549,10 +545,10 @@ by the window's line-height."
 		       (SHEET-INSIDE-LEFT SHEET) (SHEET-CURSOR-Y SHEET)
 		       (SHEET-ERASE-ALUF SHEET) SHEET))))
 
-(DEFMETHOD (SHEET :DELETE-LINE) (&OPTIONAL (LINE-COUNT 1) (UNIT ':CHARACTER))
+(DEFMETHOD (SHEET :DELETE-LINE) (&OPTIONAL (LINE-COUNT 1) (UNIT :CHARACTER))
   (SHEET-DELETE-LINE SELF LINE-COUNT UNIT))
 
-(DEFUN SHEET-DELETE-LINE (SHEET &OPTIONAL (LINE-COUNT 1) (UNIT ':CHARACTER))
+(DEFUN SHEET-DELETE-LINE (SHEET &OPTIONAL (LINE-COUNT 1) (UNIT :CHARACTER))
   "Discard one or more lines starting at the cursor vpos, moving data below up.
 Blank lines appear at the bottom of SHEET.
 LINE-COUNT is how many lines to delete; default 1.
@@ -565,7 +561,7 @@ by the window's line-height."
 	  (LINE-HEIGHT (SHEET-LINE-HEIGHT SHEET))
 	  HEIGHT
 	  DELTA-HEIGHT)
-      (SETQ HEIGHT (IF (EQ UNIT ':CHARACTER) (* LINE-COUNT LINE-HEIGHT) LINE-COUNT))
+      (SETQ HEIGHT (IF (EQ UNIT :CHARACTER) (* LINE-COUNT LINE-HEIGHT) LINE-COUNT))
       (AND (PLUSP (SETQ DELTA-HEIGHT
 			(- (+ (- (SHEET-CURSOR-Y SHEET) (SHEET-INSIDE-TOP SHEET)) HEIGHT)
 			   (* LINE-HEIGHT (SHEET-NUMBER-OF-INSIDE-LINES SHEET)))))
@@ -577,10 +573,10 @@ by the window's line-height."
 		       (SHEET-INSIDE-LEFT SHEET) (- (SHEET-CURSOR-Y SHEET) DELTA-HEIGHT)
 		       (SHEET-ERASE-ALUF SHEET) SHEET))))
 
-(DEFMETHOD (SHEET :INSERT-CHAR) (&OPTIONAL (-WIDTH- 1) (UNIT ':CHARACTER))
+(DEFMETHOD (SHEET :INSERT-CHAR) (&OPTIONAL (-WIDTH- 1) (UNIT :CHARACTER))
   (SHEET-INSERT-CHAR SELF -WIDTH- UNIT))
 
-(DEFUN SHEET-INSERT-CHAR (SHEET &OPTIONAL (WIDTH 1) (UNIT ':CHARACTER))
+(DEFUN SHEET-INSERT-CHAR (SHEET &OPTIONAL (WIDTH 1) (UNIT :CHARACTER))
   "Make room for characters at SHEET's cursor, moving rest of line right.
 The last part of the line is discarded.  The cursorpos does not change.
 If UNIT is :CHARACTER, WIDTH is a number of characters.
@@ -590,7 +586,7 @@ if UNIT is :PIXEL."
   (PREPARE-SHEET (SHEET)
     (LET ((ARRAY (SHEET-SCREEN-ARRAY SHEET))
 	  (LINE-HEIGHT (SHEET-LINE-HEIGHT SHEET))
-	  (WIDTH (IF (EQ UNIT ':PIXEL) WIDTH
+	  (WIDTH (IF (EQ UNIT :PIXEL) WIDTH
 		     (* WIDTH (SHEET-CHAR-WIDTH SHEET)))))
       (BITBLT ALU-SETA
 	      (- WIDTH (- (SHEET-INSIDE-RIGHT SHEET) (SHEET-CURSOR-X SHEET)))
@@ -601,10 +597,10 @@ if UNIT is :PIXEL."
 		       (SHEET-CURSOR-X SHEET) (SHEET-CURSOR-Y SHEET)
 		       (SHEET-ERASE-ALUF SHEET) SHEET))))
 
-(DEFMETHOD (SHEET :DELETE-CHAR) (&OPTIONAL (-WIDTH- 1) (UNIT ':CHARACTER))
+(DEFMETHOD (SHEET :DELETE-CHAR) (&OPTIONAL (-WIDTH- 1) (UNIT :CHARACTER))
   (SHEET-DELETE-CHAR SELF -WIDTH- UNIT))
 
-(DEFUN SHEET-DELETE-CHAR (SHEET &OPTIONAL (WIDTH 1) (UNIT ':CHARACTER))
+(DEFUN SHEET-DELETE-CHAR (SHEET &OPTIONAL (WIDTH 1) (UNIT :CHARACTER))
   "Discard characters after SHEET's cursor, moving rest of line left.
 Blank space is created near the right margin.
 The cursor position does not change.
@@ -615,7 +611,7 @@ if UNIT is :PIXEL."
   (PREPARE-SHEET (SHEET)
     (LET ((ARRAY (SHEET-SCREEN-ARRAY SHEET))
 	  (LINE-HEIGHT (SHEET-LINE-HEIGHT SHEET))
-	  (WIDTH (IF (EQ UNIT ':PIXEL) WIDTH
+	  (WIDTH (IF (EQ UNIT :PIXEL) WIDTH
 		     (* WIDTH (SHEET-CHAR-WIDTH SHEET)))))
       (BITBLT ALU-SETA
 	      (- (SHEET-INSIDE-RIGHT SHEET) (SHEET-CURSOR-X SHEET) WIDTH)
@@ -638,7 +634,7 @@ and the cursor is left after it."
   (SETQ LEN (IF (NUMBERP STRING)
 		(SHEET-CHARACTER-WIDTH SHEET STRING (SHEET-CURRENT-FONT SHEET))
 		(SHEET-STRING-LENGTH SHEET STRING START END)))
-  (SHEET-INSERT-CHAR SHEET LEN ':PIXEL)
+  (SHEET-INSERT-CHAR SHEET LEN :PIXEL)
   (AND TYPE-TOO (SHEET-STRING-OUT SHEET STRING START END)))
 
 (DEFMETHOD (SHEET :DELETE-STRING) (STRING &OPTIONAL (START 0) END)
@@ -651,7 +647,7 @@ The cursor position does not change."
   (SETQ LEN (IF (NUMBERP STRING)
 		(SHEET-CHARACTER-WIDTH SHEET STRING (SHEET-CURRENT-FONT SHEET))
 		(SHEET-STRING-LENGTH SHEET STRING START END)))
-  (SHEET-DELETE-CHAR SHEET LEN ':PIXEL))
+  (SHEET-DELETE-CHAR SHEET LEN :PIXEL))
 
 (DEFMETHOD (SHEET :DISPLAY-LOZENGED-STRING) (STRING)
   (SHEET-DISPLAY-LOZENGED-STRING SELF STRING))
@@ -672,7 +668,7 @@ This is how special characters with no graphic or formatting meaning are output.
 		(IF (ZEROP (SHEET-RIGHT-MARGIN-CHARACTER-FLAG SHEET))
 		    (SHEET-INSIDE-RIGHT SHEET)
 		    (- (SHEET-INSIDE-RIGHT SHEET) (SHEET-CHAR-WIDTH SHEET))))
-	     (FUNCALL SHEET ':END-OF-LINE-EXCEPTION)))
+	     (SEND SHEET :END-OF-LINE-EXCEPTION)))
       (SETF (SHEET-CURSOR-X SHEET)
 	    (SHEET-DISPLAY-LOZENGED-STRING-INTERNAL SHEET STRING
 			(SHEET-CURSOR-X SHEET) (1+ (SHEET-CURSOR-Y SHEET))
@@ -682,53 +678,61 @@ This is how special characters with no graphic or formatting meaning are output.
   (+ 9. (* 6 (STRING-LENGTH STRING))))
 
 (DEFUN SHEET-DISPLAY-LOZENGED-STRING-INTERNAL (SHEET STRING X0 Y0 XLIM ALUF)
-  (LET ((WIDTH (LOZENGED-STRING-WIDTH STRING)))
-    ;; Put the string then the box around it
-    (LET ((X1 (1- (MIN (+ X0 WIDTH) XLIM)))
-	  (Y1 (+ Y0 8)))
-      (SHEET-STRING-OUT-EXPLICIT-1 SHEET STRING (+ X0 4) (+ Y0 2) NIL
-				   X1
-				   (FUNCALL (SHEET-GET-SCREEN SHEET)
-					    ':PARSE-FONT-DESCRIPTOR FONTS:5X5)
-				   ALUF)
-      (%DRAW-RECTANGLE (- WIDTH 8) 1 (+ X0 4) Y0 ALUF SHEET)
-      (%DRAW-RECTANGLE (- WIDTH 8) 1 (+ X0 4) Y1 ALUF SHEET)
-      (%DRAW-LINE X0 (+ Y0 4) (+ X0 3) (1+ Y0) ALUF T SHEET)
-      (%DRAW-LINE (1+ X0) (+ Y0 5) (+ X0 3) (1- Y1) ALUF T SHEET)
-      (%DRAW-LINE X1 (+ Y0 4) (- X1 3) (1+ Y0) ALUF T SHEET)
-      (%DRAW-LINE (1- X1) (+ Y0 5) (- X1 3) (1- Y1) ALUF T SHEET)
-      (1+ X1))))
+  (LET* ((WIDTH (LOZENGED-STRING-WIDTH STRING))
+	 TEM (TRUNCATED 8))
+    (WHEN (MINUSP (SETQ TEM (- XLIM (+ WIDTH X0))))
+      (SETQ TRUNCATED 4)
+      (SETQ WIDTH (+ WIDTH TEM)))
+    (IF (> WIDTH 4)
+	;; Put the string then the box around it
+	(LET ((X1 (+ X0 WIDTH -1))
+	      (Y1 (+ Y0 8)))
+	  (SHEET-STRING-OUT-EXPLICIT-1 SHEET STRING (+ X0 4) (+ Y0 2) X1 NIL
+				       (SEND (SHEET-GET-SCREEN SHEET)
+					     :PARSE-FONT-DESCRIPTOR FONTS:5X5)
+				       ALUF)
+	  (%DRAW-LINE X0 (+ Y0 4) (+ X0 3) (1+ Y0) ALUF T SHEET)
+	  (%DRAW-LINE (1+ X0) (+ Y0 5) (+ X0 3) (1- Y1) ALUF T SHEET)
+	  (WHEN (PLUSP (SETQ TEM (- WIDTH TRUNCATED)))
+	    (%DRAW-RECTANGLE TEM 1 (+ X0 4) Y0 ALUF SHEET)
+	    (%DRAW-RECTANGLE TEM 1 (+ X0 4) Y1 ALUF SHEET))
+	  (WHEN (EQ TRUNCATED 8)
+	    (%DRAW-LINE X1 (+ Y0 4) (- X1 3) (1+ Y0) ALUF T SHEET)
+	    (%DRAW-LINE (1- X1) (+ Y0 5) (- X1 3) (1- Y1) ALUF T SHEET))
+	  (1+ X1))
+      XLIM)))
 
 (DEFMETHOD (SHEET :TYO) (CH &OPTIONAL FONT)
-  (SHEET-TYO SELF CH FONT))
+  (SHEET-TYO SELF CH FONT)
+  CH)
 
 (DEFUN SHEET-TYO (SHEET CHAR &OPTIONAL FONT &AUX BASE-ADJ)
   "Output printing or formatting character CHAR on SHEET in FONT.
 FONT defaults to the current font of SHEET.
 Weird characters are printed in lozenges."
-  (CHECK-ARG CHAR (AND (OR (TYPEP CHAR ':CHARACTER) (FIXP CHAR))
-		       ( CHAR 0) (< CHAR 400))
-	     "a character")
-  (IF ( CHAR 200)
-      (COND ((AND (= CHAR #\CR) (ZEROP (SHEET-CR-NOT-NEWLINE-FLAG SHEET)))
+;character lossage
+  (IF (CHARACTERP CHAR) (SETQ CHAR (CHAR-INT CHAR)))
+  (CHECK-TYPE CHAR (INTEGER 0 (#o400)) "a character")
+  (IF ( CHAR #o200)
+      (COND ((AND (= CHAR #/NEWLINE) (ZEROP (SHEET-CR-NOT-NEWLINE-FLAG SHEET)))
              (SHEET-CRLF SHEET))
-            ((= CHAR #\TAB)
+            ((= CHAR #/TAB)
              (SHEET-TAB-1 SHEET))
-            ((AND (= CHAR #\BS) (ZEROP (SHEET-BACKSPACE-NOT-OVERPRINTING-FLAG SHEET)))
+            ((AND (= CHAR #/BACKSPACE) (ZEROP (SHEET-BACKSPACE-NOT-OVERPRINTING-FLAG SHEET)))
              (SHEET-BACKSPACE-1 SHEET))
             (T
 	     (SHEET-DISPLAY-LOZENGED-STRING SHEET
-		(STRING (OR (CAR (RASSOC CHAR SI:XR-SPECIAL-CHARACTER-NAMES))
-			    (FORMAT NIL "~O" CHAR))))))
+		(STRING (OR (CAR (RASSQ CHAR SI::XR-SPECIAL-CHARACTER-NAMES))
+			    (FORMAT NIL "~3O" CHAR))))))
       (PREPARE-SHEET (SHEET)
         (OR (ZEROP (SHEET-EXCEPTIONS SHEET))
 	    (SHEET-HANDLE-EXCEPTIONS SHEET))
-	(IF FONT
-	    (PROGN
-	      (COERCE-FONT FONT SHEET)
-	      (SETQ BASE-ADJ (- (SHEET-BASELINE SHEET) (FONT-BASELINE FONT))))
-	    (SETQ FONT (SHEET-CURRENT-FONT SHEET)
-		  BASE-ADJ (SHEET-BASELINE-ADJ SHEET)))
+	(COND (FONT
+	       (COERCE-FONT FONT SHEET)
+	       (SETQ BASE-ADJ (- (SHEET-BASELINE SHEET) (FONT-BASELINE FONT))))
+	      (T
+	       (SETQ FONT (SHEET-CURRENT-FONT SHEET)
+		     BASE-ADJ (SHEET-BASELINE-ADJ SHEET))))
         (LET* ((CHAR-WIDTHS (FONT-CHAR-WIDTH-TABLE FONT))
 	       (FIT (FONT-INDEXING-TABLE FONT))
 	       (WIDTH)
@@ -742,7 +746,7 @@ Weird characters are printed in lozenges."
 			  (AREF CHAR-WIDTHS CHAR)
 			  (FONT-CHAR-WIDTH FONT)))
 	  (COND ((> (+ XPOS WIDTH) RIGHT-LIM)
-		 (FUNCALL SHEET ':END-OF-LINE-EXCEPTION)
+		 (SEND SHEET :END-OF-LINE-EXCEPTION)
 		 (SHEET-TYO SHEET CHAR FONT))
 		(T
 		 (AND (SETQ KERN-TABLE (FONT-LEFT-KERN-TABLE FONT))
@@ -815,12 +819,14 @@ If CHAR is specified, that character's width is the distance to move."
 	  (AND ( I N) (RETURN NIL))		        ;No exception if done anyway
 	  (AND (NULL (FONT-INDEXING-TABLE FONT))
 	       (GO EZ))					;Handle easy case fast
-       HD (SHEET-TYO SHEET (LDB %%CH-CHAR (AREF STRING I)))
+       HD
+	  (SHEET-TYO SHEET (CHAR-CODE (CHAR STRING I)))
 	  (AND (< (SETQ I (1+ I)) N)
 	       (GO TOP))
 	  (RETURN NIL)
 
-       EZ (OR (ZEROP (SHEET-EXCEPTIONS SHEET))		;End of page, MORE
+       EZ
+	  (OR (ZEROP (SHEET-EXCEPTIONS SHEET))		;End of page, MORE
 	      (SHEET-HANDLE-EXCEPTIONS SHEET))
 	  (SETQ XPOS (SHEET-CURSOR-X SHEET)
 		YPOS (+ (SHEET-CURSOR-Y SHEET) (SHEET-BASELINE-ADJ SHEET))
@@ -832,11 +838,11 @@ If CHAR is specified, that character's width is the distance to move."
 	  (AND (OR (FONT-CHAR-WIDTH-TABLE FONT) (FONT-LEFT-KERN-TABLE FONT))
 	       (GO VW))					;Variable-width is a little slower
        EZ1						;This is the fast loop
-	  (SETQ CH (LDB %%CH-CHAR (AREF STRING I)))
-	  (COND ((< CH 200)				;Printing char
+	  (SETQ CH (CHAR-CODE (CHAR STRING I)))
+	  (COND ((< CH #o200)				;Printing char
 		 (COND ((> (+ XPOS WIDTH) XLIM)		;Room for it before right margin?
 			(SETF (SHEET-CURSOR-X SHEET) XPOS)
-			(FUNCALL SHEET ':END-OF-LINE-EXCEPTION)
+			(SEND SHEET :END-OF-LINE-EXCEPTION)
 			(GO TOP)))
 		 (%DRAW-CHAR FONT CH XPOS YPOS ALUF SHEET)
 		 (SETQ XPOS (+ XPOS WIDTH))
@@ -848,14 +854,16 @@ If CHAR is specified, that character's width is the distance to move."
 		 (SETF (SHEET-CURSOR-X SHEET) XPOS)
 		 (GO HD)))
 
-       VW  (SETQ FWT (FONT-CHAR-WIDTH-TABLE FONT)	;This is the medium speed loop 
+       VW
+	  (SETQ FWT (FONT-CHAR-WIDTH-TABLE FONT)	;This is the medium speed loop 
 		 LKT (FONT-LEFT-KERN-TABLE FONT))
-       VW1 (SETQ CH (LDB %%CH-CHAR (AREF STRING I)))
-	   (COND ((< CH 200)				;Printing char
+       VW1
+	  (SETQ CH (CHAR-CODE (CHAR STRING I)))
+	   (COND ((< CH #o200)				;Printing char
 		  (AND FWT (SETQ WIDTH (AREF FWT CH)))
 		  (COND ((> (+ WIDTH XPOS) XLIM)	;Room before margin?
 			 (SETF (SHEET-CURSOR-X SHEET) XPOS)
-			 (FUNCALL SHEET ':END-OF-LINE-EXCEPTION)
+			 (SEND SHEET :END-OF-LINE-EXCEPTION)
 			 (GO TOP)))
 		  (%DRAW-CHAR FONT CH (IF LKT (- XPOS (AREF LKT CH)) XPOS) YPOS ALUF SHEET)
 		  (SETQ XPOS (+ XPOS WIDTH))
@@ -894,137 +902,282 @@ If CHAR is specified, that character's width is the distance to move."
 ;;; Where this leaves the sheet's actual cursorpos is undefined (somewhere on the line)
 
 ;;; This is NOT related to the :LINE-OUT operation!
-(DEFUN SHEET-LINE-OUT (SHEET STRING &OPTIONAL (START 0) (END NIL) SET-XPOS SET-YPOS DWIDTH)
-  (DECLARE (RETURN-LIST I XPOS));Returns index of next character to do and where cursor got to
- 				;Except the first value can be incremented, to show that
-				;the line was completed (as if it counted the carriage return)
-  (PREPARE-SHEET (SHEET)
-    (PROG ((I START)
-	   (N (OR END (ARRAY-ACTIVE-LENGTH STRING)))
-	   (RIGHT-LIMIT (SHEET-INSIDE-RIGHT SHEET))
-	   (MARGIN-FLAG (NOT (ZEROP (SHEET-RIGHT-MARGIN-CHARACTER-FLAG SHEET))))
-	   XPOS YPOS OYPOS ALUF WIDTH FWT LKT CH FONT FONTX TEM BASE-ADJ)
-      (AND MARGIN-FLAG (SETQ RIGHT-LIMIT (- RIGHT-LIMIT (SHEET-CHAR-WIDTH SHEET))))
-      (COND (SET-XPOS
-	     (SETF (SHEET-CURSOR-X SHEET)
-		   (SETQ SET-XPOS (MIN (+ SET-XPOS (SHEET-INSIDE-LEFT SHEET))
-				       (SHEET-INSIDE-RIGHT SHEET))))))
-      (COND (SET-YPOS
-	     (AND (SHEET-MORE-VPOS SHEET)
-		  (SETF (SHEET-MORE-VPOS SHEET) (SHEET-DEDUCE-MORE-VPOS SHEET)))
-	     (SETF (SHEET-CURSOR-Y SHEET)
-		   (SETQ SET-YPOS (MIN (+ SET-YPOS (SHEET-INSIDE-TOP SHEET))
-				       (SHEET-INSIDE-BOTTOM SHEET))))
-	     (SETF (SHEET-EXCEPTIONS SHEET) 0)
-	     (AND (> (+ SET-YPOS (SHEET-LINE-HEIGHT SHEET)) (SHEET-INSIDE-BOTTOM SHEET))
-		  (SETF (SHEET-END-PAGE-FLAG SHEET) 1))
-	     (SETQ OYPOS SET-YPOS))
-	    (T (SETQ OYPOS (SHEET-CURSOR-Y SHEET))))
+(defun sheet-line-out (sheet string &optional (start 0) (stop nil)
+					      set-xpos set-ypos dwidth (clear t))
+  ;; Returns index of next character to do and where cursor got to except the first value can
+  ;; be incremented, to show that the line was completed (as though it counted an implicit
+  ;; carriage return).
+  (declare (values index xpos))
+  (let* ((inside-right (sheet-inside-right sheet))
+	 (inside-left (sheet-inside-left sheet))
+	 (margin-flag (not (zerop (sheet-right-margin-character-flag sheet))))
+	 (xpos (if set-xpos (+ set-xpos inside-left) (sheet-cursor-x sheet)))
+	 (ypos (if set-ypos (+ set-ypos (sheet-inside-top sheet))
+		 (sheet-cursor-y sheet)))
+	 (stop-index)
+	 (stop-xpos))
+  (prepare-sheet (sheet)
+    (setq stop (or stop (array-active-length string)))
+    (setf (sheet-cursor-y sheet) ypos)		;%DRAW-STRING depends on this in some cases.
+;    (%draw-rectangle
+;      (- inside-right xpos)
+;      (sheet-line-height sheet)
+;      xpos
+;      ypos
+;      (sheet-erase-aluf sheet)
+;      sheet)
+    (cond ((fixnump clear)
+	   (if ( (+ inside-left clear) (- inside-right #o20))
+	       (%draw-rectangle (- inside-right xpos) (sheet-line-height sheet)
+				xpos ypos
+				(sheet-erase-aluf sheet) sheet)
+	       (%draw-rectangle (- (+ inside-left clear) xpos) (sheet-line-height sheet)
+				xpos ypos
+				(sheet-erase-aluf sheet) sheet)))
+	  ((null clear))
+	  (t
+	   (%draw-rectangle (- inside-right xpos) (sheet-line-height sheet)
+			    xpos ypos
+			    (sheet-erase-aluf sheet) sheet)))
+    (when dwidth				;Italic correction, back up one character.
+      (setq xpos (- xpos dwidth))
+      (decf start))
+    (multiple-value-setq (stop-index stop-xpos)
+      (%draw-string sheet (sheet-char-aluf sheet) xpos ypos string 0 start stop
+		    (if margin-flag (- inside-right (sheet-char-width sheet)) inside-right)))
+    (when (< stop-index stop)
+      (when margin-flag (send sheet :tyo-right-margin-character stop-xpos ypos #/!)))
+    (values stop-index (- stop-xpos inside-left)))))
 
-      (OR (ZEROP (SHEET-EXCEPTIONS SHEET)) (SHEET-HANDLE-EXCEPTIONS SHEET))
+(defun %draw-string (sheet alu xpos ypos string font start stop xlim)
+  "Draw STRING on SHEET starting with the character at index START and stopping after
+drawing the character at index STOP, presuming it all fits.  Output starts at XPOS,
+YPOS on the sheet and continues until all appropriate characters are drawn, or until
+the next character to be drawn would extend past XLIM.  The index of the next character
+to be drawn, and the xpos where it would go are returned.  If a NEWLINE is encountered,
+returns its index and xpos immediately.  The sheet's cursor position is ignored and
+left unchanged."
+  ;; Who says you can't write assembly code on the Lisp Machine?
+  (declare (values index xpos))
+  (prog (c (i start) width (tab-width (sheet-tab-width sheet)) (base-ypos ypos) (npos xpos)
+	 font-index font-next (font-map (sheet-font-map sheet))
+	 font-index-table font-width-table font-kern-table lozenge-string
+	 (inside-left (sheet-inside-left sheet)))
 
-      ;; If we set the cursor then do a clear to end of line
-      (AND (OR SET-XPOS SET-YPOS)
-	   (%DRAW-RECTANGLE (- (SHEET-INSIDE-RIGHT SHEET)
-			       (SETQ SET-XPOS (OR SET-XPOS (SHEET-CURSOR-X SHEET))))
-			    (SHEET-LINE-HEIGHT SHEET)
-			    SET-XPOS OYPOS
-			    (SHEET-ERASE-ALUF SHEET) SHEET))
-      ;; If special case of italic line, move back and decrement starting index
-      (COND (DWIDTH
-	     (SETF (SHEET-CURSOR-X SHEET) (- SET-XPOS DWIDTH))
-	     (SETQ I (1- I))))
+	(cond (( i stop)
+	       (return (values (1+ stop) xpos)))
+	      ((neq (%p-mask-field-offset #.%%array-type-field string 0) art-string)
+	       (go multiple-font)))
 
-  HD  (AND ( I N)
-	   (RETURN (1+ I) (- (SHEET-CURSOR-X SHEET) (SHEET-INSIDE-LEFT SHEET))))
-      (SETQ CH (AREF STRING I))
-      (OR (EQ (SETQ TEM (LDB %%CH-FONT CH)) FONTX)	;Changing to a new font
-	  (LET ((FONT-MAP (SHEET-FONT-MAP SHEET)))
-	    (SETQ FONTX TEM)
-	    (SETQ FONT (AREF FONT-MAP (IF ( FONTX (ARRAY-ACTIVE-LENGTH FONT-MAP))
-					  (SETQ FONTX 0)
-					FONTX))
-		  BASE-ADJ (- (SHEET-BASELINE SHEET) (FONT-BASELINE FONT)))))
-  HD1 (SETQ WIDTH (SHEET-CHARACTER-WIDTH SHEET (SETQ CH (LDB %%CH-CHAR CH)) FONT))
-      (COND ((> (+ (SHEET-CURSOR-X SHEET) WIDTH) RIGHT-LIMIT)	;This char won't fit
-	     (AND MARGIN-FLAG (SEND SHEET ':TYO-RIGHT-MARGIN-CHARACTER
-				    (SHEET-CURSOR-X SHEET) OYPOS #/!))
-	     (RETURN (IF (ZEROP (SHEET-TRUNCATE-LINE-OUT-FLAG SHEET)) I (1+ N))
-		     (- (SHEET-CURSOR-X SHEET) (SHEET-INSIDE-LEFT SHEET)))))
-      (COND ((AND (< CH 200)
-		  (NULL (FONT-INDEXING-TABLE FONT)))	;Let SHEET-TYO do big fonts
-	     (AND (NULL (FONT-CHAR-WIDTH-TABLE FONT))
-		  (NULL (FONT-LEFT-KERN-TABLE FONT))
-		  (GO EZ))				;Handle easy fixed-width case fast
-	     (GO VW)))					;Variable-width is a little slower
-      (SHEET-TYO SHEET CH FONT)
-      (SETQ I (1+ I))
-      (GO HD)
-  
-      ;;This loop is for simple fonts that don't need full hair of SHEET-TYO
-  EZ  (SETQ XPOS (SHEET-CURSOR-X SHEET)
-	    ALUF (SHEET-CHAR-ALUF SHEET))
-  EZ0 (SETQ WIDTH (FONT-CHAR-WIDTH FONT)
-	    YPOS (+ (SHEET-CURSOR-Y SHEET) BASE-ADJ))
-  EZ1 (OR (< CH 200) (GO EZX))				;Format effector, call full TYO
-      (COND ((> (+ XPOS WIDTH) RIGHT-LIMIT)		;Form continuation line
-	     (AND MARGIN-FLAG (SEND SHEET ':TYO-RIGHT-MARGIN-CHARACTER XPOS YPOS #/!))
-	     (RETURN (IF (ZEROP (SHEET-TRUNCATE-LINE-OUT-FLAG SHEET)) I (1+ N))
-		     (- XPOS (SHEET-INSIDE-LEFT SHEET)))))
-      (%DRAW-CHAR FONT CH XPOS YPOS ALUF SHEET)
-      (SETQ XPOS (+ XPOS WIDTH))
-      ;;Get next character, if any left
-      (COND (( (SETQ I (1+ I)) N)
-	     (SETF (SHEET-CURSOR-X SHEET) XPOS)		;Necessary?
-	     (RETURN (1+ I) (- XPOS (SHEET-INSIDE-LEFT SHEET)))))
-      (SETQ CH (AREF STRING I)
-	    TEM (LDB %%CH-FONT CH)
-	    CH (LDB %%CH-CHAR CH))
-      (AND (EQ TEM FONTX)
-	   (GO EZ1))
-      (SETQ FONT (AREF (SHEET-FONT-MAP SHEET)
-		       (SETQ FONTX (IF ( TEM (ARRAY-ACTIVE-LENGTH (SHEET-FONT-MAP SHEET)))
-				       0
-				     TEM)))	;Changing to a new font
-	    BASE-ADJ (- (SHEET-BASELINE SHEET) (FONT-BASELINE FONT)))
-      (AND (NULL (FONT-LEFT-KERN-TABLE FONT))
-	   (NULL (FONT-INDEXING-TABLE FONT))
-	   (NULL (FONT-CHAR-WIDTH-TABLE FONT))
-	   (GO EZ0))					;Handle easy case fast
-  EZX (SETF (SHEET-CURSOR-X SHEET) XPOS)
-      (GO HD1)						;Go type out char and enter HD loop
+   single-font
+	(when (fixnump font) (setq font (aref font-map font)))
+	(setq ypos (+ ypos (- (sheet-baseline sheet) (font-baseline font))))
+	(cond ((setq font-index-table (font-indexing-table font))
+	       (setf (sheet-cursor-x sheet) xpos)
+	       (go single-hairy-font-loop))
+	      ((or (setq font-width-table (font-char-width-table font))
+		   (setq font-kern-table (font-left-kern-table font)))
+	       (setq width (font-char-width font))
+	       (go single-variable-width-font-loop))
+	      (t
+	       (setq width (font-char-width font))
+	       (go single-fixed-width-font-loop)))
 
-      ;;This loop is for variable-width fonts
-  VW  (SETQ XPOS (SHEET-CURSOR-X SHEET)
-	    ALUF (SHEET-CHAR-ALUF SHEET)
-	    FWT (FONT-CHAR-WIDTH-TABLE FONT)
-	    LKT (FONT-LEFT-KERN-TABLE FONT)
-	    YPOS (+ (SHEET-CURSOR-Y SHEET) BASE-ADJ))
-  VW1 (OR (< CH 200) (GO EZX))				;Format effector, call full TYO
-      (AND FWT (SETQ WIDTH (AREF FWT CH)))
-      (COND ((> (+ WIDTH XPOS) RIGHT-LIMIT)		;Won't fit in line
-	     (AND MARGIN-FLAG (SEND SHEET ':TYO-RIGHT-MARGIN-CHARACTER XPOS YPOS #/!))
-	     (RETURN (IF (ZEROP (SHEET-TRUNCATE-LINE-OUT-FLAG SHEET)) I (1+ N))
-		     (- XPOS (SHEET-INSIDE-LEFT SHEET)))))
-      (%DRAW-CHAR FONT CH (IF LKT (- XPOS (AREF LKT CH)) XPOS) YPOS ALUF SHEET)
-      (SETQ XPOS (+ XPOS WIDTH))
-      ;;Get next character, if any left
-      (COND (( (SETQ I (1+ I)) N)
-	     (SETF (SHEET-CURSOR-X SHEET) XPOS)		;Necessary?
-	     (RETURN (1+ I) (- XPOS (SHEET-INSIDE-LEFT SHEET)))))
-      (SETQ CH (AREF STRING I)
-	    TEM (LDB %%CH-FONT CH)
-	    CH (LDB %%CH-CHAR CH))
-      (AND (EQ TEM FONTX) (GO VW1))
-      (SETF (SHEET-CURSOR-X SHEET) XPOS)
-      (GO HD)
-      )))
+   single-fixed-width-font-loop
+	(when ( (setq c (char-int (char string i))) #o200)
+	  (case c
+	    (#.(char-int #/tab)     (go single-fixed-width-font-tab))
+	    (#.(char-int #/newline) (return (values i npos)))
+	    (otherwise (go single-fixed-width-font-hard))))
+   single-fixed-width-font-char
+	(when (> (setq npos (+ (setq xpos npos) width)) xlim)
+	  (return (values i xpos)))
+	(%draw-char font c xpos ypos alu sheet)
+	(when (eq (incf i) stop)
+	  (return (values (1+ stop) npos)))
+	(if (< (setq c (char-int (char string i))) #o200)
+	    (go single-fixed-width-font-char)
+	  (case c
+	    (#.(char-int #/tab)     (go single-fixed-width-font-tab))
+	    (#.(char-int #/newline) (return (values i npos)))
+	    (otherwise (go single-fixed-width-font-hard))))
+   single-fixed-width-font-tab
+	(setq npos (+ (* (truncate (+ (setq xpos npos) tab-width) tab-width)
+			 tab-width)
+		      inside-left))
+	(cond ((> npos xlim)
+	       (return (values i xpos)))
+	      ((eq (incf i) stop)
+	       (return (values (1+ stop) npos)))
+	      (t (go single-fixed-width-font-loop)))
+   single-fixed-width-font-hard
+	(setq lozenge-string (or (car (rassq c si::xr-special-character-names))
+				 (format nil "~O" c)))
+	(setq npos (+ (setq xpos npos) (lozenged-string-width lozenge-string)))
+	(when (> npos xlim)
+	  (return (values i xpos)))
+	(setf (sheet-cursor-x sheet) xpos)
+	(sheet-display-lozenged-string sheet lozenge-string)
+	(if (eq (incf i) stop)
+	    (return (values (1+ stop) npos))
+	  (go single-fixed-width-font-loop))
+
+   single-variable-width-font-loop
+	(when ( (setq c (char-int (char string i))) #o200)
+	  (case c
+	    (#.(char-int #/tab)     (go single-variable-width-font-tab))
+	    (#.(char-int #/newline) (return (values i npos)))
+	    (otherwise (go single-variable-width-font-hard))))
+   single-variable-width-font-char
+        (when (> (setq npos (+ (setq xpos npos)
+			       (if font-width-table (aref font-width-table c) width))) xlim)
+	  (return (values i xpos)))
+	(if font-kern-table
+	    (%draw-char font c (- xpos (aref font-kern-table c)) ypos alu sheet)
+	  (%draw-char font c xpos ypos alu sheet))
+	(if (eq (incf i) stop)
+	    (return (values (1+ stop) npos))
+	  (go single-variable-width-font-loop))
+   single-variable-width-font-tab
+	(setq npos (+ (* (truncate (+ (setq xpos npos) tab-width) tab-width)
+			 tab-width)
+		      inside-left))
+	(cond ((> npos xlim)
+	       (return (values i xpos)))
+	      ((eq (incf i) stop)
+	       (return (values (1+ stop) npos)))
+	      (t (go single-variable-width-font-loop)))
+   single-variable-width-font-hard
+	(setq lozenge-string (or (car (rassq c si:xr-special-character-names))
+				 (format nil "~O" c)))
+	(setq npos (+ (setq xpos npos) (lozenged-string-width lozenge-string)))
+	(when (> npos xlim)
+	  (return (values i xpos)))
+	(setf (sheet-cursor-x sheet) xpos)
+	(sheet-display-lozenged-string sheet lozenge-string)
+	(if (eq (incf i) stop)
+	    (return (values (1+ stop) npos))
+	  (go single-variable-width-font-loop))
+
+   single-hairy-font-loop
+	(setq width (sheet-character-width sheet (setq c (char-int (char string i))) font))
+	(when (> (+ (sheet-cursor-x sheet) width) xlim)
+	  (return (values i (sheet-cursor-x sheet))))
+	(sheet-tyo sheet c font)
+	(if (eq (incf i) stop)
+	    (return (values (1+ stop) (sheet-cursor-x sheet)))
+	  (go single-hairy-font-loop))
+
+   multiple-font
+	(setq font-next (char-font (setq c (char string i))))
+   multiple-font-main-loop-font-changed
+	(setq font (aref font-map (setq font-index font-next)))
+	(setq font-index-table (font-indexing-table font))
+	(setq font-width-table (font-char-width-table font))
+	(setq font-kern-table (font-left-kern-table font))
+	(setq width (font-char-width font))
+	(setq ypos (+ base-ypos (- (sheet-baseline sheet) (font-baseline font))))
+   multiple-font-main-loop-font-unchanged
+	(when ( (setq c (char-code c)) #o200)
+	  (go multiple-font-special-character))
+
+   multiple-font-graphic-character
+	(when (> (setq npos (+ (setq xpos npos)
+			       (if font-width-table (aref font-width-table c) width)))
+		 xlim)
+	  (return (values i xpos)))
+	(when (null font-index-table)
+	  (if font-width-table
+	      (if font-kern-table
+		  (go multiple-font-variable-width-with-kerning-loop-short-cut)
+		(go multiple-font-variable-width-loop-short-cut))
+	    (go multiple-font-fixed-width-loop-short-cut)))
+	(setf (sheet-cursor-x sheet) xpos)	;Must transmit latest position.
+	(sheet-tyo sheet c font)		;Indexed character (wider than 32 bits).
+	(go multiple-font-loop-tail)
+
+   multiple-font-special-character
+	(case c
+	  (#.(char-int #/tab)
+	   (when (> (setq npos (+ (setq xpos npos)
+				  (- tab-width
+				     (\ (- xpos inside-left)
+					tab-width))))
+		    xlim)
+	     (return (values i xpos))))
+	  (#.(char-int #/newline)
+	   (return (values i (setq xpos npos))))
+	  (otherwise
+	   (setq lozenge-string (or (car (rassq c si::xr-special-character-names))
+				    (format nil "~O" c)))
+	   (when (> (setq npos (+ (setq xpos npos)
+				  (lozenged-string-width lozenge-string)))
+		    xlim)
+	     (return (values i xpos)))
+	   (setf (sheet-cursor-x sheet) xpos)
+	   (sheet-display-lozenged-string sheet lozenge-string)))
+
+   multiple-font-loop-tail
+	(cond ((eq (incf i) stop)
+	       (return (values (1+ stop) npos)))
+	      ((eq (setq font-next (char-font (setq c (char string i)))) font-index)
+	       (go multiple-font-main-loop-font-unchanged))
+	      (t
+	       (go multiple-font-main-loop-font-changed)))
+	
+   multiple-font-fixed-width-loop
+	(cond (( (setq c (char-code c)) #o200)
+	       (go multiple-font-special-character))
+	      ((> (setq npos (+ (setq xpos npos) width))
+		  xlim)
+	       (return (values i xpos))))
+   multiple-font-fixed-width-loop-short-cut
+	(%draw-char font c xpos ypos alu sheet)
+	(cond ((eq (incf i) stop)
+	       (return (values (1+ stop) npos)))
+	      ((eq (setq font-next (char-font (setq c (char string i)))) font-index)
+	       (go multiple-font-fixed-width-loop))
+	      (t
+	       (go multiple-font-main-loop-font-changed)))
+
+   multiple-font-variable-width-loop
+	(cond (( (setq c (char-code c)) #o200)
+	       (go multiple-font-special-character))
+	      ((> (setq npos (+ (setq xpos npos)
+				(if font-width-table (aref font-width-table c) width)))
+		  xlim)
+	       (return (values i xpos))))
+   multiple-font-variable-width-loop-short-cut
+	(%draw-char font c xpos ypos alu sheet)
+	(cond ((eq (incf i) stop)
+	       (return (values (1+ stop) npos)))
+	      ((eq (setq font-next (char-font (setq c (char string i)))) font-index)
+	       (go multiple-font-variable-width-loop))
+	      (t
+	       (go multiple-font-main-loop-font-changed)))
+
+   multiple-font-variable-width-with-kerning-loop
+	(cond (( (setq c (char-code c)) #o200)
+	       (go multiple-font-special-character))
+	      ((> (setq npos (+ (setq xpos npos)
+				(if font-width-table (aref font-width-table c) width)))
+		  xlim)
+	       (return (values i xpos))))
+   multiple-font-variable-width-with-kerning-loop-short-cut
+	(%draw-char font c (- xpos (aref font-kern-table c)) ypos alu sheet)
+	(cond ((eq (incf i) stop)
+	       (return (values (1+ stop) npos)))
+	      ((eq (setq font-next (char-font (setq c (char string i)))) font-index)
+	       (go multiple-font-variable-width-with-kerning-loop))
+	      (t
+	       (go multiple-font-main-loop-font-changed)))))
+
 
 (DEFMETHOD (SHEET :COMPUTE-MOTION) (STRING &OPTIONAL (START 0) END X Y &REST ARGS)
-  (LEXPR-FUNCALL 'SHEET-COMPUTE-MOTION SELF X Y STRING START END ARGS))
+  (APPLY #'SHEET-COMPUTE-MOTION SELF X Y STRING START END ARGS))
 
 (DEFCONST PRINTING-CHARACTER-TRANSLATE-TABLE
-	  (MAKE-ARRAY 200 ':INITIAL-VALUE 1))
+	  (MAKE-ARRAY #o200 :INITIAL-ELEMENT 1))
   
 ;; Change to T to fix the bug
 ;; that we stop after a character that goes across STOP-X
@@ -1047,15 +1200,15 @@ If CHAR is specified, that character's width is the distance to move."
 This is used by the editor and by TV:STREAM-MIXIN.
 In computing the motion, it will chose the font in one of two ways:
  If given an ART-FAT-STRING array (16 bit string) like the editor uses,
-  it will take the font from the %%CH-FONT field (high 8 bits) of the
-  character, and look in SHEET's font-map.
+  it will take the font from the character's CHAR-FONT and look in
+  SHEET's font-map.
  If given an ART-STRING array (8 bit string), it will take the font from
   FONT, or the SHEET-CURRENT-FONT of the sheet.
 SHEET is used to supply information such as the font map,
  and for defaulting such things as BOTTOM-LIMIT, RIGHT-LIMIT
  and LINE-HT.
 STRING, with START and END, specifies what characters to process.
-CR-AT-END-P if non-NIL says /"output/" a Return after
+CR-AT-END-P if non-NIL says /"output/" a Newline after
  STRING or the portion of STRING, and count that
  in the cursor motion.
 STOP-X and STOP-Y specify a cursor position at which to stop.
@@ -1067,7 +1220,7 @@ BOTTOM-LIMIT and RIGHT-LIMIT are a cursor position
  at which to wrap around; these default to
  the inside-size of SHEET.
 FONT specifies the font to use, if STRING is not a fat string.
-LINE-HT is the line height to use for Return characters,
+LINE-HT is the line height to use for Newline characters,
  defaulting to SHEET's line height.
 TAB-WIDTH is the width to use for Tab characters,
  defaulting to SHEET's SHEET-TAB-WIDTH.
@@ -1081,193 +1234,202 @@ FINAL-X, FINAL-Y are the cursor position
 FINAL-STRING-INDEX is the index
  in the string at which processing stopped (could be the length
  of the string, if the stop point was passed then), T if stopped
- due to reaching the stop point after the additional Return,
+ due to reaching the stop point after the additional Newline,
  or NIL if stopped due to finishing.
 MAXIMUM-X was the largest X-position ever encountered during processing."
 
 ; *** The interface to this crock should be redesigned.  Also note that the
 ; *** exact treatment of STOP-X and STOP-Y does not agree with SHEET-STRING-LENGTH.
 ; *** This is what turning on COMPUTE-MOTION-ROUND-DOWN is going to fix.
-  (DECLARE (RETURN-LIST FINAL-X FINAL-Y FINAL-STRING-INDEX MAXIMUM-X))
+  (DECLARE (VALUES FINAL-X FINAL-Y FINAL-STRING-INDEX MAXIMUM-X))
   (IF FONT
       (COERCE-FONT FONT SHEET)
-    (SETQ FONT (SHEET-CURRENT-FONT SHEET)))
+      (SETQ FONT (SHEET-CURRENT-FONT SHEET)))
   (PROG (CWA CW CH FONTX TEM I N NN II MARGIN-FLAG MAXIMUM-X OLD-X)
-    (OR (ZEROP (SHEET-RIGHT-MARGIN-CHARACTER-FLAG SHEET)) (SETQ MARGIN-FLAG T))
-    (AND (NULL X) (SETQ X (- (SHEET-CURSOR-X SHEET) (SHEET-INSIDE-LEFT SHEET))))
-    (AND (NULL Y) (SETQ Y (- (SHEET-CURSOR-Y SHEET) (SHEET-INSIDE-TOP SHEET))))
-    (AND (NULL STOP-Y)
-	 (SETQ STOP-Y (1+ (SHEET-INSIDE-HEIGHT SHEET))))
-		    ;   ^-- THIS 1+ IS SO CAN USE  RATHER THAN >
-    (OR RIGHT-LIMIT (SETQ RIGHT-LIMIT (SHEET-INSIDE-WIDTH SHEET)))
-    (AND MARGIN-FLAG (SETQ RIGHT-LIMIT (- RIGHT-LIMIT (SHEET-CHAR-WIDTH SHEET))))
-    (AND (NULL BOTTOM-LIMIT)
-	 (SETQ BOTTOM-LIMIT (- (SHEET-INSIDE-HEIGHT SHEET) LINE-HT)))
-    (SETQ MAXIMUM-X X
-	  I START
- 	  N (OR END (ARRAY-ACTIVE-LENGTH STRING))
-	  CW (FONT-CHAR-WIDTH FONT))
-    ;; At this point, decide whether we can use the fast version.
-    (COND
-      ;; If FONTX is non-NIL, then we have a string with font changes.
-      ((NEQ 8 (CDR (ASSQ (ARRAY-TYPE STRING) ARRAY-BITS-PER-ELEMENT)))
-       (SETQ FONTX T))
-      ;; The current font is variable width.
-      ((SETQ CWA (FONT-CHAR-WIDTH-TABLE FONT)))
-      ;; No font changes and the current font is fixed width.  We can use the fast version.
-      (T (GO FAST)))
-    ;;This is the slow version.
-SLOW
-    (SETQ MAXIMUM-X (MAX X MAXIMUM-X))
-    (COND ((AND ( Y STOP-Y) ( X STOP-X))	;Reached sticking-point
-	   (RETURN X Y I MAXIMUM-X))
-	  ((NOT (< I N))			;If string exhausted
-	   (COND (CR-AT-END-P
-		  (SETQ X 0 Y (+ Y LINE-HT))	;CRLF if told to
-		  (AND (> Y BOTTOM-LIMIT) (SETQ Y 0))))
-	   (RETURN X Y (AND ( X STOP-X) ( Y STOP-Y)) MAXIMUM-X)))
-    ;; Move quickly over the remaining characters until we reach
-    ;; an x-position at which something must be done.
-    (UNLESS (EQ FONTX T)
-      (LET (WIDTH-INCR
-	    (LIMIT (MIN RIGHT-LIMIT (IF ( Y STOP-Y) STOP-X RIGHT-LIMIT))))
-	(SETQ WIDTH-INCR
-	      (%STRING-WIDTH (OR CWA
-				 PRINTING-CHARACTER-TRANSLATE-TABLE)
-			     (IF FONTX (DPB FONTX %%CH-FONT 0) 0)
-			     STRING I N
-			     (IF CWA (- LIMIT X) (FLOOR (- LIMIT X) CW))))
-	(UNLESS CWA
-	  (SETQ WIDTH-INCR (* WIDTH-INCR CW)))
-	(SETQ I (%POP))
-	;; increment positions.
-	(SETQ X (+ WIDTH-INCR X))
-	;; At end of string, loop back, to exit.
-	(IF (= I N) (GO SLOW))
-	;; Otherwise we stopped due to funny char or font change or reaching the X limit.
-	))
-    (SETQ MAXIMUM-X (MAX X MAXIMUM-X))
-    (COND ((AND ( Y STOP-Y) ( X STOP-X))	;If reached sticking-point, done.
-	   (RETURN X Y I MAXIMUM-X)))
-    (SETQ CH (LDB %%CH-CHAR (SETQ TEM (AREF STRING I))))
-    (COND ((AND FONTX (NEQ (SETQ TEM (LDB %%CH-FONT TEM)) FONTX)) ;Changing fonts
-	   (SETQ FONTX TEM
-		 FONT (LET ((FONT-MAP (SHEET-FONT-MAP SHEET)))
-			(AREF FONT-MAP (IF ( FONTX (ARRAY-ACTIVE-LENGTH FONT-MAP))
-					   0 FONTX)))
-		 CWA (FONT-CHAR-WIDTH-TABLE FONT)
-		 CW (FONT-CHAR-WIDTH FONT))))
-    (SETQ OLD-X X)
-    ;; Try to do this one char.
-    (COND ((= CH #\CR)
-	   (SETQ X 0 Y (+ Y LINE-HT))
-	   (AND (> Y BOTTOM-LIMIT) (SETQ Y 0)))
-	  ((< CH 200)				;Printing character
-	   (SETQ X (+ (COND (CWA (AREF CWA CH)) (T CW)) X))) ;do char width
-	  ((= CH #\TAB)				;Tab (have to do here since x-dependent)
-	   (SETQ TEM TAB-WIDTH)
-	   (SETQ X (* (TRUNCATE (+ X TEM) TEM) TEM)))
-	  (T					;Format effector
-	   (SETQ X (MAX (+ X (SHEET-CHARACTER-WIDTH SHEET CH FONT)) 0))))
-    ;; If this char went past the stop-point, pretend we stopped before it.
-    (WHEN (AND COMPUTE-MOTION-ROUND-DOWN
-	       (> X STOP-X) ( Y STOP-Y))
-      (RETURN OLD-X Y I MAXIMUM-X))
-    ;; If this char went past the right margin, do a CR, then redo this char
-    (COND ((> X RIGHT-LIMIT)
-	   (SETQ X 0 Y (+ Y LINE-HT))
-	   (AND (> Y BOTTOM-LIMIT) (SETQ Y 0)))
-	  (T (SETQ I (1+ I))))
-    (GO SLOW)
+	(OR (ZEROP (SHEET-RIGHT-MARGIN-CHARACTER-FLAG SHEET)) (SETQ MARGIN-FLAG T))
+	(AND (NULL X) (SETQ X (- (SHEET-CURSOR-X SHEET) (SHEET-INSIDE-LEFT SHEET))))
+	(AND (NULL Y) (SETQ Y (- (SHEET-CURSOR-Y SHEET) (SHEET-INSIDE-TOP SHEET))))
+	(AND (NULL STOP-Y)
+	     (SETQ STOP-Y (1+ (SHEET-INSIDE-HEIGHT SHEET))))
+	;;		   ^-- THIS 1+ IS SO CAN USE  RATHER THAN >
+	(OR RIGHT-LIMIT (SETQ RIGHT-LIMIT (SHEET-INSIDE-WIDTH SHEET)))
+	(AND MARGIN-FLAG (SETQ RIGHT-LIMIT (- RIGHT-LIMIT (SHEET-CHAR-WIDTH SHEET))))
+	(AND (NULL BOTTOM-LIMIT)
+	     (SETQ BOTTOM-LIMIT (- (SHEET-INSIDE-HEIGHT SHEET) LINE-HT)))
+	(SETQ MAXIMUM-X X
+	      I START
+	      N (OR END (ARRAY-ACTIVE-LENGTH STRING))
+	      CW (FONT-CHAR-WIDTH FONT))
+	;; At this point, decide whether we can use the fast version.
+	(COND
+	  ;; If FONTX is non-NIL, then we have a string with font changes.
+	  ((NEQ 8 (CDR (ASSQ (ARRAY-TYPE STRING) ARRAY-BITS-PER-ELEMENT)))
+	   (SETQ FONTX T))
+	  ;; The current font is variable width.
+	  ((SETQ CWA (FONT-CHAR-WIDTH-TABLE FONT)))
+	  ;; No font changes and the current font is fixed width.
+	  ;;  We can use the fast version.
+	  (T (GO FAST)))
+	;;This is the slow version.
+     SLOW
+	(SETQ MAXIMUM-X (MAX X MAXIMUM-X))
+	(COND ((AND ( Y STOP-Y) ( X STOP-X))	;Reached sticking-point
+	       (RETURN (VALUES X Y
+			       I MAXIMUM-X)))
+	      ((NOT (< I N))			;If string exhausted
+	       (WHEN CR-AT-END-P
+		 (SETQ X 0 Y (+ Y LINE-HT))	;CRLF if told to
+		 (AND (> Y BOTTOM-LIMIT) (SETQ Y 0)))
+	       (RETURN (VALUES X Y
+			       (AND ( X STOP-X) ( Y STOP-Y)) MAXIMUM-X))))
+	;; Move quickly over the remaining characters until we reach
+	;; an x-position at which something must be done.
+	(UNLESS (EQ FONTX T)
+	  (LET ((WIDTH-INCR)
+		(LIMIT (MIN RIGHT-LIMIT (IF ( Y STOP-Y) STOP-X RIGHT-LIMIT))))
+	    (SETQ WIDTH-INCR
+		  (%STRING-WIDTH (OR CWA
+				     PRINTING-CHARACTER-TRANSLATE-TABLE)
+				 (IF FONTX (DPB FONTX %%CH-FONT 0) 0)
+				 STRING I N
+				 (IF CWA (- LIMIT X) (FLOOR (- LIMIT X) CW))))
+	    (UNLESS CWA
+	      (SETQ WIDTH-INCR (* WIDTH-INCR CW)))
+	    (SETQ I (%POP))
+	    ;; increment positions.
+	    (INCF X WIDTH-INCR)
+	    ;; At end of string, loop back, to exit.
+	    (IF (= I N) (GO SLOW))
+	    ;; Otherwise we stopped due to funny char or font change or reaching the X limit.
+	    ))
+	(SETQ MAXIMUM-X (MAX X MAXIMUM-X))
+	(WHEN (AND ( Y STOP-Y) ( X STOP-X))	;If reached sticking-point, done.
+	  (RETURN (VALUES X Y
+			  I MAXIMUM-X)))
+	(SETQ CH (CHAR-CODE (SETQ TEM (CHAR STRING I))))
+	(WHEN (AND FONTX (NEQ (SETQ TEM (CHAR-FONT TEM)) FONTX))	;Changing fonts
+	  (SETQ FONTX TEM
+		FONT (LET ((FONT-MAP (SHEET-FONT-MAP SHEET)))
+		       (AREF FONT-MAP (IF ( FONTX (ARRAY-ACTIVE-LENGTH FONT-MAP))
+					  0 FONTX)))
+		CWA (FONT-CHAR-WIDTH-TABLE FONT)
+		CW (FONT-CHAR-WIDTH FONT)))
+	(SETQ OLD-X X)
+	;; Try to do this one char.
+	(COND ((= CH #/NEWLINE)
+	       (SETQ X 0 Y (+ Y LINE-HT))
+	       (AND (> Y BOTTOM-LIMIT) (SETQ Y 0)))
+	      ((< CH #o200)			;Printing character
+	       (SETQ X (+ (COND (CWA (AREF CWA CH)) (T CW)) X)))	;do char width
+	      ((= CH #/TAB)			;Tab (have to do here since x-dependent)
+	       (SETQ TEM TAB-WIDTH)
+	       (SETQ X (* (TRUNCATE (+ X TEM) TEM) TEM)))
+	      (T				;Format effector
+	       (SETQ X (MAX (+ X (SHEET-CHARACTER-WIDTH SHEET CH FONT)) 0))))
+	;; If this char went past the stop-point, pretend we stopped before it.
+	(WHEN (AND COMPUTE-MOTION-ROUND-DOWN
+		   (> X STOP-X) ( Y STOP-Y))
+	  (RETURN (VALUES OLD-X Y
+			  I MAXIMUM-X)))
+	;; If this char went past the right margin, do a CR, then redo this char
+	(COND ((> X RIGHT-LIMIT)
+	       (SETQ X 0 Y (+ Y LINE-HT))
+	       (AND (> Y BOTTOM-LIMIT) (SETQ Y 0)))
+	      (T (INCF I)))
+	(GO SLOW)
 
-    ;;Here is the fast loop.  The basic idea is to scan as fast as possible
-    ;;over printing characters, with all checking outside the loop.
-FAST 
-    (SETQ MAXIMUM-X (MAX X MAXIMUM-X))
-    ;;First, decide the most characters we want to scan over in a whack
-    (SETQ NN
-	  (MIN (+ (TRUNCATE (- (COND (( Y STOP-Y)	;Stop-point is in this line
-				      STOP-X)
-				     (T RIGHT-LIMIT))	;Stop for this line is margin
-			       X)
-			    CW)
-		  I)
-	       N))				;NN is limiting value of I
-    ;Now, scan over printing characters.
-    (AND ( (SETQ II I) NN)			;Save initial I, and check for null loop
-	 (GO SCX))
-SCN (%STRING-WIDTH PRINTING-CHARACTER-TRANSLATE-TABLE
-		   0 STRING II NN NIL)
-    (SETQ I (%POP))
-;    (SETQ TEM 200)				;This is really a ridiculous bum
-;SCN (AND (< (AREF STRING I) TEM)		;If this is a printing character
-;	 (< (SETQ I (1+ I)) NN)			; and we haven't reached stop point
-;	 (GO SCN))				; then continue to loop (9 instructions)
-    (SETQ X (+ (* (- I II) CW) X))		;Account for the motion of those chars
-SCX (SETQ NN X)
-    (SETQ MAXIMUM-X (MAX X MAXIMUM-X))
-    (COND ((AND ( Y STOP-Y) ( X STOP-X))	;If reached sticking-point, done.
-	   (RETURN X Y I MAXIMUM-X))
-	  ((NOT (< I N))			;If string exhausted
-	   (COND (CR-AT-END-P			;Do return X off end of line
-		  (SETQ X 0 Y (+ Y LINE-HT))	;crlf if told to
-		  (AND (> Y BOTTOM-LIMIT) (SETQ Y 0))))
-	   (RETURN X Y (AND ( X STOP-X) ( Y STOP-Y)) MAXIMUM-X)))
-    (SETQ OLD-X X)
-    ;; Try to do this one char.
-    (COND ((= (SETQ CH (AREF STRING I)) #\CR)
-	   (SETQ X 0 Y (+ Y LINE-HT))
-	   (AND (> Y BOTTOM-LIMIT) (SETQ Y 0)))
-	  ((< CH 200)				;Printing character
-	   (SETQ X (+ CW X)))
-	  ((= CH #\TAB)				;Tab (have to do here since x-dependent)
-	   (SETQ TEM TAB-WIDTH)
-	   (SETQ X (* (TRUNCATE (+ X TEM) TEM) TEM)))
-	  (T					;Format effector
-	   (SETQ X (MAX (+ X (SHEET-CHARACTER-WIDTH SHEET CH FONT)) 0))))
-    ;; If this char went past the stop-point, pretend we stopped before it.
-    (WHEN (AND COMPUTE-MOTION-ROUND-DOWN
-	       (> X STOP-X) ( Y STOP-Y))
-      (RETURN OLD-X Y I MAXIMUM-X))
-    ;; If this char went past the right margin, do a CR and then redo this char.
-    (COND ((> X RIGHT-LIMIT)
-	   (SETQ X 0 Y (+ Y LINE-HT))
-	   (AND (> Y BOTTOM-LIMIT) (SETQ Y 0)))
-	  (T (SETQ I (1+ I))))
-    (GO FAST)
-))
+	;;Here is the fast loop.  The basic idea is to scan as fast as possible
+	;;over printing characters, with all checking outside the loop.
+     FAST 
+	(SETQ MAXIMUM-X (MAX X MAXIMUM-X))
+	;;First, decide the most characters we want to scan over in a whack
+	(SETQ NN
+	      (MIN (1+ (TRUNCATE (- (IF ( Y STOP-Y)	;Stop-point is in this line
+				        STOP-X
+				        RIGHT-LIMIT)	;Stop for this line is margin
+				    X)
+				 CW))
+		   N))				;NN is limiting value of I
+	;; Now, scan over printing characters.
+	(WHEN ( (SETQ II I) NN)		;Save initial I, and check for null loop
+	  (GO SCX))
+     SCN
+	(%STRING-WIDTH PRINTING-CHARACTER-TRANSLATE-TABLE
+		       0 STRING II NN NIL)
+	(SETQ I (%POP))
+;       (SETQ TEM #o200)			;This is really a ridiculous bum
+;    SCN
+;	(AND (< (AREF STRING I) TEM)		;If this is a printing character
+;	     (< (SETQ I (1+ I)) NN)		; and we haven't reached stop point
+;	     (GO SCN))				; then continue to loop (9 instructions)
+	(SETQ X (+ (* (- I II) CW) X))		;Account for the motion of those chars
+
+     SCX
+	(SETQ NN X)
+	(SETQ MAXIMUM-X (MAX X MAXIMUM-X))
+	(COND ((AND ( Y STOP-Y) ( X STOP-X))	;If reached sticking-point, done.
+	       (RETURN (VALUES X Y
+			       I MAXIMUM-X)))
+	      ((NOT (< I N))			;If string exhausted
+	       (WHEN CR-AT-END-P		;Do Newline X off end of line
+		 (SETQ X 0 Y (+ Y LINE-HT))	;crlf if told to
+		 (AND (> Y BOTTOM-LIMIT) (SETQ Y 0)))
+	       (RETURN (VALUES X Y
+			       (AND ( X STOP-X) ( Y STOP-Y)) MAXIMUM-X))))
+	(SETQ OLD-X X)
+	;; Try to do this one char.
+	(COND ((= (SETQ CH (CHAR STRING I)) #/CR)
+	       (SETQ X 0 Y (+ Y LINE-HT))
+	       (AND (> Y BOTTOM-LIMIT) (SETQ Y 0)))
+	      ((< CH #o200)			;Printing character
+	       (INCF X CW))
+	      ((= CH #/TAB)			;Tab (have to do here since x-dependent)
+	       (SETQ TEM TAB-WIDTH)
+	       (SETQ X (* (TRUNCATE (+ X TEM) TEM) TEM)))
+	      (T				;Format effector
+	       (SETQ X (MAX (+ X (SHEET-CHARACTER-WIDTH SHEET CH FONT)) 0))))
+	;; If this char went past the stop-point, pretend we stopped before it.
+	(WHEN (AND COMPUTE-MOTION-ROUND-DOWN
+		   (> X STOP-X) ( Y STOP-Y))
+	  (RETURN (VALUES OLD-X Y
+			  I MAXIMUM-X)))
+	;; If this char went past the right margin, do a Newline and then redo this char.
+	(COND ((> X RIGHT-LIMIT)
+	       (SETQ X 0 Y (+ Y LINE-HT))
+	       (AND (> Y BOTTOM-LIMIT) (SETQ Y 0)))
+	      (T (INCF I)))
+	(GO FAST)))
 
 (DEFMETHOD (SHEET :CHARACTER-WIDTH) (CHAR &OPTIONAL (FONT CURRENT-FONT))
   (SHEET-CHARACTER-WIDTH SELF CHAR
 			 (IF (TYPEP FONT 'FONT)
 			     FONT
-			   (FUNCALL (SHEET-GET-SCREEN SELF)
-				    ':PARSE-FONT-DESCRIPTOR FONT))))
+			   (SEND (SHEET-GET-SCREEN SELF) :PARSE-FONT-DESCRIPTOR FONT))))
 
 (DEFUN SHEET-CHARACTER-WIDTH (SHEET CH FONT &AUX TEM)
   "Returns the width of a character, in raster units.
-For backspace, it can return a negative number.
-For tab, the number returned depends on the current cursor position.
-For return, the result is zero.
-CH can be NIL; then you get the font's character-width."
+For Backspace, it can return a negative number.
+For Tab, the number returned depends on the current cursor position.
+For Newline, the result is zero.
+CH may be NIL; then you get the font's character-width."
   (COERCE-FONT FONT SHEET)
   (COND ((NULL CH) (FONT-CHAR-WIDTH FONT))
-	((< CH 200)				;Ordinary printing character
+	((< CH #o200)				;Ordinary printing character
 	 (COND ((SETQ TEM (FONT-CHAR-WIDTH-TABLE FONT)) (AREF TEM CH))
 	       (T (FONT-CHAR-WIDTH FONT))))
-	((= CH #\CR) 0)				        ;Return
-	((= CH #\TAB)				        ;Tab
+	((= CH #/NEWLINE) 0)			;Return
+	((= CH #/TAB)				;Tab
 	 (SETQ TEM (SHEET-TAB-WIDTH SHEET))
 	 (- (* (TRUNCATE (+ (SHEET-CURSOR-X SHEET) TEM) TEM) TEM)
 	    (SHEET-CURSOR-X SHEET)))
-	((AND (= CH #\BS) (ZEROP (SHEET-BACKSPACE-NOT-OVERPRINTING-FLAG SHEET)))
+	((AND (= CH #/BACKSPACE) (ZEROP (SHEET-BACKSPACE-NOT-OVERPRINTING-FLAG SHEET)))
 	 (MINUS (SHEET-CHAR-WIDTH SHEET)))		;Backspace
 	(T						;Misc lozenge character
-	 (LET ((TEM (CAR (RASSOC CH SI:XR-SPECIAL-CHARACTER-NAMES))))
+	 (LET ((TEM (CAR (RASSQ CH SI::XR-SPECIAL-CHARACTER-NAMES))))
 	   (LOZENGED-STRING-WIDTH (OR TEM "777"))))))
 
 (DEFMETHOD (SHEET :STRING-LENGTH) (&REST ARGS)
-  (LEXPR-FUNCALL 'SHEET-STRING-LENGTH SELF ARGS))
+  (APPLY #'SHEET-STRING-LENGTH SELF ARGS))
 
 (DEFUN SHEET-STRING-LENGTH (SHEET STRING &OPTIONAL (START 0) (END NIL) (STOP-X NIL)
 						   FONT (START-X 0)
@@ -1297,92 +1459,93 @@ FINAL-X is the X-position when processing stopped
 FINAL-INDEX is the index in the string at which processing stopped.
 MAXIMUM-X is the largest X-position reached during processing.
  This can be larger than FINAL-X if the string contains
- Backspaces or Returns."
-  (DECLARE (RETURN-LIST FINAL-X FINAL-INDEX MAXIMUM-X))
+ Backspaces or Newlines."
+  (DECLARE (VALUES FINAL-X FINAL-INDEX MAXIMUM-X))
   (IF FONT
       (COERCE-FONT FONT SHEET)
     (SETQ FONT (SHEET-CURRENT-FONT SHEET)))
   (PROG (CWA CW CH FONTX TEM I N NN II STRINGP (X START-X))
-    (SETQ I START
-	  N (OR END (ARRAY-ACTIVE-LENGTH STRING))
-	  CW (FONT-CHAR-WIDTH FONT))
-    ;At this point, decide whether we can use the fast version
-SLOW
-    (AND (SETQ STRINGP (= (%P-MASK-FIELD-OFFSET %%ARRAY-TYPE-FIELD STRING 0)
-			  ART-STRING))			;i.e. no font changes
-	 (NULL (SETQ CWA (FONT-CHAR-WIDTH-TABLE FONT)))	;and fixed width
-	 (GO FAST))
-SLOW0
-    (OR (< I N) (RETURN X I MAX-X))			;If string exhausted
-    ;; Move quickly over 20 characters, or all the remaining characters,
-    ;; if that does not go past STOP-X.
-    (WHEN (OR STRINGP FONTX)
-      (LET ((WIDTH-INCR
-	      (%STRING-WIDTH (OR CWA
-				 PRINTING-CHARACTER-TRANSLATE-TABLE)
-			     (IF FONTX (DPB FONTX %%CH-FONT 0) 0)
-			     STRING I N
-			     (AND STOP-X
-				  (IF CWA
-				      (- STOP-X X)
-				    (FLOOR (- STOP-X X) CW))))))
-	(UNLESS CWA
-	  (SETQ WIDTH-INCR (* WIDTH-INCR CW)))
-	(SETQ I (%POP))
-	(SETQ X (+ WIDTH-INCR X))
-	(SETQ MAX-X (MAX X MAX-X))
-	;; Loop back if reached end of string.
-	(IF (= I N) (GO SLOW0))
-	;; Otherwise we stopped due to funny char or font change or reaching STOP-X.
-	))
-    (SETQ CH (LDB %%CH-CHAR (SETQ TEM (AREF STRING I))))
-    (COND ((AND (NOT STRINGP)				;Changing fonts
-		(NEQ (SETQ TEM (LDB %%CH-FONT TEM)) FONTX))
-	   (SETQ FONTX TEM
-		 FONT (AREF (SHEET-FONT-MAP SHEET) FONTX)
-		 CWA (FONT-CHAR-WIDTH-TABLE FONT)
-		 CW (FONT-CHAR-WIDTH FONT))))
-    (COND ((< CH 200)					;Printing character
-	   (SETQ NN (IF CWA (AREF CWA CH) CW)))
-	  ((= CH #\TAB)
-	   (SETQ TEM TAB-WIDTH)
-	   (SETQ NN (- (* (TRUNCATE (+ X TEM) TEM) TEM) X)))
-	  ((AND (= CH #\BS) (ZEROP (SHEET-BACKSPACE-NOT-OVERPRINTING-FLAG SHEET)))
-	   (SETQ NN (- (MAX 0 (- X (SHEET-CHAR-WIDTH SHEET))) X)))
-	  ((= CH #\CR)
-	   (SETQ NN 0 X 0))
-	  (T					;Lozenged character
-	   (SETQ NN (SHEET-CHARACTER-WIDTH SHEET CH FONT))))
-    (SETQ X (+ X NN))
-    (IF (> X MAX-X) (SETQ MAX-X X))
-    (AND STOP-X (> X STOP-X)			;If char doesn't fit, stop before it
-	 (RETURN (- X NN) I MAX-X))
-    (SETQ I (1+ I))
-    (GO SLOW)
+	(SETQ I START
+	      N (OR END (ARRAY-ACTIVE-LENGTH STRING))
+	      CW (FONT-CHAR-WIDTH FONT))
+	;; At this point, decide whether we can use the fast version
+     SLOW
+	(AND (SETQ STRINGP (= (%P-MASK-FIELD-OFFSET %%ARRAY-TYPE-FIELD STRING 0)
+			      ART-STRING))	;i.e. no font changes
+	     (NULL (SETQ CWA (FONT-CHAR-WIDTH-TABLE FONT)))	;and fixed width
+	     (GO FAST))
+     SLOW0
+	(UNLESS (< I N)				;If string exhausted
+	  (RETURN (VALUES X I MAX-X)))
+	;; Move quickly over 20 characters, or all the remaining characters,
+	;; if that does not go past STOP-X.
+	(WHEN (OR STRINGP FONTX)
+	  (LET ((WIDTH-INCR
+		  (%STRING-WIDTH (OR CWA
+				     PRINTING-CHARACTER-TRANSLATE-TABLE)
+				 (IF FONTX (DPB FONTX %%CH-FONT 0) 0)
+				 STRING I N
+				 (AND STOP-X
+				      (IF CWA
+					  (- STOP-X X)
+					(FLOOR (- STOP-X X) CW))))))
+	    (UNLESS CWA
+	      (SETQ WIDTH-INCR (* WIDTH-INCR CW)))
+	    (SETQ I (%POP))
+	    (INCF X WIDTH-INCR)
+	    (SETQ MAX-X (MAX X MAX-X))
+	    ;; Loop back if reached end of string.
+	    (IF (= I N) (GO SLOW0))
+	    ;; Otherwise we stopped due to funny char or font change or reaching STOP-X.
+	    ))
+	(SETQ CH (CHAR-CODE (SETQ TEM (AREF STRING I))))
+	(COND ((AND (NOT STRINGP)		;Changing fonts
+		    (NEQ (SETQ TEM (CHAR-FONT TEM)) FONTX))
+	       (SETQ FONTX TEM
+		     FONT (AREF (SHEET-FONT-MAP SHEET) FONTX)
+		     CWA (FONT-CHAR-WIDTH-TABLE FONT)
+		     CW (FONT-CHAR-WIDTH FONT))))
+	(COND ((< CH #o200)			;Printing character
+	       (SETQ NN (IF CWA (AREF CWA CH) CW)))
+	      ((= CH #/TAB)
+	       (SETQ TEM TAB-WIDTH)
+	       (SETQ NN (- (* (TRUNCATE (+ X TEM) TEM) TEM) X)))
+	      ((AND (= CH #/BACKSPACE) (ZEROP (SHEET-BACKSPACE-NOT-OVERPRINTING-FLAG SHEET)))
+	       (SETQ NN (- (MAX 0 (- X (SHEET-CHAR-WIDTH SHEET))) X)))
+	      ((= CH #/NEWLINE)
+	       (SETQ NN 0 X 0))
+	      (T				;Lozenged character
+	       (SETQ NN (SHEET-CHARACTER-WIDTH SHEET CH FONT))))
+	(INCF X NN)
+	(IF (> X MAX-X) (SETQ MAX-X X))
+	(WHEN (AND STOP-X (> X STOP-X))		;If char doesn't fit, stop before it
+	  (RETURN (VALUES (- X NN) I MAX-X)))
+	(INCF I)
+	(GO SLOW)
 
-    ;Here is the fast loop.  The basic idea is to scan as fast as possible
-    ;over printing characters, with all checking outside the loop.
-FAST 
-    ;First, decide the most characters we want to scan over in a whack
-    (SETQ NN (COND ((NULL STOP-X) N)		;NN is limiting value of I
-                   ((MIN (+ (TRUNCATE (- STOP-X X) CW)
-                            I)
-                         N))))
-    ;Now, scan over printing characters.
-    (AND ( (SETQ II I) NN)			;Save initial I, and check for null loop
-	 (GO SLOW0))
-SCN (%STRING-WIDTH PRINTING-CHARACTER-TRANSLATE-TABLE
-		   0 STRING II NN NIL)
-    (SETQ I (%POP))
-;    (SETQ TEM 200)				;This is really a ridiculous bum
-;SCN (AND (< (AREF STRING I) TEM)		;If this is a printing character
-;	 (< (SETQ I (1+ I)) NN)			; and we haven't reached stop point
-;	 (GO SCN))				; then continue to loop (9 instructions)
-    (SETQ X (+ (* (- I II) CW) X))		;Account for the motion of those chars
-    (IF (> X MAX-X) (SETQ MAX-X X))
-    (GO SLOW0)					;Either string exhausted, non-printing,
+	;; Here is the fast loop.  The basic idea is to scan as fast as possible
+	;; over printing characters, with all checking outside the loop.
+     FAST
+	;; First, decide the most characters we want to scan over in a whack
+	(SETQ NN (COND ((NULL STOP-X) N)	;NN is limiting value of I
+		       ((MIN (1+ (TRUNCATE (- STOP-X X) CW))
+			     N))))
+	;; Now, scan over printing characters.
+	(WHEN ( (SETQ II I) NN)		;Save initial I, and check for null loop
+	  (GO SLOW0))
+     SCN
+	(%STRING-WIDTH PRINTING-CHARACTER-TRANSLATE-TABLE
+		       0 STRING II NN NIL)
+	(SETQ I (%POP))
+;	(SETQ TEM #o200)			;This is really a ridiculous bum
+;    SCN
+;	(AND (< (AREF STRING I) TEM)		;If this is a printing character
+;	     (< (SETQ I (1+ I)) NN)		; and we haven't reached stop point
+;	     (GO SCN))				; then continue to loop (9 instructions)
+	(SETQ X (+ (* (- I II) CW) X))		;Account for the motion of those chars
+	(IF (> X MAX-X) (SETQ MAX-X X))
+	(GO SLOW0)))				;Either string exhausted, non-printing,
 						; or reached stop-x
-))
 
 (DEFMETHOD (SHEET :STRING-OUT-EXPLICIT)
 	   (STRING START-X START-Y X-LIMIT Y-LIMIT FONT ALU
@@ -1408,11 +1571,11 @@ Output starts at cursor position START-X, Y but SHEET's cursor is not moved.
 Output stops if x-position XLIM or y-position YLIM is reached.
 Font FONT is used, and alu-function ALU.
 START and END specify a portion of STRING to be used.
-MULTI-LINE-LINE-HEIGHT is how far to move down for Return characters;
- Return also moves back to x-position START-X.
+MULTI-LINE-LINE-HEIGHT is how far to move down for Newline characters;
+ Newline also moves back to x-position START-X.
  NIL means output <Return> with a lozenge.
 All position arguments are relative to SHEET's outside edges."
-  (DECLARE (RETURN-LIST FINAL-X FINAL-INDEX FINAL-Y))
+  (DECLARE (VALUES FINAL-X FINAL-INDEX FINAL-Y))
   (COERCE-FONT FONT SHEET)
   (SETQ FIT (FONT-INDEXING-TABLE FONT)
 	FWT (FONT-CHAR-WIDTH-TABLE FONT)
@@ -1425,26 +1588,26 @@ All position arguments are relative to SHEET's outside edges."
 	 (CH))
 	(( I N) (VALUES X Y I))
       (SETQ CH (AREF STRING I))
-      (COND ((AND MULTI-LINE-LINE-HEIGHT (= CH #\RETURN))
+      (COND ((AND MULTI-LINE-LINE-HEIGHT (= CH #/NEWLINE))
 	     (SETQ X START-X Y (+ Y MULTI-LINE-LINE-HEIGHT))
 	     (IF (AND YLIM (> (+ Y MULTI-LINE-LINE-HEIGHT) YLIM))
-		 (RETURN X Y I)))
-	    (( CH 200)
-	     (LET* ((STRING (STRING (OR (CAR (RASSOC CH SI:XR-SPECIAL-CHARACTER-NAMES))
+		 (RETURN (VALUES X Y I))))
+	    (( CH #o200)
+	     (LET* ((STRING (STRING (OR (CAR (RASSQ CH SI::XR-SPECIAL-CHARACTER-NAMES))
 					(FORMAT NIL "~3O" CH))))
 		    (NX (+ X (LOZENGED-STRING-WIDTH STRING))))
-	       (IF (> NX XLIM) (RETURN X Y I))
+	       (IF (> NX XLIM) (RETURN (VALUES X Y I)))
 	       (SHEET-DISPLAY-LOZENGED-STRING-INTERNAL SHEET STRING
 						       X (1+ Y) XLIM ALU)
 	       (SETQ X NX)))
 	    (T (IF FWT (SETQ WIDTH (AREF FWT CH)))
-	       (IF (> (+ X WIDTH) XLIM) (RETURN X Y I))
+	       (IF (> (+ X WIDTH) XLIM) (RETURN (VALUES X Y I)))
 	       (DRAW-CHAR FONT CH
 			  (IF LKT (- X (AREF LKT CH)) X)
 			  Y ALU SHEET)
-	       (SETQ X (+ X WIDTH)))))))
+	       (INCF X WIDTH))))))
 
-;like %DRAW-CHAR but works on wide characters just as on narrow ones.
+;;; like %DRAW-CHAR but works on wide characters just as on narrow ones.
 (DEFUN DRAW-CHAR (FONT CH X Y ALU SHEET)
   "Draw character CH in FONT at X, Y in SHEET using alu-function ALU.
 X and Y are relative to SHEET's outside edges."
@@ -1461,10 +1624,11 @@ X and Y are relative to SHEET's outside edges."
       (%DRAW-CHAR FONT CH X Y ALU SHEET))))
 
 (DEFMETHOD (SHEET :DISPLAY-CENTERED-STRING-EXPLICIT) (&REST ARGS)
-  (LEXPR-FUNCALL 'SHEET-DISPLAY-CENTERED-STRING-EXPLICIT SELF ARGS))
+  (APPLY #'SHEET-DISPLAY-CENTERED-STRING-EXPLICIT SELF ARGS))
 
 (COMPILER:MAKE-OBSOLETE SHEET-DISPLAY-CENTERED-STRING-EXPLICIT
-			"use the :STRING-OUT-CENTERED-EXPLICIT operation with rearranged args")
+  "use the :STRING-OUT-CENTERED-EXPLICIT operation with rearranged args")
+
 (DEFUN SHEET-DISPLAY-CENTERED-STRING-EXPLICIT
        (SHEET STRING &OPTIONAL
 	(LEFT (TV:SHEET-INSIDE-LEFT SHEET)) Y-POS
@@ -1503,39 +1667,41 @@ Y-POS specifies the vertical position of the top of the output,
 relative to SHEET's top margin.
 FONT and ALU function are used, defaulting to SHEET's font and char-aluf.
 START and END specify a portion of STRING to output; default is all.
-MULTI-LINE-LINE-HEIGHT is the distance for Return to move down;
+MULTI-LINE-LINE-HEIGHT is the distance for Newline to move down;
  then each line is centered individually.
- It can be NIL meaning output Return as <Return>.
+ It can be NIL meaning output Newline as <Return>.
  Default is sheet's line-height.
 
 SHEET's cursor is not used or moved."
   (IF FONT
       (COERCE-FONT FONT SHEET)
-    (SETQ FONT (SHEET-CURRENT-FONT SHEET)))
+      (SETQ FONT (SHEET-CURRENT-FONT SHEET)))
   (OR ALU (SETQ ALU ALU-IOR))
   (SETQ WID (- RIGHT LEFT)
 	STRING (STRING STRING))
   (OR END (SETQ END (STRING-LENGTH STRING)))
   (DO ((BEG START)) ((>= BEG END))
-    (LET ((STOP (OR (STRING-SEARCH-CHAR #\RETURN STRING BEG END) END)))
-      (MULTIPLE-VALUE (NIL NIL NIL SWID)  ;Compute how wide the string is, and whether to truncate
-	(SHEET-COMPUTE-MOTION SHEET 0 0 STRING BEG STOP NIL
-			      1.0S10 1.0S10 1.0S10 1.0S10 FONT))
+    (LET ((STOP (OR (STRING-SEARCH-CHAR #/RETURN STRING BEG END) END)))
+      (SETQ SWID		;Compute how wide the string is, and whether to truncate
+	    (NTH-VALUE 3 (SHEET-COMPUTE-MOTION SHEET 0 0 STRING BEG STOP NIL
+					       1.0s10 1.0s10 1.0s10 1.0s10 FONT)))
       (SHEET-STRING-OUT-EXPLICIT-1 SHEET STRING
 				   (+ LEFT (MAX (TRUNCATE (- WID SWID) 2) 0))
 				   Y-POS
 				   RIGHT NIL FONT ALU BEG STOP)
       (IF (OR (NULL MULTI-LINE-LINE-HEIGHT)
-	      (>= (+ Y-POS MULTI-LINE-LINE-HEIGHT) YLIM))
+	      ( (+ Y-POS MULTI-LINE-LINE-HEIGHT) YLIM))
 	  (RETURN))
       (INCF Y-POS MULTI-LINE-LINE-HEIGHT)
       (SETQ BEG (1+ STOP)))))
 
 (DEFMETHOD (SHEET :STRING-OUT-CENTERED) (&REST ARGS)
-  (LEXPR-FUNCALL 'SHEET-DISPLAY-CENTERED-STRING SELF ARGS))
+  (DECLARE (ARGLIST STRING &OPTIONAL LEFT RIGHT Y-POS))
+  (APPLY #'SHEET-DISPLAY-CENTERED-STRING SELF ARGS))
 
 (DEFMETHOD (SHEET :DISPLAY-CENTERED-STRING) (&REST ARGS)
-  (LEXPR-FUNCALL 'SHEET-DISPLAY-CENTERED-STRING SELF ARGS))
+  (DECLARE (ARGLIST STRING &OPTIONAL LEFT RIGHT Y-POS))
+  (APPLY #'SHEET-DISPLAY-CENTERED-STRING SELF ARGS))
 
 ;;; This function displays a string centered between two X coordinates, truncated if necessary
 ;;; The arguments are relative to the margins, as usual.
@@ -1552,17 +1718,20 @@ SHEET's current font, alu function and line height are used.
 SHEET's cursor is left at the end of the string."
   (SETQ WID (- RIGHT LEFT)
 	STRING (STRING STRING))
-  (MULTIPLE-VALUE (SWID SLEN)  ;Compute how wide the string is, and whether to truncate
+  ;; Compute how wide the string is, and whether to truncate
+  (MULTIPLE-VALUE-SETQ (SWID SLEN)
      (SHEET-STRING-LENGTH SHEET STRING 0 NIL WID))
   ;; SHEET-SET-CURSORPOS takes arguments in a different coordinate system
   (SHEET-SET-CURSORPOS SHEET (+ LEFT (MAX (TRUNCATE (- WID SWID) 2) 0)) Y-POS)
   (SHEET-STRING-OUT SHEET STRING 0 SLEN))
 
 (DEFMETHOD (SHEET :STRING-OUT-X-Y-CENTERED-EXPLICIT) (&REST ARGS)
-  (LEXPR-FUNCALL 'SHEET-DISPLAY-X-Y-CENTERED-STRING SELF ARGS))
+  (DECLARE (ARGLIST STRING &OPTIONAL LEFT TOP RIGHT BOTTOM FONT ALU START END LINE-HEIGHT))
+  (APPLY #'SHEET-DISPLAY-X-Y-CENTERED-STRING SELF ARGS))
 
 (DEFMETHOD (SHEET :DISPLAY-X-Y-CENTERED-STRING) (&REST ARGS)
-  (LEXPR-FUNCALL 'SHEET-DISPLAY-X-Y-CENTERED-STRING SELF ARGS))
+  (DECLARE (ARGLIST STRING &OPTIONAL LEFT TOP RIGHT BOTTOM FONT ALU START END LINE-HEIGHT))
+  (APPLY #'SHEET-DISPLAY-X-Y-CENTERED-STRING SELF ARGS))
 
 (DEFUN SHEET-DISPLAY-X-Y-CENTERED-STRING (SHEET STRING
 					  &OPTIONAL
@@ -1582,8 +1751,8 @@ SHEET's cursor is not used or moved."
   (LET ((WID (- RIGHT LEFT)))
     (MULTIPLE-VALUE-BIND (NIL SHEI SLEN SWID)
 	(SHEET-COMPUTE-MOTION SHEET LEFT TOP STRING START END T
-			      0 (+ top (sheet-inside-height sheet))
-			      30000000 NIL FNT MULTI-LINE-LINE-HEIGHT)
+			      0 (+ TOP (SHEET-INSIDE-HEIGHT SHEET))
+			      #o30000000 NIL FNT MULTI-LINE-LINE-HEIGHT)
 ;	(SHEET-STRING-LENGTH SHEET STRING START END WID FNT)
       (UNLESS (NUMBERP SLEN) (SETQ SLEN NIL))
       (SHEET-STRING-OUT-EXPLICIT-1 SHEET STRING
@@ -1593,8 +1762,6 @@ SHEET's cursor is not used or moved."
 					TOP)
 				   RIGHT BOTTOM
 				   FNT ALU START SLEN MULTI-LINE-LINE-HEIGHT))))
-
-(setq sheis nil mids nil stops nil lefts nil tops nil sheets nil)
 
 ;;; Most screens can be seen by the "user"
 (DEFMETHOD (SCREEN :USER-VISIBLE) () T)
@@ -1628,19 +1795,20 @@ SHEET's cursor is not used or moved."
   INF						;Inferiors all have same time stamp
   CURRENT-TIME-STAMP)
 
-(DECLARE-FLAVOR-INSTANCE-VARIABLES (SCALE-INFERIORS-MIXIN)
 (DEFUN SCALE-INFERIORS-MIXIN-UPDATE-INFERIOR (INFERIOR)
+  (DECLARE (:SELF-FLAVOR SCALE-INFERIORS-MIXIN))
   (LET ((INF-TIME-STAMP (SHEET-TIME-STAMP INFERIOR)))
     (COND ((NEQ INF-TIME-STAMP CURRENT-TIME-STAMP)
 	   (LET ((OLD-FONT (FOURTH (SHEET-TIME-STAMP INFERIOR)))
 		 (NEW-FONT (FOURTH CURRENT-TIME-STAMP)))
 	     (OR (EQUAL OLD-FONT NEW-FONT)
-		 (FUNCALL INFERIOR ':CHANGE-OF-DEFAULT-FONT NIL NIL)))
-	   (SCALE-INFERIORS-MIXIN-SCALE-INFERIOR INFERIOR NIL INF-TIME-STAMP))))))
+		 (SEND INFERIOR :CHANGE-OF-DEFAULT-FONT NIL NIL)))
+	   (SCALE-INFERIORS-MIXIN-SCALE-INFERIOR INFERIOR NIL INF-TIME-STAMP)))))
 
-(DECLARE-FLAVOR-INSTANCE-VARIABLES (SCALE-INFERIORS-MIXIN)
 (DEFUN SCALE-INFERIORS-MIXIN-SCALE-INFERIOR (INFERIOR EXPOSE
-				&OPTIONAL (INF-TIME-STAMP (SHEET-TIME-STAMP INFERIOR)))
+					     &OPTIONAL (INF-TIME-STAMP
+							 (SHEET-TIME-STAMP INFERIOR)))
+  (DECLARE (:SELF-FLAVOR SCALE-INFERIORS-MIXIN))
   (OR (EQ CURRENT-TIME-STAMP INF-TIME-STAMP)
       ;; Hasn't had edges set in the current time slice, so set them
       (LET* ((SIZE-LAST-TIME (CDR INF-TIME-STAMP))
@@ -1661,8 +1829,9 @@ SHEET's cursor is not used or moved."
 		    (= (SHEET-WIDTH INFERIOR) NEW-WIDTH)
 		    (= (SHEET-HEIGHT INFERIOR) NEW-HEIGHT))
 	       (SETQ NEW-LEFT NIL))
-	      ((NOT (FUNCALL INFERIOR ':SET-EDGES NEW-LEFT NEW-TOP
-			     (+ NEW-LEFT NEW-WIDTH) (+ NEW-TOP NEW-HEIGHT) ':VERIFY))
+	      ((NOT (SEND INFERIOR :SET-EDGES NEW-LEFT NEW-TOP
+					      (+ NEW-LEFT NEW-WIDTH) (+ NEW-TOP NEW-HEIGHT)
+					      :VERIFY))
 	       ;; Won't go, try not to change size
 	       (SETQ NEW-WIDTH (SHEET-WIDTH INFERIOR)
 		     NEW-HEIGHT (SHEET-HEIGHT INFERIOR))
@@ -1670,18 +1839,19 @@ SHEET's cursor is not used or moved."
 		    (SETQ NEW-LEFT (- (SHEET-INSIDE-RIGHT) NEW-WIDTH)))
 	       (AND (> (+ NEW-HEIGHT NEW-TOP) (SHEET-INSIDE-BOTTOM))
 		    (SETQ NEW-TOP (- (SHEET-INSIDE-BOTTOM) NEW-HEIGHT)))
-	       (OR (FUNCALL INFERIOR ':SET-EDGES NEW-LEFT NEW-TOP
-			    (+ NEW-LEFT NEW-WIDTH) (+ NEW-TOP NEW-HEIGHT) ':VERIFY)
+	       (OR (SEND INFERIOR :SET-EDGES NEW-LEFT NEW-TOP
+					     (+ NEW-LEFT NEW-WIDTH) (+ NEW-TOP NEW-HEIGHT)
+					     :VERIFY)
 		   ;; Won't go, don't change size at all
 		   (SETQ NEW-LEFT NIL))))
 	(COND (NEW-LEFT
-	       (FUNCALL INFERIOR ':SET-EDGES
-			NEW-LEFT NEW-TOP (+ NEW-LEFT NEW-WIDTH) (+ NEW-TOP NEW-HEIGHT))
-	       (AND EXPOSE (FUNCALL INFERIOR ':EXPOSE)))
-	      (T (FUNCALL INFERIOR ':UPDATE-TIME-STAMP)))))))
+	       (SEND INFERIOR :SET-EDGES NEW-LEFT NEW-TOP
+		     			 (+ NEW-LEFT NEW-WIDTH) (+ NEW-TOP NEW-HEIGHT))
+	       (AND EXPOSE (SEND INFERIOR :EXPOSE)))
+	      (T (SEND INFERIOR :UPDATE-TIME-STAMP))))))
 
 (DEFMETHOD (SCALE-INFERIORS-MIXIN :BEFORE :INFERIOR-ACTIVATE) (INFERIOR)
-  ;Catch up with any changes that happened while we were inactive
+  ;; Catch up with any changes that happened while we were inactive
   (SCALE-INFERIORS-MIXIN-UPDATE-INFERIOR INFERIOR)
   INFERIOR)
 
@@ -1689,12 +1859,12 @@ SHEET's cursor is not used or moved."
   `(DELAYING-SCREEN-MANAGEMENT
      (LET ((OLD-EXP-INFS (REVERSE EXPOSED-INFERIORS)))
        (DOLIST (I EXPOSED-INFERIORS)
-	 (FUNCALL I ':DEEXPOSE))
+	 (SEND I :DEEXPOSE))
        ,@BODY
        (SETQ CURRENT-TIME-STAMP
 	     (LIST (1+ (CAR CURRENT-TIME-STAMP))
 		   (SHEET-INSIDE-WIDTH) (SHEET-INSIDE-HEIGHT)
-		   (fourth current-time-stamp)))
+		   (FOURTH CURRENT-TIME-STAMP)))
        (DOLIST (I OLD-EXP-INFS)
 	 (SCALE-INFERIORS-MIXIN-SCALE-INFERIOR I T))
        (DOLIST (I INFERIORS)
@@ -1713,27 +1883,26 @@ SHEET's cursor is not used or moved."
 
 ;; Kill the processes only after any :after :kill daemons have run.
 (DEFWRAPPER (SHEET :KILL) (IGNORE . BODY)
-  `(LET ((PROCESSES (UNLESS KILL-RECURSION (SEND SELF ':PROCESSES)))
+  `(LET ((PROCESSES (UNLESS KILL-RECURSION (SEND SELF :PROCESSES)))
 	 (KILL-RECURSION T))
      ,@BODY
      (KILL-PROCESSES PROCESSES)))
 
 (DEFMETHOD (SHEET :KILL) ()
-  (SEND SELF ':DEACTIVATE)
-  (MAPC 'FUNCALL (COPYLIST INFERIORS)
-	(CIRCULAR-LIST ':KILL)))
+  (SEND SELF :DEACTIVATE)
+  (MAPC #'(LAMBDA (X) (SEND X :KILL)) (COPY-LIST INFERIORS)))
 
 (DEFUN KILL-PROCESSES (PROCESSES)
   (DOLIST (P PROCESSES)
     (UNLESS (EQ P CURRENT-PROCESS)
-      (SEND P ':KILL)))
+      (SEND P :KILL)))
   (IF (MEMQ CURRENT-PROCESS PROCESSES)
-      (SEND CURRENT-PROCESS ':KILL)))
+      (SEND CURRENT-PROCESS :KILL)))
 
 ;; Uses :APPEND method combination and returns a list of processes to be killed.
 (DEFMETHOD (SHEET :PROCESSES) ()
-  (MAPCAN 'FUNCALL (COPYLIST INFERIORS)
-	  (CIRCULAR-LIST ':PROCESSES)))
+  (MAPCAN #'(LAMBDA (X) (SEND X :PROCESSES)) (COPY-LIST INFERIORS)))
+
 
 (DEFFLAVOR STANDARD-SCREEN () (SCALE-INFERIORS-MIXIN SCREEN))
 
@@ -1744,14 +1913,14 @@ SHEET's cursor is not used or moved."
 ;;; This height may get hacked by the who-line making code if the wholine ends up
 ;;; at the bottom of the main screen (which it usually does!)
 (DEFVAR MAIN-SCREEN-WIDTH
-  (SELECT PROCESSOR-TYPE-CODE
-      (SI:CADR-TYPE-CODE 768.)
-      (SI:LAMBDA-TYPE-CODE #o1440)))  ;LAMBDA TV IS 32. BITS WIDER.
+  (SELECT-PROCESSOR
+    (:CADR 768.)
+    (LAMBDA #o1440)))				;LAMBDA TV IS 32. BITS WIDER.
 
 (DEFVAR MAIN-SCREEN-HEIGHT
-  (SELECT PROCESSOR-TYPE-CODE
-      (SI:CADR-TYPE-CODE 963.)     ;was 896. for CPT
-      (SI:LAMBDA-TYPE-CODE (- #o2000 8))))
+  (SELECT-PROCESSOR
+    (:CADR 963.)				;was 896. for CPT
+    (:LAMBDA (- #o2000 8))))
 
 (DEFVAR MAIN-SCREEN-LOCATIONS-PER-LINE
   (SELECT-PROCESSOR
@@ -1759,8 +1928,8 @@ SHEET's cursor is not used or moved."
     (:LAMBDA 32.)))
 
 (DEFCONST MAIN-SCREEN-BUFFER-ADDRESS IO-SPACE-VIRTUAL-ADDRESS)
-(DEFCONST MAIN-SCREEN-CONTROL-ADDRESS 377760)
-(DEFCONST MAIN-SCREEN-BUFFER-LENGTH 100000)
+(DEFCONST MAIN-SCREEN-CONTROL-ADDRESS #o377760)
+(DEFCONST MAIN-SCREEN-BUFFER-LENGTH #o100000)
 
 ;;;Set things up
 (DEFUN INITIALIZE ()
@@ -1783,9 +1952,9 @@ SHEET's cursor is not used or moved."
 	SCREEN-MANAGER-QUEUE NIL))
 
 (DEFUN DEFINE-SCREEN (FLAVOR NAME &REST ARGS)
-  (LET ((SCREEN (LEXPR-FUNCALL #'MAKE-WINDOW FLAVOR ':NAME NAME ARGS)))
+  (LET ((SCREEN (APPLY #'MAKE-INSTANCE FLAVOR :NAME NAME ARGS)))
     (PUSH SCREEN ALL-THE-SCREENS)
-    (FUNCALL SCREEN ':EXPOSE)
+    (SEND SCREEN :EXPOSE)
     SCREEN))
 
 (DEFVAR MAIN-SCREEN-AND-WHO-LINE NIL)
@@ -1798,27 +1967,27 @@ SHEET's cursor is not used or moved."
 				(SCREEN-BUFFER MAIN-SCREEN) NIL)
     (SETQ MAIN-SCREEN-AND-WHO-LINE
 	  (MAKE-PIXEL-ARRAY MAIN-SCREEN-WIDTH MAIN-SCREEN-HEIGHT
-			    ':TYPE (SHEET-ARRAY-TYPE MAIN-SCREEN)
-			    ':DISPLACED-TO (SCREEN-BUFFER MAIN-SCREEN))))
+			    :TYPE (SHEET-ARRAY-TYPE MAIN-SCREEN)
+			    :DISPLACED-TO (SCREEN-BUFFER MAIN-SCREEN))))
   MAIN-SCREEN-AND-WHO-LINE)
 
 (DEFVAR INITIAL-LISP-LISTENER)
 
-;This function is called from an initialization in COMETH
+;;; This function is called from an initialization in COMETH
 (DEFUN WINDOW-INITIALIZE (&AUX FIRST-TIME)
   (INITIALIZE)
   (DOLIST (S ALL-THE-SCREENS)
-    (FUNCALL S ':EXPOSE))
+    (SEND S :EXPOSE))
   (SETQ KBD-TYI-HOOK NIL PROCESS-IS-IN-ERROR NIL)
   (OR (EQ WHO-LINE-PROCESS SI:INITIAL-PROCESS)	;So it stays latched here during loading
       (SETQ WHO-LINE-PROCESS NIL))
-  (OR INITIAL-LISP-LISTENER	;Set to NIL in LTOP
-      (SETQ INITIAL-LISP-LISTENER (MAKE-WINDOW 'LISP-LISTENER ':PROCESS SI:INITIAL-PROCESS)
+  (OR INITIAL-LISP-LISTENER			;Set to NIL in LTOP
+      (SETQ INITIAL-LISP-LISTENER (MAKE-INSTANCE 'LISP-LISTENER :PROCESS SI:INITIAL-PROCESS)
 	    FIRST-TIME T))
-  (FUNCALL INITIAL-LISP-LISTENER ':SELECT)
-  (WHEN FIRST-TIME (SETQ TERMINAL-IO INITIAL-LISP-LISTENER))
-  (OR (MEMQ 'TV:BLINKER-CLOCK SI:CLOCK-FUNCTION-LIST)
-      (PUSH 'TV:BLINKER-CLOCK SI:CLOCK-FUNCTION-LIST)))
+  (SEND INITIAL-LISP-LISTENER :SELECT)
+  (WHEN FIRST-TIME (SETQ *TERMINAL-IO* INITIAL-LISP-LISTENER))
+  (PUSHNEW 'TV:BLINKER-CLOCK SI:CLOCK-FUNCTION-LIST :TEST #'EQ))
+
 
 (DEFVAR SYNC-RAM-CONTENTS :UNBOUND
   "Data to load into the TV board's sync memory.")
@@ -1829,14 +1998,12 @@ On the CADR, it can also be the refresh frequency (default is 60.5).
 WASTED-LINES is a number of lines at the bottom of the screen that should not be used
 for output, and should be left zero, though they will be displayed on the monitor.
 This is useful if your monitor is adjusted so that some of it cannot be seen."
-  (UNLESS ARG
-    (SETQ ARG (IF (= PROCESSOR-TYPE-CODE CADR-TYPE-CODE) 60.5 1024.)))
-  ;; Try not to burn up the monitor
-  (IF (= PROCESSOR-TYPE-CODE CADR-TYPE-CODE)
-      (CHECK-ARG ARG (OR ( 54. ARG 76.) (< 763. ARG 1087.))
-	     "a number between 55. and 75., or one between 764. and 1086.")
-    (CHECK-ARG ARG (< 100. ARG 1025.)
-	       "a number between 101. and 1024."))
+  (IF ARG
+      ;; Try not to burn up the monitor
+      (SELECT-PROCESSOR
+	(:CADR (CHECK-TYPE ARG (OR (INTEGER 54. 76.) (INTEGER 7644. 1086.))))
+	(:LAMBDA (CHECK-TYPE ARG (INTEGER 101. 1024.))))
+    (SETQ ARG (SELECT-PROCESSOR (:CADR 60.5) (:LAMBDA 1024.))))
   ;; If arg is frequency, compute number of lines from it.
   (IF (< 100. ARG)
       (SETQ N-LINES ARG)
@@ -1845,98 +2012,101 @@ This is useful if your monitor is adjusted so that some of it cannot be seen."
   ;; The number of lines per frame is 70. overhead lines plus enough display lines
   ;; to give the desired rate.
   (DELAYING-SCREEN-MANAGEMENT
-   (WITH-MOUSE-USURPED
-    (LOCK-SHEET (MAIN-SCREEN)
-     (LOCK-SHEET (WHO-LINE-SCREEN)
-       (WITHOUT-INTERRUPTS
-	 (LET ((MS MOUSE-SHEET) (SW SELECTED-WINDOW))
-	   (AND (SHEET-ME-OR-MY-KID-P MS MAIN-SCREEN)
-		(SETQ MOUSE-SHEET NIL))
-	   (FUNCALL WHO-LINE-SCREEN ':DEEXPOSE)
-	   (FUNCALL MAIN-SCREEN ':DEEXPOSE)
-	   (WHEN (= PROCESSOR-TYPE-CODE CADR-TYPE-CODE)
-	     (SI:SETUP-CPT
-	       (SETQ SYNC-RAM-CONTENTS	;save for possible use at LISP-REINITIALIZE.
-		(APPEND '(1.  (1 33) (5 13) 12 12 (11. 12 12) 212 113)	;VERT SYNC, CLEAR TVMA
-		       '(53. (1 33) (5 13) 12 12 (11. 12 12) 212 13)	;VERT RETRACE
-		       '(8.  (1 31)  (5 11) 11 10 (11. 0 0) 200 21)	;8 LINES OF MARGIN
-		       (DO ((L NIL (APPEND L `(,DN (1 31) (5 11) 11 50 (11. 0 40) 200 21)))
-			    (N N-LINES (- N DN))
-			    (DN))
-			   ((ZEROP N) L)
-			 (SETQ DN (MIN 255. N)))
-		       '(7. (1 31) (5 11) 11 10 (11. 0 0) 200 21)
-		       '(1. (1 31) (5 11) 11 10 (11. 0 0) 300 23)))
-	       (SCREEN-CONTROL-ADDRESS MAIN-SCREEN)
-	       T))
-	   ;; Move the who-line, and change the dimensions of main screen
-	   (SETQ MAIN-SCREEN-HEIGHT (- N-LINES WASTED-LINES))
-	   (FUNCALL WHO-LINE-SCREEN ':CHANGE-OF-SIZE-OR-MARGINS
-		    ':TOP (- MAIN-SCREEN-HEIGHT (SHEET-HEIGHT WHO-LINE-SCREEN)))
-	   (FUNCALL MAIN-SCREEN ':CHANGE-OF-SIZE-OR-MARGINS
-		    ':HEIGHT (- MAIN-SCREEN-HEIGHT (SHEET-HEIGHT WHO-LINE-SCREEN)))
-	   (SETQ %DISK-RUN-LIGHT
-		 (+ (- (* MAIN-SCREEN-HEIGHT (SHEET-LOCATIONS-PER-LINE MAIN-SCREEN)) 15)
-		    MAIN-SCREEN-BUFFER-ADDRESS))
-	   (SETQ WHO-LINE-RUN-LIGHT-LOC (+ 2 (LOGAND %DISK-RUN-LIGHT 777777)))
-	   (FUNCALL WHO-LINE-SCREEN ':EXPOSE)
-	   (FUNCALL MAIN-SCREEN ':EXPOSE)
-	   (AND SW (FUNCALL SW ':SELECT))
-	   (SETQ MOUSE-SHEET MS)
-	   ;; Zero out the words at screen bottom that we are not using.
-	   (WHEN (= PROCESSOR-TYPE-CODE LAMBDA-TYPE-CODE)
-	     (INCF WASTED-LINES (- 1024. N-LINES)))
-	   (LET ((WASTED-WORDS (* WASTED-LINES (SHEET-LOCATIONS-PER-LINE MAIN-SCREEN)))
-		 (PTR1 (%MAKE-POINTER-OFFSET DTP-FIX (SCREEN-BUFFER MAIN-SCREEN)
-					     (* (- N-LINES WASTED-LINES)
-						(SHEET-LOCATIONS-PER-LINE MAIN-SCREEN)))))
-	     (DOTIMES (I WASTED-WORDS)
-	       (%P-DPB 0 %%Q-LOW-HALF (%MAKE-POINTER-OFFSET DTP-FIX PTR1 I))
-	       (%P-DPB 0 %%Q-HIGH-HALF (%MAKE-POINTER-OFFSET DTP-FIX PTR1 I))))
-	   (SETQ VALUE (- N-LINES WASTED-LINES))))))))
+    (WITH-MOUSE-USURPED
+      (LOCK-SHEET (MAIN-SCREEN)
+	(LOCK-SHEET (WHO-LINE-SCREEN)
+	  (WITHOUT-INTERRUPTS
+	    (LET ((MS MOUSE-SHEET) (SW SELECTED-WINDOW))
+	      (AND (SHEET-ME-OR-MY-KID-P MS MAIN-SCREEN)
+		   (SETQ MOUSE-SHEET NIL))
+	      (SEND WHO-LINE-SCREEN :DEEXPOSE)
+	      (SEND MAIN-SCREEN :DEEXPOSE)
+	      (IF-IN-CADR
+		(SI:SETUP-CPT
+		  (SETQ SYNC-RAM-CONTENTS	;save for possible use at LISP-REINITIALIZE.
+			(APPEND '(1.  (1 33) (5 13) 12 12 (11. 12 12) 212 113)	;VERT SYNC, CLEAR TVMA
+				'(53. (1 33) (5 13) 12 12 (11. 12 12) 212 13)	;VERT RETRACE
+				'(8.  (1 31)  (5 11) 11 10 (11. 0 0) 200 21)	;8 LINES OF MARGIN
+				(DO ((L NIL (APPEND L `(,DN (1 31) (5 11) 11 50 (11. 0 40) 200 21)))
+				     (N N-LINES (- N DN))
+				     (DN))
+				    ((ZEROP N) L)
+				  (SETQ DN (MIN 255. N)))
+				'(7. (1 31) (5 11) #o11 #o10 (11. 0 0) #o200 #o21)
+				'(1. (1 31) (5 11) #o11 #o10 (11. 0 0) #o300 #o23)))
+		  (SCREEN-CONTROL-ADDRESS MAIN-SCREEN)
+		  T))
+	      ;; Move the who-line, and change the dimensions of main screen
+	      (SETQ MAIN-SCREEN-HEIGHT (- N-LINES WASTED-LINES))
+	      (SEND WHO-LINE-SCREEN
+		    :CHANGE-OF-SIZE-OR-MARGINS
+		    :TOP (- MAIN-SCREEN-HEIGHT (SHEET-HEIGHT WHO-LINE-SCREEN)))
+	      (SEND MAIN-SCREEN
+		    :CHANGE-OF-SIZE-OR-MARGINS
+		    :HEIGHT (- MAIN-SCREEN-HEIGHT (SHEET-HEIGHT WHO-LINE-SCREEN)))
+	      (SETQ %DISK-RUN-LIGHT
+		    (+ (- (* MAIN-SCREEN-HEIGHT (SHEET-LOCATIONS-PER-LINE MAIN-SCREEN)) 15)
+		       MAIN-SCREEN-BUFFER-ADDRESS))
+	      (SETQ WHO-LINE-RUN-LIGHT-LOC (+ 2 (LOGAND %DISK-RUN-LIGHT #o777777)))
+	      (SEND WHO-LINE-SCREEN :EXPOSE)
+	      (SEND MAIN-SCREEN :EXPOSE)
+	      (AND SW (SEND SW :SELECT))
+	      (SETQ MOUSE-SHEET MS)
+	      ;; Zero out the words at screen bottom that we are not using.
+	      (IF-IN-LAMBDA
+		(INCF WASTED-LINES (- 1024. N-LINES)))
+	      (LET ((WASTED-WORDS (* WASTED-LINES (SHEET-LOCATIONS-PER-LINE MAIN-SCREEN)))
+		    (PTR1 (%POINTER-PLUS (SCREEN-BUFFER MAIN-SCREEN)
+					 (* (- N-LINES WASTED-LINES)
+					    (SHEET-LOCATIONS-PER-LINE MAIN-SCREEN)))))
+		(DOTIMES (I WASTED-WORDS)
+		  (%P-DPB 0 %%Q-LOW-HALF (%MAKE-POINTER-OFFSET DTP-FIX PTR1 I))
+		  (%P-DPB 0 %%Q-HIGH-HALF (%MAKE-POINTER-OFFSET DTP-FIX PTR1 I))))
+	      (SETQ VALUE (- N-LINES WASTED-LINES))))))))
   (DOLIST (RESOURCE-NAME WINDOW-RESOURCE-NAMES)
     (SI:MAP-RESOURCE 
       #'(LAMBDA (WINDOW &REST IGNORE)
-	  (OR (TYPEP WINDOW ':INSTANCE) (FERROR NIL "LOSSAGE"))
+	  (UNLESS (TYPEP WINDOW 'INSTANCE) (FERROR NIL "LOSSAGE"))
 	  (IF (TYPEP WINDOW 'TV:BASIC-MENU)
-	      (LET ((GEO (SEND WINDOW ':GEOMETRY)))
+	      (LET ((GEO (SEND WINDOW :GEOMETRY)))
 		(DO ((L GEO (CDR L))) ((NULL L))
 		  (SETF (CAR L) NIL)))
-	    (LET* ((SUPERIOR (SEND WINDOW ':SUPERIOR))
-		   (BOTTOM (SEND WINDOW ':HEIGHT))
-		   (SUPHEIGHT (OR (SEND SUPERIOR ':SEND-IF-HANDLES ':INSIDE-HEIGHT)
-				  (SEND SUPERIOR ':HEIGHT))))
+	    (LET* ((SUPERIOR (SEND WINDOW :SUPERIOR))
+		   (BOTTOM (SEND WINDOW :HEIGHT))
+		   (SUPHEIGHT (OR (SEND SUPERIOR :SEND-IF-HANDLES :INSIDE-HEIGHT)
+				  (SEND SUPERIOR :HEIGHT))))
 	      (IF (> BOTTOM SUPHEIGHT)
-		  (SEND WINDOW ':SET-SIZE (SEND WINDOW ':WIDTH) SUPHEIGHT)))))
+		  (SEND WINDOW :SET-SIZE (SEND WINDOW :WIDTH) SUPHEIGHT)))))
       RESOURCE-NAME))
   VALUE)
 
-(DEFF SET-TV-HEIGHT 'SET-TV-SPEED)
+;(DEFF SET-TV-HEIGHT 'SET-TV-SPEED)
 
 (DEFUN SET-WHO-LINE-LINES (N-LINES)
   "Reconfigure the screen so that the who line has N-LINES lines."
   (WITH-MOUSE-USURPED
-   (LOCK-SHEET (MAIN-SCREEN)
-    (LOCK-SHEET (WHO-LINE-SCREEN)
-      (WITHOUT-INTERRUPTS
-	(LET ((MS MOUSE-SHEET) (SW SELECTED-WINDOW))
-	  (AND (SHEET-ME-OR-MY-KID-P MS MAIN-SCREEN)
-	       (SETQ MOUSE-SHEET NIL))
-	  (FUNCALL WHO-LINE-SCREEN ':DEEXPOSE)
-	  (FUNCALL MAIN-SCREEN ':DEEXPOSE)
-;	  (FUNCALL WHO-LINE-SCREEN ':SET-VSP (IF (= N-LINES 1) 0 2))
-	  (FUNCALL WHO-LINE-SCREEN ':CHANGE-OF-SIZE-OR-MARGINS
-		   ':BOTTOM MAIN-SCREEN-HEIGHT 
-		   ':TOP (- MAIN-SCREEN-HEIGHT
-			    (* N-LINES (SHEET-LINE-HEIGHT WHO-LINE-SCREEN))))
-	  (FUNCALL MAIN-SCREEN ':CHANGE-OF-SIZE-OR-MARGINS
-		   ':HEIGHT (- MAIN-SCREEN-HEIGHT (SHEET-HEIGHT WHO-LINE-SCREEN)))
-	  (FUNCALL WHO-LINE-SCREEN ':EXPOSE)
-	  (FUNCALL MAIN-SCREEN ':EXPOSE)
-	  (AND SW (FUNCALL SW ':SELECT))
-	  (SETQ MOUSE-SHEET MS)))))))
+    (LOCK-SHEET (MAIN-SCREEN)
+      (LOCK-SHEET (WHO-LINE-SCREEN)
+	(WITHOUT-INTERRUPTS
+	  (LET ((MS MOUSE-SHEET) (SW SELECTED-WINDOW))
+	    (AND (SHEET-ME-OR-MY-KID-P MS MAIN-SCREEN)
+		 (SETQ MOUSE-SHEET NIL))
+	    (SEND WHO-LINE-SCREEN :DEEXPOSE)
+	    (SEND MAIN-SCREEN :DEEXPOSE)
+	    (SEND WHO-LINE-SCREEN :SET-VSP (IF (= N-LINES 1) 0 2))
+	    (SEND WHO-LINE-SCREEN :CHANGE-OF-SIZE-OR-MARGINS
+		  		  :BOTTOM MAIN-SCREEN-HEIGHT
+				  :TOP (- MAIN-SCREEN-HEIGHT
+					  (* N-LINES (SHEET-LINE-HEIGHT WHO-LINE-SCREEN))))
+	    (SEND MAIN-SCREEN :CHANGE-OF-SIZE-OR-MARGINS
+			      :HEIGHT (- MAIN-SCREEN-HEIGHT (SHEET-HEIGHT WHO-LINE-SCREEN)))
+	    (SEND WHO-LINE-SCREEN :EXPOSE)
+	    (SEND MAIN-SCREEN :EXPOSE)
+	    (AND SW (SEND SW :SELECT))
+	    (SETQ MOUSE-SHEET MS)))))))
 
-;;; Scan line table hacking
+
+;;;; Scan line table hacking
 
 (defconst scan-line-table-begin #16r6000)
 (defconst scan-line-table-length (// #16r1000 4))
@@ -1959,8 +2129,8 @@ This is useful if your monitor is adjusted so that some of it cannot be seen."
     (setq %disk-run-light
 	  (+ (* (1- main-screen-height) (sheet-locations-per-line main-screen))
 	     14
-	     (lsh 77 18.)))
-    (setq who-line-run-light-loc (+ 2 (logand %disk-run-light 777777)))))
+	     (lsh #o77 18.)))
+    (setq who-line-run-light-loc (+ 2 (logand %disk-run-light #o777777)))))
 
 (add-initialization "Load scan line table" '(set-up-scan-line-table))
 
@@ -1978,58 +2148,61 @@ This is useful if your monitor is adjusted so that some of it cannot be seen."
 	    (let ((ms mouse-sheet) (sw selected-window))
 	      (and (sheet-me-or-my-kid-p ms main-screen)
 		   (setq mouse-sheet nil))
-	      (funcall who-line-screen ':deexpose)
-	      (funcall main-screen ':deexpose)
+	      (send who-line-screen :deexpose)
+	      (send main-screen :deexpose)
 
 	      (setf (sheet-locations-per-line main-screen) *words-per-line*)
 	      (setf (sheet-locations-per-line who-line-screen) *words-per-line*)
 
 	      ;fix cold-load-stream
 	      (let ((new-array
-		      (make-array (list (* 32. *words-per-line*) 1777)
-				  ':type 'art-1b
+		      (make-array (list (* 32. *words-per-line*) #o1777) :type 'art-1b
 				  ; 10. is BUFFER instance variable
-				  ':displaced-to (%p-contents-offset si:cold-load-stream 10.))))
+				  :displaced-to (%p-contents-offset si:cold-load-stream 10.))))
 		(%p-store-contents-offset
-		  new-array si:cold-load-stream 1) ;ARRAY
+		  new-array si:cold-load-stream 1)			;ARRAY
 		(%p-store-contents-offset
-		  *words-per-line* si:cold-load-stream 2)	;LOCATIONS-PER-LINE
-		(%p-store-contents-offset 1777 si:cold-load-stream 3) ;HEIGHT
+		  *words-per-line* si:cold-load-stream 2)		;LOCATIONS-PER-LINE
+		(%p-store-contents-offset #o1777 si:cold-load-stream 3)	;HEIGHT
 		)
 
 	      (load-scan-line-table *words-per-line*)
 
 	      (map-over-all-windows-of-sheet
 		#'(lambda (window) 
-		    (send window ':eval-inside-yourself '(fix-window-width *words-per-line*)))
+		    (send window :eval-inside-yourself
+			  '(fix-window-width *words-per-line*)))
 		main-screen)
 
-	      (let ((array (send who-line-screen ':old-screen-array)))
+	      (let ((array (send who-line-screen :old-screen-array)))
 		(redirect-array array
 				(array-type array)
 				(* *words-per-line* 32.)
 				(pixel-array-height array)
 				(%p-contents-offset array
 					     (+ (array-rank array)
-						(%p-ldb-offset %%array-long-length-flag array 0)))
+						(%p-ldb-offset %%array-long-length-flag array
+							       0)))
 				nil))
 
 	      (map-over-all-windows-of-sheet
 		#'(lambda (window)
 		    (cond ((neq window who-line-screen)
-			   (send window ':eval-inside-yourself '(fix-window-width *words-per-line*)))))
+			   (send window :eval-inside-yourself
+				 '(fix-window-width *words-per-line*)))))
 		who-line-screen)
 	      
-	      (send who-line-screen ':change-of-size-or-margins
-		    ':top (- main-screen-height (sheet-height who-line-screen)))
+	      (send who-line-screen :change-of-size-or-margins
+				    :top (- main-screen-height
+					    (sheet-height who-line-screen)))
 	      (setq %disk-run-light
 		    (+ (* (1- main-screen-height) (sheet-locations-per-line main-screen))
 		       11.
-		       (lsh 77 18.)))
-	      (setq who-line-run-light-loc (+ 2 (logand %disk-run-light 777777)))
-	      (funcall who-line-screen ':expose)
-	      (funcall main-screen ':expose)
-	      (and sw (funcall sw ':select))
+		       (lsh #o77 18.)))
+	      (setq who-line-run-light-loc (+ 2 (logand %disk-run-light #o777777)))
+	      (send who-line-screen :expose)
+	      (send main-screen :expose)
+	      (and sw (send sw :select))
 	      (mouse-set-sheet ms)
 	      )))))))
 
@@ -2052,13 +2225,15 @@ This is useful if your monitor is adjusted so that some of it cannot be seen."
 			 ;used to be just array
 			 (%p-contents-offset array
 					     (+ (array-rank array)
-						(%p-ldb-offset %%array-long-length-flag array 0)))
-			 (let ((offset (+ (send window ':x-offset)
-					  (* (send window ':y-offset) (* words-per-line 32.)))))
+						(%p-ldb-offset %%array-long-length-flag array
+							       0)))
+			 (let ((offset (+ (send window :x-offset)
+					  (* (send window :y-offset)
+					     (* words-per-line 32.)))))
 			   (if (zerop offset) 
-			       (if (= (%P-LDB-OFFSET si:%%ARRAY-INDEX-LENGTH-IF-SHORT ARRAY 0) 2)
-				   nil
-				 0)
+			       (if (= (%p-ldb-offset si:%%array-index-length-if-short array 0)
+				      2)
+				   nil 0)
 			     offset))))
 	(t
 	 (grow-bit-array array (* words-per-line 32.) (pixel-array-height array)))))
@@ -2072,7 +2247,7 @@ This is useful if your monitor is adjusted so that some of it cannot be seen."
   (map-over-all-windows-of-sheet-1 func sheet)
   (dolist (resource-name window-resource-names)
     (si:map-resource #'(lambda (window ignore ignore)
-			 (cond ((and (eq (send window ':status) ':deactivated)
+			 (cond ((and (eq (send window :status) ':deactivated)
 				     (eq sheet (sheet-get-screen window)))
 				(map-over-all-windows-of-sheet-1 func window))))
 		     resource-name)))
@@ -2082,23 +2257,22 @@ This is useful if your monitor is adjusted so that some of it cannot be seen."
 	 (push sheet *mapped-windows*)
 	 (funcall func sheet)
 	 (cond ((and (not (typep sheet 'zwei:zwei-mini-buffer))
-		     (send sheet ':send-if-handles ':typeout-window))
-		(map-over-all-windows-of-sheet-1 func (send sheet ':typeout-window))))
+		     (send sheet :send-if-handles :typeout-window))
+		(map-over-all-windows-of-sheet-1 func (send sheet :typeout-window))))
 	 (cond ((and (typep sheet 'zwei:mode-line-window)
-		     (send sheet ':mini-buffer-window))
-		(map-over-all-windows-of-sheet-1 func (send sheet ':mini-buffer-window))))
-	 (dolist (x (send sheet ':inferiors))
+		     (send sheet :mini-buffer-window))
+		(map-over-all-windows-of-sheet-1 func (send sheet :mini-buffer-window))))
+	 (dolist (x (send sheet :inferiors))
 	   (map-over-all-windows-of-sheet-1 func x)))))
 
 ;;;
 
-(DEFUN lambda-set-height (&OPTIONAL (n-lines 1024.) &AUX VALUE)
+(DEFUN LAMBDA-SET-HEIGHT (&OPTIONAL (N-LINES 1024.) &AUX VALUE)
   "Set the TV refresh rate.  The default is 60.5.  Returns the number of display lines.
 WASTED-LINES is a number of lines at the bottom of the screen that should not be used.
 This is useful if your monitor is adjusted so that some of it cannot be seen."
   ;; Try not to burn up the monitor
-  (CHECK-ARG n-lines (AND (> n-lines 100.) (<= n-lines 1024.))
-	     "a number between 100. and 1024.")
+  (CHECK-TYPE N-LINES (INTEGER 100. 1024.))
   (DELAYING-SCREEN-MANAGEMENT
     (WITH-MOUSE-USURPED
       (LOCK-SHEET (MAIN-SCREEN)
@@ -2107,22 +2281,25 @@ This is useful if your monitor is adjusted so that some of it cannot be seen."
 	    (LET ((MS MOUSE-SHEET) (SW SELECTED-WINDOW))
 	      (AND (SHEET-ME-OR-MY-KID-P MS MAIN-SCREEN)
 		   (SETQ MOUSE-SHEET NIL))
-	      (FUNCALL WHO-LINE-SCREEN ':DEEXPOSE)
-	      (FUNCALL MAIN-SCREEN ':DEEXPOSE)
+	      (SEND WHO-LINE-SCREEN :DEEXPOSE)
+	      (SEND MAIN-SCREEN :DEEXPOSE)
 	      ;; Move the who-line, and change the dimensions of main screen
 	      (SETQ MAIN-SCREEN-HEIGHT N-LINES)
-	      (FUNCALL WHO-LINE-SCREEN ':CHANGE-OF-SIZE-OR-MARGINS
-		       ':TOP (- MAIN-SCREEN-HEIGHT (SHEET-HEIGHT WHO-LINE-SCREEN)))
-	      (FUNCALL MAIN-SCREEN ':CHANGE-OF-SIZE-OR-MARGINS
-		       ':HEIGHT (- MAIN-SCREEN-HEIGHT (SHEET-HEIGHT WHO-LINE-SCREEN)))
-	      (let ((line-address (* (1- main-screen-height) (sheet-locations-per-line main-screen))))
-		(setq %disk-run-light (+ (+ line-address 11.) (lsh 77 18.)))
-		(setq who-line-run-light-loc (+ 2 (logand %disk-run-light 777777))))
-	      (FUNCALL WHO-LINE-SCREEN ':EXPOSE)
-	      (FUNCALL MAIN-SCREEN ':EXPOSE)
-	      (AND SW (FUNCALL SW ':SELECT))
+	      (SEND WHO-LINE-SCREEN :CHANGE-OF-SIZE-OR-MARGINS
+				    :TOP (- MAIN-SCREEN-HEIGHT
+					    (SHEET-HEIGHT WHO-LINE-SCREEN)))
+	      (SEND MAIN-SCREEN :CHANGE-OF-SIZE-OR-MARGINS
+				:HEIGHT (- MAIN-SCREEN-HEIGHT (SHEET-HEIGHT WHO-LINE-SCREEN)))
+	      (let ((line-address (* (1- main-screen-height)
+				     (sheet-locations-per-line main-screen))))
+		(setq %disk-run-light (+ (+ line-address 11.) (lsh #o77 18.)))
+		(setq who-line-run-light-loc (+ 2 (logand %disk-run-light #o777777))))
+	      (SEND WHO-LINE-SCREEN :EXPOSE)
+	      (SEND MAIN-SCREEN :EXPOSE)
+	      (AND SW (SEND SW :SELECT))
 	      (SETQ MOUSE-SHEET MS)
-	      (LET ((WASTED-WORDS (* (- 1024. n-lines) (SHEET-LOCATIONS-PER-LINE MAIN-SCREEN)))
+	      (LET ((WASTED-WORDS (* (- 1024. n-lines)
+				     (SHEET-LOCATIONS-PER-LINE MAIN-SCREEN)))
 		    (LAST-USED-WORD (* (+ (SHEET-HEIGHT WHO-LINE-SCREEN)
 					  (SHEET-HEIGHT MAIN-SCREEN))
 				       (SHEET-LOCATIONS-PER-LINE MAIN-SCREEN))))
@@ -2135,17 +2312,17 @@ This is useful if your monitor is adjusted so that some of it cannot be seen."
   (DOLIST (RESOURCE-NAME WINDOW-RESOURCE-NAMES)
     (SI:MAP-RESOURCE 
       #'(LAMBDA (WINDOW &REST IGNORE)
-	  (OR (TYPEP WINDOW ':INSTANCE) (FERROR NIL "LOSSAGE"))
+	  (OR (TYPEP WINDOW 'INSTANCE) (FERROR NIL "LOSSAGE"))
 	  (IF (typep window 'tv:basic-menu)
-	      (LET ((GEO (SEND WINDOW ':GEOMETRY)))
+	      (LET ((GEO (SEND WINDOW :GEOMETRY)))
 		(DO ((L GEO (CDR L))) ((NULL L))
 		  (SETF (CAR L) NIL)))
-	    (LET* ((SUPERIOR (SEND WINDOW ':SUPERIOR))
-		   (BOTTOM (SEND WINDOW ':HEIGHT))
-		   (SUPHEIGHT (OR (SEND SUPERIOR ':SEND-IF-HANDLES ':INSIDE-HEIGHT)
-				  (SEND SUPERIOR ':HEIGHT))))
+	    (LET* ((SUPERIOR (SEND WINDOW :SUPERIOR))
+		   (BOTTOM (SEND WINDOW :HEIGHT))
+		   (SUPHEIGHT (OR (SEND SUPERIOR :SEND-IF-HANDLES :INSIDE-HEIGHT)
+				  (SEND SUPERIOR :HEIGHT))))
 	      (IF (> BOTTOM SUPHEIGHT)
-		  (SEND WINDOW ':SET-SIZE (SEND WINDOW ':WIDTH) SUPHEIGHT)))))
+		  (SEND WINDOW :SET-SIZE (SEND WINDOW :WIDTH) SUPHEIGHT)))))
       RESOURCE-NAME))
   VALUE)
 
@@ -2220,7 +2397,7 @@ This is useful if your monitor is adjusted so that some of it cannot be seen."
 All windows that were set up to /"use the default font/"
 will presently be using FONT-DESCRIPTOR.
 FONT-DESCRIPTOR should be a font descriptor, such as the name of a font."
-  (SET-STANDARD-FONT ':DEFAULT FONT-DESCRIPTOR))
+  (SET-STANDARD-FONT :DEFAULT FONT-DESCRIPTOR))
 
 (DEFUN SET-STANDARD-FONT (PURPOSE FONT-DESCRIPTOR)
   "Make FONT-DESCRIPTOR be the standard font for purpose PURPOSE.
@@ -2236,21 +2413,22 @@ All windows on SCREEN that were set up to /"use the font for PURPOSE/"
 will presently be using FONT-DESCRIPTOR."
   ;; Make absolutely sure we really have a font,
   ;; since if we don't this will wedge everything.
-  (LET ((FONT (FUNCALL SCREEN ':PARSE-FONT-DESCRIPTOR FONT-DESCRIPTOR))
+  (LET ((FONT (SEND SCREEN :PARSE-FONT-DESCRIPTOR FONT-DESCRIPTOR))
 	FONT-NAME)
     (DO () ((TYPEP FONT 'FONT))
-      (SETQ FONT (FONT-EVALUATE (CERROR T NIL ':WRONG-TYPE-ARG "~S is not a font name" FONT-DESCRIPTOR))))
+      (SETQ FONT (FONT-EVALUATE
+		   (CERROR T NIL :WRONG-TYPE-ARG "~S is not a font name" FONT-DESCRIPTOR))))
     (SETQ FONT-NAME (FONT-NAME FONT))
-    (LET* ((STANDARD-NAME (FUNCALL SCREEN ':FONT-NAME-FOR PURPOSE T))
-	   (OLD-FONT (SYMEVAL STANDARD-NAME)))
+    (LET* ((STANDARD-NAME (SEND SCREEN :FONT-NAME-FOR PURPOSE T))
+	   (OLD-FONT (SYMBOL-VALUE STANDARD-NAME)))
       ;; If the screen has no entry for PURPOSE on its font alist,
       ;; :FONT-NAME-FOR returns T because we supplied that as the default.
       ;; We do that so we can avoid clobbering the font names on the
       ;; DEFAULT-FONT-ALIST.
-      (COND ((NEQ STANDARD-NAME T)
-	     (SET STANDARD-NAME FONT-NAME)
-	     (IF (EQ PURPOSE ':DEFAULT)
-		 (FUNCALL SCREEN ':CHANGE-OF-DEFAULT-FONT
-			  (FONT-EVALUATE OLD-FONT) (FONT-EVALUATE FONT-NAME))
-	       (FUNCALL SCREEN ':CHANGE-OF-DEFAULT-FONT NIL NIL)))))))
+      (UNLESS (EQ STANDARD-NAME T)
+	(SET STANDARD-NAME FONT-NAME)
+	(IF (EQ PURPOSE ':DEFAULT)
+	    (SEND SCREEN :CHANGE-OF-DEFAULT-FONT
+			 (FONT-EVALUATE OLD-FONT) (FONT-EVALUATE FONT-NAME))
+	  (SEND SCREEN :CHANGE-OF-DEFAULT-FONT NIL NIL))))))
 
