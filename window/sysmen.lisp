@@ -860,7 +860,7 @@ Type any character to flush:  ")))
 	  (LET ((BLINKER (CAR (SHEET-BLINKER-LIST TRACE-POP-UP-WINDOW))))
 	    (COND ((NULL FCN)
 		   ;Make sure blinker is blinking
-		   (BLINKER-SET-VISIBILITY BLINKER BLINK)
+		   (BLINKER-SET-VISIBILITY BLINKER :BLINK)
 		   (PRINC "Type in name of function to be traced or untraced.")
 		   (TERPRI TRACE-POP-UP-WINDOW)
 		   (PRINC "  Abort quits.")
