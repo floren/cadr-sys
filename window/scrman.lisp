@@ -1,4 +1,4 @@
-;;; -*- Mode: LISP; Package: TV; Base: 8 -*-
+;;; -*- Mode:LISP; Package:TV; Base:8; Readtable:T -*-
 ;;;	** (c) Copyright 1980 Massachusetts Institute of Technology **
 
 ;;; The screen manager, an unseen entity that many have cursed and
@@ -106,7 +106,7 @@ is not also in RPRIME.  The set is guaranteed to be canonical."
 ;;; The real screen manager:
 (DEFRESOURCE SCREEN-MANAGER-BIT-ARRAY-RESOURCE ()
    :CONSTRUCTOR (MAKE-PIXEL-ARRAY (SHEET-WIDTH DEFAULT-SCREEN) (SHEET-HEIGHT DEFAULT-SCREEN)
-				  ':TYPE 'ART-1B)
+				  :TYPE 'ART-1B)
    :INITIAL-COPIES 0)
 
 (ADD-INITIALIZATION "Screen manager bit arrays"
@@ -134,15 +134,13 @@ The rectangles passed in here better be destructable."
       ;; Is this now an illegal rectangle?  If so, then punt it altogether
       (OR (AND (< (RECT-LEFT R) (RECT-RIGHT R)) (< (RECT-TOP R) (RECT-BOTTOM R)))
 	  (SETQ BOUND-RECTANGLES (DELQ R BOUND-RECTANGLES)))))
-  (COND (BOUND-RECTANGLES
-	 (SETQ NOT-WHOLE T
-	       BOUND-RECTANGLES (CANONICALIZE-RECTANGLE-SET BOUND-RECTANGLES)))
-	(T
-	 (SETQ BOUND-RECTANGLES
-	       (LIST (LIST (LIST SHEET 0 0)
-			   (SHEET-INSIDE-LEFT SHEET) (SHEET-INSIDE-TOP SHEET)
-			   (SHEET-INSIDE-RIGHT SHEET) (SHEET-INSIDE-BOTTOM SHEET))))))
-
+  (IF BOUND-RECTANGLES
+      (SETQ NOT-WHOLE T
+	    BOUND-RECTANGLES (CANONICALIZE-RECTANGLE-SET BOUND-RECTANGLES))
+    (SETQ BOUND-RECTANGLES
+	  (LIST (LIST (LIST SHEET 0 0)
+		      (SHEET-INSIDE-LEFT SHEET) (SHEET-INSIDE-TOP SHEET)
+		      (SHEET-INSIDE-RIGHT SHEET) (SHEET-INSIDE-BOTTOM SHEET)))))
   ;; Figure out what should be visible
   ;; This loop is executed with S each of the inferiors then with S the sheet itself
   (DO ((INFS (SHEET-INFERIORS SHEET) (CDR INFS))
@@ -151,20 +149,18 @@ The rectangles passed in here better be destructable."
     (AND (NULL INFS)
 	 (RETURN (SETQ RECTANGLE-LIST (NCONC BOUND-RECTANGLES RECTANGLE-LIST))))
     (SETQ S (CAR INFS))
-    (SETQ S-TEM (SCREEN-MANAGE-SHEET-RECTANGLES S BOUND-RECTANGLES))
     ;; S-TEM is the set of rectangles which are visible portions of S
-    (IF (NULL S-TEM)
-	NIL
-	(DOLIST (R S-TEM)
-	  (DOLIST (RA BOUND-RECTANGLES)
-	    (SETQ BOUND-RECTANGLES (DELQ RA BOUND-RECTANGLES)
-		  R-TEM (RECTANGLE-NOT-INTERSECTION R RA))
-	    (AND R-TEM (SETQ BOUND-RECTANGLES (NCONC R-TEM BOUND-RECTANGLES))))
-	  (OR BOUND-RECTANGLES (RETURN T)))
-	(OR (AND (SHEET-EXPOSED-P S) (SHEET-SCREEN-ARRAY SHEET))
-	    ;; Never need to restore exposed sheets if superior
-	    ;; has a screen image
-	    (SETQ RECTANGLE-LIST (NCONC S-TEM RECTANGLE-LIST)))))
+    (WHEN (SETQ S-TEM (SCREEN-MANAGE-SHEET-RECTANGLES S BOUND-RECTANGLES))
+      (DOLIST (R S-TEM)
+	(DOLIST (RA BOUND-RECTANGLES)
+	  (SETQ BOUND-RECTANGLES (DELQ RA BOUND-RECTANGLES)
+		R-TEM (RECTANGLE-NOT-INTERSECTION R RA))
+	  (AND R-TEM (SETQ BOUND-RECTANGLES (NCONC R-TEM BOUND-RECTANGLES))))
+	(OR BOUND-RECTANGLES (RETURN T)))
+      (OR (AND (SHEET-EXPOSED-P S) (SHEET-SCREEN-ARRAY SHEET))
+	  ;; Never need to restore exposed sheets if superior
+	  ;; has a screen image
+	  (SETQ RECTANGLE-LIST (NCONC S-TEM RECTANGLE-LIST)))))
 
   (SCREEN-MANAGE-FLUSH-KNOWLEDGE SHEET)
 
@@ -172,8 +168,8 @@ The rectangles passed in here better be destructable."
   (AND RECTANGLE-LIST
        (IF ARRAY-TO-DRAW-ON
 	   (SCREEN-MANAGE-SHEET-FINAL SHEET RECTANGLE-LIST ARRAY-TO-DRAW-ON X Y ALU)
-	   (SHEET-FORCE-ACCESS (SHEET)
-	     (SCREEN-MANAGE-SHEET-FINAL SHEET RECTANGLE-LIST ARRAY-TO-DRAW-ON X Y ALU)))))
+	 (SHEET-FORCE-ACCESS (SHEET)
+	   (SCREEN-MANAGE-SHEET-FINAL SHEET RECTANGLE-LIST ARRAY-TO-DRAW-ON X Y ALU)))))
 
 (DEFUN SCREEN-MANAGE-SHEET-FINAL (SHEET RECTANGLE-LIST ARRAY-TO-DRAW-ON X Y ALU)
   "Update screen area of some rectangles within SCREEN in ARRAY-TO-DRAW-ON.
@@ -191,14 +187,13 @@ Each rectangle is processed as appropriate to the sheet which is its source."
     ;; inferiors there, but not that it is really necessarily blank! See
     ;; comments on SCREEN-MANAGE-MAYBE-BLT-RECTANGLE.
     (SETQ CURRENT-SHEET (CAR (RECT-SOURCE MASTER)))
-    (COND ((EQ SHEET CURRENT-SHEET)
-	   (SETQ RECTANGLE-LIST
-		 (FUNCALL SHEET ':SCREEN-MANAGE-UNCOVERED-AREA
-			       RECTANGLE-LIST ARRAY-TO-DRAW-ON X Y ALU)))
-	  (T
-	   (SETQ RECTANGLE-LIST
-		 (FUNCALL CURRENT-SHEET ':SCREEN-MANAGE-RESTORE-AREA
-			  RECTANGLE-LIST ARRAY-TO-DRAW-ON X Y ALU))))))
+    (IF (EQ SHEET CURRENT-SHEET)
+	(SETQ RECTANGLE-LIST
+	      (SEND SHEET :SCREEN-MANAGE-UNCOVERED-AREA
+			  RECTANGLE-LIST ARRAY-TO-DRAW-ON X Y ALU))
+      (SETQ RECTANGLE-LIST
+	    (SEND CURRENT-SHEET :SCREEN-MANAGE-RESTORE-AREA
+				RECTANGLE-LIST ARRAY-TO-DRAW-ON X Y ALU)))))
 
 (DEFUN SCREEN-MANAGE-FLUSH-KNOWLEDGE (SHEET)
   (SETF (SHEET-SCREEN-MANAGER-SCREEN-IMAGE SHEET) NIL))
@@ -213,46 +208,45 @@ Each rectangle is processed as appropriate to the sheet which is its source."
   "Return a list of rectangles describing where SHEET intersects any of BOUND-RECTANGLES.
 The rectangles returned have (SHEET its-x-offset its-y-offset its-bit-array) as source.
 All rectangle edges are relative to SHEET's superior, or to -1, -1 for a screen."
-  (COND ((OR (MEMQ SHEET (SHEET-EXPOSED-INFERIORS SUPERIOR))
-	     (FUNCALL SHEET ':SCREEN-MANAGE-DEEXPOSED-VISIBILITY))
-	 (COND (SUPERIOR
-		(SETQ LEFT (SHEET-INSIDE-LEFT SUPERIOR)
-		      TOP (SHEET-INSIDE-TOP SUPERIOR)
-		      RIGHT (SHEET-INSIDE-RIGHT SUPERIOR)
-		      BOTTOM (SHEET-INSIDE-BOTTOM SUPERIOR))))
-	 
-	 ;; Intersect the rectangles with the bounds of the specified sheet,
-	 ;; and return a list of the resulting rectangles.
-	 ;; Include in the source description the bit array so we force an update if that
-	 ;; changes.
-	 (DOLIST (BOUND BOUND-RECTANGLES)
-	   (AND (SHEET-OVERLAPS-P SHEET
-				  (RECT-LEFT BOUND) (RECT-TOP BOUND)
-				  (- (RECT-RIGHT BOUND) (RECT-LEFT BOUND))
-				  (- (RECT-BOTTOM BOUND) (RECT-TOP BOUND)))
-		(PUSH (LIST (LIST SHEET X-OFF Y-OFF (SHEET-BIT-ARRAY SHEET))
-			    (MAX X-OFF (RECT-LEFT BOUND) LEFT)
-			    (MAX Y-OFF (RECT-TOP BOUND) TOP)
-			    (MIN (+ X-OFF (SHEET-WIDTH SHEET)) (RECT-RIGHT BOUND) RIGHT)
-			    (MIN (+ Y-OFF (SHEET-HEIGHT SHEET)) (RECT-BOTTOM BOUND) BOTTOM))
-		      RECTS)))
-	 RECTS)))
+  (WHEN (OR (MEMQ SHEET (SHEET-EXPOSED-INFERIORS SUPERIOR))
+	    (SEND SHEET :SCREEN-MANAGE-DEEXPOSED-VISIBILITY))
+    (IF SUPERIOR
+	(SETQ LEFT (SHEET-INSIDE-LEFT SUPERIOR)
+	      TOP (SHEET-INSIDE-TOP SUPERIOR)
+	      RIGHT (SHEET-INSIDE-RIGHT SUPERIOR)
+	      BOTTOM (SHEET-INSIDE-BOTTOM SUPERIOR)))
+    ;; Intersect the rectangles with the bounds of the specified sheet,
+    ;; and return a list of the resulting rectangles.
+    ;; Include in the source description the bit array so we force an update if that
+    ;; changes.
+    (DOLIST (BOUND BOUND-RECTANGLES)
+      (IF (SHEET-OVERLAPS-P SHEET
+			    (RECT-LEFT BOUND) (RECT-TOP BOUND)
+			    (- (RECT-RIGHT BOUND) (RECT-LEFT BOUND))
+			    (- (RECT-BOTTOM BOUND) (RECT-TOP BOUND)))
+	  (PUSH (LIST (LIST SHEET X-OFF Y-OFF (SHEET-BIT-ARRAY SHEET))
+		      (MAX X-OFF (RECT-LEFT BOUND) LEFT)
+		      (MAX Y-OFF (RECT-TOP BOUND) TOP)
+		      (MIN (+ X-OFF (SHEET-WIDTH SHEET)) (RECT-RIGHT BOUND) RIGHT)
+		      (MIN (+ Y-OFF (SHEET-HEIGHT SHEET)) (RECT-BOTTOM BOUND) BOTTOM))
+		RECTS)))
+    RECTS))
 
 ;;; Subroutines used by bit restorers and blank area managers
 
-(DECLARE-FLAVOR-INSTANCE-VARIABLES (SHEET)
 (DEFUN SCREEN-MANAGE-CLEAR-RECTANGLE (R ARRAY X Y ALU)
+  (DECLARE (:SELF-FLAVOR SHEET))
   (BITBLT (OR ALU ERASE-ALUF)
 	  (- (RECT-RIGHT R) (RECT-LEFT R)) (- (RECT-BOTTOM R) (RECT-TOP R))
 	  ARRAY (+ X (RECT-LEFT R)) (+ Y (RECT-TOP R))
-	  ARRAY (+ X (RECT-LEFT R)) (+ Y (RECT-TOP R)))))
+	  ARRAY (+ X (RECT-LEFT R)) (+ Y (RECT-TOP R))))
 
-(DECLARE-FLAVOR-INSTANCE-VARIABLES (SHEET)
 (DEFUN SCREEN-MANAGE-MAYBE-BLT-RECTANGLE (R ARRAY X Y ALU)
   "Restore or clear the rectangle R in ARRAY with offset X and Y.
 If SELF has a bit-array, restore from that; otherwise, clear it.
 This is a reasonable screen management protocol for blank areas for sheets which
 might have bit save arrays and get screen managed, such as LISP-LISTENERS with inferiors."
+  (DECLARE (:SELF-FLAVOR SHEET))
   (COND (BIT-ARRAY
 	 (PAGE-IN-PIXEL-ARRAY BIT-ARRAY NIL (LIST WIDTH HEIGHT))
 	 (BITBLT (OR ALU ALU-SETA)
@@ -261,7 +255,7 @@ might have bit save arrays and get screen managed, such as LISP-LISTENERS with i
 		 BIT-ARRAY (RECT-LEFT R) (RECT-TOP R)
 		 ARRAY (+ X (RECT-LEFT R)) (+ Y (RECT-TOP R))))
 	(T
-	 (SCREEN-MANAGE-CLEAR-RECTANGLE R ARRAY X Y ALU)))))
+	 (SCREEN-MANAGE-CLEAR-RECTANGLE R ARRAY X Y ALU))))
 
 (DEFUN PAGE-IN-PIXEL-ARRAY (ARRAY &OPTIONAL FROM TO)
   "Page in array of pixels ARRAY, or the part from FROM to TO.
@@ -277,21 +271,21 @@ FROM or TO can be NIL or a list (WIDTH HEIGHT)."
     (SETQ FROM (REVERSE FROM) TO (REVERSE TO)))
   (SI:PAGE-OUT-ARRAY ARRAY FROM TO))
 
-(DECLARE-FLAVOR-INSTANCE-VARIABLES (SHEET)
 (DEFUN SCREEN-MANAGE-CLEAR-AREA (RECTS ARRAY X Y ALU)
+  (DECLARE (:SELF-FLAVOR SHEET))
   (DOLIST (R RECTS)
-    (COND ((EQ SELF (CAR (RECT-SOURCE R)))
-           (SCREEN-MANAGE-CLEAR-RECTANGLE R ARRAY X Y ALU)
-	   (SETQ RECTS (DELQ R RECTS)))))
-  RECTS))
+    (WHEN (EQ SELF (CAR (RECT-SOURCE R)))
+      (SCREEN-MANAGE-CLEAR-RECTANGLE R ARRAY X Y ALU)
+      (SETQ RECTS (DELQ R RECTS))))
+  RECTS)
 
-(DECLARE-FLAVOR-INSTANCE-VARIABLES (SHEET)
 (DEFUN SCREEN-MANAGE-RESTORE-AREA (RECTANGLE-LIST TO-ARRAY X Y ALU &OPTIONAL CLEAR-AREA)
   "Restore contents of rectangles in RECTANGLE-LIST to TO-ARRAY with offsets X and Y.
 ALU is the alu-function used in BITBLTing.
 CLEAR-AREA non-NIL says just use zeros if no data is remembered;
 otherwise, regenerate the contents of SELF and use them.
 Return RECTANGLE-LIST sans the rectangles that applied to this window."
+  (DECLARE (:SELF-FLAVOR SHEET))
   (COND (BIT-ARRAY
 	 (SCREEN-MANAGE-RESTORE-AREA-FROM-BIT-ARRAY RECTANGLE-LIST
 						    BIT-ARRAY
@@ -306,31 +300,31 @@ Return RECTANGLE-LIST sans the rectangles that applied to this window."
 	     (SETQ SCREEN-ARRAY ARRAY)
 	     (PAGE-IN-PIXEL-ARRAY ARRAY NIL (LIST WIDTH HEIGHT))
 	     (SHEET-FORCE-ACCESS (SELF T)
-	       (FUNCALL-SELF ':REFRESH))
+	       (SEND SELF :REFRESH))
 	     (SCREEN-MANAGE-RESTORE-AREA-FROM-BIT-ARRAY RECTANGLE-LIST
 							ARRAY
 							TO-ARRAY X Y
 							NIL (OR ALU ALU-SETA)))
-	  (SETQ SCREEN-ARRAY NIL))))))
+	  (SETQ SCREEN-ARRAY NIL)))))
 
 (DEFUN SCREEN-MANAGE-RESTORE-AREA-FROM-BIT-ARRAY (RECTANGLE-LIST ARRAY TO-ARRAY X Y
 								 PAGE-FLAG ALU
 						  &AUX (FROM (LIST 0 0)) (TO (LIST 0 0)))
   (DOLIST (R RECTANGLE-LIST)
-    (COND ((EQ (CAR (RECT-SOURCE R)) SELF)
-	   (SETF (CAR FROM) (- (RECT-LEFT R) (CADR (RECT-SOURCE R))))
-	   (SETF (CADR FROM) (- (RECT-TOP R) (CADDR (RECT-SOURCE R))))
-	   (SETF (CAR TO) (+ (CAR FROM) (- (RECT-RIGHT R) (RECT-LEFT R))))
-	   (SETF (CADR TO) (+ (CADR FROM) (- (RECT-BOTTOM R) (RECT-TOP R))))
-	   (AND PAGE-FLAG (PAGE-IN-PIXEL-ARRAY ARRAY FROM TO))
-	   (BITBLT (OR ALU ALU-SETA)
-		   (- (RECT-RIGHT R) (RECT-LEFT R))
-		   (- (RECT-BOTTOM R) (RECT-TOP R))
-		   ARRAY
-		   ;; Take chunk offset to rectangle origin
-		   (CAR FROM) (CADR FROM)
-		   TO-ARRAY (+ X (RECT-LEFT R)) (+ Y (RECT-TOP R)))
-	   (SETQ RECTANGLE-LIST (DELQ R RECTANGLE-LIST)))))
+    (WHEN (EQ (CAR (RECT-SOURCE R)) SELF)
+      (SETF (CAR FROM) (- (RECT-LEFT R) (CADR (RECT-SOURCE R))))
+      (SETF (CADR FROM) (- (RECT-TOP R) (CADDR (RECT-SOURCE R))))
+      (SETF (CAR TO) (+ (CAR FROM) (- (RECT-RIGHT R) (RECT-LEFT R))))
+      (SETF (CADR TO) (+ (CADR FROM) (- (RECT-BOTTOM R) (RECT-TOP R))))
+      (AND PAGE-FLAG (PAGE-IN-PIXEL-ARRAY ARRAY FROM TO))
+      (BITBLT (OR ALU ALU-SETA)
+	      (- (RECT-RIGHT R) (RECT-LEFT R))
+	      (- (RECT-BOTTOM R) (RECT-TOP R))
+	      ARRAY
+	      ;; Take chunk offset to rectangle origin
+	      (CAR FROM) (CADR FROM)
+	      TO-ARRAY (+ X (RECT-LEFT R)) (+ Y (RECT-TOP R)))
+      (SETQ RECTANGLE-LIST (DELQ R RECTANGLE-LIST))))
   (SI:PAGE-OUT-ARRAY ARRAY)
   RECTANGLE-LIST)
 
@@ -357,28 +351,28 @@ Return RECTANGLE-LIST sans the rectangles that applied to this window."
 is inhibited.  It will also do autoexposure on the sheet, unless screen management is
 inhibited.  This allows you to batch a series of screen manages without running autoexposure
 each time.  It is expected that autoexposure gets run explicitly in this case."
-  (FUNCALL-SELF ':ORDER-INFERIORS)
-  (FUNCALL-SELF ':SCREEN-MANAGE-AUTOEXPOSE-INFERIORS)
-  (LEXPR-FUNCALL #'SCREEN-MANAGE-SHEET SELF ARGS))
+  (SEND SELF :ORDER-INFERIORS)
+  (SEND SELF :SCREEN-MANAGE-AUTOEXPOSE-INFERIORS)
+  (APPLY #'SCREEN-MANAGE-SHEET SELF ARGS))
 
 ;;; Tell SHEET to do something appropriate for a rectangle
 ;;; that is not covered by any inferior of SHEET.
 ;;; Note: Rectangles given to :SCREEN-MANAGE-UNCOVERED-AREA are 0 origin and
 ;;;       point into SELF.  This is guaranteed, and need not be checked for.
 (DEFMETHOD (SHEET :SCREEN-MANAGE-UNCOVERED-AREA) (RECTS ARRAY X Y ALU)
-  ARRAY X Y ALU					;Unused
+  (DECLARE (IGNORE ARRAY X Y ALU))
   (DOLIST (R RECTS)
-    (AND (EQ (CAR (RECT-SOURCE R)) SELF)
-	 (SETQ RECTS (DELQ R RECTS))))
+    (WHEN (EQ (CAR (RECT-SOURCE R)) SELF)
+      (SETQ RECTS (DELQ R RECTS))))
   RECTS)
 
 (DEFMETHOD (SCREEN :SCREEN-MANAGE-UNCOVERED-AREA) SCREEN-MANAGE-CLEAR-UNCOVERED-AREA)
 (DEFUN SCREEN-MANAGE-CLEAR-UNCOVERED-AREA (IGNORE RECTS ARRAY X Y ALU)
   "Default is to clear area.  This can be redefined if that isn't desireable."
   (DOLIST (R RECTS)
-    (COND ((EQ (CAR (RECT-SOURCE R)) SELF)
-	   (SCREEN-MANAGE-CLEAR-RECTANGLE R ARRAY X Y ALU)
-	   (SETQ RECTS (DELQ R RECTS)))))
+    (WHEN (EQ (CAR (RECT-SOURCE R)) SELF)
+      (SCREEN-MANAGE-CLEAR-RECTANGLE R ARRAY X Y ALU)
+      (SETQ RECTS (DELQ R RECTS))))
   RECTS)
 
 (DEFMETHOD (SHEET :SCREEN-MANAGE-RESTORE-AREA) (RECTS ARRAY X Y ALU)
@@ -387,11 +381,11 @@ If there is a bit array, restore from there.  If there is no bit array, simply
 clear the area, unless :SCREEN-MANAGE-DEEXPOSED-VISIBILITY returns T in which
 case refresh the bits into a temporary array and restore from that"
   (SCREEN-MANAGE-RESTORE-AREA RECTS ARRAY X Y ALU
-			      (NOT (FUNCALL-SELF ':SCREEN-MANAGE-DEEXPOSED-VISIBILITY))))
+			      (NOT (SEND SELF :SCREEN-MANAGE-DEEXPOSED-VISIBILITY))))
 
 
 (DEFFLAVOR NO-SCREEN-MANAGING-MIXIN () ()
-  (:DOCUMENTATION :MIXIN "Prevents screen managing within windows of this flavor.
+  (:DOCUMENTATION "Prevents screen managing within windows of this flavor.
 That is, the screen manager will not update the parts of the inferiors
 of these windows into their proper places."))
 
@@ -399,11 +393,11 @@ of these windows into their proper places."))
 (DEFMETHOD (NO-SCREEN-MANAGING-MIXIN :SCREEN-MANAGE-UNCOVERED-AREA) (&REST IGNORE) NIL)
 
 (DEFFLAVOR SHOW-PARTIALLY-VISIBLE-MIXIN () ()
-  (:DOCUMENTATION :MIXIN "If parts of this window are visible but not all, show partial contents."))
+  (:DOCUMENTATION "If parts of this window are visible but not all, show partial contents."))
 
 (DEFMETHOD (SHOW-PARTIALLY-VISIBLE-MIXIN :SCREEN-MANAGE-DEEXPOSED-VISIBILITY) () T)
 
-;;; Graying stuff
+;;;; Graying stuff
 
 (DEFUN MAKE-GRAY (HEIGHT WIDTH &REST ROWS &AUX GRAY RWIDTH PAT)
   "Return a bitblt array containing a specified gray pattern.
@@ -413,17 +407,19 @@ WIDTH cannot be greater than 8.
 The array's first dimension will be some multiple of WIDTH
 that is suitable for a BITBLT array."
   (CHECK-ARG HEIGHT (= HEIGHT (LENGTH ROWS)) "equal to number of rows")
-  (CHECK-ARG WIDTH (< WIDTH 32.) "less than or equal to 31")
-  (DO L ROWS (CDR L) (NULL L)			;CONVERT OCTAL BINARY TO BINARY
-    (RPLACA L (DO ((W (CAR L) (LSH W -3))
-		   (M 1 (LSH M 1))
-		   (R 0))
-		  ((ZEROP W) R)
-		(AND (BIT-TEST 1 W) (SETQ R (LOGIOR R M))))))
+  (CHECK-TYPE WIDTH (INTEGER 0 31.))
+  (DO ((L ROWS (CDR L)))
+      ((NULL L))
+    (SETF (CAR L) (DO ((W (CAR L) (LSH W -3))
+		       (M 1 (LSH M 1))
+		       (R 0))
+		      ((ZEROP W) R)
+		    (AND (BIT-TEST 1 W) (SETQ R (LOGIOR R M))))))
   (DOTIMES (I WIDTH)
-    (AND (ZEROP (\ (* 32. (1+ I)) WIDTH))
-	 (RETURN (SETQ RWIDTH (* 32. (1+ I))))))
-  (SETQ GRAY (MAKE-PIXEL-ARRAY RWIDTH HEIGHT ':TYPE 'ART-1B))
+    (WHEN (ZEROP (\ (* 32. (1+ I)) WIDTH))
+      (SETQ RWIDTH (* 32. (1+ I)))
+      (RETURN)))
+  (SETQ GRAY (MAKE-PIXEL-ARRAY RWIDTH HEIGHT :TYPE 'ART-1B))
   (DOTIMES (H HEIGHT)
     (SETQ PAT (NTH H ROWS))
     (DOTIMES (W RWIDTH)
@@ -440,11 +436,11 @@ that is suitable for a BITBLT array."
 
 (DEFUN INIT-GRAYS ()
   (SETQ 50%-GRAY (MAKE-GRAY 2 2 01 10))
-  (SETQ 25%-GRAY (MAKE-GRAY 4 4 1000 0010 0100 0001))
-  (SETQ 75%-GRAY (MAKE-GRAY 4 4 0111 1101 1011 1110))
-  (SETQ 33%-GRAY (MAKE-GRAY 3 3 100 010 001))
-  (SETQ HES-GRAY (MAKE-GRAY 4 4 1000 0000 0010 0000))
-  (SETQ 12%-GRAY (MAKE-GRAY 4 4 1000 0000 0010 0000)))
+  (SETQ 25%-GRAY (MAKE-GRAY 4 4 #o1000 #o0010 #o0100 #o0001))
+  (SETQ 75%-GRAY (MAKE-GRAY 4 4 #o0111 #o1101 #o1011 #o1110))
+  (SETQ 33%-GRAY (MAKE-GRAY 3 3 #o0100 #o0010 #o0001))
+  (SETQ HES-GRAY (MAKE-GRAY 4 4 #o1000 #o0000 #o0010 #o0000))
+  (SETQ 12%-GRAY (MAKE-GRAY 4 4 #o1000 #o0000 0010 #o0000)))
 
 (ADD-INITIALIZATION "Init grays" '(INIT-GRAYS) '(:NOW) 'ARRAY-ORDER-INITIALIZATION-LIST)
 
@@ -453,21 +449,21 @@ that is suitable for a BITBLT array."
   :SETTABLE-INSTANCE-VARIABLES
   :INITABLE-INSTANCE-VARIABLES
   (:INCLUDED-FLAVORS SHEET)
-  (:DOCUMENTATION :MIXIN "Grayed over when deexposed"))
+  (:DOCUMENTATION "Grayed over when deexposed"))
 
 (DEFWRAPPER (GRAY-DEEXPOSED-WRONG-MIXIN :SCREEN-MANAGE-RESTORE-AREA)
 	        ((RECTS ARRAY X Y ALU) . BODY)
-  `(LET ((SI:.DAEMON-CALLER-ARGS. (LIST NIL RECTS ARRAY X Y (OR ALU CHAR-ALUF))))
+  `(WITH-STACK-LIST (SI::.DAEMON-CALLER-ARGS. NIL RECTS ARRAY X Y (OR ALU CHAR-ALUF))
      (DOLIST (R RECTS)
-       (AND (EQ (CAR (RECT-SOURCE R)) SELF)
-	    (SCREEN-MANAGE-GRAY-RECTANGLE R ARRAY X Y ALU-SETA)))
-     . ,BODY))
+       (WHEN (EQ (CAR (RECT-SOURCE R)) SELF)
+	 (SCREEN-MANAGE-GRAY-RECTANGLE R ARRAY X Y ALU-SETA))
+     . ,BODY)))
 
 (DEFMETHOD (GRAY-DEEXPOSED-WRONG-MIXIN :SCREEN-MANAGE-UNCOVERED-AREA) (RECTS ARRAY X Y IGNORE)
   (DOLIST (R RECTS)
-    (COND ((EQ (CAR (RECT-SOURCE R)) SELF)
-	   (SCREEN-MANAGE-GRAY-RECTANGLE R ARRAY X Y ALU-SETA)
-	   (SETQ RECTS (DELQ R RECTS)))))
+    (WHEN (EQ (CAR (RECT-SOURCE R)) SELF)
+      (SCREEN-MANAGE-GRAY-RECTANGLE R ARRAY X Y ALU-SETA)
+      (SETQ RECTS (DELQ R RECTS))))
   RECTS)
 
 ;;; This flavor causes the deexposed window to be grayed over.  It works for windows
@@ -477,35 +473,35 @@ that is suitable for a BITBLT array."
   :SETTABLE-INSTANCE-VARIABLES
   :INITABLE-INSTANCE-VARIABLES
   (:INCLUDED-FLAVORS SHEET)
-  (:DOCUMENTATION :MIXIN "Grayed over when deexposed"))
+  (:DOCUMENTATION "Grayed over when deexposed"))
 
-(DECLARE-FLAVOR-INSTANCE-VARIABLES (GRAY-DEEXPOSED-RIGHT-MIXIN)
 (DEFUN SCREEN-MANAGE-GRAY-RECTANGLE (RECT ARRAY X Y ALU)
   "Gray the specified rectangle on the specified array.
 All graying is relative to (0, 0) on the sheet that the rectangle is on."
+  (DECLARE (:SELF-FLAVOR GRAY-DEEXPOSED-RIGHT-MIXIN))
   (LET ((X-OFF (- (RECT-LEFT RECT) (SECOND (RECT-SOURCE RECT))))
 	(Y-OFF (- (RECT-TOP RECT) (THIRD (RECT-SOURCE RECT)))))
     (BITBLT (OR ALU CHAR-ALUF)
 	    (- (RECT-RIGHT RECT) (RECT-LEFT RECT)) (- (RECT-BOTTOM RECT) (RECT-TOP RECT))
-	    GRAY-ARRAY (\ X-OFF (ARRAY-DIMENSION GRAY-ARRAY 0))
-	    	       (\ Y-OFF (ARRAY-DIMENSION GRAY-ARRAY 1))
-	    ARRAY (+ X (RECT-LEFT RECT)) (+ Y (RECT-TOP RECT))))))
+	    GRAY-ARRAY (\ X-OFF (ARRAY-DIMENSION GRAY-ARRAY 1))
+	    	       (\ Y-OFF (ARRAY-DIMENSION GRAY-ARRAY 0))
+	    ARRAY (+ X (RECT-LEFT RECT)) (+ Y (RECT-TOP RECT)))))
 
-(DECLARE-FLAVOR-INSTANCE-VARIABLES (GRAY-DEEXPOSED-RIGHT-MIXIN)
 (DEFUN GRAY-DEEXPOSED-RIGHT-RESTORE-INTERNAL (RECTS KLUDGE-ARRAY ARRAY X Y ALU)
   "This is an internal function for the wrapper of the grayer.  It grays the
 window in the internal bit array, and then causes the appropriate rectangles
 to be blted onto the screen."
+  (DECLARE (:SELF-FLAVOR GRAY-DEEXPOSED-RIGHT-MIXIN))
   (SCREEN-MANAGE-GRAY-RECTANGLE `((,SELF 0 0) 0 0 ,WIDTH ,HEIGHT)
 				KLUDGE-ARRAY 0 0 CHAR-ALUF)
   (SCREEN-MANAGE-RESTORE-AREA-FROM-BIT-ARRAY RECTS KLUDGE-ARRAY ARRAY X Y NIL
-					     (OR ALU ALU-SETA))))
+					     (OR ALU ALU-SETA)))
 
 (DEFMETHOD (GRAY-DEEXPOSED-RIGHT-MIXIN :SCREEN-MANAGE-UNCOVERED-AREA) (RECTS ARRAY X Y IGNORE)
   (DOLIST (R RECTS)
-    (COND ((EQ (CAR (RECT-SOURCE R)) SELF)
-	   (SCREEN-MANAGE-GRAY-RECTANGLE R ARRAY X Y ALU-SETA)
-	   (SETQ RECTS (DELQ R RECTS)))))
+    (WHEN (EQ (CAR (RECT-SOURCE R)) SELF)
+      (SCREEN-MANAGE-GRAY-RECTANGLE R ARRAY X Y ALU-SETA)
+      (SETQ RECTS (DELQ R RECTS))))
   RECTS)
 
 (DEFWRAPPER (GRAY-DEEXPOSED-RIGHT-MIXIN :SCREEN-MANAGE-RESTORE-AREA)
@@ -513,8 +509,8 @@ to be blted onto the screen."
   `(USING-RESOURCE (KLUDGE-ARRAY SCREEN-MANAGER-BIT-ARRAY-RESOURCE)
      (PAGE-IN-PIXEL-ARRAY KLUDGE-ARRAY NIL (LIST WIDTH HEIGHT))
      ;; This is a kludge -- fudge the arguments to all methods inside
-     (LET ((SI:.DAEMON-CALLER-ARGS. (LIST NIL (COPYLIST RECTS) KLUDGE-ARRAY
-					  (- X-OFFSET) (- Y-OFFSET) ALU)))
+     (WITH-STACK-LIST (SI::.DAEMON-CALLER-ARGS.
+			NIL (COPY-LIST RECTS) KLUDGE-ARRAY (- X-OFFSET) (- Y-OFFSET) ALU)
        . ,BODY)
      (GRAY-DEEXPOSED-RIGHT-RESTORE-INTERNAL RECTS KLUDGE-ARRAY ARRAY X Y ALU)))
 
@@ -525,62 +521,58 @@ to be blted onto the screen."
 (DEFUN SCREEN-ACTIVITY-HAS-CHANGED (WINDOW ON-P)
   "Update screen manager when WINDOW becomes active or inactive.
 ON-P is T for WINDOW becoming active."
-  ON-P						;Isn't very interesting
-  (AND SCREEN-MANAGE-TRACE-OUTPUT
-       (FORMAT SCREEN-MANAGE-TRACE-OUTPUT
-	       "~&Activity change: window ~S, ~:[Deactivate~;Activate~]~%"
-	       WINDOW ON-P))
-  (COND ((FUNCALL WINDOW ':SCREEN-MANAGE-DEEXPOSED-VISIBILITY)
-	 ;; If window is visible when deexposed, then screen management is useful
-	 (SCREEN-MANAGE-WINDOW-AREA WINDOW))
-	(T (SCREEN-MANAGE-FLUSH-KNOWLEDGE WINDOW))))
+  (DECLARE (IGNORE ON-P))			;Isn't very interesting
+  (IF SCREEN-MANAGE-TRACE-OUTPUT
+      (FORMAT SCREEN-MANAGE-TRACE-OUTPUT
+	      "~&Activity change: window ~S, ~:[De~;A~]ctivate~%" WINDOW ON-P))
+  (IF (SEND WINDOW :SCREEN-MANAGE-DEEXPOSED-VISIBILITY)
+      ;; If window is visible when deexposed, then screen management is useful
+      (SCREEN-MANAGE-WINDOW-AREA WINDOW)
+    (SCREEN-MANAGE-FLUSH-KNOWLEDGE WINDOW)))
 
-(DEFUN SCREEN-CONFIGURATION-HAS-CHANGED (WINDOW &OPTIONAL (WHY ':FORCE)
+(DEFUN SCREEN-CONFIGURATION-HAS-CHANGED (WINDOW &OPTIONAL (WHY :FORCE)
 						&AUX DO-IT (SUP (SHEET-SUPERIOR WINDOW)))
   "Update screen when WINDOW becomes exposed or deexposed.
 WHY should be :EXPOSE if WINDOW is being exposed, :DEEXPOSE if WINDOW
 is being deexposed, or :FORCE (actually same as :DEEXPOSE here)."
-  (COND ((MEMQ WINDOW (SHEET-INFERIORS SUP))
-	 ;; Only consider active windows
-	 (SELECTQ WHY
-	   (:EXPOSE
-	    ;; Just exposed a window, don't need to hack it's area any (except that one can
-	    ;; optimize by removing all areas from consideration for screen management
-	    ;; that it subsumes)
-	    (LET ((RECT (LIST NIL (SHEET-X-OFFSET WINDOW) (SHEET-Y-OFFSET WINDOW)
-			          (+ (SHEET-X-OFFSET WINDOW) (SHEET-WIDTH WINDOW))
-				  (+ (SHEET-Y-OFFSET WINDOW) (SHEET-HEIGHT WINDOW)))))
-	      (WITHOUT-INTERRUPTS
-	        (DOLIST (QE SCREEN-MANAGER-QUEUE)
-		  (AND (EQ (CAR (RECT-SOURCE QE)) SUP)
-		       (RECT-WITHIN-RECT-P QE RECT)
-		       (SETQ SCREEN-MANAGER-QUEUE (DELQ QE SCREEN-MANAGER-QUEUE)))))))
-	   ((:DEEXPOSE :FORCE)
-	    ;; Deexposing, things may have changed underneath it, so screen manage even
-	    ;; if it is temporary
-	    (SETQ DO-IT T)))
-	 (AND SUP (FUNCALL SUP ':ORDER-INFERIORS))
-	 (AND SCREEN-MANAGE-TRACE-OUTPUT
-	      (FORMAT SCREEN-MANAGE-TRACE-OUTPUT
-		      "~&Configuration change: window ~S, reason ~A~%"
-		      WINDOW WHY))		      
-	 (COND (DO-IT
-		(SCREEN-MANAGE-WINDOW-AREA WINDOW))
-	       (T (SCREEN-MANAGE-FLUSH-KNOWLEDGE SUP))))))
+  (WHEN (MEMQ WINDOW (SHEET-INFERIORS SUP))
+    ;; Only consider active windows
+    (CASE WHY
+      (:EXPOSE
+       ;; Just exposed a window, don't need to hack it's area any (except that one can
+       ;; optimize by removing all areas from consideration for screen management
+       ;; that it subsumes)
+       (WITH-STACK-LIST (RECT NIL (SHEET-X-OFFSET WINDOW) (SHEET-Y-OFFSET WINDOW)
+			      (+ (SHEET-X-OFFSET WINDOW) (SHEET-WIDTH WINDOW))
+			      (+ (SHEET-Y-OFFSET WINDOW) (SHEET-HEIGHT WINDOW)))
+	 (WITHOUT-INTERRUPTS
+	   (DOLIST (QE SCREEN-MANAGER-QUEUE)
+	     (AND (EQ (CAR (RECT-SOURCE QE)) SUP)
+		  (RECT-WITHIN-RECT-P QE RECT)
+		  (SETQ SCREEN-MANAGER-QUEUE (DELQ QE SCREEN-MANAGER-QUEUE)))))))
+      ((:DEEXPOSE :FORCE)
+       ;; Deexposing, things may have changed underneath it, so screen manage even
+       ;; if it is temporary
+       (SETQ DO-IT T)))
+    (AND SUP (SEND SUP :ORDER-INFERIORS))
+    (IF SCREEN-MANAGE-TRACE-OUTPUT
+	(FORMAT SCREEN-MANAGE-TRACE-OUTPUT
+		"~&Configuration change: window ~S, reason ~A~%" WINDOW WHY))		      
+    (IF DO-IT
+	(SCREEN-MANAGE-WINDOW-AREA WINDOW)
+      (SCREEN-MANAGE-FLUSH-KNOWLEDGE SUP))))
 
 (DEFUN SCREEN-AREA-HAS-CHANGED (WINDOW &REST RECT
 				       &AUX (SUP (SHEET-SUPERIOR WINDOW)))
   "Update screen when WINDOW's edges have changed.
 RECT should be the edges of the area to update."
-  (COND ((MEMQ WINDOW (SHEET-INFERIORS SUP))
-	 (AND SUP (FUNCALL SUP ':ORDER-INFERIORS))
-	 (COND ((OR (AND RECT (SHEET-EXPOSED-P WINDOW))	;Explicit rectangle, and exposed
-		    (FUNCALL WINDOW ':SCREEN-MANAGE-DEEXPOSED-VISIBILITY))
-		(AND SCREEN-MANAGE-TRACE-OUTPUT
-		     (FORMAT SCREEN-MANAGE-TRACE-OUTPUT
-			     "~&Area change: window ~S~%"
-			     WINDOW))
-		(LEXPR-FUNCALL #'SCREEN-MANAGE-WINDOW-AREA WINDOW RECT))))))
+  (WHEN (MEMQ WINDOW (SHEET-INFERIORS SUP))
+    (AND SUP (SEND SUP :ORDER-INFERIORS))
+    (WHEN (OR (AND RECT (SHEET-EXPOSED-P WINDOW))	;Explicit rectangle, and exposed
+	      (SEND WINDOW :SCREEN-MANAGE-DEEXPOSED-VISIBILITY))
+      (IF SCREEN-MANAGE-TRACE-OUTPUT
+	  (FORMAT SCREEN-MANAGE-TRACE-OUTPUT "~&Area change: window ~S~%" WINDOW))
+      (APPLY #'SCREEN-MANAGE-WINDOW-AREA WINDOW RECT))))
 
 (DEFUN SCREEN-MANAGE-WINDOW-AREA (WINDOW
 				  &OPTIONAL (LEFT (SHEET-X-OFFSET WINDOW))
@@ -612,21 +604,21 @@ of the correct inferior of SUP onto the rectangle."
 	(T
 	 (AND SCREEN-MANAGE-TRACE-OUTPUT
 	      (FORMAT SCREEN-MANAGE-TRACE-OUTPUT
-		      "~&Queueing rectangle ~S, inhibit ~A~%"
-		      E INHIBIT-SCREEN-MANAGEMENT))
+		      "~&Queueing rectangle ~S, inhibit ~A~%" E INHIBIT-SCREEN-MANAGEMENT))
 	 (PUSH E SCREEN-MANAGER-QUEUE)
 	 ;; Do right away if possible, otherwise leave on queue
 	 (OR INHIBIT-SCREEN-MANAGEMENT
 	     (SCREEN-MANAGE-DEQUEUE-ENTRY E)))))
 
 (DEFUN SCREEN-MANAGE-DELAYING-SCREEN-MANAGEMENT-INTERNAL (;&OPTIONAL OLD-STYLE
-							  &AUX (INHIBIT-SCHEDULING-FLAG T))
+							  )
   "Called if stuff got queued during a DELAYING-SCREEN-MANAGEMENT.
 Process the queued requests now unless management is still being delayed,
 but leave them queued if they want to wait for a lock."
-  (OR INHIBIT-SCREEN-MANAGEMENT
-      ;; Only try to dequeue if not delaying anymore
-      (SCREEN-MANAGE-DEQUEUE)))
+  (WITHOUT-INTERRUPTS
+    (OR INHIBIT-SCREEN-MANAGEMENT
+	;; Only try to dequeue if not delaying anymore
+	(SCREEN-MANAGE-DEQUEUE))))
 
 (DEFUN SCREEN-MANAGE-DEQUEUE (&AUX (INHIBIT-SCHEDULING-FLAG T))
   "Process the requests for screen management queued during a DELAYING-SCREEN-MANAGEMENT.
@@ -670,12 +662,12 @@ The code returns T if it actually dequeued the entry, else NIL."
 	       ;; FORCE-ACCESS so that PREPARE-SHEET won't look at the output-hold flag.
 	       (SHEET-FORCE-ACCESS (SHEET :NO-PREPARE)
 	         (SETQ INHIBIT-SCHEDULING-FLAG NIL)
-		 (FUNCALL (CAR (RECT-SOURCE ENTRY)) ':SCREEN-MANAGE ALL))
+		 (SEND (CAR (RECT-SOURCE ENTRY)) :SCREEN-MANAGE ALL))
 	       ;; If can't screen manage (no screen!), then just do autoexposure
 	       (LOCK-SHEET (SHEET)
 	         (SETQ INHIBIT-SCHEDULING-FLAG NIL)
-		 (FUNCALL SHEET ':ORDER-INFERIORS)
-		 (FUNCALL SHEET ':SCREEN-MANAGE-AUTOEXPOSE-INFERIORS)))
+		 (SEND SHEET :ORDER-INFERIORS)
+		 (SEND SHEET :SCREEN-MANAGE-AUTOEXPOSE-INFERIORS)))
 	   (SETQ INHIBIT-SCHEDULING-FLAG T)
 	   T))
 	(T NIL)))
@@ -697,14 +689,14 @@ SHEET should be locked."
   (LOCK-SHEET (SHEET)
     (DOLIST (I (SHEET-INFERIORS SHEET))
       (OR (MEMQ I (SHEET-EXPOSED-INFERIORS SHEET))
-;	  (NOT (FUNCALL I ':SCREEN-MANAGE-DEEXPOSED-VISIBILITY))
+;	  (NOT (SEND I :SCREEN-MANAGE-DEEXPOSED-VISIBILITY))
 	  (NOT (SHEET-WITHIN-SHEET-P I SHEET))
 	  ( (OR (SHEET-PRIORITY I) 0) -1)
 	  (PUSH I INTERESTING-INFERIORS)))
     (SETQ INTERESTING-INFERIORS (NREVERSE INTERESTING-INFERIORS))
-    (AND SCREEN-MANAGE-TRACE-OUTPUT
-	 (FORMAT SCREEN-MANAGE-TRACE-OUTPUT
-		 "~&Autoexpose-inferiors: ~S~%" INTERESTING-INFERIORS))
+    (IF SCREEN-MANAGE-TRACE-OUTPUT
+	(FORMAT SCREEN-MANAGE-TRACE-OUTPUT
+		"~&Autoexpose-inferiors: ~S~%" INTERESTING-INFERIORS))
     ;; Now, we have a list of interesting: deexposed and active
     ;; Expose them one by one if they aren't covered.
     (DOLIST (I INTERESTING-INFERIORS)
@@ -714,13 +706,14 @@ SHEET should be locked."
 	    ;; Don't expose if it would cover anything earlier in the list.  What this
 	    ;; does is prevent violations of priority; something earlier in the list
 	    ;; might not be exposed because some other part of it was covered.
-	    ((DOLIST (HP INTERESTING-INFERIORS)
+	    (T
+	     (DOLIST (HP INTERESTING-INFERIORS)
 	       (AND (EQ I HP)
 		    (RETURN T))
-	       (AND (FUNCALL HP ':SCREEN-MANAGE-DEEXPOSED-VISIBILITY)
+	       (AND (SEND HP :SCREEN-MANAGE-DEEXPOSED-VISIBILITY)
 		    (SHEET-OVERLAPS-SHEET-P I HP)
 		    (RETURN NIL)))
-	     (FUNCALL I ':EXPOSE)
+	     (SEND I :EXPOSE)
 	     (SETQ INTERESTING-INFERIORS (DELQ I INTERESTING-INFERIORS)))))
     (AND (EQ SHEET MOUSE-SHEET)
 	 (NULL SELECTED-WINDOW)
@@ -728,8 +721,8 @@ SHEET should be locked."
 	 ;; If hacking the sheet the mouse is on, and there is no window currently selected,
 	 ;; select a window
 	 (DOLIST (I INTERESTING-INFERIORS)
-	   (AND (FUNCALL I ':NAME-FOR-SELECTION)
-		(RETURN (FUNCALL I ':SELECT)))))))
+	   (AND (SEND I :NAME-FOR-SELECTION)
+		(RETURN (SEND I :SELECT)))))))
 
 ;;; Screen manager's background process
 
@@ -775,13 +768,13 @@ SHEET should be locked."
 							    (SHEET-EXPOSED-INFERIORS SHEET)))
   (DOLIST (I (SHEET-INFERIORS SHEET))
     (SCREEN-MANAGE-UPDATE-PERMITTED-WINDOWS I)
-    (COND ((AND (NOT (MEMQ I EXPSD-INFS))
-		( (OR (SHEET-PRIORITY I) 0) 0)
-		(EQ (SHEET-DEEXPOSED-TYPEOUT-ACTION I) ':PERMIT)
-		(ZEROP (SHEET-OUTPUT-HOLD-FLAG I)))
-	   ;; Sheet is permitted, deexposed, and has been typed on.  Update it on screen.
-	   (SETF (SHEET-OUTPUT-HOLD-FLAG I) 1)
-	   (SCREEN-CONFIGURATION-HAS-CHANGED I)))))
+    (WHEN (AND (NOT (MEMQ I EXPSD-INFS))
+	       ( (OR (SHEET-PRIORITY I) 0) 0)
+	       (EQ (SHEET-DEEXPOSED-TYPEOUT-ACTION I) ':PERMIT)
+	       (ZEROP (SHEET-OUTPUT-HOLD-FLAG I)))
+      ;; Sheet is permitted, deexposed, and has been typed on.  Update it on screen.
+      (SETF (SHEET-OUTPUT-HOLD-FLAG I) 1)
+      (SCREEN-CONFIGURATION-HAS-CHANGED I))))
 
 (DEFVAR SCREEN-MANAGER-BACKGROUND-PROCESS
 	(PROCESS-RUN-RESTARTABLE-FUNCTION "Screen Manager Background"
