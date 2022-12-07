@@ -1,12 +1,14 @@
-;;; -*- Mode: LISP; Package: TV; Base: 8 -*-
+;;; -*- Mode:LISP; Package:TV; Readtable:T; Base:8 -*-
 ;;; ** (c) Copyright 1980 by Massachusetts Institute of Technology **
 
 (DEFUN %DRAW-RECTANGLE-CLIPPED (WIDTH HEIGHT X-BITPOS Y-BITPOS ALU-FUNCTION SHEET)
   "Draw rectangle in SHEET, coords relative to SHEET, clipping to SHEET."
-  (AND (MINUSP X-BITPOS) (SETQ WIDTH (+ WIDTH X-BITPOS)
-			       X-BITPOS 0))
-  (AND (MINUSP Y-BITPOS) (SETQ HEIGHT (+ HEIGHT Y-BITPOS)
-			       Y-BITPOS 0))
+  (IF (MINUSP X-BITPOS)
+      (SETQ WIDTH (+ WIDTH X-BITPOS)
+	    X-BITPOS 0))
+  (IF (MINUSP Y-BITPOS)
+      (SETQ HEIGHT (+ HEIGHT Y-BITPOS)
+	    Y-BITPOS 0))
   (SETQ WIDTH (MIN WIDTH (MAX 0 (- (SHEET-WIDTH SHEET) X-BITPOS))))
   (SETQ HEIGHT (MIN HEIGHT (MAX 0 (- (SHEET-HEIGHT SHEET) Y-BITPOS))))
   (AND (> WIDTH 0) (> HEIGHT 0)
@@ -80,8 +82,8 @@ assuming that a screen's offsets are always 0."
        (Y-OFFSET 0))
       ((EQ W TOP)
        (VALUES X-OFFSET Y-OFFSET))
-      (SETQ X-OFFSET (+ X-OFFSET (SHEET-X W))
-	    Y-OFFSET (+ Y-OFFSET (SHEET-Y W)))))
+    (SETQ X-OFFSET (+ X-OFFSET (SHEET-X W))
+	  Y-OFFSET (+ Y-OFFSET (SHEET-Y W)))))
 
 (DEFUN SHEET-ME-OR-MY-KID-P (SHEET ME)
   "T if SHEET is ME or an inferior to any number of levels of ME."
@@ -169,23 +171,21 @@ Should be called with interrupts inhibited if it's to be meaningful."
   "Lock SHEET's lock, waiting if necessary.
 The locks of SHEET's inferiors are locked also."
   (DO ((INHIBIT-SCHEDULING-FLAG T T))
-      (())
-    (COND ((SHEET-CAN-GET-LOCK SHEET UNIQUE-ID)
-	   (RETURN (SHEET-GET-LOCK-INTERNAL SHEET UNIQUE-ID)))
-	  (T
-	   (SETQ INHIBIT-SCHEDULING-FLAG NIL)
-	   (PROCESS-WAIT "Window Lock" #'SHEET-CAN-GET-LOCK SHEET UNIQUE-ID)))))
+      ((SHEET-CAN-GET-LOCK SHEET UNIQUE-ID)
+       (SHEET-GET-LOCK-INTERNAL SHEET UNIQUE-ID))
+    (SETQ INHIBIT-SCHEDULING-FLAG NIL)
+    (PROCESS-WAIT "Window Lock" #'SHEET-CAN-GET-LOCK SHEET UNIQUE-ID)))
 
 (DEFUN SHEET-GET-LOCK-INTERNAL (SHEET UNIQUE-ID)
   "Really get the lock on a sheet and its inferiors, assuming lock is available to us now.
 INHIBIT-SCHEDULING-FLAG must be non-NIL."
   (OR INHIBIT-SCHEDULING-FLAG
-      (FERROR NIL "SHEET-GET-LOCK-INTERNAL called with interrupts enabled."))
+      (FERROR NIL "~S called with interrupts enabled." 'SHEET-GET-LOCK-INTERNAL))
   (OR (SHEET-LOCK SHEET)
       ;; If lock is currently non-NIL, then initialize it to the unique-id
       (SETF (SHEET-LOCK SHEET) UNIQUE-ID))
   ;; Always bump the lock count here
-  (SETF (SHEET-LOCK-COUNT SHEET) (1+ (SHEET-LOCK-COUNT SHEET)))
+  (INCF (SHEET-LOCK-COUNT SHEET))
   (DOLIST (INFERIOR (SHEET-INFERIORS SHEET))
     (SHEET-GET-LOCK-INTERNAL INFERIOR UNIQUE-ID)))
 
@@ -218,21 +218,20 @@ REQUESTOR is the temporary sheet that is going to cover SHEET."
 	   ;; and the lock count is non-zero (this is for the case of a window being
 	   ;; in temp-lock state, but not being plussified)
 	   (PLUS (AND (NOT (ZEROP LC)) (= LC (SHEET-LOCK-COUNT SUP)))))
-      (COND (PLUS
-	     ;; In plus state, determine if we are a valid temp locker (we must be
-	     ;; an inferior (direct or indirect) of the lowest superior that is not
-	     ;; in the plus state)
-	     (SHEET-ME-OR-MY-KID-P REQUESTOR
-				   (DO ((OSUP SUP SUP))
-				       (())
-				     (SETQ SUP (SHEET-SUPERIOR OSUP))
-				     (WHEN (OR (NULL SUP)
-					       (> LC (SHEET-LOCK-COUNT SUP)))
-				       ;; Found where the buck stops, return the sheet
-				       (RETURN OSUP)))))
-	    (T
-	     ;; Otherwise, only ok to lock if already temp locked
-	     (CONSP LOCK))))))
+      (IF PLUS
+	  ;; In plus state, determine if we are a valid temp locker (we must be
+	  ;; an inferior (direct or indirect) of the lowest superior that is not
+	  ;; in the plus state)
+	  (SHEET-ME-OR-MY-KID-P REQUESTOR
+				(DO ((OSUP SUP SUP))
+				    (())
+				  (SETQ SUP (SHEET-SUPERIOR OSUP))
+				  (WHEN (OR (NULL SUP)
+					    (> LC (SHEET-LOCK-COUNT SUP)))
+				    ;; Found where the buck stops, return the sheet
+				    (RETURN OSUP))))
+	;; Otherwise, only ok to lock if already temp locked
+	(CONSP LOCK)))))
 
 (DEFUN SHEET-GET-TEMPORARY-LOCK (SHEET REQUESTOR)
   "Get a temporary lock on SHEET.
@@ -251,10 +250,10 @@ REQUESTOR is the temporary sheet that is going to cover SHEET."
     (PROCESS-WAIT "Window Lock" #'SHEET-CAN-GET-TEMPORARY-LOCK SHEET REQUESTOR)))
 
 (DEFUN SHEET-FIND-LOCKER (SHEET)
-  (DO ((SUP SHEET) (LOCK)) (())
+  (DO ((SUP SHEET) (LOCK))
+      (())
     (SETQ SUP (SHEET-SUPERIOR SUP))
-    (OR SUP (FERROR NIL
-		    "Internal error - Lock count non-zero, but nobody is locked!"))
+    (OR SUP (FERROR NIL "Internal error - Lock count non-zero, but nobody is locked!"))
     (AND (ATOM (SETQ LOCK (SHEET-LOCK SUP)))
 	 (RETURN LOCK))))
 
@@ -298,9 +297,10 @@ REQUESTOR is the temporary sheet that is going to cover SHEET."
   "Wait till SHEET's lock is available, then return with interrupts off.
 Must be called with INHIBIT-SCHEDULING-FLAG bound to T.
 However, other processes can run when this function is called."
-  (DO () ((SHEET-CAN-GET-LOCK SHEET))
+  (DO ()
+      ((SHEET-CAN-GET-LOCK SHEET))
     (SETQ INHIBIT-SCHEDULING-FLAG NIL)
-    (PROCESS-WAIT "Window Lock" 'SHEET-CAN-GET-LOCK SHEET)
+    (PROCESS-WAIT "Window Lock" #'SHEET-CAN-GET-LOCK SHEET)
     (SETQ INHIBIT-SCHEDULING-FLAG T)))
 
 (DEFUN SHEET-MORE-LOCK-KLUDGE (FUN &REST ARGS)
@@ -308,7 +308,7 @@ However, other processes can run when this function is called."
   ;; **********************************************************************
   ;; ** The following is a total kludge and should not even be looked at **
   ;; **********************************************************************
-  (IF (OR (STRING-EQUAL USER-ID "RMS") (STRING-EQUAL USER-ID "MLY"))
+  (IF (OR (STRING-EQUAL USER-ID "RMS") (STRING-EQUAL USER-ID "Mly"))
       ;; Let's see what this is accomplishing, the hard way.
       (APPLY FUN ARGS)
     ;; It seems we 1) set the lock state of this window and all inferiors
@@ -323,9 +323,10 @@ However, other processes can run when this function is called."
 	(PROGN
 	  (AND LOCK
 	       (NEQ LOCK CURRENT-PROCESS)
-	       (FERROR NIL "Attempt to **MORE** when sheet was not locked by current process."))
-	  (SETQ OLD-LOCK-STATE
-		(AND LOCK (SHEET-MORE-LOCK-KLUDGE-LOCK-STATE SELF (SHEET-LOCK-COUNT SUPERIOR))))
+	       (FERROR NIL
+		       "Attempt to **MORE** when sheet was not locked by current process."))
+	  (SETQ OLD-LOCK-STATE (AND LOCK (SHEET-MORE-LOCK-KLUDGE-LOCK-STATE
+					   SELF (SHEET-LOCK-COUNT SUPERIOR))))
 	  (SETQ INHIBIT-SCHEDULING-FLAG NIL)
 	  (SETQ CHAR (APPLY FUN ARGS)))
 	(AND OLD-LOCK-STATE (SHEET-GET-LOCK SELF))
@@ -602,12 +603,12 @@ INHIBIT-SCHEDULING-FLAG bound."
   (SHEET-INSIDE-HEIGHT))
 
 (DEFMETHOD (SHEET :SQUARE-PANE-SIZE) (MAX-WIDTH MAX-HEIGHT IGNORE IGNORE STACKING)
-  (SELECTQ STACKING
+  (CASE STACKING
     (:VERTICAL MAX-WIDTH)
     (:HORIZONTAL MAX-HEIGHT)))
 
 (DEFMETHOD (SHEET :SQUARE-PANE-INSIDE-SIZE) (MAX-WIDTH MAX-HEIGHT IGNORE IGNORE STACKING)
-  (SELECTQ STACKING
+  (CASE STACKING
     (:VERTICAL
      (+ TOP-MARGIN-SIZE (- MAX-WIDTH LEFT-MARGIN-SIZE RIGHT-MARGIN-SIZE) BOTTOM-MARGIN-SIZE))
     (:HORIZONTAL
@@ -615,7 +616,9 @@ INHIBIT-SCHEDULING-FLAG bound."
     ))
 
 (DEFMETHOD (SHEET :INSIDE-EDGES) ()
-  (VALUES (SHEET-INSIDE-LEFT) (SHEET-INSIDE-TOP) (SHEET-INSIDE-RIGHT)
+  (VALUES (SHEET-INSIDE-LEFT)
+	  (SHEET-INSIDE-TOP)
+	  (SHEET-INSIDE-RIGHT)
 	  (SHEET-INSIDE-BOTTOM)))
 
 (DEFMETHOD (SHEET :POSITION) ()
@@ -690,7 +693,7 @@ INHIBIT-SCHEDULING-FLAG bound."
 (DEFUN SHEET-ARRAY-TYPE (SHEET)
   "Return the proper array type to use for bit arrays for SHEET.
 This depends on the type of screen SHEET is on."
-  (SELECTQ (SCREEN-BITS-PER-PIXEL (SHEET-SCREEN SHEET))
+  (CASE (SCREEN-BITS-PER-PIXEL (SHEET-SCREEN SHEET))
     (1 'ART-1B)
     (2 'ART-2B)
     (4 'ART-4B)
@@ -702,13 +705,13 @@ This depends on the type of screen SHEET is on."
   "Decode the value of the :CHARACTER-WIDTH init keyword, when creating a window.
 Returns a number of pixels."
   (DECLARE (:SELF-FLAVOR SHEET))
-  (MIN (COND ((NUMBERP SPEC)
-	      (+ (* SPEC CHAR-WIDTH) LEFT-MARGIN-SIZE RIGHT-MARGIN-SIZE))
-	     ((STRINGP SPEC)
-	      (MULTIPLE-VALUE-BIND (NIL NIL MAX-X)
-		  (SHEET-STRING-LENGTH SELF SPEC)
-		(+ MAX-X LEFT-MARGIN-SIZE RIGHT-MARGIN-SIZE)))
-	     (T (FERROR NIL "~S illegal as :CHARACTER-WIDTH; use NIL, number, or string")))
+  (MIN (TYPECASE SPEC
+	 (NUMBER (+ (* SPEC CHAR-WIDTH) LEFT-MARGIN-SIZE RIGHT-MARGIN-SIZE))
+	 (STRING (MULTIPLE-VALUE-BIND (NIL NIL MAX-X)
+		     (SHEET-STRING-LENGTH SELF SPEC)
+		   (+ MAX-X LEFT-MARGIN-SIZE RIGHT-MARGIN-SIZE)))
+	 (T (FERROR NIL "~S illegal as ~S; use ~S, number, or string"
+		    :CHARACTER-WIDTH NIL)))
        (IF SUPERIOR (SHEET-INSIDE-WIDTH SUPERIOR) #o1000000)))
 
 (DEFUN DECODE-CHARACTER-HEIGHT-SPEC (SPEC &OPTIONAL WIDTH-ALSO &AUX WID)
@@ -717,14 +720,14 @@ Returns a number of pixels."
   (DECLARE (:SELF-FLAVOR SHEET))
   (AND WIDTH-ALSO (STRINGP SPEC)
        (SETQ WID (- (DECODE-CHARACTER-WIDTH-SPEC SPEC) LEFT-MARGIN-SIZE RIGHT-MARGIN-SIZE)))
-  (MIN (COND ((NUMBERP SPEC)
-	      (+ (* SPEC LINE-HEIGHT)
-		 TOP-MARGIN-SIZE BOTTOM-MARGIN-SIZE))
-	     ((STRINGP SPEC)
-	      (MULTIPLE-VALUE-BIND (IGNORE HT)
-		  (SHEET-COMPUTE-MOTION SELF 0 0 SPEC 0 NIL T 0 #o1000000 #o1000000 WID)
-		(+ HT TOP-MARGIN-SIZE BOTTOM-MARGIN-SIZE)))
-	     (T (FERROR NIL "~S illegal as :CHARACTER-HEIGHT; use NIL, number, or string")))
+  (MIN (TYPECASE SPEC
+	 (NUMBER (+ (* SPEC LINE-HEIGHT)
+		    TOP-MARGIN-SIZE BOTTOM-MARGIN-SIZE))
+	 (STRING (MULTIPLE-VALUE-BIND (NIL HT)
+		     (SHEET-COMPUTE-MOTION SELF 0 0 SPEC 0 NIL T 0 #o1000000 #o1000000 WID)
+		   (+ HT TOP-MARGIN-SIZE BOTTOM-MARGIN-SIZE)))
+	 (T (FERROR NIL "~S illegal as ~S; use ~S, number, or string"
+		    :CHARACTER-HEIGHT NIL)))
        (IF SUPERIOR (SHEET-INSIDE-HEIGHT SUPERIOR) #o1000000)))
 
 (DEFUN SHEET-DEDUCE-AND-SET-SIZES (RIGHT BOTTOM VSP INTEGRAL-P
@@ -768,41 +771,41 @@ the variables already have their values, and we use those values."
 					  (DESELECTED-VISIBILITY :ON))
   ;; Process options
   (DOPLIST ((CAR INIT-PLIST) VAL OP)
-    (SELECTQ OP
-	((:LEFT :X) (SETQ X-OFFSET VAL))
-	((:TOP :Y) (SETQ Y-OFFSET VAL))
-	(:POSITION (SETQ X-OFFSET (FIRST VAL) Y-OFFSET (SECOND VAL)))
-	(:RIGHT (SETQ RIGHT VAL))
-	(:BOTTOM (SETQ BOTTOM VAL))
-	(:SIZE (AND VAL (SETQ WIDTH (FIRST VAL)
-			      HEIGHT (SECOND VAL))))
-	(:EDGES (AND VAL (SETQ X-OFFSET (FIRST VAL)
-			       Y-OFFSET (SECOND VAL)
-			       RIGHT (THIRD VAL)
-			       BOTTOM (FOURTH VAL)
-			       ;; Override any specified height, probably from default plist.
-			       HEIGHT NIL WIDTH NIL))
-		(UNLESS (> RIGHT X-OFFSET)
-		  (FERROR NIL "Specified edges give width ~S" (- RIGHT X-OFFSET)))
-		(UNLESS (> BOTTOM Y-OFFSET)
-		  (FERROR NIL "Specified edges give height ~S" (- BOTTOM Y-OFFSET))))
-	(:CHARACTER-WIDTH (SETQ CHARACTER-WIDTH VAL))
-	(:CHARACTER-HEIGHT (SETQ CHARACTER-HEIGHT VAL))
-	(:BLINKER-P (SETQ BLINKER-P VAL))
-	(:REVERSE-VIDEO-P (SETQ REVERSE-VIDEO-P VAL))
-	(:MORE-P (SETQ MORE-P VAL))
-	(:VSP (SETQ VSP VAL))
-	(:BLINKER-FLAVOR (SETQ BLINK-FL VAL))
-	(:BLINKER-DESELECTED-VISIBILITY (SETQ DESELECTED-VISIBILITY VAL))
-	(:INTEGRAL-P (SETQ INTEGRAL-P VAL))
-	(:SAVE-BITS (SETQ SAVE-BITS VAL))
-	(:RIGHT-MARGIN-CHARACTER-FLAG (SETF (SHEET-RIGHT-MARGIN-CHARACTER-FLAG) VAL))
-	(:BACKSPACE-NOT-OVERPRINTING-FLAG (SETF (SHEET-BACKSPACE-NOT-OVERPRINTING-FLAG) VAL))
-	(:CR-NOT-NEWLINE-FLAG (SETF (SHEET-CR-NOT-NEWLINE-FLAG) VAL))
-	(:TRUNCATE-LINE-OUT-FLAG (SETF (SHEET-TRUNCATE-LINE-OUT-FLAG) VAL))
-	(:DEEXPOSED-TYPEIN-ACTION (SEND SELF :SET-DEEXPOSED-TYPEIN-ACTION VAL))
-	(:TAB-NCHARS (SETF (SHEET-TAB-NCHARS) VAL))
-	))
+    (CASE OP
+      ((:LEFT :X) (SETQ X-OFFSET VAL))
+      ((:TOP :Y) (SETQ Y-OFFSET VAL))
+      (:POSITION (SETQ X-OFFSET (FIRST VAL) Y-OFFSET (SECOND VAL)))
+      (:RIGHT (SETQ RIGHT VAL))
+      (:BOTTOM (SETQ BOTTOM VAL))
+      (:SIZE (AND VAL (SETQ WIDTH (FIRST VAL)
+			    HEIGHT (SECOND VAL))))
+      (:EDGES (AND VAL (SETQ X-OFFSET (FIRST VAL)
+			     Y-OFFSET (SECOND VAL)
+			     RIGHT (THIRD VAL)
+			     BOTTOM (FOURTH VAL)
+			     ;; Override any specified height, probably from default plist.
+			     HEIGHT NIL WIDTH NIL))
+	      (UNLESS (> RIGHT X-OFFSET)
+		(FERROR NIL "Specified edges give width ~S" (- RIGHT X-OFFSET)))
+	      (UNLESS (> BOTTOM Y-OFFSET)
+		(FERROR NIL "Specified edges give height ~S" (- BOTTOM Y-OFFSET))))
+      (:CHARACTER-WIDTH (SETQ CHARACTER-WIDTH VAL))
+      (:CHARACTER-HEIGHT (SETQ CHARACTER-HEIGHT VAL))
+      (:BLINKER-P (SETQ BLINKER-P VAL))
+      (:REVERSE-VIDEO-P (SETQ REVERSE-VIDEO-P VAL))
+      (:MORE-P (SETQ MORE-P VAL))
+      (:VSP (SETQ VSP VAL))
+      (:BLINKER-FLAVOR (SETQ BLINK-FL VAL))
+      (:BLINKER-DESELECTED-VISIBILITY (SETQ DESELECTED-VISIBILITY VAL))
+      (:INTEGRAL-P (SETQ INTEGRAL-P VAL))
+      (:SAVE-BITS (SETQ SAVE-BITS VAL))
+      (:RIGHT-MARGIN-CHARACTER-FLAG (SETF (SHEET-RIGHT-MARGIN-CHARACTER-FLAG) VAL))
+      (:BACKSPACE-NOT-OVERPRINTING-FLAG (SETF (SHEET-BACKSPACE-NOT-OVERPRINTING-FLAG) VAL))
+      (:CR-NOT-NEWLINE-FLAG (SETF (SHEET-CR-NOT-NEWLINE-FLAG) VAL))
+      (:TRUNCATE-LINE-OUT-FLAG (SETF (SHEET-TRUNCATE-LINE-OUT-FLAG) VAL))
+      (:DEEXPOSED-TYPEIN-ACTION (SEND SELF :SET-DEEXPOSED-TYPEIN-ACTION VAL))
+      (:TAB-NCHARS (SETF (SHEET-TAB-NCHARS) VAL))
+      ))
   (SHEET-DEDUCE-AND-SET-SIZES RIGHT BOTTOM VSP INTEGRAL-P CHARACTER-WIDTH CHARACTER-HEIGHT)
   (COND ((OR (EQ SAVE-BITS 'T) BIT-ARRAY)
 	 (LET ((DIMS (LIST (TRUNCATE (* 32. (SETQ LOCATIONS-PER-LINE
@@ -820,22 +823,21 @@ the variables already have their values, and we use those values."
 	((EQ SAVE-BITS :DELAYED)
 	 (SETF (SHEET-FORCE-SAVE-BITS) 1)))
   (SETQ MORE-VPOS (AND MORE-P (SHEET-DEDUCE-MORE-VPOS SELF)))
-  (COND (SUPERIOR
-	 (OR BIT-ARRAY
-	     (LET ((ARRAY (SHEET-SUPERIOR-SCREEN-ARRAY)))
-	       (SETQ OLD-SCREEN-ARRAY
-		     (MAKE-PIXEL-ARRAY
-		       (PIXEL-ARRAY-WIDTH ARRAY) HEIGHT
-		       :TYPE (ARRAY-TYPE ARRAY)
-		       :DISPLACED-TO ARRAY
-		       :DISPLACED-INDEX-OFFSET
-		       (+ X-OFFSET (* Y-OFFSET (PIXEL-ARRAY-WIDTH ARRAY)))))
-	       (SETQ LOCATIONS-PER-LINE (SHEET-LOCATIONS-PER-LINE SUPERIOR))))
-	 (AND BLINKER-P
-	      (APPLY 'MAKE-BLINKER SELF BLINK-FL
-		     :FOLLOW-P T
-		     :DESELECTED-VISIBILITY DESELECTED-VISIBILITY
-		     (AND (CONSP BLINKER-P) BLINKER-P)))))
+  (WHEN SUPERIOR
+    (OR BIT-ARRAY
+	(LET ((ARRAY (SHEET-SUPERIOR-SCREEN-ARRAY)))
+	  (SETQ OLD-SCREEN-ARRAY
+		(MAKE-PIXEL-ARRAY (PIXEL-ARRAY-WIDTH ARRAY) HEIGHT
+				  :TYPE (ARRAY-TYPE ARRAY)
+				  :DISPLACED-TO ARRAY
+				  :DISPLACED-INDEX-OFFSET
+				    (+ X-OFFSET (* Y-OFFSET (PIXEL-ARRAY-WIDTH ARRAY)))))
+	  (SETQ LOCATIONS-PER-LINE (SHEET-LOCATIONS-PER-LINE SUPERIOR))))
+    (AND BLINKER-P
+	 (APPLY #'MAKE-BLINKER SELF BLINK-FL
+		:FOLLOW-P T
+		:DESELECTED-VISIBILITY DESELECTED-VISIBILITY
+		(AND (CONSP BLINKER-P) BLINKER-P))))
   (SETF (SHEET-OUTPUT-HOLD-FLAG) 1)
   (OR (VARIABLE-BOUNDP CHAR-ALUF)
       (SETQ CHAR-ALUF (IF REVERSE-VIDEO-P ALU-ANDCA ALU-IOR)))
@@ -849,8 +851,11 @@ the variables already have their values, and we use those values."
     (SETQ LOCATIONS-PER-LINE (TRUNCATE (* WIDTH BITS-PER-PIXEL) 32.)))
   (SETQ FONT-ALIST NIL)   ;Overridden by the :AFTER method.
 			  ;Makes :PARSE-FONT-DESCRIPTOR not lose.
-  (SETQ DEFAULT-FONT FONTS:CPTFONT  ;These two must get values here,
-	FONT-MAP (FILLARRAY NIL (LIST DEFAULT-FONT));but they will be replaced with the right ones later.
+  ;; These two must get values here, but they will be replaced with the right ones later.
+  (SETQ DEFAULT-FONT FONTS:CPTFONT
+	FONT-MAP (MAKE-FONT-MAP :FONT-LIST (LIST DEFAULT-FONT)
+				:FILL-POINTER 1
+				:MAKE-ARRAY (:LENGTH 1 :INITIAL-CONTENTS (LIST DEFAULT-FONT)))
 	;; No one uses this anyway...
 	BUFFER-HALFWORD-ARRAY (MAKE-ARRAY (TRUNCATE (* WIDTH (OR HEIGHT 1) BITS-PER-PIXEL) 16.)
 					  :TYPE ART-16B :DISPLACED-TO BUFFER))
@@ -901,25 +906,28 @@ the variables already have their values, and we use those values."
 
 (DEFUN SCREEN-PARSE-FONT-DESCRIPTOR (FD TYPE &OPTIONAL DONT-LOAD-P)
   (DECLARE (:SELF-FLAVOR SCREEN))
-  (AND (TYPEP FD 'FONT) (BOUNDP (FONT-NAME FD))
+  (AND (TYPEP FD 'FONT)
+       (BOUNDP (FONT-NAME FD))
        (SETQ FD (FONT-NAME FD)))
-  (COND ((SYMBOLP FD)
-	 ;; Name of font -- find appropriate font
-	 (PROG ((FONT (GET FD TYPE)))
+  (TYPECASE FD
+    (FONT FD)
+    (SYMBOL
+     ;; Name of font -- find appropriate font
+     (PROG ((FONT (GET FD TYPE)))
 	   ;; First try a property of the symbol.
-	   (COND ((NULL FONT))
-		 ((SYMBOLP FONT)
-		   (RETURN (SCREEN-PARSE-FONT-DESCRIPTOR FONT TYPE DONT-LOAD-P)))
-		 ((TYPEP FONT 'FONT) (RETURN FONT)))
+	   (TYPECASE FONT
+	     (NULL)
+	     (SYMBOL (RETURN (SCREEN-PARSE-FONT-DESCRIPTOR FONT TYPE DONT-LOAD-P)))
+	     (FONT (RETURN FONT)))
 	   ;; Then see if it is a known "purpose" of a standard font.
 	   (IF (ASSQ FD FONT-ALIST)
 	       (RETURN (FONT-EVALUATE (CDR (ASSQ FD FONT-ALIST))) (CDR (ASSQ FD FONT-ALIST))))
 	   ;; Then try its value.
-	   (IF (BOUNDP FD) (SETQ FONT (SYMEVAL FD)))
+	   (IF (BOUNDP FD) (SETQ FONT (SYMBOL-VALUE FD)))
 	   (COND ((NULL FONT))
-		 ((EQ FONT FD))  ;In case arg is in KEYWORD.
+		 ((EQ FONT FD))			;In case arg is in KEYWORD.
 		 ((SYMBOLP FONT)
-		   (RETURN (SCREEN-PARSE-FONT-DESCRIPTOR FONT TYPE DONT-LOAD-P) FD))
+		  (RETURN (SCREEN-PARSE-FONT-DESCRIPTOR FONT TYPE DONT-LOAD-P) FD))
 		 ((TYPEP FONT 'FONT) (RETURN FONT FD)))
 	   ;; Then try re-interning in FONTS if not already there.
 	   (SETQ FONT (INTERN-SOFT FD "FONTS"))
@@ -927,22 +935,21 @@ the variables already have their values, and we use those values."
 		(RETURN (SCREEN-PARSE-FONT-DESCRIPTOR FONT TYPE DONT-LOAD-P)))
 	   ;; Then maybe try loading a file.
 	   (OR DONT-LOAD-P
-	       (PROGN
-		 ;; Specifying FONTS package is to inhibit loading message.
-		 (CATCH-ERROR (LOAD (FORMAT NIL "SYS: FONTS; ~A" FD) "FONTS" T T) NIL)
-		 ;; See if we got a value for the symbol from the file.
-		 (IF (BOUNDP FD) (SETQ FONT (SYMEVAL FD)))
-		 (COND ((NULL FONT))
-		       ((EQ FONT FD))
-		       ((SYMBOLP FONT)
-			(RETURN (SCREEN-PARSE-FONT-DESCRIPTOR FONT TYPE DONT-LOAD-P)))
-		       ((TYPEP FONT 'FONT) (RETURN FONT FD)))))
+	       (PROGN (CATCH-ERROR (LOAD (FORMAT NIL "SYS: FONTS; ~A" FD)
+					 :SET-DEFAULT-PATHNAME NIL
+					 :VERBOSE NIL) NIL)
+		      ;; See if we got a value for the symbol from the file.
+		      (IF (BOUNDP FD) (SETQ FONT (SYMBOL-VALUE FD)))
+		      (COND ((NULL FONT))
+			    ((EQ FONT FD))
+			    ((SYMBOLP FONT)
+			     (RETURN (SCREEN-PARSE-FONT-DESCRIPTOR FONT TYPE DONT-LOAD-P)))
+			    ((TYPEP FONT 'FONT) (RETURN FONT FD)))))
 	   ;; Ask the user to specify some other font descriptor.
 	   (RETURN (SCREEN-PARSE-FONT-DESCRIPTOR
 		     (CERROR T NIL NIL "Font ~D not found" FD)
 		     TYPE))))
-	((TYPEP FD 'FONT) FD)
-	(T (FERROR NIL "Illegal font descriptor ~A" FD))))
+	(T (FERROR NIL "Illegal font descriptor ~S" FD))))
 
 (DEFMETHOD (SCREEN :PARSE-FONT-NAME) (FD)
   (MULTIPLE-VALUE-BIND (FONT -NAME-)
@@ -1031,7 +1038,6 @@ VSP is a number of pixels."
 		  (FONT-NAME NEW-FONT)))))
 
 (DEFMETHOD (SCREEN :AFTER :CHANGE-OF-DEFAULT-FONT) (OLD-FONT NEW-FONT)
-  (DECLARE (SPECIAL OLD-FONT NEW-FONT))
   (DOLIST (RESOURCE-NAME WINDOW-RESOURCE-NAMES)
     (MAP-RESOURCE #'(LAMBDA (WINDOW IGNORE IGNORE)
 		      (AND (EQ (SEND WINDOW :STATUS) :DEACTIVATED)
@@ -1076,14 +1082,14 @@ VSP is a number of pixels."
   (SHEET-NEW-FONT-MAP NEW-MAP (SEND SELF :VSP))
   FONT-MAP)
 
-(DEFMETHOD (SHEET :SET-CURRENT-FONT) (NEW-FONT &OPTIONAL OK-IF-NOT-IN-FONT-MAP &aux font tem)
+(DEFMETHOD (SHEET :SET-CURRENT-FONT) (NEW-FONT &OPTIONAL OK-IF-NOT-IN-FONT-MAP &AUX FONT TEM)
   (WITHOUT-INTERRUPTS
     (SETF (FONT-MAP-CURRENT-FONT FONT-MAP)
 	  (COND ((NUMBERP NEW-FONT) (SETQ FONT (AREF FONT-MAP NEW-FONT)) NEW-FONT)
 		(T (SETQ FONT (SEND (SHEET-SCREEN SELF) :PARSE-FONT-SPECIFIER NEW-FONT)
 			 TEM (POSITION FONT FONT-MAP))
 		   (UNLESS (OR TEM OK-IF-NOT-IN-FONT-MAP)
-		     (FERROR NIL "~A IS NOT IN THE FONT MAP OF ~S." FONT SELF))
+		     (FERROR NIL "~S is not in the font map of ~S." FONT SELF))
 		   (IF (SYMBOLP NEW-FONT) NEW-FONT (OR TEM FONT)))))
     (LET ((BL (SHEET-FOLLOWING-BLINKER SELF)))
       (IF BL (SEND BL :SET-SIZE (FONT-CHAR-WIDTH FONT) (FONT-CHAR-HEIGHT FONT))))
@@ -1108,11 +1114,11 @@ VSP is a number of pixels."
 
 (DEFMETHOD (SHEET :SET-DEEXPOSED-TYPEIN-ACTION) (VALUE)
   (SETF (SHEET-DEEXPOSED-TYPEIN-NOTIFY)
-	(SELECTQ VALUE
+	(CASE VALUE
 	  (:NORMAL 0)
 	  (:NOTIFY 1)
 	  (OTHERWISE
-	   (FERROR NIL "~S illegal deexposed-typein-action; use :NORMAL or :NOTIFY")))))
+	   (FERROR NIL "~S illegal deexposed-typein-action; use ~S or ~S" :NORMAL :NOTIFY)))))
 
 (DEFMETHOD (SHEET :SAVE-BITS) ()
   (IF BIT-ARRAY T
@@ -1120,7 +1126,7 @@ VSP is a number of pixels."
       :DELAYED)))
 
 (DEFMETHOD (SHEET :SET-SAVE-BITS) (SAVE-BITS &AUX (INHIBIT-SCHEDULING-FLAG T))
-  (OR SUPERIOR (FERROR NIL "Cannot :SET-SAVE-BITS on a top-level sheet"))
+  (OR SUPERIOR (FERROR NIL "Cannot ~S on a top-level sheet" :SET-SAVE-BITS))
   (LOCK-SHEET (SELF)
     (COND ((EQ SAVE-BITS 'T)
 	   (LET ((INHIBIT-SCHEDULING-FLAG T))
@@ -1151,21 +1157,21 @@ VSP is a number of pixels."
 	   (SETQ BIT-ARRAY NIL)
 	   ;; Note that SCREEN-ARRAY still points to the old value of BIT-ARRAY.  This is
 	   ;; important for the following deexposes to work.
-	   (COND ((NOT EXPOSED-P)
-		  ;; The mouse can't possibly be in any of these windows, so it's alright
-		  ;; to just go ahead and deexpose them with us locked
-		  (DOLIST (I EXPOSED-INFERIORS)
-		    (SEND I :DEEXPOSE :DEFAULT :NOOP NIL))
-		  (WITHOUT-INTERRUPTS		    
-		    (SETQ OLD-SCREEN-ARRAY SCREEN-ARRAY)
-		    (LET ((ARRAY (SHEET-SUPERIOR-SCREEN-ARRAY)))
-		      (REDIRECT-ARRAY OLD-SCREEN-ARRAY (ARRAY-TYPE OLD-SCREEN-ARRAY)
-				      (PIXEL-ARRAY-WIDTH ARRAY)
-				      (PIXEL-ARRAY-HEIGHT OLD-SCREEN-ARRAY)
-				      ARRAY
-				      (+ X-OFFSET (* Y-OFFSET
-						     (PIXEL-ARRAY-WIDTH ARRAY)))))
-		    (SETQ SCREEN-ARRAY NIL))))))
+	   (UNLESS EXPOSED-P
+	     ;; The mouse can't possibly be in any of these windows, so it's alright
+	     ;; to just go ahead and deexpose them with us locked
+	     (DOLIST (I EXPOSED-INFERIORS)
+	       (SEND I :DEEXPOSE :DEFAULT :NOOP NIL))
+	     (WITHOUT-INTERRUPTS		    
+	       (SETQ OLD-SCREEN-ARRAY SCREEN-ARRAY)
+	       (LET ((ARRAY (SHEET-SUPERIOR-SCREEN-ARRAY)))
+		 (REDIRECT-ARRAY OLD-SCREEN-ARRAY (ARRAY-TYPE OLD-SCREEN-ARRAY)
+				 (PIXEL-ARRAY-WIDTH ARRAY)
+				 (PIXEL-ARRAY-HEIGHT OLD-SCREEN-ARRAY)
+				 ARRAY
+				 (+ X-OFFSET (* Y-OFFSET
+						(PIXEL-ARRAY-WIDTH ARRAY)))))
+	       (SETQ SCREEN-ARRAY NIL)))))
     (SETF (SHEET-FORCE-SAVE-BITS) (IF (EQ SAVE-BITS :DELAYED) 1 0)))
   SAVE-BITS)
 
@@ -1205,7 +1211,7 @@ VSP is a number of pixels."
 	OLD-Y (- CURSOR-Y TOP-MARGIN-SIZE))
   ;; Process options
   (DOPLIST (OPTIONS VAL OP)
-    (SELECTQ OP
+    (CASE OP
       ((:TOP :Y) (SETQ TOP VAL))
       (:BOTTOM (SETQ BOTTOM VAL))
       ((:LEFT :X) (SETQ LEFT VAL))
@@ -1232,7 +1238,7 @@ VSP is a number of pixels."
 
   (WITHOUT-INTERRUPTS
     (SHEET-FORCE-ACCESS (SELF T)
-      (MAPC 'OPEN-BLINKER BLINKER-LIST))
+      (MAPC #'OPEN-BLINKER BLINKER-LIST))
     (SHEET-DEDUCE-AND-SET-SIZES RIGHT BOTTOM (SEND SELF :VSP) INTEGRAL-P)
     (SETQ CURSOR-X
 	  (MIN (+ LEFT-MARGIN-SIZE OLD-X) (- WIDTH RIGHT-MARGIN-SIZE CHAR-WIDTH)))
@@ -1257,12 +1263,11 @@ VSP is a number of pixels."
       (LET ((ARRAY (OR SCREEN-ARRAY OLD-SCREEN-ARRAY))
 	    (INDIRECT-TO (OR (AND (NOT EXPOSED-P) BIT-ARRAY)
 			     (SHEET-SUPERIOR-SCREEN-ARRAY))))
-	(REDIRECT-ARRAY
-	  ARRAY (ARRAY-TYPE INDIRECT-TO)
-	  (PIXEL-ARRAY-WIDTH INDIRECT-TO) HEIGHT
-	  INDIRECT-TO
-	  (IF (AND BIT-ARRAY (NOT EXPOSED-P)) 0
-	    (+ X-OFFSET (* Y-OFFSET (PIXEL-ARRAY-WIDTH INDIRECT-TO)))))
+	(REDIRECT-ARRAY ARRAY (ARRAY-TYPE INDIRECT-TO)
+			(PIXEL-ARRAY-WIDTH INDIRECT-TO) HEIGHT
+			INDIRECT-TO
+			(IF (AND BIT-ARRAY (NOT EXPOSED-P)) 0
+			  (+ X-OFFSET (* Y-OFFSET (PIXEL-ARRAY-WIDTH INDIRECT-TO)))))
 	(IF (OR BIT-ARRAY EXPOSED-P)
 	    (SETQ SCREEN-ARRAY ARRAY
 		  OLD-SCREEN-ARRAY NIL)
@@ -1310,9 +1315,7 @@ VSP is a number of pixels."
 			     (OR (SHEET-SCREEN-ARRAY (SHEET-SCREEN SHEET))
 				 (SHEET-OLD-SCREEN-ARRAY (SHEET-SCREEN SHEET))))))
 	 (ROUND-TO (TRUNCATE 32. (OR (CDR (ASSQ TYPE ARRAY-BITS-PER-ELEMENT)) 32.))))
-    (APPLY #'MAKE-PIXEL-ARRAY
-	   (* (CEILING X ROUND-TO) ROUND-TO)
-	   Y
+    (APPLY #'MAKE-PIXEL-ARRAY (* (CEILING X ROUND-TO) ROUND-TO) Y
 	   :TYPE TYPE
 	   MAKE-ARRAY-OPTIONS)))
 
@@ -1458,9 +1461,9 @@ and CONTENTS-MATTER says preserve the old contents if possible."
 (DEFUN SHEET-PREPARE-FOR-EXPOSE (SHEET INSIDE-EXPOSE-METHOD
 				 &OPTIONAL TURN-ON-BLINKERS BITS-ACTION
 				 	   (X X-OFFSET) (Y Y-OFFSET))
-  (DECLARE (:SELF-FLAVOR SHEET))
-  (DECLARE (VALUES OK BITS-ACTION ERROR))
-  TURN-ON-BLINKERS
+  (DECLARE (:SELF-FLAVOR SHEET)
+	   (VALUES OK BITS-ACTION ERROR)
+	   (IGNORE TURN-ON-BLINKERS))
   (PROG ((OLD-INHIBIT-SCHEDULING-FLAG INHIBIT-SCHEDULING-FLAG)
 	 (INHIBIT-SCHEDULING-FLAG T)
 	 RESULT)
@@ -1468,7 +1471,7 @@ and CONTENTS-MATTER says preserve the old contents if possible."
 	(SETQ INHIBIT-SCHEDULING-FLAG T)
 	(UNLESS (SHEET-CAN-GET-LOCK SHEET)
 	  (SETQ INHIBIT-SCHEDULING-FLAG NIL)
-	  (PROCESS-WAIT "Window Lock" 'SHEET-CAN-GET-LOCK SHEET)
+	  (PROCESS-WAIT "Window Lock" #'SHEET-CAN-GET-LOCK SHEET)
 	  (GO MAIN-LOOP))
 	(WHEN EXPOSED-P
 	  (RETURN T BITS-ACTION NIL))
@@ -1506,9 +1509,8 @@ and CONTENTS-MATTER says preserve the old contents if possible."
 	  (GO MAIN-LOOP))
 	(COND ((SHEET-TEMPORARY-P)
 	       (SETQ RESULT
-		     (*CATCH 'SHEET-EXPOSE-CANT-GET-LOCK
-		       (LET ((*REQUESTOR* SELF))
-			 (DECLARE (SPECIAL *REQUESTOR*))
+		     (CATCH 'SHEET-EXPOSE-CANT-GET-LOCK
+		       (LET ((REQUESTOR SELF))
 			 ;; Check to make sure we can get all the locks at once
 			 (MAP-OVER-EXPOSED-SHEET
 			   #'(LAMBDA (TARGET)
@@ -1519,17 +1521,16 @@ and CONTENTS-MATTER says preserve the old contents if possible."
 				 (SHEET-EXPOSED-P TARGET)
 				 (SHEET-OVERLAPS-SHEET-P *REQUESTOR* TARGET)
 				 (OR (SHEET-CAN-GET-TEMPORARY-LOCK TARGET *REQUESTOR*)
-				     (*THROW 'SHEET-EXPOSE-CANT-GET-LOCK TARGET))
+				     (THROW 'SHEET-EXPOSE-CANT-GET-LOCK TARGET))
 				 ;; If this window owns the mouse, must force
 				 ;; mouse out of it
 				 (EQ TARGET MOUSE-WINDOW)
-				 (*THROW 'SHEET-EXPOSE-CANT-GET-LOCK TARGET)))
+				 (THROW 'SHEET-EXPOSE-CANT-GET-LOCK TARGET)))
 			   SUPERIOR)
 			 ;; We can, get them all and win totally, but only do this if
 			 ;; we are inside the expose method proper
 			 (AND INSIDE-EXPOSE-METHOD
-			      (LET ((*REQUESTOR* SELF))
-				(DECLARE (SPECIAL *REQUESTOR*))
+			      (LET ((REQUESTOR SELF))
 				(MAP-OVER-EXPOSED-SHEET
 				  #'(LAMBDA (TARGET)
 				      (COND ((AND ;; Can't be us, we aren't exposed yet
@@ -1537,10 +1538,10 @@ and CONTENTS-MATTER says preserve the old contents if possible."
 					       ;; Sheet may be on EXPOSED-INFERIORS, but not
 					       ;; in actuality exposed
 					       (SHEET-EXPOSED-P TARGET)
-					       (SHEET-OVERLAPS-SHEET-P *REQUESTOR* TARGET))
+					       (SHEET-OVERLAPS-SHEET-P REQUESTOR TARGET))
 					     ;; All blinkers must get turned off on this sheet
 					     (SHEET-OPEN-BLINKERS TARGET)
-					     (OR (SHEET-GET-TEMPORARY-LOCK TARGET *REQUESTOR*)
+					     (OR (SHEET-GET-TEMPORARY-LOCK TARGET REQUESTOR)
 						 (FERROR NIL
 							 "Internal error, can't get lock on ~A, but we already verified we could get lock"
 							 TARGET))
@@ -1599,7 +1600,7 @@ and CONTENTS-MATTER says preserve the old contents if possible."
       (DELAYING-SCREEN-MANAGEMENT
 	(UNWIND-PROTECT
 	  (DO ((DONE NIL) ERROR) (DONE)
-	    (APPLY 'SHEET-PREPARE-FOR-EXPOSE SELF NIL (CDR DAEMON-ARGS))
+	    (APPLY #'SHEET-PREPARE-FOR-EXPOSE SELF NIL (CDR DAEMON-ARGS))
 	    (SETQ ERROR
 		  (*CATCH 'SHEET-ABORT-EXPOSE
 		    (LOCK-SHEET (SELF)
@@ -1607,20 +1608,20 @@ and CONTENTS-MATTER says preserve the old contents if possible."
 		      (SETQ DONE T)
 		      NIL)))
 	    (AND (NOT DONE) ERROR
-		 (APPLY 'FERROR ERROR)))
+		 (APPLY #'FERROR ERROR)))
 	  (DOLIST (SHEET *SHEETS-MADE-INVISIBLE-TO-MOUSE*)
 	    (SETF (SHEET-INVISIBLE-TO-MOUSE-P SHEET) NIL))
 	  (MOUSE-WAKEUP))
 	(VALUES VAL1 VAL2 VAL3))))
 
 (DEFWRAPPER (SHEET :EXPOSE) (IGNORE . BODY)
-  `(SHEET-EXPOSE SI:.DAEMON-CALLER-ARGS.
-		 #'(LAMBDA (SI:.DAEMON-CALLER-ARGS.
-			    &AUX FOO (SI:.DAEMON-MAPPING-TABLE. SYS:SELF-MAPPING-TABLE))
+  `(SHEET-EXPOSE SI::.DAEMON-CALLER-ARGS.
+		 #'(LAMBDA (SI::.DAEMON-CALLER-ARGS.
+			    &AUX FOO (SI::.DAEMON-MAPPING-TABLE. SYS:SELF-MAPPING-TABLE))
 		     ;; Local slot 1 must contain our mapping table
 		     ;; in something that contains combined method code.
 		     FOO
-		     SI:.DAEMON-MAPPING-TABLE.
+		     SI::.DAEMON-MAPPING-TABLE.
 		     . ,BODY)))
 
 ;;; TURN-ON-BLINKERS means that this window will soon become the SELECTED-WINDOW,
@@ -1639,7 +1640,7 @@ and CONTENTS-MATTER says preserve the old contents if possible."
 	(SETQ SUPERIOR-HAS-SCREEN-ARRAY (OR (NULL SUPERIOR) (SHEET-SCREEN-ARRAY SUPERIOR)))
 	(MULTIPLE-VALUE (OK BITS-ACTION ERROR)
 	  (SHEET-PREPARE-FOR-EXPOSE SELF T INHIBIT-BLINKERS BITS-ACTION X Y))
-	(OR OK (*THROW 'SHEET-ABORT-EXPOSE ERROR))
+	(OR OK (THROW 'SHEET-ABORT-EXPOSE ERROR))
 	;; Have made our area of the screen safe for us.  We'll now call ourselves
 	;; "exposed", even though we haven't put our bits on the screen at all.  This
 	;; will win, because we have ourself locked, and if someone wants to cover us
@@ -1647,7 +1648,7 @@ and CONTENTS-MATTER says preserve the old contents if possible."
 	;; happen, but the system shouldn't come crashing to the ground because of it.
 	;; *** INHIBIT-SCHEDULING-FLAG had better still be T ***
 	(OR INHIBIT-SCHEDULING-FLAG
-	    (FERROR NIL "Hairy part of expose finished with INHIBIT-SCHEDULING-FLAG off"))
+	    (FERROR NIL "Hairy part of expose finished with ~S off" 'INHIBIT-SCHEDULING-FLAG))
 	;; Lie by saying that we are exposed, because we aren't really, but we are
 	;; locked so it doesn't matter
 	(AND SUPERIOR-HAS-SCREEN-ARRAY (SETQ EXPOSED-P T PREPARED-SHEET NIL))
@@ -1677,14 +1678,14 @@ and CONTENTS-MATTER says preserve the old contents if possible."
 	      (SUPERIOR-HAS-SCREEN-ARRAY
 	       (SETQ SCREEN-ARRAY OLD-SCREEN-ARRAY)
 	       (SETF (SHEET-OUTPUT-HOLD-FLAG) 0)))
-	(COND ((AND SUPERIOR-HAS-SCREEN-ARRAY (SHEET-TEMPORARY-P))
-	       (IF (EQ TEMPORARY-BIT-ARRAY T)
-		   (SETQ TEMPORARY-BIT-ARRAY
-			 (MAKE-PIXEL-ARRAY (LOGAND #o-40 (+ #o37 WIDTH)) HEIGHT
-					   :TYPE (SHEET-ARRAY-TYPE SELF)))
-		   (PAGE-IN-PIXEL-ARRAY TEMPORARY-BIT-ARRAY NIL (LIST WIDTH HEIGHT)))
-	       (BITBLT ALU-SETA WIDTH HEIGHT SCREEN-ARRAY 0 0 TEMPORARY-BIT-ARRAY 0 0)
-	       (PAGE-OUT-PIXEL-ARRAY TEMPORARY-BIT-ARRAY NIL (LIST WIDTH HEIGHT))))
+	(WHEN (AND SUPERIOR-HAS-SCREEN-ARRAY (SHEET-TEMPORARY-P))
+	  (IF (EQ TEMPORARY-BIT-ARRAY T)
+	      (SETQ TEMPORARY-BIT-ARRAY
+		    (MAKE-PIXEL-ARRAY (LOGAND #o-40 (+ #o37 WIDTH)) HEIGHT
+				      :TYPE (SHEET-ARRAY-TYPE SELF)))
+	      (PAGE-IN-PIXEL-ARRAY TEMPORARY-BIT-ARRAY NIL (LIST WIDTH HEIGHT)))
+	  (BITBLT ALU-SETA WIDTH HEIGHT SCREEN-ARRAY 0 0 TEMPORARY-BIT-ARRAY 0 0)
+	  (PAGE-OUT-PIXEL-ARRAY TEMPORARY-BIT-ARRAY NIL (LIST WIDTH HEIGHT)))
 	(DOLIST (SHEET *SHEETS-MADE-INVISIBLE-TO-MOUSE*)
 	  (SETF (SHEET-INVISIBLE-TO-MOUSE-P SHEET) NIL))
 	(SETQ *SHEETS-MADE-INVISIBLE-TO-MOUSE* NIL)
@@ -1694,7 +1695,7 @@ and CONTENTS-MATTER says preserve the old contents if possible."
 	;; turn on before the bits get BITBLT'ed into the temporary array
 	(SETQ INHIBIT-SCHEDULING-FLAG OLD-INHIBIT-SCHEDULING-FLAG)
 	(COND (SUPERIOR-HAS-SCREEN-ARRAY
-	       (SELECTQ BITS-ACTION
+	       (CASE BITS-ACTION
 		 (:NOOP NIL)
 		 (:RESTORE
 		  (SEND SELF :REFRESH :USE-OLD-BITS))
@@ -1702,7 +1703,7 @@ and CONTENTS-MATTER says preserve the old contents if possible."
 		  (SHEET-HOME SELF)
 		  (SEND SELF :REFRESH :COMPLETE-REDISPLAY))
 		 (OTHERWISE
-		  (FERROR NIL "Unknown BITS-ACTION ~S" BITS-ACTION)))
+		  (FERROR NIL "Unknown ~S ~S" 'BITS-ACTION BITS-ACTION)))
 	       (OR INHIBIT-BLINKERS
 		   (DESELECT-SHEET-BLINKERS SELF))
 	       (OR BIT-ARRAY
@@ -1713,58 +1714,58 @@ and CONTENTS-MATTER says preserve the old contents if possible."
 
 (DEFUN SHEET-DEEXPOSE (DAEMON-ARGS INTERNALS)
   (DECLARE (:SELF-FLAVOR SHEET))
-  (IF (OR (NULL SUPERIOR)
-	  (TYPEP SUPERIOR 'SCREEN)
-	  (SEND SUPERIOR :INFERIOR-DEEXPOSE SELF))
-      (UNWIND-PROTECT
+  (WHEN (OR (NULL SUPERIOR)
+	    (TYPEP SUPERIOR 'SCREEN)
+	    (SEND SUPERIOR :INFERIOR-DEEXPOSE SELF))
+    (UNWIND-PROTECT
 	(PROGN
 	  ;; Always make ourselves invisible to the mouse
 	  (SETF (SHEET-INVISIBLE-TO-MOUSE-P SELF) T)
 	  (LET ((INHIBIT-SCHEDULING-FLAG T))
 	    (COND ((SHEET-ME-OR-MY-KID-P MOUSE-SHEET SELF)
-		   ;; The mouse is currently on me or one of my inferiors, get it out of there
+		   ;; The mouse is currently on me or one of my inferiors,
+		   ;; get it out of there
 		   (SETQ INHIBIT-SCHEDULING-FLAG NIL)
 		   (IF SUPERIOR
 		       (MOUSE-SET-SHEET SUPERIOR)
-		       (IF (NEQ SELF DEFAULT-SCREEN)
-			   (MOUSE-SET-SHEET DEFAULT-SCREEN)
-			   (FERROR NIL
-			"Attempt to deexpose sheet ~S, which is top level sheet that owns mouse"
-				   SELF)))
+		     (IF (NEQ SELF DEFAULT-SCREEN)
+			 (MOUSE-SET-SHEET DEFAULT-SCREEN)
+		       (FERROR NIL "Attempt to deexpose sheet ~S, which is top level sheet which owns mouse"
+			       SELF)))
 		   (SETQ INHIBIT-SCHEDULING-FLAG T)))
-	    (COND ((AND (TYPEP MOUSE-WINDOW 'SHEET) (SHEET-ME-OR-MY-KID-P MOUSE-WINDOW SELF))
-		   ;; Me or my inferior is the current mouse sheet, so force it out
-		   (SETQ MOUSE-RECONSIDER T)
-		   (SETQ INHIBIT-SCHEDULING-FLAG NIL)
-		   (PROCESS-WAIT "Mouse Out"
-				 #'(LAMBDA (SHEET)
-				     (OR (NOT (TYPEP MOUSE-WINDOW 'SHEET))
-					 (NOT (SHEET-ME-OR-MY-KID-P MOUSE-WINDOW SHEET))))
-				 SELF))))
+	    (WHEN (AND (TYPEP MOUSE-WINDOW 'SHEET) (SHEET-ME-OR-MY-KID-P MOUSE-WINDOW SELF))
+	      ;; Me or my inferior is the current mouse sheet, so force it out
+	      (SETQ MOUSE-RECONSIDER T)
+	      (SETQ INHIBIT-SCHEDULING-FLAG NIL)
+	      (PROCESS-WAIT "Mouse Out"
+			    #'(LAMBDA (SHEET)
+				(OR (NOT (TYPEP MOUSE-WINDOW 'SHEET))
+				    (NOT (SHEET-ME-OR-MY-KID-P MOUSE-WINDOW SHEET))))
+			    SELF)))
 	  (LOCK-SHEET (SELF)
 	    (FUNCALL INTERNALS DAEMON-ARGS)))
-	(SETF (SHEET-INVISIBLE-TO-MOUSE-P SELF) NIL))))
+      (SETF (SHEET-INVISIBLE-TO-MOUSE-P SELF) NIL))))
 
 (DEFWRAPPER (SHEET :DEEXPOSE) (IGNORE . BODY)
-  `(SHEET-DEEXPOSE SI:.DAEMON-CALLER-ARGS.
-		   #'(LAMBDA (SI:.DAEMON-CALLER-ARGS.
-			      &AUX FOO (SI:.DAEMON-MAPPING-TABLE. SYS:SELF-MAPPING-TABLE))
+  `(SHEET-DEEXPOSE SI::.DAEMON-CALLER-ARGS.
+		   #'(LAMBDA (SI::.DAEMON-CALLER-ARGS.
+			      &AUX FOO (SI::.DAEMON-MAPPING-TABLE. SYS:SELF-MAPPING-TABLE))
 		       ;; Local slot 1 must contain our mapping table
 		       ;; in something that contains combined method code.
 		       FOO
 		       ;; Make sure we are marked as requiring SELF-MAPPING-TABLE
 		       ;; to be recomputed, because SHEET-DEEXPOSE set it to SHEET's.
 		       SCREEN-ARRAY
-		       SI:.DAEMON-MAPPING-TABLE.
+		       SI::.DAEMON-MAPPING-TABLE.
 		       . ,BODY)))
 
 (DEFMETHOD (SHEET :DEEXPOSE) (&OPTIONAL (SAVE-BITS-P :DEFAULT) SCREEN-BITS-ACTION
 			      		(REMOVE-FROM-SUPERIOR T))
   "Deexpose a sheet (removing it virtually from the physical screen, some bits may remain)"
   (DELAYING-SCREEN-MANAGEMENT
-    (COND ((AND (EQ SAVE-BITS-P :DEFAULT) (NOT (ZEROP (SHEET-FORCE-SAVE-BITS))) EXPOSED-P)
-	   (SETQ SAVE-BITS-P :FORCE)
-	   (SETF (SHEET-FORCE-SAVE-BITS) 0)))
+    (WHEN (AND (EQ SAVE-BITS-P :DEFAULT) (NOT (ZEROP (SHEET-FORCE-SAVE-BITS))) EXPOSED-P)
+      (SETQ SAVE-BITS-P :FORCE)
+      (SETF (SHEET-FORCE-SAVE-BITS) 0))
     (LET ((SW SELECTED-WINDOW))
       (AND SW (SHEET-ME-OR-MY-KID-P SW SELF)
 	   (SEND SW :DESELECT NIL)))
@@ -1799,7 +1800,7 @@ and CONTENTS-MATTER says preserve the old contents if possible."
 		      (SHEET-RELEASE-TEMPORARY-LOCK SHEET SELF))
 		    (SETQ TEMPORARY-WINDOWS-LOCKED NIL))
 		   (T
-		    (SELECTQ SCREEN-BITS-ACTION
+		    (CASE SCREEN-BITS-ACTION
 		      (:NOOP)
 		      (:CLEAN
 		       (%DRAW-RECTANGLE WIDTH HEIGHT 0 0 ALU-ANDCA SELF))
@@ -1828,12 +1829,12 @@ and CONTENTS-MATTER says preserve the old contents if possible."
 				     (NOT RESTORED-BITS-P)))))
   (IF PAGE-IN (PAGE-IN-PIXEL-ARRAY BIT-ARRAY NIL (LIST WIDTH HEIGHT)))
   (COND (RESTORED-BITS-P
-	  (AND EXPOSED-P		;If we are deexposed, this is a big no-op!
-	       (PREPARE-SHEET (SELF)
-	         (BITBLT ALU-SETA WIDTH HEIGHT BIT-ARRAY 0 0 SCREEN-ARRAY 0 0)))
-	  (COND ((NEQ TYPE :USE-OLD-BITS)
-		 (ERASE-MARGINS)
-		 (SEND SELF :REFRESH-MARGINS))))
+	 (AND EXPOSED-P				;If we are deexposed, this is a big no-op!
+	      (PREPARE-SHEET (SELF)
+		(BITBLT ALU-SETA WIDTH HEIGHT BIT-ARRAY 0 0 SCREEN-ARRAY 0 0)))
+	 (UNLESS (EQ TYPE :USE-OLD-BITS)
+	   (ERASE-MARGINS)
+	   (SEND SELF :REFRESH-MARGINS)))
 	(T
 	 (PREPARE-SHEET (SELF)
 	   (%DRAW-RECTANGLE WIDTH HEIGHT 0 0 ERASE-ALUF SELF))
@@ -1867,7 +1868,7 @@ to save time in the normal case."
 	       (SEND SHEET :END-OF-PAGE-EXCEPTION)))
 	  (T (SETF (SHEET-MORE-FLAG SHEET) 0))))
   (UNLESS (ZEROP (SHEET-EXCEPTIONS SHEET))
-    (FERROR NIL "Exceptions (~O) on sheet ~S won't go away"
+    (FERROR NIL "Exceptions (#o~O) on sheet ~S won't go away"
 	    (SHEET-EXCEPTIONS SHEET)
 	    SHEET))
   NIL)
@@ -1930,16 +1931,13 @@ that the normal output operations on SELF would do."
 	(OLD-CHAR-WIDTH CHAR-WIDTH))
     (WHEN MORE-STRING
       (UNWIND-PROTECT
-	  (PROGN
-	    (SETQ CURRENT-FONT (AREF FONT-MAP 0))
-	    (SETQ CHAR-WIDTH (FONT-CHAR-WIDTH CURRENT-FONT))
-	    (SHEET-STRING-OUT SELF MORE-STRING))
+	  (PROGN (SETQ CURRENT-FONT (AREF FONT-MAP 0))
+		 (SETQ CHAR-WIDTH (FONT-CHAR-WIDTH CURRENT-FONT))
+		 (SHEET-STRING-OUT SELF MORE-STRING))
 	(SETQ CURRENT-FONT OLD-FONT)
 	(SETQ CHAR-WIDTH OLD-CHAR-WIDTH))))
-
   (WHEN (GET-HANDLER-FOR SELF OPERATION)
     (SETQ CHAR (SHEET-MORE-LOCK-KLUDGE SELF OPERATION)))
-
   (WHEN MORE-STRING
     (SETQ CURSOR-X CURRENT-X)			;Wipe out the **MORE**
     (SHEET-CLEAR-EOL SELF))
@@ -1960,11 +1958,10 @@ that the normal output operations on SELF would do."
 (DEFMETHOD (SHEET :OUTPUT-HOLD-EXCEPTION) ()
   (OR (ZEROP (SHEET-OUTPUT-HOLD-FLAG))
       EXPOSED-P				;Output held due to deexposure
-      (SELECTQ DEEXPOSED-TYPEOUT-ACTION
+      (CASE DEEXPOSED-TYPEOUT-ACTION
 	(:NORMAL)
 	(:ERROR				;Give error if attempting typeout?
-	  (FERROR 'OUTPUT-ON-DEEXPOSED-SHEET
-		  "Attempt to typeout on ~S, which is deexposed"
+	  (FERROR 'OUTPUT-ON-DEEXPOSED-SHEET "Attempt to typeout on ~S, which is deexposed"
 		  SELF))
 	(:PERMIT
 	 ;; OUTPUT-HOLD gets cleared at this level, rather than never getting set when 
@@ -1997,8 +1994,8 @@ that the normal output operations on SELF would do."
 ;;; No currently-defined events use the ARGS argument, but it is there for
 ;;; future extensibility.
 (DEFMETHOD (SHEET :NOTICE) (EVENT &REST ARGS)
-  ARGS ;ignored
-  (SELECTQ EVENT
+  (DECLARE (IGNORE ARGS))
+  (CASE EVENT
     ((:INPUT :OUTPUT)		;Deexposed window needs some attention
      ;; Wait for there to be a place to notify
      (PROCESS-WAIT "A Selected Window" #'(LAMBDA () SELECTED-WINDOW))
@@ -2043,14 +2040,13 @@ that the normal output operations on SELF would do."
 	   ;; If window is visible, go ahead and use it.
 	   (WAIT-TILL-SAFE-FOR-ERROR SELF 'SHEET-CAN-GET-LOCK SELF)
 	 ;; Otherwise must notify.
-	 (OR (LET ((PROCESS-IS-IN-ERROR SELF))
-	       (WAIT-TILL-SAFE-FOR-ERROR SELF 'NOTIFY-POSSIBLE-P SELF))
-	     (PROGN
-	       (NOTIFY SELF "Process ~A got an error" (PROCESS-NAME CURRENT-PROCESS))
-	       ;; If notifying for an error, remain "in error" until selected
-	       (LET ((PROCESS-IS-IN-ERROR SELF))
-		 (PROCESS-WAIT "Selected" #'(LAMBDA (W) (EQ SELECTED-WINDOW W)) SELF)
-		 NIL))))))
+	 (UNLESS (LET ((PROCESS-IS-IN-ERROR SELF))
+		   (WAIT-TILL-SAFE-FOR-ERROR SELF 'NOTIFY-POSSIBLE-P SELF))
+	   (NOTIFY SELF "Process ~A got an error" (PROCESS-NAME CURRENT-PROCESS))
+	   ;; If notifying for an error, remain "in error" until selected
+	   (LET ((PROCESS-IS-IN-ERROR SELF))
+	     (PROCESS-WAIT "Selected" #'(LAMBDA (W) (EQ SELECTED-WINDOW W)) SELF)
+	     NIL)))))
     (OTHERWISE NIL)))		;Ignore unknown events (could signal error instead?)
 
 (DEFVAR LOCKED-ERROR-WINDOWS NIL
@@ -2061,7 +2057,7 @@ enter the error handler.  Looked at by mouse process.")
 
 (DEFVAR *WINDOWS-LOCKED-ERROR-QUERY* T
   "T means ask (in cold load stream) what to do about background error with windows locked.
-NIL means just wait for user to type Terminal Call or Terminal Ctl-Clear-Input.")
+NIL means just wait for user to type Terminal Call or Terminal Meta-Clear-Input.")
 
 (DEFUN WAIT-TILL-SAFE-FOR-ERROR (WINDOW FUNCTION &REST ARGS)
   "Wait until either (APPLY FUNCTION ARGS) is non-NIL or user does Terminal Call.
@@ -2083,14 +2079,14 @@ ask user to choose to use cold load stream, unlock window locks, or do nothing.
 		    (SEND COLD-LOAD-STREAM :CLEAR-INPUT)
 		    (EH:SAVE-SCREEN-FOR-COLD-LOAD-STREAM)
 		    (SETQ ANSWER
-			  (FQUERY '(:CHOICES (((:C "Cold load stream") #/C)
-					      ((:U "Clear all locks") #/U)
-					      ((:N "Nothing now") #/N)))
+			  (FQUERY '(:CHOICES (((:C "Cold load stream") #/C)
+					      ((:U "Clear all locks") #/U)
+					      ((:N "Nothing now") #/N)))
 				  "How do you want to handle error in process ~A?
 You can handle it in the error handler by typing
         C  to use the cold-load stream (like Terminal Call),
         U  to forcibly unlock all windows so a notification can come out 
-           (like Terminal Control-Clear-input)
+           (like Terminal Meta-Clear-input)
      or N  to tell it to wait until you do some other thing. "
 				  (PROCESS-NAME CURRENT-PROCESS))))
 		  (EH:RESTORE-SCREEN-FOR-COLD-LOAD-STREAM T))
@@ -2104,16 +2100,15 @@ You can handle it in the error handler by typing
 	  ;; Wait until either the function supplied to us returns T
 	  ;; or someone removes this window from the locked list
 	  ;; (which means, telling us to use the cold load stream)
-	  (PROCESS-WAIT
-	    "Error notify"
-	    #'(LAMBDA (FUNCTION ARGS WINDOW)
-		(OR (APPLY FUNCTION ARGS)
-		    (NOT (MEMQ WINDOW LOCKED-ERROR-WINDOWS))))
-	    FUNCTION ARGS WINDOW)
+	  (PROCESS-WAIT "Error notify"
+			#'(LAMBDA (FUNCTION ARGS WINDOW)
+			    (OR (APPLY FUNCTION ARGS)
+				(NOT (MEMQ WINDOW LOCKED-ERROR-WINDOWS))))
+			FUNCTION ARGS WINDOW)
 	  (IF (NOT (MEMQ WINDOW LOCKED-ERROR-WINDOWS))
 	      'COLD-LOAD-STREAM))
-      (WITHOUT-INTERRUPTS (SETQ LOCKED-ERROR-WINDOWS
-				(DELQ WINDOW LOCKED-ERROR-WINDOWS 1))))))
+      (WITHOUT-INTERRUPTS
+	(SETQ LOCKED-ERROR-WINDOWS (DELQ WINDOW LOCKED-ERROR-WINDOWS 1))))))
 
 (DEFUN NOTIFY-POSSIBLE-P (WINDOW)
   "T if it is possible at this instant to print a notification about WINDOW."
@@ -2138,7 +2133,7 @@ OPTIONS are init keywords and values for MAKE-INSTANCE."
     (PUSH BLINKER (SHEET-BLINKER-LIST SHEET)))
   BLINKER)
 
-(DEFF DEFINE-BLINKER 'MAKE-BLINKER) ;Keep old name for compatibility.
+(DEFF DEFINE-BLINKER 'MAKE-BLINKER)		;ancient name
 (COMPILER:MAKE-OBSOLETE DEFINE-BLINKER "it has been renamed to TV:MAKE-BLINKER")
 
 (DEFMETHOD (BLINKER :INIT) (IGNORE)
@@ -2148,8 +2143,8 @@ OPTIONS are init keywords and values for MAKE-INSTANCE."
 
 (DEFMETHOD (RECTANGULAR-BLINKER :BEFORE :INIT) (IGNORE &AUX FONT)
   (SETQ FONT (AREF (SHEET-FONT-MAP SHEET) 0))
-  (UNLESS WIDTH (SETQ WIDTH (FONT-BLINKER-WIDTH FONT)))
-  (UNLESS HEIGHT (SETQ HEIGHT (FONT-BLINKER-HEIGHT FONT))))
+  (OR WIDTH (SETQ WIDTH (FONT-BLINKER-WIDTH FONT)))
+  (OR HEIGHT (SETQ HEIGHT (FONT-BLINKER-HEIGHT FONT))))
 
 (DEFMETHOD (RECTANGULAR-BLINKER :SIZE) ()
   (VALUES WIDTH HEIGHT))
@@ -2202,7 +2197,7 @@ to stay open during any specific piece of code."
 				BLINKER-DELTA-TIME))))
 	(SETF (BLINKER-TIME-UNTIL-BLINK BLINKER) NEW-TIME)
 	(AND (ZEROP NEW-TIME)
-	     (SELECTQ (BLINKER-VISIBILITY BLINKER)
+	     (CASE (BLINKER-VISIBILITY BLINKER)
 	       ((NIL :OFF)
 		(BLINKER-PHASE BLINKER))
 	       ((T :ON)
@@ -2296,15 +2291,16 @@ sheet it is on"
 
 (DEFMETHOD (BLINKER :SET-VISIBILITY) (NEW-VISIBILITY &AUX (INHIBIT-SCHEDULING-FLAG T))
   "Carefully alter the visibility of a blinker"
-  (CHECK-TYPE NEW-VISIBILITY (MEMBER T NIL :BLINK :ON :OFF) "a valid blinker visibility type.")
+  (CHECK-TYPE NEW-VISIBILITY (MEMBER T NIL :BLINK :ON :OFF)
+	      "a valid blinker visibility type.")
   (COND ((EQ VISIBILITY NEW-VISIBILITY))
 	((EQ PHASE NEW-VISIBILITY)
 	 (SETQ VISIBILITY NEW-VISIBILITY))
 	(T
 	 (DO () ((NOT (SHEET-OUTPUT-HELD-P SHEET)))
-	     (SETQ INHIBIT-SCHEDULING-FLAG NIL)
-	     (SEND SHEET :OUTPUT-HOLD-EXCEPTION)
-	     (SETQ INHIBIT-SCHEDULING-FLAG T))
+	   (SETQ INHIBIT-SCHEDULING-FLAG NIL)
+	   (SEND SHEET :OUTPUT-HOLD-EXCEPTION)
+	   (SETQ INHIBIT-SCHEDULING-FLAG T))
 	 (OR NEW-VISIBILITY (OPEN-BLINKER SELF))
 	 (SETQ VISIBILITY NEW-VISIBILITY)
 	 ;; Blinker clock will fix the screen
@@ -2320,9 +2316,9 @@ sheet it is on"
 	  (SETQ S-SUP NEW-SHEET
 		S-INF SHEET
 		EXCH-FLAG 1)
-	(SETQ S-SUP SHEET
-	      S-INF NEW-SHEET
-	      EXCH-FLAG -1))
+	  (SETQ S-SUP SHEET
+		S-INF NEW-SHEET
+		EXCH-FLAG -1))
       (COND ((OR (= EXCH-FLAG 1)
 		 (SHEET-ME-OR-MY-KID-P S-INF S-SUP))
 	     (MULTIPLE-VALUE-BIND (X-OFF Y-OFF)
@@ -2351,7 +2347,7 @@ sheet it is on"
     ALU-XOR SHEET))
 
 (DEFFLAVOR HOLLOW-RECTANGULAR-BLINKER () (RECTANGULAR-BLINKER)
-  (:DOCUMENTATION :COMBINATION "A flavor of blinker that appears as a rectangular outline."))
+  (:DOCUMENTATION "A flavor of blinker that appears as a rectangular outline."))
 
 ;;; This sticks out by 1 pixel on the top and left but not on the bottom and
 ;;; right since that seems to be the right thing for boxing text -- this may be a crock
@@ -2367,8 +2363,7 @@ sheet it is on"
 			     ALU-XOR SHEET)))
 
 (DEFFLAVOR BOX-BLINKER () (RECTANGULAR-BLINKER)
-  (:DOCUMENTATION :COMBINATION
-		  "A flavor of blinker that appears as a thick rectangular outline."))
+  (:DOCUMENTATION "A flavor of blinker that appears as a thick rectangular outline."))
 
 (DEFMETHOD (BOX-BLINKER :BLINK) ()
   (%DRAW-RECTANGLE-CLIPPED 2 HEIGHT X-POS Y-POS ALU-XOR SHEET)
@@ -2379,8 +2374,8 @@ sheet it is on"
 ;;; Mixin that causes a blinker to stay entirely inside its sheet
 (DEFFLAVOR STAY-INSIDE-BLINKER-MIXIN () ()
   (:REQUIRED-FLAVORS RECTANGULAR-BLINKER)
-  (:DOCUMENTATION :MIXIN
-		  "This mixin prevents lower right corner of blinker from being outside the sheet."))
+  (:DOCUMENTATION
+    "This mixin prevents lower right corner of blinker from being outside the sheet."))
 
 (DEFWRAPPER (STAY-INSIDE-BLINKER-MIXIN :SET-CURSORPOS) (XY . BODY)
   `(PROGN (SETF (FIRST XY) (MIN (FIRST XY) (- (SHEET-INSIDE-WIDTH SHEET) WIDTH)))
@@ -2391,7 +2386,7 @@ sheet it is on"
 	((HEIGHT NIL))
 	(BLINKER)
   (:INITABLE-INSTANCE-VARIABLES HEIGHT)
-  (:DOCUMENTATION :COMBINATION "A blinker that appears as an I-beam."))
+  (:DOCUMENTATION "A blinker that appears as an I-beam."))
 
 (DEFMETHOD (IBEAM-BLINKER :BEFORE :INIT) (IGNORE)
   (OR HEIGHT (SETQ HEIGHT (SHEET-LINE-HEIGHT SHEET))))
@@ -2411,7 +2406,7 @@ sheet it is on"
 	(BLINKER)
   (:INITABLE-INSTANCE-VARIABLES FONT CHARACTER)
   (:INIT-KEYWORDS :CHAR)
-  (:DOCUMENTATION :COMBINATION "A blinker whose appearance is a character from a font."))
+  (:DOCUMENTATION "A blinker whose appearance is a character from a font."))
 
 (DEFMETHOD (CHARACTER-BLINKER :BEFORE :INIT) (PLIST)
   (UNLESS (VARIABLE-BOUNDP CHARACTER)
@@ -2439,12 +2434,13 @@ sheet it is on"
 	 (ARRAY NIL))
 	(MOUSE-BLINKER-MIXIN BLINKER)
   :INITABLE-INSTANCE-VARIABLES
-  (:DOCUMENTATION :COMBINATION "A blinker whose appearance is made by BITBLTing an array."))
+  (:DOCUMENTATION "A blinker whose appearance is made by BITBLTing an array."))
 
 (DEFMETHOD (BITBLT-BLINKER :BEFORE :INIT) (IGNORE)
   (UNLESS ARRAY
     (UNLESS (AND WIDTH HEIGHT)
-      (FERROR NIL "Attept to create a BITBLT-BLINKER without specifying an array or its size."))
+      (FERROR NIL
+	      "Attept to create a BITBLT-BLINKER without specifying an array or its size."))
     (SETQ ARRAY (MAKE-PIXEL-ARRAY (* 32. (CEILING WIDTH 32.)) HEIGHT
 				  :TYPE (SHEET-ARRAY-TYPE SHEET))))
   (IF (NULL WIDTH)
@@ -2535,7 +2531,7 @@ sheet it is on"
 	(BITBLT-BLINKER)
   :INITABLE-INSTANCE-VARIABLES
   :GETTABLE-INSTANCE-VARIABLES
-  (:DOCUMENTATION :COMBINATION "A blinker whose appearance is a character from a font
+  (:DOCUMENTATION "A blinker whose appearance is a character from a font
 against a solid rectangular background."))
 
 (DEFMETHOD (REVERSE-CHARACTER-BLINKER :BEFORE :INIT) (IGNORE)
@@ -2558,7 +2554,8 @@ against a solid rectangular background."))
   (%DRAW-RECTANGLE WIDTH HEIGHT 0 0 ALU-IOR ARRAY)
   (DRAW-CHAR FONT CHARACTER CHARACTER-X-OFFSET CHARACTER-Y-OFFSET ALU-ANDCA ARRAY))
 
-(DEFMETHOD (REVERSE-CHARACTER-BLINKER :CHARACTER) () (VALUES CHARACTER FONT))
+(DEFMETHOD (REVERSE-CHARACTER-BLINKER :CHARACTER) ()
+  (VALUES CHARACTER FONT))
 
 (DEFMETHOD (REVERSE-CHARACTER-BLINKER :SET-SIZE) (NEW-WIDTH NEW-HEIGHT)
   NEW-WIDTH NEW-HEIGHT
