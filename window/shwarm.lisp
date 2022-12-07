@@ -361,9 +361,7 @@ CHAR may be a character whose width controls how wide an area to clear."
 (DEFMETHOD (SHEET :CLEAR-EOL) ()
   (SHEET-CLEAR-EOL SELF))
 (compiler:make-obsolete :clear-eol
-			("~S is an obsolete window operation; use the ~S"
-			 :clear-eol :clear-rest-of-line)
-			message)
+			":CLEAR-EOL is an obsolete window operation; use the :CLEAR-REST-OF-LINE")
 
 (DEFMETHOD (SHEET :CLEAR-REST-OF-LINE) ()
   (SHEET-CLEAR-EOL SELF))
@@ -471,9 +469,7 @@ but if on different lines, assumes screen wrap-around"
 (DEFMETHOD (SHEET :CLEAR-SCREEN) ()
   (SHEET-CLEAR SELF))
 (compiler:make-obsolete :clear-screen
-			("~S is an obsolete window operation, use the ~S message"
-			 :clear-window)
-			message)
+			":CLEAR-SCREEN is an obsolete window operation, use the :CLEAR-WINDOW message")
 
 (DEFMETHOD (SHEET :CLEAR-WINDOW) ()
   (SHEET-CLEAR SELF))
@@ -498,9 +494,7 @@ but if on different lines, assumes screen wrap-around"
   (SHEET-CLEAR-EOF SELF))
 
 (compiler:make-obsolete :clear-eof
-			("~S is an obsolete window operation, use the ~S message"
-			 :clear-rest-of-window)
-			message)
+			":CLEAR-REST-OF-WINDOW is an obsolete window operation, use the :CLEAR-EOF message")
 
 (DEFUN SHEET-CLEAR-EOF (SHEET &AUX HT TEM)
   "Clear from SHEET's cursor to right margin, and all area below."
