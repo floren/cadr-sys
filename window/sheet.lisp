@@ -853,9 +853,7 @@ the variables already have their values, and we use those values."
 			  ;Makes :PARSE-FONT-DESCRIPTOR not lose.
   ;; These two must get values here, but they will be replaced with the right ones later.
   (SETQ DEFAULT-FONT FONTS:CPTFONT
-	FONT-MAP (MAKE-FONT-MAP :FONT-LIST (LIST DEFAULT-FONT)
-				:FILL-POINTER 1
-				:MAKE-ARRAY (:LENGTH 1 :INITIAL-CONTENTS (LIST DEFAULT-FONT)))
+	FONT-MAP (FILLARRAY NIL (LIST DEFAULT-FONT))
 	;; No one uses this anyway...
 	BUFFER-HALFWORD-ARRAY (MAKE-ARRAY (TRUNCATE (* WIDTH (OR HEIGHT 1) BITS-PER-PIXEL) 16.)
 					  :TYPE ART-16B :DISPLACED-TO BUFFER))
@@ -1510,7 +1508,8 @@ and CONTENTS-MATTER says preserve the old contents if possible."
 	(COND ((SHEET-TEMPORARY-P)
 	       (SETQ RESULT
 		     (CATCH 'SHEET-EXPOSE-CANT-GET-LOCK
-		       (LET ((REQUESTOR SELF))
+		       (LET ((*REQUESTOR* SELF))
+			 (DECLARE (SPECIAL *REQUESTOR*))
 			 ;; Check to make sure we can get all the locks at once
 			 (MAP-OVER-EXPOSED-SHEET
 			   #'(LAMBDA (TARGET)
@@ -1530,7 +1529,8 @@ and CONTENTS-MATTER says preserve the old contents if possible."
 			 ;; We can, get them all and win totally, but only do this if
 			 ;; we are inside the expose method proper
 			 (AND INSIDE-EXPOSE-METHOD
-			      (LET ((REQUESTOR SELF))
+			      (LET ((*REQUESTOR* SELF))
+				(DECLARE (SPECIAL *REQUESTOR*))
 				(MAP-OVER-EXPOSED-SHEET
 				  #'(LAMBDA (TARGET)
 				      (COND ((AND ;; Can't be us, we aren't exposed yet
@@ -1538,10 +1538,10 @@ and CONTENTS-MATTER says preserve the old contents if possible."
 					       ;; Sheet may be on EXPOSED-INFERIORS, but not
 					       ;; in actuality exposed
 					       (SHEET-EXPOSED-P TARGET)
-					       (SHEET-OVERLAPS-SHEET-P REQUESTOR TARGET))
+					       (SHEET-OVERLAPS-SHEET-P *REQUESTOR* TARGET))
 					     ;; All blinkers must get turned off on this sheet
 					     (SHEET-OPEN-BLINKERS TARGET)
-					     (OR (SHEET-GET-TEMPORARY-LOCK TARGET REQUESTOR)
+					     (OR (SHEET-GET-TEMPORARY-LOCK TARGET *REQUESTOR*)
 						 (FERROR NIL
 							 "Internal error, can't get lock on ~A, but we already verified we could get lock"
 							 TARGET))
@@ -1994,7 +1994,6 @@ that the normal output operations on SELF would do."
 ;;; No currently-defined events use the ARGS argument, but it is there for
 ;;; future extensibility.
 (DEFMETHOD (SHEET :NOTICE) (EVENT &REST ARGS)
-  (DECLARE (IGNORE ARGS))
   (CASE EVENT
     ((:INPUT :OUTPUT)		;Deexposed window needs some attention
      ;; Wait for there to be a place to notify
