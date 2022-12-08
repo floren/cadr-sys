@@ -765,6 +765,37 @@ lexical variables of the containing code.  Contrast with EVAL."
     (with-current-interpreter-environment (env)
       (funcall tem function args env))))
 
+(DEFUN DECLARE (&QUOTE &REST DECLARATIONS)
+  "The body is made up of declarations,
+which are in effect throughout the construct at the head of whose body the DECLARE appears.
+
+DECLARE is also used at top level to be identical to
+/(EVAL-WHEN (COMPILE) ...), but this is obsolete.
+Either EVAL-WHEN or PROCLAIM should be used instead."
+  DECLARATIONS
+  'DECLARE)
+
+;;; This definition assumes we are evalling.
+;;; COMPILE-DRIVER takes care of compiling and loading.
+(DEFUN EVAL-WHEN (&QUOTE TIMES &REST FORMS &AUX VAL)
+  "Process the FORMS only at the specified TIMES.
+TIMES is a list which may include COMPILE, EVAL or LOAD.
+EVAL means to eval the FORMS if the EVAL-WHEN is processed by the interpreter,
+ or to compile and eval them when compiling to core.
+LOAD means the compiler when compiling to a file should compile the FORMS
+ if appropriate and then make them be executed when the QFASL file is loaded.
+COMPILE means the compiler should execute the forms
+ at compile time.
+/(EVAL LOAD) is equivalent to the normal state of affairs."
+    (OR (AND (CLI:LISTP TIMES)
+	     (LOOP FOR TIME IN TIMES ALWAYS (MEMQ TIME '(EVAL LOAD COMPILE))))
+	(FERROR NIL "~S invalid EVAL-WHEN times;
+	must be a list of EVAL, LOAD, and//or COMPILE."
+		    TIMES))
+    (WHEN (MEMQ 'EVAL TIMES)
+      (DOLIST (FORM FORMS) (SETQ VAL (EVAL FORM)))
+      VAL))
+
 (defun setq (&quote &rest symbols-and-values)
   "Given alternating variables and value expressions, sets each variable to following value.
 Each variable is set before the following variable's new value is evaluated.
@@ -1458,6 +1489,46 @@ The variables are always bound as specials if they are bound;
 therefore, strictly speaking only variables declared special should be used."
   (progw (and cond var-list)
     (eval-body body)))
+
+(defun letf (&quote places-and-values &rest body)
+  "LETF is like LET, except that it it can bind any storage cell
+rather than just value cells.
+PLACES-AND-VALUES is a list of lists of two elements, the car of each
+ of which specifies a location to bind (this should be a form acceptable to LOCF)
+ and the cadr the value to which to bind it.
+The places are bound in parallel.
+Then the body is evaluated sequentially and the values
+of the last expression in it are returned.
+/(Note that the bindings made by LETF are always /"special/")"
+  (declare (zwei:indentation 1 1))
+  (prog ((vars-left places-and-values))
+     bindloop
+   	(when vars-left
+	  (%push (with-stack-list ((tem 'locf (caar vars-left)))
+		   (eval1 tem)))
+	  (%push (eval1 (cadar vars-left)))
+	  (pop vars-left)
+	  (go bindloop))
+	(setq vars-left places-and-values)
+     bindloop1
+	(when vars-left
+	  (%bind (%pop) (%pop))
+	  (pop vars-left)
+	  (go bindloop1))
+	(return (eval-body body))))
+
+(defun letf* (&quote places-and-values &rest body)
+  "Like LETF except that binding of PLACES-AND-VALUES is done in series."
+  (declare (zwei:indentation 1 1))
+  (prog ((vars-left places-and-values))
+     bindloop
+   	(when vars-left
+	  (%bind (with-stack-list ((tem 'locf (caar vars-left)))
+		   (eval1 tem))
+		 (eval1 (cadar vars-left)))
+	  (pop vars-left)
+	  (go bindloop))
+	(return (eval-body body))))
 
 ;;; Interpreter version of UNWIND-PROTECT
 ;;; (UNWIND-PROTECT risky-stuff forms-to-do-when-unwinding-this-frame...)
