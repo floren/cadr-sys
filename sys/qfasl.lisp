@@ -1,4 +1,4 @@
-;;; -*- Mode:LISP; Readtable:T; Package:SYSTEM-INTERNALS; Base:8; Cold-load: T -*-
+;;; -*- Mode:LISP; Package:SYSTEM-INTERNALS; Cold-Load:T; Base:8; Readtable:ZL -*-
 ;;; This is SYS: SYS; QFASL, a cold load file.
 ;;; 
 ;;; LOAD, READFILE, and FASLOAD for the Lisp Machine
@@ -61,12 +61,12 @@
 (DEFVAR PRINT-LOADED-FORMS NIL
   "Set by :PRINT argument to LOAD.  Non-NIL means print the forms loaded.")
 
-(DEFCONST ACCUMULATE-FASL-FORMS NIL
-  "Non-NIL means FASLOAD should compute LAST-FASL-FILE-FORMS.")
+(DEFCONST *ACCUMULATE-FASL-FORMS* NIL
+  "Non-NIL means FASLOAD should compute *LAST-FASL-FILE-FORMS*.")
 
-(DEFVAR LAST-FASL-FILE-FORMS :UNBOUND
+(DEFVAR *LAST-FASL-FILE-FORMS* :UNBOUND
   "FASLOAD sets this to a list of forms describing the file.
-Only if ACCUMULATE-FASL-FORMS is non-NIL, this variable is set to a list of forms
+Only if *ACCUMULATE-FASL-FORMS* is non-NIL, this variable is set to a list of forms
 which are equivalent to what was done by loading the file.")
 
 ;;; In this we accumulate a list of all forms evaluated at load time.
@@ -74,7 +74,7 @@ which are equivalent to what was done by loading the file.")
 ;;; expected to record its action as a "definition" of any sort.
 ;;; This list is always created, and goes on the :RANDOM-FORMS property
 ;;; of the generic pathname.
-(DEFVAR FASL-FILE-EVALUATIONS)
+(DEFVAR *FASL-FILE-EVALUATIONS*)
 
 (DEFVAR MACRO-MISMATCH-FUNCTIONS NIL
   "List of functions fasloaded which had been compiled with different macro definitions.
@@ -106,7 +106,7 @@ Files loaded by MINI are represented by strings.")
     (FASL-NIBBLE-SLOW)))
 
 (ADD-INITIALIZATION 'FASL-VARIABLES
-		    '(SETQ ACCUMULATE-FASL-FORMS NIL
+		    '(SETQ *ACCUMULATE-FASL-FORMS* NIL
 			   PRINT-LOADED-FORMS NIL)
 		    '(WARM))
 
@@ -117,34 +117,34 @@ Files loaded by MINI are represented by strings.")
 	 (*PACKAGE* *PACKAGE*)
 	 (FDEFINE-FILE-DEFINITIONS)
 	 (FDEFINE-FILE-PATHNAME GENERIC-PATHNAME))
-    (BINDING-INTERPRETER-ENVIRONMENT (())
-      (FS:READ-ATTRIBUTE-LIST GENERIC-PATHNAME *STANDARD-INPUT*)
-      ;; Enter appropriate environment for the file
-      (MULTIPLE-VALUE-BIND (VARS VALS)
-	  (FS:FILE-ATTRIBUTE-BINDINGS 
-	    (IF PKG
-		;; If package is specified, don't look up the file's package
-		;; since that might ask the user a spurious question.
-		(LET ((PLIST (COPY-LIST (SEND GENERIC-PATHNAME :PLIST))))
-		  (REMF PLIST :PACKAGE)
-		  (LOCF PLIST))
-	      GENERIC-PATHNAME))
-	(PROGV VARS VALS
-	  ;; If package overridden, do so.  PACKAGE is bound in any case.
-	  (COND (PKG (SETQ *PACKAGE* (PKG-FIND-PACKAGE PKG)))
-		(NO-MSG-P)			;And tell user what it was unless told not to
-		(T (FORMAT *QUERY-IO* "~&Loading ~A into package ~A~%" PATHNAME *PACKAGE*)))
-	  (DO ((EOF '(()))
-	       ;; If the file contains a SETQ, don't alter what package we recorded loading in
-	       (*PACKAGE* *PACKAGE*)
-	       (FORM))
-	      ((EQ (SETQ FORM (READ *STANDARD-INPUT* EOF)) EOF))
-	    (IF PRINT-LOADED-FORMS
-		(PRINT (EVAL1 FORM))
-	        (EVAL1 FORM)))
-	  (SET-FILE-LOADED-ID PATHNAME FILE-ID *PACKAGE*)
-	  (RECORD-FILE-DEFINITIONS PATHNAME (NREVERSE FDEFINE-FILE-DEFINITIONS))
-	  PATHNAME)))))
+    (FS:READ-ATTRIBUTE-LIST GENERIC-PATHNAME *STANDARD-INPUT*)
+    ;; Enter appropriate environment for the file
+    (MULTIPLE-VALUE-BIND (VARS VALS)
+	(FS:FILE-ATTRIBUTE-BINDINGS 
+	  (IF PKG
+	      ;; If package is specified, don't look up the file's package
+	      ;; since that might ask the user a spurious question.
+	      (LET ((PLIST (COPY-LIST (SEND GENERIC-PATHNAME :PROPERTY-LIST))))
+		(REMF PLIST ':PACKAGE)
+		(LOCF PLIST))
+	    GENERIC-PATHNAME))
+      (PROGV VARS VALS
+	;; If package overridden, do so.  *PACKAGE* is bound in any case.
+	(COND (PKG (SETQ *PACKAGE* (PKG-FIND-PACKAGE PKG)))
+	      (NO-MSG-P)			;And tell user what it was unless told not to
+	      (T (FORMAT *QUERY-IO* "~&Loading ~A into package ~A~%" PATHNAME *PACKAGE*)))
+	(DO ((EOF '(()))
+	     ;; If the file contains a SETQ, don't alter what package we recorded loading in
+	     (*PACKAGE* *PACKAGE*)
+	     (FORM))
+	    ((EQ (SETQ FORM (CLI:READ *STANDARD-INPUT* NIL EOF)) EOF))
+	  (IF PRINT-LOADED-FORMS
+	      (PRINT FORM))
+	  ;; for compatibility with ancient history
+	  (SI:EVAL-SPECIAL-OK FORM))
+	(SET-FILE-LOADED-ID PATHNAME FILE-ID *PACKAGE*)
+	(RECORD-FILE-DEFINITIONS PATHNAME (NREVERSE FDEFINE-FILE-DEFINITIONS))
+	PATHNAME))))
 
 ;;; This is the function which provides entry to fasload.
 ;;; NOTE WELL: If you change this, change MINI-FASLOAD too!
@@ -161,9 +161,9 @@ NO-MSG-P inhibits the message announcing that the loading is taking place."
 
 (DEFUN FASLOAD-INTERNAL (FASL-STREAM PKG NO-MSG-P)
   (LET* ((PATHNAME (SEND FASL-STREAM :PATHNAME))
-	 (FDEFINE-FILE-PATHNAME
-	   (IF (STRINGP PATHNAME) PATHNAME
-	     (SEND PATHNAME :GENERIC-PATHNAME)))
+	 (FDEFINE-FILE-PATHNAME (IF (STRINGP PATHNAME)
+				    PATHNAME
+				    (SEND PATHNAME :GENERIC-PATHNAME)))
 	 (PATCH-SOURCE-FILE-NAMESTRING)
 	 (FDEFINE-FILE-DEFINITIONS)
 	 (FASL-GENERIC-PLIST-RECEIVER (SEND FASL-STREAM :GENERIC-PATHNAME))
@@ -173,59 +173,58 @@ NO-MSG-P inhibits the message announcing that the loading is taking place."
 	 FASL-STREAM-ARRAY FASL-STREAM-INDEX (FASL-STREAM-COUNT 0)
 	 (FASLOAD-FILE-PROPERTY-LIST-FLAG NIL)
 	 (FASL-PACKAGE-SPECIFIED PKG)
-	 FASL-FILE-EVALUATIONS
+	 *FASL-FILE-EVALUATIONS*
 	 FASL-FILE-PLIST
 	 DONT-CONVERT-DESTINATIONS
 	 (FASL-TABLE NIL))
-    (BINDING-INTERPRETER-ENVIRONMENT (())
-      ;; Set up the environment
-      (FASL-START)
-      (PUSH (CAR (SEND FASL-STREAM :INFO)) FASLOADED-FILE-TRUENAMES)
-      ;; Start by making sure the file type in the first word is really SIXBIT/QFASL/.
-      (LET ((W1 (OR (SEND FASL-STREAM :TYI) 0))
-	    (W2 (OR (SEND FASL-STREAM :TYI) 0)))
-	(OR (AND (= W1 #o143150) (= W2 #o71660))
-	    (FERROR NIL "~A is not a QFASL file" PATHNAME)))
-      (SEND FASL-GENERIC-PLIST-RECEIVER :REMPROP :MACROS-EXPANDED)
-      ;; Read in the file property list before choosing a package.
-      (WHEN (= (LOGAND (FASL-NIBBLE-PEEK) %FASL-GROUP-TYPE) FASL-OP-FILE-PROPERTY-LIST)
-	(FASL-FILE-PROPERTY-LIST)
-	(SETQ DONT-CONVERT-DESTINATIONS
-	      (AND (SIXTH (OR (GETF FASL-FILE-PLIST :FASD-DATA)
-			      (GETF FASL-FILE-PLIST :COMPILE-DATA)))
-		   (GETF (SIXTH (OR (GETF FASL-FILE-PLIST :FASD-DATA)
-				    (GETF FASL-FILE-PLIST :COMPILE-DATA)))
-			 'COMPILER::NEW-DESTINATIONS))))
-      ;; Enter appropriate environment defined by file property list
-      (MULTIPLE-VALUE-BIND (VARS VALS)
-	  (IF (NOT (STRINGP PATHNAME))
-	      (FS:FILE-ATTRIBUTE-BINDINGS
-		(IF PKG
-		    ;; If package is specified, don't look up the file's package
-		    ;; since that might ask the user a spurious question.
-		    (LET ((PLIST (COPY-LIST (SEND FDEFINE-FILE-PATHNAME :PLIST))))
-		      (REMF PLIST :PACKAGE)
-		      (LOCF PLIST))
-		  FDEFINE-FILE-PATHNAME)))
-	(PROGV VARS VALS
-	  (LET ((PACKAGE (PKG-FIND-PACKAGE (OR PKG *PACKAGE*) :ASK)))
-	    (LET ((*PACKAGE* *PACKAGE*))
-	      (OR PKG
-		  ;; Don't want this message for a REL file
-		  ;; since we don't actually know its package yet
-		  ;; and it might have parts in several packages.
-		  (= (LOGAND (FASL-NIBBLE-PEEK) %FASL-GROUP-TYPE) FASL-OP-REL-FILE)
-		  NO-MSG-P
-		  (FORMAT *QUERY-IO* "~&Loading ~A into package ~A~%" PATHNAME *PACKAGE*))
-	      (SETQ LAST-FASL-FILE-PACKAGE *PACKAGE*)
-	      (FASL-TOP-LEVEL))			;load it.
-	    (SEND FASL-GENERIC-PLIST-RECEIVER :PUTPROP FASL-FILE-EVALUATIONS :RANDOM-FORMS)
-	    (RECORD-FILE-DEFINITIONS PATHNAME (NREVERSE FDEFINE-FILE-DEFINITIONS)
-				     T FASL-GENERIC-PLIST-RECEIVER)
-	    (SET-FILE-LOADED-ID PATHNAME FILE-ID *PACKAGE*))))
-      (SETQ FASL-STREAM-ARRAY NIL)
-      (SETQ LAST-FASL-FILE-FORMS (NREVERSE LAST-FASL-FILE-FORMS))
-      PATHNAME)))
+    ;; Set up the environment
+    (FASL-START)
+    (PUSH (CAR (SEND FASL-STREAM :INFO)) FASLOADED-FILE-TRUENAMES)
+    ;; Start by making sure the file type in the first word is really SIXBIT/QFASL/.
+    (LET ((W1 (OR (SEND FASL-STREAM :TYI) 0))
+	  (W2 (OR (SEND FASL-STREAM :TYI) 0)))
+      (OR (AND (= W1 #o143150) (= W2 #o71660))
+	  (FERROR NIL "~A is not a QFASL file" PATHNAME)))
+    (SEND FASL-GENERIC-PLIST-RECEIVER :REMPROP :MACROS-EXPANDED)
+    ;; Read in the file property list before choosing a package.
+    (WHEN (= (LOGAND (FASL-NIBBLE-PEEK) %FASL-GROUP-TYPE) FASL-OP-FILE-PROPERTY-LIST)
+      (FASL-FILE-PROPERTY-LIST)
+      (SETQ DONT-CONVERT-DESTINATIONS
+	    (AND (SIXTH (OR (GETF FASL-FILE-PLIST ':FASD-DATA)
+			    (GETF FASL-FILE-PLIST ':COMPILE-DATA)))
+		 (GETF (SIXTH (OR (GETF FASL-FILE-PLIST ':FASD-DATA)
+				  (GETF FASL-FILE-PLIST ':COMPILE-DATA)))
+		       'COMPILER::NEW-DESTINATIONS))))
+    ;; Enter appropriate environment defined by file property list
+    (MULTIPLE-VALUE-BIND (VARS VALS)
+	(IF (NOT (STRINGP PATHNAME))
+	    (FS:FILE-ATTRIBUTE-BINDINGS
+	      (IF PKG
+		  ;; If package is specified, don't look up the file's package
+		  ;; since that might ask the user a spurious question.
+		  (LET ((PLIST (COPY-LIST (SEND FDEFINE-FILE-PATHNAME :PROPERTY-LIST))))
+		    (REMF PLIST ':PACKAGE)
+		    (LOCF PLIST))
+		FDEFINE-FILE-PATHNAME)))
+      (PROGV VARS VALS
+	(LET ((*PACKAGE* (PKG-FIND-PACKAGE (OR PKG *PACKAGE*) :ASK)))
+	  (LET ((*PACKAGE* *PACKAGE*))
+	    (OR PKG
+		;; Don't want this message for a REL file
+		;; since we don't actually know its package yet
+		;; and it might have parts in several packages.
+		(= (LOGAND (FASL-NIBBLE-PEEK) %FASL-GROUP-TYPE) FASL-OP-REL-FILE)
+		NO-MSG-P
+		(FORMAT *QUERY-IO* "~&Loading ~A into package ~A~%" PATHNAME *PACKAGE*))
+	    (SETQ LAST-FASL-FILE-PACKAGE *PACKAGE*)
+	    (FASL-TOP-LEVEL))			;load it.
+	  (SEND FASL-GENERIC-PLIST-RECEIVER :PUTPROP *FASL-FILE-EVALUATIONS* :RANDOM-FORMS)
+	  (RECORD-FILE-DEFINITIONS PATHNAME (NREVERSE FDEFINE-FILE-DEFINITIONS)
+				   T FASL-GENERIC-PLIST-RECEIVER)
+	  (SET-FILE-LOADED-ID PATHNAME FILE-ID *PACKAGE*))))
+    (SETQ FASL-STREAM-ARRAY NIL)
+    (SETQ *LAST-FASL-FILE-FORMS* (NREVERSE *LAST-FASL-FILE-FORMS*))
+    PATHNAME))
 
 (DEFUN QFASL-FILE-PLIST (FILE)
   "Return the attribute list of a compiled file."
@@ -271,43 +270,40 @@ Usually DEFINITION-TYPE is DEFUN and OBJECT-DEFINED is a function spec."
   (LET* ((ALIST-ELEM (ASSQ *PACKAGE* (SEND GENERIC-PATHNAME :GET :DEFINITIONS)))
 	 (OLD-DEFINITIONS (CDR ALIST-ELEM))
 	 OLD-FUN)
-    (LOCALLY
-      (DECLARE (SPECIAL UNANALYZED-FILES))
-      (IF (AND (VARIABLE-BOUNDP UNANALYZED-FILES)
-	       (NOT (MEMQ GENERIC-PATHNAME UNANALYZED-FILES)))
-	  (SETQ UNANALYZED-FILES (COPY-LIST (CONS GENERIC-PATHNAME UNANALYZED-FILES)))))
+    (IF (AND (VARIABLE-BOUNDP *UNANALYZED-FILES*)
+	     (NOT (MEMQ GENERIC-PATHNAME *UNANALYZED-FILES*)))
+	(SETQ *UNANALYZED-FILES* (COPY-LIST (CONS GENERIC-PATHNAME *UNANALYZED-FILES*)
+					    BACKGROUND-CONS-AREA)))
     (IF (NOT WHOLE-FILE)
 	(SETQ DEFINITIONS (NUNION-EQUAL OLD-DEFINITIONS DEFINITIONS))
       ;; Make the data structure compact for paging efficiency.
-      (SETQ DEFINITIONS (COPY-TREE DEFINITIONS)))
+      (SETQ DEFINITIONS (COPY-TREE DEFINITIONS BACKGROUND-CONS-AREA)))
     (IF ALIST-ELEM
-	(RPLACD ALIST-ELEM DEFINITIONS)
-      (SEND GENERIC-PATHNAME :PUSH-PROPERTY (CONS *PACKAGE* DEFINITIONS) :DEFINITIONS))
+	(SETF (CDR ALIST-ELEM) DEFINITIONS)
+        (SEND GENERIC-PATHNAME :PUSH-PROPERTY (CONS *PACKAGE* DEFINITIONS) :DEFINITIONS))
     (IF (NOT WHOLE-FILE)
 	NIL
       ;; If we are doing the whole file, offer to undefine any methods deleted from the file.
       (DO ((DEFS DEFINITIONS (CDR DEFS))) ((NULL DEFS))
 	(SETF (CAR DEFS) (COPY-LIST (CAR DEFS))))
-      (UNLESS (SEND GENERIC-PATHNAME :GET :PATCH-FILE)
+      (UNLESS (SEND GENERIC-PATHNAME :GET ':PATCH-FILE)
 	(DOLIST (OLD-DEF OLD-DEFINITIONS)
-	  (AND (CONSP OLD-DEF)
-	       (EQ (CDR OLD-DEF) 'DEFUN)
+	  (AND (EQ (CDR-SAFE OLD-DEF) 'DEFUN)
 	       (SETQ OLD-FUN (CAR OLD-DEF))
-	       (CONSP OLD-FUN)
-	       (EQ (CAR OLD-FUN) :METHOD)
+	       (EQ (CAR-SAFE OLD-FUN) :METHOD)
 	       ;; Leave out combined methods, which may have been present
 	       ;; due to COMPILE-FLAVOR-METHODS.  They are handled automatically.
 	       (OR (= (LENGTH OLD-FUN) 3)
 		   (NOT (MEMQ (CADDR OLD-FUN) '(:COMBINED FASLOAD-COMBINED))))
-	       (NOT (MEMBER OLD-DEF DEFINITIONS))
+	       (NOT (MEMBER-EQUAL OLD-DEF DEFINITIONS))
 	       (FDEFINEDP OLD-FUN)
 	       ;; Detect automatic methods defined by a DEFFLAVOR that is still present.
 	       (MULTIPLE-VALUE-BIND (NAME TYPE)
 		   (SI:FUNCTION-PARENT OLD-FUN)
-		 (NOT (MEMBER (CONS NAME TYPE) DEFINITIONS)))
+		 (NOT (MEMBER-EQUAL (CONS NAME TYPE) DEFINITIONS)))
 	       (LET* ((FILES (CDR (ASSQ 'DEFUN (GET-ALL-SOURCE-FILE-NAMES OLD-FUN))))
 		      (FILES-1 FILES))
-		 (DO () ((NOT (AND FILES-1 (SEND (CAR FILES-1) :GET :PATCH-FILE))))
+		 (DO () ((NOT (AND FILES-1 (SEND (CAR FILES-1) :GET ':PATCH-FILE))))
 		   (POP FILES-1))
 		 (AND (EQ (CAR FILES-1) GENERIC-PATHNAME)
 		      (PROGN
@@ -320,7 +316,8 @@ Usually DEFINITION-TYPE is DEFUN and OBJECT-DEFINED is a function spec."
 It was more recently redefined by patch file ~A, but no other non-patch file.~%"
 				  ACCESS-PATHNAME OLD-FUN
 				  (SEND (CAR FILES) :SOURCE-PATHNAME)))
-			(PROG1 (WITH-TIMEOUT ((* 60. 60.) (FORMAT *QUERY-IO* " ... Yes by timeout.") T)
+			(PROG1 (WITH-TIMEOUT ((* 60. 60.)
+					      (FORMAT *QUERY-IO* " ... Yes by timeout.") T)
 				 (Y-OR-N-P "Undefine it? (60 sec timeout for Yes) "))
 			       (TERPRI *QUERY-IO*)))))
 	       (FUNDEFINE OLD-FUN)))))))
@@ -351,7 +348,7 @@ It was more recently redefined by patch file ~A, but no other non-patch file.~%"
       TEM)))
 
 (DEFUN FASL-START ()
-  (SETQ LAST-FASL-FILE-FORMS NIL)
+  (SETQ *LAST-FASL-FILE-FORMS* NIL)
   ;; Initialize the fasl table if necessary
   (WHEN (NOT (VARIABLE-BOUNDP FASL-GROUP-DISPATCH))
     (SETQ FASL-GROUP-DISPATCH (MAKE-ARRAY (LENGTH FASL-OPS) :AREA CONTROL-TABLES))
@@ -386,8 +383,9 @@ It was more recently redefined by patch file ~A, but no other non-patch file.~%"
 	   (COND ((AND SOURCE-PATHNAME (NOT (STRINGP FDEFINE-FILE-PATHNAME)))
 		  ;; If opened via a logical host, should record with that host in, even if
 		  ;; not compiled that way.
-		  (SETQ SOURCE-PATHNAME (SEND FDEFINE-FILE-PATHNAME
-					      :BACK-TRANSLATED-PATHNAME SOURCE-PATHNAME))
+		  (UNLESS (TYPEP SOURCE-PATHNAME 'FS::LOGICAL-PATHNAME)
+		    (SETQ SOURCE-PATHNAME (SEND FDEFINE-FILE-PATHNAME
+						:BACK-TRANSLATED-PATHNAME SOURCE-PATHNAME)))
 		  (SETQ FDEFINE-FILE-PATHNAME (SEND SOURCE-PATHNAME :GENERIC-PATHNAME))
 		  (SETQ FASL-GENERIC-PLIST-RECEIVER FDEFINE-FILE-PATHNAME)))))
     (DO ((PLIST PLIST (CDDR PLIST)))
@@ -396,10 +394,10 @@ It was more recently redefined by patch file ~A, but no other non-patch file.~%"
 ;      (WHEN PRINT-LOADED-FORMS
 ;	(PRINT `(SEND ',FASL-GENERIC-PLIST-RECEIVER :PUTPROP
 ;		      ',(CADR PLIST) ',(CAR PLIST))))
-      (AND ACCUMULATE-FASL-FORMS
+      (AND *ACCUMULATE-FASL-FORMS*
 	   (PUSH `(SEND ',FASL-GENERIC-PLIST-RECEIVER :PUTPROP
 			',(CADR PLIST) ',(CAR PLIST))
-		 LAST-FASL-FILE-FORMS))))
+		 *LAST-FASL-FILE-FORMS*))))
   (AND FASLOAD-FILE-PROPERTY-LIST-FLAG (SETQ FASL-RETURN-FLAG T))) ;Cause FASL-WHACK to return
 
 ;;; A call to this function is written at the end of each QFASL file by the compiler.
@@ -453,12 +451,12 @@ It was more recently redefined by patch file ~A, but no other non-patch file.~%"
 	    (SEND ACCESS-PATHNAME :GENERIC-PATHNAME)
 	  'MINI-PLIST-RECEIVER))		;In MINI, and flavors not in use yet.
   (COND ((SETQ TEM (ASSQ PKG (SEND GENERIC-PATHNAME :GET :FILE-ID-PACKAGE-ALIST)))
-	 (RPLACA (CDR TEM) FILE-ID)
-	 (RPLACA (CDDR TEM) ACCESS-PATHNAME))
+	 (SETF (CADR TEM) FILE-ID)
+	 (SETF (CADDR TEM) ACCESS-PATHNAME))
 	(T
 	 (SEND GENERIC-PATHNAME :PUSH-PROPERTY
 	       			(LIST PKG FILE-ID ACCESS-PATHNAME)
-				:FILE-ID-PACKAGE-ALIST))))
+				':FILE-ID-PACKAGE-ALIST))))
 
 ;;; Get the version of a file that was loaded into a particular package, NIL if never loaded.
 ;;; If the package is given as NIL, the file's :PACKAGE property is used.
@@ -468,8 +466,8 @@ It was more recently redefined by patch file ~A, but no other non-patch file.~%"
 	    (SEND ACCESS-PATHNAME :GENERIC-PATHNAME)
 	  'MINI-PLIST-RECEIVER))	;In MINI, and flavors not in use yet.
   (AND (NULL PKG)
-       (SETQ PKG (SEND GENERIC-PATHNAME :GET :PACKAGE)))
-  (CADR (LET ((PROP (SEND GENERIC-PATHNAME :GET :FILE-ID-PACKAGE-ALIST)))
+       (SETQ PKG (SEND GENERIC-PATHNAME :GET ':PACKAGE)))
+  (CADR (LET ((PROP (SEND GENERIC-PATHNAME :GET ':FILE-ID-PACKAGE-ALIST)))
 	  (IF PKG (ASSQ (PKG-FIND-PACKAGE PKG) PROP) (CAR PROP)))))
 
 ;;; This is the top-level loop of fasload, a separate function so
@@ -537,7 +535,7 @@ It was more recently redefined by patch file ~A, but no other non-patch file.~%"
   (AREF FASL-TABLE (FASL-GROUP)))
 
 (DEFUN FASL-STORE-EVALED-VALUE (V)
-  (ASET V FASL-TABLE FASL-EVALED-VALUE)
+  (SETF (AREF FASL-TABLE FASL-EVALED-VALUE) V)
   FASL-EVALED-VALUE)
 
 ;;;; FASL ops
@@ -598,7 +596,7 @@ It was more recently redefined by patch file ~A, but no other non-patch file.~%"
   ;; 3 -- two prefixes, single colon (no longer produced by QFASD).
   ;; 4 -- three ....
   ;; FASL-GROUP-FLAG is non-NIL to allow internal symbols and creation of symbols.
-  (AND (= LEN 402)
+  (AND (= LEN #o402)
        (SETQ DOUBLE-COLON T LEN 2))
   (SETQ STR (FASL-NEXT-VALUE))
   (IF (AND FASL-GROUP-FLAG (EQUAL STR ""))
@@ -719,7 +717,7 @@ It was more recently redefined by patch file ~A, but no other non-patch file.~%"
     (ENTER-FASL-TABLE RAT)))
 
 (DEFUN FASL-OP-COMPLEX ()
-  (LET ((COMP (%COMPLEX-CONS (FASL-NEXT-VALUE) (FASL-NEXT-VALUE))))
+  (LET ((COMP (COMPLEX (FASL-NEXT-VALUE) (FASL-NEXT-VALUE))))
     (ENTER-FASL-TABLE COMP)))
 		
 (DEFUN FASL-OP-LIST (&OPTIONAL AREA COMPONENT-FLAG
@@ -729,8 +727,8 @@ It was more recently redefined by patch file ~A, but no other non-patch file.~%"
   (DO ((P LST (CDR P))				;Store the contents
        (N LIST-LENGTH (1- N)))
       ((ZEROP N))
-    (RPLACA P (FASL-NEXT-VALUE)))
-  (COND (FASL-GROUP-FLAG (DOTIFY LST)))		;Flag means "last pair is dotted"
+    (SETF (CAR P) (FASL-NEXT-VALUE)))
+  (IF FASL-GROUP-FLAG (DOTIFY LST))		;Flag means "last pair is dotted"
   (IF (NULL COMPONENT-FLAG)
       (ENTER-FASL-TABLE LST)
       (FASL-STORE-EVALED-VALUE LST)))
@@ -833,50 +831,49 @@ It was more recently redefined by patch file ~A, but no other non-patch file.~%"
   HACK)
 
 (DEFUN FASL-OP-ARRAY-PUSH () 
-  (VECTOR-PUSH (FASL-NEXT-VALUE)
-	       (FASL-NEXT-VALUE))
+  (LET ((VECTOR (FASL-NEXT-VALUE)))
+    (VECTOR-PUSH (FASL-NEXT-VALUE) VECTOR))
   0)
 
 (DEFUN FASL-OP-EVAL ()
   (LET ((FORM (AREF FASL-TABLE (FASL-NEXT-NIBBLE))))
     (COND ((OR (ATOM FORM) (NEQ (CAR FORM) 'FUNCTION))
 ;          (WHEN PRINT-LOADED-FORMS (PRINT FORM))
-	   (WHEN ACCUMULATE-FASL-FORMS
-	     (PUSH FORM LAST-FASL-FILE-FORMS))
-	   (PUSH FORM FASL-FILE-EVALUATIONS)))
-    (FASL-STORE-EVALED-VALUE (EVAL1 FORM)))
+	   (WHEN *ACCUMULATE-FASL-FORMS*
+	     (PUSH FORM *LAST-FASL-FILE-FORMS*))
+	   (PUSH FORM *FASL-FILE-EVALUATIONS*)))
+    (FASL-STORE-EVALED-VALUE (EVAL FORM)))
   NIL)
 
 ;;; Calls to these functions should not be recorded.
-(DEFPROP SI:DEFCONST-1 T QFASL-DONT-RECORD)
-(DEFPROP SI:DEFVAREF T QFASL-DONT-RECORD)
-(DEFPROP SI:DEFSELECT-INTERNAL T QFASL-DONT-RECORD)
-(DEFPROP SI:FUNCTION-SPEC-PUTPROP T QFASL-DONT-RECORD)
-(DEFPROP SI:FDEFINITION-LOCATION T QFASL-DONT-RECORD)
-(DEFPROP SI:RECORD-SOURCE-FILE-NAME T QFASL-DONT-RECORD)
-(DEFPROP SI:DEFMACRO-SET-INDENTATION-FOR-ZWEI T QFASL-DONT-RECORD)
-(DEFPROP FS:MAKE-FASLOAD-PATHNAME T QFASL-DONT-RECORD)
+(DEFPROP SI::DEFCONST-1 T QFASL-DONT-RECORD)
+(DEFPROP SI::DEFVAR-1 T QFASL-DONT-RECORD)
+(DEFPROP SI::DEFSELECT-INTERNAL T QFASL-DONT-RECORD)
+(DEFPROP SI::FUNCTION-SPEC-PUTPROP T QFASL-DONT-RECORD)
+(DEFPROP SI::FDEFINITION-LOCATION T QFASL-DONT-RECORD)
+(DEFPROP SI::RECORD-SOURCE-FILE-NAME T QFASL-DONT-RECORD)
+(DEFPROP SI::DEFMACRO-SET-INDENTATION-FOR-ZWEI T QFASL-DONT-RECORD)
+(DEFPROP FS::MAKE-FASLOAD-PATHNAME T QFASL-DONT-RECORD)
 
 ;;; These properties should not be recorded when they are DEFPROPed.
-(DEFPROP SI:DEFSTRUCT-SLOT T QFASL-DONT-RECORD)
-(DEFPROP SI:DEFSTRUCT-DESCRIPTION T QFASL-DONT-RECORD)
-(DEFPROP SI:DEFSTRUCT-NAME T QFASL-DONT-RECORD)
+(DEFPROP SI::DEFSTRUCT-SLOT T QFASL-DONT-RECORD)
+(DEFPROP SI::DEFSTRUCT-DESCRIPTION T QFASL-DONT-RECORD)
+(DEFPROP SI::DEFSTRUCT-NAME T QFASL-DONT-RECORD)
 
 (DEFUN FASL-OP-EVAL1 ()
   (LET ((FORM (FASL-NEXT-VALUE)))
     (COND ((OR (ATOM FORM) (NEQ (CAR FORM) 'FUNCTION))
 ;          (WHEN PRINT-LOADED-FORMS (PRINT FORM))
-	   (AND ACCUMULATE-FASL-FORMS
-		(PUSH FORM
-		      LAST-FASL-FILE-FORMS))
+	   (AND *ACCUMULATE-FASL-FORMS*
+		(PUSH FORM *LAST-FASL-FILE-FORMS*))
 	   (IF (NOT (AND (CONSP FORM)
 			 (OR (GET (CAR FORM) 'QFASL-DONT-RECORD)
 			     (AND (EQ (CAR FORM) 'FDEFINE)
 				  (EQ (FOURTH FORM) T))
 			     (AND (EQ (CAR FORM) 'DEFPROP)
 				  (GET (FOURTH FORM) 'QFASL-DONT-RECORD)))))
-	       (PUSH FORM FASL-FILE-EVALUATIONS))))
-    (ENTER-FASL-TABLE (EVAL1 FORM))))
+	       (PUSH FORM *FASL-FILE-EVALUATIONS*))))
+    (ENTER-FASL-TABLE (EVAL FORM))))
 
 (DEFUN FASL-OP-MOVE ()
   (LET ((FROM (FASL-NEXT-NIBBLE))
@@ -894,8 +891,7 @@ It was more recently redefined by patch file ~A, but no other non-patch file.~%"
 	(OBJ NIL)
 	(TEM NIL)
 	(OFFSET NIL)
-	(%INHIBIT-READ-ONLY T)
-	)
+	(%INHIBIT-READ-ONLY T))
      (SETQ FASL-GROUP-LENGTH (FASL-NEXT-NIBBLE))	;Amount of stuff that follows
      (SETQ FEF (%ALLOCATE-AND-INITIALIZE	;Create the FEF
 		  DTP-FEF-POINTER		;Data type of returned pointer
@@ -904,61 +900,54 @@ It was more recently redefined by patch file ~A, but no other non-patch file.~%"
 		  (AREF FASL-TABLE FASL-FRAME-AREA)	;Area to allocate in
 		  SIZE))			;Amount to allocate
      (FASL-NEXT-NIBBLE)				;Skip modifier nibble for header Q
-     (%BIND (LOCF (AREF FASL-TABLE FASL-LIST-AREA))
-	    MACRO-COMPILED-PROGRAM)
-     (%BIND (LOCF (AREF FASL-TABLE FASL-ARRAY-AREA))
-	    MACRO-COMPILED-PROGRAM)
-     (DO ((I 1 (1+ I)))				;Fill in boxed Qs
-	 (( I Q-COUNT))
-       ;; OBJ gets the object to be stored.
-       (COND ((AND (= I (1- Q-COUNT))
-		   (> I %FEFHI-MISC)
-		   (LDB-TEST %%FEFHI-MS-DEBUG-INFO-PRESENT
-			     (%P-CONTENTS-OFFSET FEF %FEFHI-MISC)))
-	      ;; If this constant is the fef's debugging info alist,
-	      ;; read it in in a special area.
-	      (LET ()
-		(%BIND (LOCF (AREF FASL-TABLE FASL-LIST-AREA))
-		      DEBUG-INFO-AREA)
-		(SETQ OBJ (FASL-NEXT-VALUE)))
-	      ;; See if any macros that were used in this fef
-	      ;; have changed their sxhashes since the fef was compiled.
-	      (LET ((TEM (ASSQ :MACROS-EXPANDED OBJ)))
-		(IF TEM
-		    (CHECK-MACROS-EXPANDED (CADR TEM) (FUNCTION-NAME FEF)))))
-	     ;; Read everything except the debugging info alist.
-	     (T (SETQ OBJ (FASL-NEXT-VALUE))))
-       (SETQ TEM (FASL-NEXT-NIBBLE))			;Get ultra-kludgey modifier
-       (OR (ZEROP (SETQ OFFSET (LOGAND #o17 TEM)))	;Add offset if necessary
-	   (SETQ OBJ (%MAKE-POINTER-OFFSET DTP-LOCATIVE OBJ OFFSET)))
-       (%P-STORE-CONTENTS-OFFSET OBJ FEF I)		;Store it
-       (%P-DPB-OFFSET (LSH TEM -6) %%Q-CDR-CODE FEF I)	;Mung cdr code
-;      (%P-DPB-OFFSET (LSH TEM -5) %%Q-FLAG-BIT FEF I)	;Mung flag bit
-       (AND (BIT-TEST #o20 TEM)				;Make into external value cell pointer
-	    (%P-DPB-OFFSET DTP-EXTERNAL-VALUE-CELL-POINTER
-			   %%Q-DATA-TYPE FEF I))
-       (AND (BIT-TEST #o400 TEM)			;Make into locative
-	    (%P-DPB-OFFSET DTP-LOCATIVE %%Q-DATA-TYPE FEF I))
-       (AND (BIT-TEST #o1000 TEM)
-	    (%P-DPB-OFFSET DTP-SELF-REF-POINTER %%Q-DATA-TYPE FEF I)))
-     (DO ((I Q-COUNT (1+ I)))				;Now store unboxed Qs
-	 (( I SIZE))
-       (%P-DPB-OFFSET (FASL-NEXT-NIBBLE)		;Store low-order halfword
-		      %%Q-LOW-HALF FEF I)
-       (%P-DPB-OFFSET (FASL-NEXT-NIBBLE)		;Then high-order halfword
-		      %%Q-HIGH-HALF FEF I))
-     ;; Convert old destination codes to new ones.
-     (UNLESS DONT-CONVERT-DESTINATIONS
-       (FEF-CONVERT-DESTINATIONS FEF))
-     (ENTER-FASL-TABLE FEF)))
+     (LETF (((LOCF (AREF FASL-TABLE FASL-LIST-AREA)) MACRO-COMPILED-PROGRAM)
+	    ((LOCF (AREF FASL-TABLE FASL-ARRAY-AREA)) MACRO-COMPILED-PROGRAM))
+       (DO ((I 1 (1+ I)))			;Fill in boxed Qs
+	   (( I Q-COUNT))
+	 ;; OBJ gets the object to be stored.
+	 (COND ((AND (= I (1- Q-COUNT))
+		     (> I %FEFHI-MISC)
+		     (FEF-DEBUGGING-INFO-PRESENT-P FEF))
+		;; If this constant is the fef's debugging info alist,
+		;; read it in in a special area.
+		(LETF (((LOCF (AREF FASL-TABLE FASL-LIST-AREA)) DEBUG-INFO-AREA))
+		  (SETQ OBJ (FASL-NEXT-VALUE)))
+		;; See if any macros that were used in this fef
+		;; have changed their sxhashes since the fef was compiled.
+		(LET ((TEM (ASSQ ':MACROS-EXPANDED OBJ)))
+		  (IF TEM
+		      (CHECK-MACROS-EXPANDED (CADR TEM) (FUNCTION-NAME FEF)))))
+	       ;; Read everything except the debugging info alist.
+	       (T (SETQ OBJ (FASL-NEXT-VALUE))))
+	 (SETQ TEM (FASL-NEXT-NIBBLE))			;Get ultra-kludgey modifier
+	 (OR (ZEROP (SETQ OFFSET (LOGAND #o17 TEM)))	;Add offset if necessary
+	     (SETQ OBJ (%MAKE-POINTER-OFFSET DTP-LOCATIVE OBJ OFFSET)))
+	 (%P-STORE-CONTENTS-OFFSET OBJ FEF I)		;Store it
+	 (%P-DPB-OFFSET (LSH TEM -6) %%Q-CDR-CODE FEF I)	;Mung cdr code
+;	 (%P-DPB-OFFSET (LSH TEM -5) %%Q-FLAG-BIT FEF I)	;Mung flag bit
+	 (AND (BIT-TEST #o20 TEM)		;Make into external value cell pointer
+	      (%P-DPB-OFFSET DTP-EXTERNAL-VALUE-CELL-POINTER
+			     %%Q-DATA-TYPE FEF I))
+	 (AND (BIT-TEST #o400 TEM)			;Make into locative
+	      (%P-DPB-OFFSET DTP-LOCATIVE %%Q-DATA-TYPE FEF I))
+	 (AND (BIT-TEST #o1000 TEM)
+	      (%P-DPB-OFFSET DTP-SELF-REF-POINTER %%Q-DATA-TYPE FEF I)))
+       (DO ((I Q-COUNT (1+ I)))				;Now store unboxed Qs
+	   (( I SIZE))
+	 (%P-DPB-OFFSET (FASL-NEXT-NIBBLE)		;Store low-order halfword
+			%%Q-LOW-HALF FEF I)
+	 (%P-DPB-OFFSET (FASL-NEXT-NIBBLE)		;Then high-order halfword
+			%%Q-HIGH-HALF FEF I))
+       ;; Convert old destination codes to new ones.
+       (UNLESS DONT-CONVERT-DESTINATIONS
+	 (FEF-CONVERT-DESTINATIONS FEF))
+       (ENTER-FASL-TABLE FEF))))
 
 ;;; Used to be called DISASSEMBLE-FETCH and EH:FEF-INSTRUCTION.
 (DEFSUBST FEF-INSTRUCTION (FEF PC)
   "Given a FEF and a PC, returns the corresponding 16-bit macro instruction.
 There is no error checking."
-  (%P-LDB-OFFSET (IF (ZEROP (LOGAND 1 PC))
-		     %%Q-LOW-HALF
-		   %%Q-HIGH-HALF)
+  (%P-LDB-OFFSET (IF (ZEROP (LOGAND 1 PC)) %%Q-LOW-HALF %%Q-HIGH-HALF)
 		 FEF (TRUNCATE PC 2)))
 
 ;;; Convert old codes for D-PDL and D-LAST into new ones.
@@ -998,8 +987,7 @@ There is no error checking."
 (DEFUN FASL-OP-FUNCTION-HEADER ()
   (LET ((FCTN (FASL-NEXT-VALUE))
 	(F-SXH (FASL-NEXT-VALUE)))
-    FCTN
-    F-SXH)
+    (DECLARE (IGNORE FCTN F-SXH)))
   0)
 
 (DEFUN FASL-OP-FUNCTION-END NIL
@@ -1009,31 +997,30 @@ There is no error checking."
   (LET ((CELL (FASL-NEXT-NIBBLE))
 	(DATA (FASL-NEXT-VALUE))
 	(SYM (FASL-NEXT-VALUE)))
-    (SELECTQ CELL
+    (CASE CELL
       (1 (SET SYM DATA)
 	 (WHEN PRINT-LOADED-FORMS (PRINT `(SETQ ,SYM ',DATA)))
-	 (IF ACCUMULATE-FASL-FORMS
-	     (PUSH `(SETQ ,SYM ',DATA) LAST-FASL-FILE-FORMS)))
+	 (IF *ACCUMULATE-FASL-FORMS*
+	     (PUSH `(SETQ ,SYM ',DATA) *LAST-FASL-FILE-FORMS*)))
       (2 (FSET SYM DATA)
 	 (WHEN PRINT-LOADED-FORMS (PRINT `(FSET ',SYM ',DATA)))
-	 (IF ACCUMULATE-FASL-FORMS
-	     (PUSH `(FSET ',SYM ',DATA) LAST-FASL-FILE-FORMS)))
-      (3 (SETPLIST SYM DATA)
-	 (WHEN PRINT-LOADED-FORMS (PRINT `(SETPLIST ,SYM ',DATA)))
-	 (IF ACCUMULATE-FASL-FORMS
-	     (PUSH `(SETPLIST ',SYM ',DATA) LAST-FASL-FILE-FORMS)))))
+	 (IF *ACCUMULATE-FASL-FORMS*
+	     (PUSH `(FSET ',SYM ',DATA) *LAST-FASL-FILE-FORMS*)))
+      (3 (SETF (SYMBOL-PLIST SYM) DATA)
+	 (WHEN PRINT-LOADED-FORMS (PRINT `(SETF (SYMBOL-PLIST ,SYM) ',DATA)))
+	 (IF *ACCUMULATE-FASL-FORMS*
+	     (PUSH `(SETF (SYMBOL-PLIST ',SYM) ',DATA) *LAST-FASL-FILE-FORMS*)))))
     0)
 
 (DEFUN FASL-OP-STOREIN-SYMBOL-VALUE ()
   (LET ((DATA (AREF FASL-TABLE (FASL-NEXT-NIBBLE)))
 	(SYM (FASL-NEXT-VALUE)))
     (SET SYM DATA)
-    (PUSH `(SETQ ,SYM ',DATA) FASL-FILE-EVALUATIONS)
+    (PUSH `(SETQ ,SYM ',DATA) *FASL-FILE-EVALUATIONS*)
     (WHEN PRINT-LOADED-FORMS
-      (PRINT (CAR FASL-FILE-EVALUATIONS)))
-    (AND ACCUMULATE-FASL-FORMS
-	 (PUSH (CAR FASL-FILE-EVALUATIONS)
-	       LAST-FASL-FILE-FORMS)))
+      (PRINT (CAR *FASL-FILE-EVALUATIONS*)))
+    (AND *ACCUMULATE-FASL-FORMS*
+	 (PUSH (CAR *FASL-FILE-EVALUATIONS*) *LAST-FASL-FILE-FORMS*)))
     0)
 
 (DEFUN FASL-OP-STOREIN-FUNCTION-CELL ()
@@ -1042,21 +1029,19 @@ There is no error checking."
     (FSET-CAREFULLY SYM DATA)
     (WHEN PRINT-LOADED-FORMS
       (PRINT `(SETF (SYMBOL-FUNCTION ',SYM) ',DATA)))
-    (AND ACCUMULATE-FASL-FORMS
-	 (PUSH `(SETF (SYMBOL-FUNCTION ',SYM) ',DATA)
-	       LAST-FASL-FILE-FORMS)))
+    (AND *ACCUMULATE-FASL-FORMS*
+	 (PUSH `(SETF (SYMBOL-FUNCTION ',SYM) ',DATA) *LAST-FASL-FILE-FORMS*)))
   0)
 
 (DEFUN FASL-OP-STOREIN-PROPERTY-CELL ()
   (LET ((DATA (AREF FASL-TABLE (FASL-NEXT-NIBBLE)))
 	(SYM (FASL-NEXT-VALUE)))
     (SETF (SYMBOL-PLIST SYM) DATA)
-    (PUSH `(SETF (SYMBOL-PLIST ',SYM) ',DATA) FASL-FILE-EVALUATIONS)
+    (PUSH `(SETF (SYMBOL-PLIST ',SYM) ',DATA) *FASL-FILE-EVALUATIONS*)
     (WHEN PRINT-LOADED-FORMS
-      (PRINT (CAR FASL-FILE-EVALUATIONS)))
-    (AND ACCUMULATE-FASL-FORMS
-	 (PUSH (CAR FASL-FILE-EVALUATIONS)
-	       LAST-FASL-FILE-FORMS)))
+      (PRINT (CAR *FASL-FILE-EVALUATIONS*)))
+    (AND *ACCUMULATE-FASL-FORMS*
+	 (PUSH (CAR *FASL-FILE-EVALUATIONS*) *LAST-FASL-FILE-FORMS*)))
   0)
 
 (DEFUN FASL-OP-STOREIN-ARRAY-LEADER ()
@@ -1079,16 +1064,15 @@ There is no error checking."
   (LET* ((COUNT (FASL-NEXT-NIBBLE))
 	 (FCTN (FASL-NEXT-VALUE))
 	 V
-	 (P (VALUE-CELL-LOCATION V)))
+	 (P (LOCF V)))
     (DOTIMES (I COUNT)
-      (RPLACD P (SETQ P (NCONS-IN-AREA (FASL-NEXT-VALUE)
-				       (AREF FASL-TABLE FASL-TEMP-LIST-AREA)))))
-    (AND ACCUMULATE-FASL-FORMS
-	 (PUSH `(APPLY ',FCTN ',V)
-	       LAST-FASL-FILE-FORMS))
+      (SETF (CDR P)
+	    (SETQ P (NCONS-IN-AREA (FASL-NEXT-VALUE) (AREF FASL-TABLE FASL-TEMP-LIST-AREA)))))
+    (PUSH `(APPLY ',FCTN ',V) *FASL-FILE-EVALUATIONS*)
+    (AND *ACCUMULATE-FASL-FORMS*
+	 (PUSH (CAR *FASL-FILE-EVALUATIONS*) *LAST-FASL-FILE-FORMS*))
 ;   (WHEN PRINT-LOADED-FORMS
 ;   (PRINT `(APPLY ',FCTN ',V)))
-    (PUSH `(,FCTN) FASL-FILE-EVALUATIONS)
     (FASL-STORE-EVALED-VALUE (APPLY FCTN V))))
 
 (DEFUN FASL-OP-END-OF-WHACK ()
@@ -1108,7 +1092,7 @@ There is no error checking."
 (DEFUN FASL-OP-SET-PARAMETER ()
   (LET ((TO (FASL-NEXT-VALUE))
 	(FROM (FASL-GROUP)))
-    (SETF (AREF FASL-TABLE (EVAL1 TO)) (AREF FASL-TABLE FROM)))
+    (SETF (AREF FASL-TABLE (EVAL TO)) (AREF FASL-TABLE FROM)))
   0)
 
 (DEFUN FASL-APPEND (OUTFILE &REST INFILES)
