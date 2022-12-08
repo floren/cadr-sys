@@ -420,19 +420,17 @@ Optimizations added latest get called first."
   `(add-optimizer-internal ',target-function ',optimizer-name ',optimized-into))
 
 (defmacro defoptimizer (optimizer-name function-to-optimize
-			&optional #|| ((&rest optimizes-into)) ||# arglist &body body)
-  "(defoptimizer foo-optimizer foo (form)
+			&optional ((&rest optimizes-into)) arglist &body body)
+  "(defoptimizer foo-optimizer foo (optfoo1 optfoo2) (form)
      (if (eq (cadr form) 'foo)
          `(and (optfoo . ,(cadr form))
                (optfoo2 . (caddr form)))
         form))
 OR
-/(defoptimizer foo-optimizer foo)"
+/(defoptimizer foo-optimizer foo (optfoo1 optfoo2))"
   (if (null arglist)
-      `(add-optimizer-internal ',function-to-optimize ',optimizer-name
-			       nil #||',optimizes-into||#)
-    `(progn (add-optimizer-internal ',function-to-optimize ',optimizer-name
-				    nil #||',optimizes-into||#)
+      `(add-optimizer-internal ',function-to-optimize ',optimizer-name ',optimizes-into)
+    `(progn (add-optimizer-internal ',function-to-optimize ',optimizer-name ',optimizes-into)
 	    (defun ,optimizer-name ,arglist
 	      (declare (function-parent ,optimizer-name defoptimizer))
 	      . ,body))))
