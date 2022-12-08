@@ -396,7 +396,7 @@ followed by STARTING-TAIL."
     (DO ((P AL (CDR P)))
 	((ATOM P) AL)
       (IF (CONSP (CAR P))			;Then recopy the assoc cells.
-	  (SETF (car P) (CONS (CAAR P) (CDAR P))))))))
+	  (SETF (car P) (CONS (CAAR P) (CDAR P)))))))
 (DEFF COPY-ALIST #'COPYALIST)
 
 ;;; (SUBST NIL NIL ...) is such an ugly language idiom...
@@ -564,7 +564,7 @@ Compares elements with EQ."
   (COND ((NULL LISTS) NIL)
 	((NULL (CDR LISTS)) (CAR LISTS))
 	(T (APPLY #'NINTERSECTION-EQ (COPY-LIST (CAR LISTS)) (CDR LISTS)))))
-(DEFUN INTERSECTION #'INTERSECTION-EQ)
+(DEFF INTERSECTION #'INTERSECTION-EQ)
 
 (DEFUN NINTERSECTION-EQ (&REST LISTS)
   "Alter the first argument to be the intersection of all the arguments.
@@ -818,7 +818,7 @@ The value is actually the link of IN-LIST whose CAR is that element."
 	 (DO ((X IN-LIST (CDR X)))
 	     ((NULL X))
 	   (IF (EQUAL (CAR X) ITEM) (RETURN X))))))
-(DEFF #'MEMBER MEMBER-EQUAL)
+(DEFF MEMBER #'MEMBER-EQUAL)
 
 (DEFUN MEMBER-EQUALP (ITEM IN-LIST)
   "Return non-NIL if IN-LIST has an element EQUALP to ITEM.
@@ -1337,7 +1337,7 @@ but arrays, entities, instances and stack groups are not."
 	     T)
 	    (T
 	     ;; stack-closures don't have any predefined way to work with typep
-	     (EQ (%DATA-TYPE X #.DTP-STACK-CLOSURE)))))))
+	     (EQ (%DATA-TYPE X) #.DTP-STACK-CLOSURE))))))
 
 (DEFUN MACRO-FUNCTION (FSPEC &OPTIONAL ENVIRONMENT &AUX DEF)
   "If FSPEC has a function definition which is a macro, return the expander function; else NIL."
@@ -2035,7 +2035,7 @@ This is an obsolete Maclisp function."
 
 (DEFUN ARRAY-PUSH-EXTEND (ARRAY DATA &OPTIONAL EXTENSION &AUX (INHIBIT-SCHEDULING-FLAG T))
   "Same as (VECTOR-PUSH DATA VECTOR EXTENSION)"
-  (COND ((VECTOR-PUSH ARRAY DATA))
+  (COND ((ARRAY-PUSH ARRAY DATA))
 	(T (ADJUST-ARRAY-SIZE ARRAY (+ (ARRAY-LENGTH ARRAY)
 				       ;; If amount to extend by not specified,
 				       ;; try to guess a reasonable amount
@@ -2043,14 +2043,14 @@ This is an obsolete Maclisp function."
 					     ((< (%STRUCTURE-TOTAL-SIZE ARRAY) PAGE-SIZE)
 					      (MAX (ARRAY-LENGTH ARRAY) #o100))
 					     (T (TRUNCATE (ARRAY-LENGTH ARRAY) 4)))))
-	   (VECTOR-PUSH ARRAY DATA))))
+	   (ARRAY-PUSH ARRAY DATA))))
 
 (DEFUN VECTOR-PUSH-EXTEND (DATA VECTOR &OPTIONAL EXTENSION
 			   &AUX (INHIBIT-SCHEDULING-FLAG T))
   "Add the new element DATA to the end of VECTOR, making VECTOR larger if needed.
 EXTENSION says how many elements to add; the default is a fraction
 of the existing size.  VECTOR must have a fill pointer."
-  (COND ((VECTOR-PUSH VECTOR DATA))
+  (COND ((ARRAY-PUSH VECTOR DATA))
 	(T (ADJUST-ARRAY-SIZE VECTOR (+ (ARRAY-LENGTH VECTOR)
 					;; If amount to extend by not specified,
 					;; try to guess a reasonable amount
@@ -2058,7 +2058,7 @@ of the existing size.  VECTOR must have a fill pointer."
 					      ((< (%STRUCTURE-TOTAL-SIZE VECTOR) PAGE-SIZE)
 					       (MAX (ARRAY-LENGTH VECTOR) #o100))
 					      (T (TRUNCATE (ARRAY-LENGTH VECTOR) 4)))))
-	   (VECTOR-PUSH VECTOR DATA))))
+	   (ARRAY-PUSH VECTOR DATA))))
 
 ;;Now microcoded
 ;(DEFUN ARRAY-IN-BOUNDS-P (ARRAY &REST POINT)
@@ -2685,7 +2685,7 @@ is used to invoke the expander function."
 		  (VALUES `(,(CADAR MACRO-CALL) ,@(CDDAR MACRO-CALL) . ,(CDR MACRO-CALL))
 			  T))
 		 ((MEMQ (CAAR MACRO-CALL) '(SUBST CLI:SUBST NAMED-SUBST))
-		  (VALUES (FUNCALL *MACROEXPAND-HOOK* 'SUBST-EXPAND-1 MACRO-CALL ENVIRONMENT)
+		  (VALUES (FUNCALL *MACROEXPAND-HOOK* 'SUBST-EXPAND-1 MACRO-CALL)
 			  T))
 		 (T MACRO-CALL)))
 	  ((NOT (SYMBOLP (CAR MACRO-CALL)))
@@ -2716,7 +2716,7 @@ is used to invoke the expander function."
 			     (NOT (MEMQ (CAR MACRO-CALL) MACROS-EXPANDED))
 			     (PUSH (CAR MACRO-CALL) MACROS-EXPANDED))
 			(VALUES (FUNCALL *MACROEXPAND-HOOK*
-					 'SUBST-EXPAND-1 MACRO-CALL ENVIRONMENT)
+					 'SUBST-EXPAND-1 MACRO-CALL)
 				T))
 		    MACRO-CALL))
 		 ((ATOM TM) MACRO-CALL)
@@ -2734,7 +2734,7 @@ is used to invoke the expander function."
 		  (AND RECORD-MACROS-EXPANDED
 		       (NOT (MEMQ (CAR MACRO-CALL) MACROS-EXPANDED))
 		       (PUSH (CAR MACRO-CALL) MACROS-EXPANDED))
-		  (VALUES (FUNCALL *MACROEXPAND-HOOK* 'SUBST-EXPAND-1 MACRO-CALL ENVIRONMENT)
+		  (VALUES (FUNCALL *MACROEXPAND-HOOK* 'SUBST-EXPAND-1 MACRO-CALL)
 			  T))
 		 (T MACRO-CALL)))
 	  (T MACRO-CALL))))
@@ -2785,7 +2785,7 @@ a local declaration.  If it is encapsulated, unencapsulate it."
   (COND ((AND DEF (SYMBOLP DEF)) (DECLARED-DEFINITION DEF))
 	(T DEF)))
 
-(DEFUN SUBST-EXPAND-1 (FORM ENVIRONMENT)
+(DEFUN SUBST-EXPAND-1 (FORM)
   (LET ((SUBST (CAR FORM))
 	SIMPLE-SUBSTITUTION-OK)
     (DO-FOREVER
@@ -2797,14 +2797,14 @@ a local declaration.  If it is encapsulated, unencapsulate it."
 		     (NOT (ASSQ ':NO-SIMPLE-SUBSTITUTION DI)))
 	       (SETQ SUBST (CADR (ASSQ 'INTERPRETED-DEFINITION DI)))))
 	    (T (RETURN))))
-    (SUBST-EXPAND SUBST FORM ENVIRONMENT SIMPLE-SUBSTITUTION-OK)))
+    (SUBST-EXPAND SUBST FORM SIMPLE-SUBSTITUTION-OK)))
     
 ;;; Expand a call to a SUBST function.  SUBST is the function definition to use.
 ;;; FORM is the whole form.
 ;;; Match the SUBST args with the expressions in the form
 ;;; and then substitute the expressions for the args in the body of the function with SUBLIS.
 
-(DEFUN SUBST-EXPAND (SUBST FORM ENVIRONMENT SIMPLE-SUBSTITUTION-OK)
+(DEFUN SUBST-EXPAND (SUBST FORM &OPTIONAL SIMPLE-SUBSTITUTION-OK)
   (LET (ALIST OPTIONAL-FLAG REST-ALREADY-FLAG LAMBDA-LIST BODY FN-NAME)
     ;; Extract the lambda-list, body, and function name from the definition.
     (COND ((EQ (CAR SUBST) 'NAMED-SUBST)
@@ -2814,7 +2814,7 @@ a local declaration.  If it is encapsulated, unencapsulate it."
 	  (T (SETQ LAMBDA-LIST (CADR SUBST) BODY (CDDR SUBST)
 		   FN-NAME (CAR FORM))))
     ;; Discard documentation string or declarations from front of body.
-    (SETQ BODY (EXTRACT-DECLARATIONS BODY NIL T ENVIRONMENT))
+    (SETQ BODY (EXTRACT-DECLARATIONS BODY NIL T))
     ;; Provide an implicit PROGN for the body.
     (IF (CDR BODY)
 	(SETQ BODY `(PROGN . ,BODY))
@@ -2847,7 +2847,7 @@ a local declaration.  If it is encapsulated, unencapsulate it."
 	     (COND ((NULL LAMBDA-LIST)
 		    (RETURN (IF SIMPLE-SUBSTITUTION-OK
 				(SUBLIS ALIST BODY)
-			      (SUBLIS-EVAL-ONCE (NREVERSE ALIST) BODY nil nil ENVIRONMENT))))
+			      (SUBLIS-EVAL-ONCE (NREVERSE ALIST) BODY))))
 		   ((NOT OPTIONAL-FLAG)
 		    (RETURN (CERROR T NIL 'INVALID-FORM
 				    "Too few arguments for ~S."
