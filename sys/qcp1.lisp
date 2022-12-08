@@ -462,7 +462,8 @@ This function will not execute correctly unless the DEFFLAVOR is fixed."
       ;; declarations made outside of compilation
       ;; but after anything coming from a DECLARE in the body.
       (DOLIST (ELT (REVERSE EXPR-DEBUG-INFO))
-	(WHEN (ASSQ (CAR ELT) *DEBUG-INFO-LOCAL-DECLARATION-TYPES*)
+	(WHEN (AND (NEQ (CAR ELT) 'DOCUMENTATION)
+		   (GET (CAR ELT) 'SI::DEBUG-INFO))
 	  (PUSH ELT LOCAL-DECLARATIONS))))
     (SETQ LL (CADR EXP1))			;lambda list.
     (SETQ BODY (CDDR EXP1))
@@ -557,11 +558,12 @@ This function will not execute correctly unless the DEFFLAVOR is fixed."
     ;; Set up the debug info from the local declarations and other things
     (LET ((DEBUG-INFO NIL) TEM)
       (AND DOCUMENTATION (PUSH `(:DOCUMENTATION ,DOCUMENTATION) DEBUG-INFO))
-      (DOLIST (DCL *DEBUG-INFO-LOCAL-DECLARATION-TYPES*)
-	(IF (SETQ TEM (ASSQ (CAR DCL) LOCAL-DECLARATIONS))
-	    (IF (NEQ (CAR DCL) (CDR DCL))
-		(PUSH (CONS (CDR DCL) (CDR TEM)) DEBUG-INFO)
-	      (PUSH TEM DEBUG-INFO))))
+      (DOLIST (DCL LOCAL-DECLARATIONS)
+	(WHEN (SYMBOLP (CAR DCL))
+	  (SETQ TEM (GET (CAR DCL) 'SI::DEBUG-INFO))
+	  (IF (EQ TEM T) (SETQ TEM (CAR DCL)))
+	  (UNLESS (ASSQ TEM DEBUG-INFO)
+	    (PUSH (IF (EQ TEM (CAR DCL)) DCL (CONS TEM (CDR DCL))) DEBUG-INFO))))
       ;; Propagate any other kinds of debug info from the expr definition.
       (DOLIST (DCL EXPR-DEBUG-INFO)
 	(OR (ASSQ (CAR DCL) DEBUG-INFO)
