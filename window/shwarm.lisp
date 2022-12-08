@@ -43,7 +43,7 @@ BEEP-TYPE says why the beep is being done.  Standard values are:
 BEEP-TYPE does not have any effect, currently,
 but you can redefine BEEP to to different things for different beep types."
   (WHEN BEEP
-    (IF (OPERATION-HANDLED-P STREAM :BEEP)
+    (IF (MEMQ ':BEEP (FUNCALL STREAM ':WHICH-OPERATIONS))
 	(SEND STREAM :BEEP BEEP-TYPE)
       (%BEEP BEEP-WAVELENGTH BEEP-DURATION))))
 
