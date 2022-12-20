@@ -8,6 +8,7 @@
   (:PATCHABLE "SYS: PATCH;")
   (:MODULE ALLDEFS ("SYS: SYS2; DEFMAC"	;at 78, latest 80 WIP
 		    "SYS: SYS2; LMMAC"	;at 372, latest 389 WIP
+		    "SYS: EH; ERRMAC"	;at -1, latest 2 OK
 		    "SYS: SYS2; STRUCT"	;at 322, latest 322 OK
 		    "SYS: SYS2; SETF"	;at 97, latest 97 OK
 		    "SYS: SYS; TYPES")	;at 72, latest 72 FAIL - COLD
