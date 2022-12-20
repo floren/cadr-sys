@@ -3,7 +3,7 @@
 ;; Condition and error related macros used by the system.
 ;; Used to be in SYS2; LMMAC
 
-(DEFMACRO CONDITION-CASE (VARIABLES BODY-FORM &BODY CLAUSES)
+(DEFMACRO CONDITION-CASE (VARIABLES BODY-FORM &REST CLAUSES)
   "Execute BODY-FORM with conditions handled according to CLAUSES.
 Each element of CLAUSES is a clause like those used in SELECTQ.
 It specifies one or more condition names, and what to do if they are signalled.
@@ -21,48 +21,47 @@ If there is a clause with keyword :NO-ERROR, it is executed after BODY-FORM
 if conditions are NOT signaled.  During this clause, the variables VARIABLES
 are bound to the values produced by BODY-FORM.  The values of the last form
 in the clause are returned from CONDITION-CASE."
-  (DECLARE (ZWEI:INDENTATION 1 3 2 1))
+  ;; We don't use &BODY in the real arglist to avoid overriding
+  ;; the special form of indentation on *INITIAL-LISP-INDENT-OFFSET-ALIST*
+  (DECLARE (ARGLIST VARIABLES BODY-FORM &BODY CLAUSES))
   `(CONDITION-CASE-IF T ,VARIABLES ,BODY-FORM . ,CLAUSES))
 
-(DEFMACRO CONDITION-CASE-IF (&ENVIRONMENT ENV COND-FORM VARIABLES BODY-FORM &BODY CLAUSES)
+(DEFMACRO CONDITION-CASE-IF (COND-FORM VARIABLES BODY-FORM &REST CLAUSES)
   "Like CONDITION-CASE, but establishes condition handlers only if COND-FORM evaluates non-NIL.
 Refer to the documentation of CONDITION-CASE for more information."
-  (DECLARE (ZWEI:INDENTATION 2 3 3 1))
-  (MULTIPLE-VALUE-BIND (REALCLAUSES DECLS)
-      (EXTRACT-DECLARATIONS CLAUSES NIL NIL ENV)
-    (LET* ((ALL-CONDITIONS
-	     (MAPCAN #'(LAMBDA (CLAUSE)
-			 (MACRO-TYPE-CHECK-WARNING 'CONDITION-CASE-IF (CAR CLAUSE))
-			 (IF (EQ (CAR CLAUSE) ':NO-ERROR) NIL
-			   (IF (CONSP (CAR CLAUSE)) (CAR CLAUSE)
-			     (LIST (CAR CLAUSE)))))
-		     REALCLAUSES))
-	   (VAR (OR (CAR VARIABLES) (GENSYM)))
-	   (NO-ERROR-CLAUSE (ASSQ ':NO-ERROR REALCLAUSES))
-	   (TAG (GENSYM)))
-      (IF (NULL (CDR ALL-CONDITIONS))
-	  (SETQ ALL-CONDITIONS (CAR ALL-CONDITIONS)))
-      (IF NO-ERROR-CLAUSE
-	  `(LET ,VARIABLES
-	     (DECLARE . ,DECLS)
-	     (CATCH-CONTINUATION-IF T ',TAG
-		 #'(LAMBDA (,VAR)
-		     (DECLARE . ,DECLS)
-		     (SELECT-MEMQ (SEND ,VAR :CONDITION-NAMES)
-		       . ,(REMQ NO-ERROR-CLAUSE REALCLAUSES)))
-		 #'(LAMBDA () . ,(CDR NO-ERROR-CLAUSE))
-	       (CONDITION-BIND-IF ,COND-FORM ((,ALL-CONDITIONS 'CONDITION-CASE-THROW ',TAG))
-		 (MULTIPLE-VALUE-SETQ ,VARIABLES ,BODY-FORM))))
-	`(CATCH-CONTINUATION-IF T ',TAG
-	     #'(LAMBDA (,VAR)
-		 (DECLARE . ,DECLS)
-		 (SELECT-MEMQ (SEND ,VAR :CONDITION-NAMES)
-		   . ,REALCLAUSES))
-	     ()
-	   (CONDITION-BIND-IF ,COND-FORM ((,ALL-CONDITIONS 'CONDITION-CASE-THROW ',TAG))
-	     ,BODY-FORM))))))
+  ;; We don't use &BODY in the real arglist to avoid overriding
+  ;; the special form of indentation on *INITIAL-LISP-INDENT-OFFSET-ALIST*
+  (DECLARE (ARGLIST COND-FORM VARIABLES BODY-FORM &BODY CLAUSES))
+  (LET* ((ALL-CONDITIONS
+	   (MAPCAN #'(LAMBDA (CLAUSE)
+		       (MACRO-TYPE-CHECK-WARNING 'CONDITION-CASE-IF (CAR CLAUSE))
+		       (IF (EQ (CAR CLAUSE) ':NO-ERROR) NIL
+			 (IF (CONSP (CAR CLAUSE)) (CAR CLAUSE)
+			   (LIST (CAR CLAUSE)))))
+		   CLAUSES))
+	 (VAR (OR (CAR VARIABLES) (GENSYM)))
+	 (NO-ERROR-CLAUSE (ASSQ ':NO-ERROR CLAUSES))
+	 (TAG (GENSYM)))
+    (IF (NULL (CDR ALL-CONDITIONS))
+	(SETQ ALL-CONDITIONS (CAR ALL-CONDITIONS)))
+    (IF NO-ERROR-CLAUSE
+	`(LET ,VARIABLES
+	   (CATCH-CONTINUATION-IF T ',TAG
+				  #'(LAMBDA (,VAR)
+				      (SELECT-MEMQ (SEND ,VAR :CONDITION-NAMES)
+					. ,(REMQ NO-ERROR-CLAUSE CLAUSES)))
+				  #'(LAMBDA () . ,(CDR NO-ERROR-CLAUSE))
+	     (CONDITION-BIND-IF ,COND-FORM ((,ALL-CONDITIONS 'CONDITION-CASE-THROW ',TAG))
+				(MULTIPLE-VALUE ,VARIABLES ,BODY-FORM))))
+      `(CATCH-CONTINUATION-IF T ',TAG
+			      #'(LAMBDA (,VAR)
+				  (SELECT-MEMQ (SEND ,VAR :CONDITION-NAMES)
+				    . ,CLAUSES))
+			      ()
+	 (CONDITION-BIND-IF ,COND-FORM ((,ALL-CONDITIONS 'CONDITION-CASE-THROW ',TAG))
+	   ,BODY-FORM)))))
 
-(DEFMACRO CONDITION-CALL (VARIABLES BODY-FORM &BODY CLAUSES)
+(DEFMACRO CONDITION-CALL (VARIABLES BODY-FORM &REST CLAUSES)
   "Execute BODY-FORM with conditions handled according to CLAUSES.
 Each element of CLAUSES is a clause like those used in COND.
 This virtual COND is executed whenever a condition is signaled within BODY-FORM.
@@ -85,36 +84,33 @@ handling does not cause something else to happen.  However, if there is
 a :NO-ERROR clause (a clause whose first element is :NO-ERROR) then it
 is executed and its values are returned from the CONDITION-CALL.
 In this clause, the VARIABLES are bound to the values of the BODY-FORM."
-  (DECLARE (ZWEI:INDENTATION 1 3 2 1))
+  ;; We don't use &BODY in the real arglist to avoid overriding
+  ;; the special form of indentation on *INITIAL-LISP-INDENT-OFFSET-ALIST*
+  (DECLARE (ARGLIST VARIABLES BODY-FORM &BODY CLAUSES))
   `(CONDITION-CALL-IF T ,VARIABLES ,BODY-FORM . ,CLAUSES))
 
-(DEFMACRO CONDITION-CALL-IF (&ENVIRONMENT ENV COND-FORM VARIABLES BODY-FORM &BODY CLAUSES)
+(DEFMACRO CONDITION-CALL-IF (COND-FORM VARIABLES BODY-FORM &REST CLAUSES)
   "Like CONDITION-CALL, but establishes the handlers only if COND-FORM evaluates non-NIL.
 See the documentation of CONDITION-CALL for more information."
   ;; We don't use &BODY in the real arglist to avoid overriding
   ;; the special form of indentation on *INITIAL-LISP-INDENT-OFFSET-ALIST*
-  (DECLARE (ZWEI:INDENTATION 2 3 3 1))
-  (MULTIPLE-VALUE-BIND (REALCLAUSES DECLS)
-      (EXTRACT-DECLARATIONS CLAUSES NIL NIL ENV)
-    (LET* ((ORDINARY-CLAUSES (SUBSET #'(LAMBDA (CLAUSE) (NEQ (CAR CLAUSE) ':NO-ERROR))
-				     REALCLAUSES))
-	   (NO-ERROR-CLAUSE (ASSQ ':NO-ERROR REALCLAUSES))
-	   (PREDICATES (MAPCAR #'CAR ORDINARY-CLAUSES))
-	   (VAR (OR (CAR VARIABLES) (GENSYM)))
-	   (TAG (GENSYM))
-	   (HANDLER `#'(LAMBDA (,VAR &REST IGNORE)
-			 (DECLARE . ,DECLS)
-			 (IF (OR . ,PREDICATES)
-			     (THROW ',TAG ,VAR)))))
-      `(CATCH-CONTINUATION-IF T ',TAG
-	   #'(LAMBDA (,VAR)
-	       (DECLARE . ,DECLS)
-	       (COND . ,ORDINARY-CLAUSES))
-	   ,(IF NO-ERROR-CLAUSE
-		`#'(LAMBDA ,VARIABLES
-		     (DECLARE . ,DECLS)
-		     . ,(CDR NO-ERROR-CLAUSE)))
-       (CONDITION-BIND-IF ,COND-FORM ((NIL ,HANDLER)) ,BODY-FORM)))))
+  (DECLARE (ARGLIST COND-FORM (VARIABLE) BODY-FORM &BODY CLAUSES))
+  (LET* ((ORDINARY-CLAUSES (SUBSET #'(LAMBDA (CLAUSE) (NEQ (CAR CLAUSE) ':NO-ERROR))
+				   CLAUSES))
+	 (NO-ERROR-CLAUSE (ASSQ ':NO-ERROR CLAUSES))
+	 (PREDICATES
+	   (MAPCAR 'CAR ORDINARY-CLAUSES))
+	 (VAR (OR (CAR VARIABLES) (GENSYM)))
+	 (TAG (GENSYM))
+	 (HANDLER `#'(LAMBDA (,VAR &REST IGNORE)
+		       (IF (OR . ,PREDICATES)
+			   (*THROW ',TAG ,VAR)))))
+    `(CATCH-CONTINUATION-IF T ',TAG
+			    #'(LAMBDA (,VAR)
+				(COND . ,ORDINARY-CLAUSES))
+			    ,(IF NO-ERROR-CLAUSE
+				 `#'(LAMBDA ,VARIABLES . ,(CDR NO-ERROR-CLAUSE)))
+       (CONDITION-BIND-IF ,COND-FORM ((NIL ,HANDLER)) ,BODY-FORM))))
 
 (DEFMACRO CONDITION-BIND-IF (COND-FORM HANDLERS &BODY BODY)
   "Execute BODY, with condition handlers HANDLERS in effect iff COND-FORM evals non-NIL.
@@ -187,8 +183,6 @@ except that the default list is searched after the entire regular list."
 If there is an error, return NIL (or at least not a list.)
 An error message is printed unless PRINTFLAG is specified and evaluates to NIL."
   (LET ((TAG (GENSYM)))
-    ;; Returning TEM is for the sake of ERR only.
-    ;; If ERRSET-HANDLER actually runs, it throws NIL.
     `(CATCH-CONTINUATION ',TAG #'(LAMBDA (TEM) (VALUES TEM T)) NIL
        (CONDITION-BIND ((ERROR 'ERRSET-HANDLER ',TAG ,PRINTFLAG))
 	  (LIST ,BODY)))))
@@ -199,12 +193,12 @@ An error message is printed unless PRINTFLAG is specified and evaluates to NIL."
 	      (DOLIST (H EH:CONDITION-HANDLERS)
 		(WHEN (AND (EQ (CAR H) 'ERROR)
 			   (EQ (CADR H) 'ERRSET-HANDLER))
-		  (THROW (CADDR H) .VALUE.)))
+		  (*THROW (CADDR H) .VALUE.)))
 	      (FERROR "~S" .VALUE.)))
 	  (T '(PROGN (DOLIST (H EH:CONDITION-HANDLERS)
 		       (WHEN (AND (EQ (CAR H) 'ERROR)
 				  (EQ (CADR H) 'ERRSET-HANDLER))
-			 (THROW (CADDR H) NIL)))
+			 (*THROW (CADDR H) NIL)))
 		     (ERROR "")))))
 
 (DEFMACRO IGNORE-ERRORS (&BODY BODY)
@@ -353,9 +347,9 @@ PREDICATE is a function of one arg (a condition object) which decides
 FORMAT-STRING and FORMAT-ARGS are for the debugger to print a description
 of what this resume handler is for, so the user can decide whether to use it.
 FUNCTION is the actual resume handler function.  Its arguments are
- the condition object, the EXTRA-ARGS, and any any other values supplied by caller.
+ the condition object and the EXTRA-ARGS.
 
-CONDITION-RESUME does not do a CATCH.
+CONDITION-RESUME does not do a *CATCH.
 It simply establishes the resume handler and executes the body."
   `(WITH-STACK-LIST* (EH:CONDITION-RESUME-HANDLERS ,HANDLER EH:CONDITION-RESUME-HANDLERS)
      . ,BODY))
