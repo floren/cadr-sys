@@ -717,7 +717,7 @@ It was more recently redefined by patch file ~A, but no other non-patch file.~%"
     (ENTER-FASL-TABLE RAT)))
 
 (DEFUN FASL-OP-COMPLEX ()
-  (LET ((COMP (COMPLEX (FASL-NEXT-VALUE) (FASL-NEXT-VALUE))))
+  (LET ((COMP (%COMPLEX-CONS (FASL-NEXT-VALUE) (FASL-NEXT-VALUE))))
     (ENTER-FASL-TABLE COMP)))
 		
 (DEFUN FASL-OP-LIST (&OPTIONAL AREA COMPONENT-FLAG
@@ -900,8 +900,8 @@ It was more recently redefined by patch file ~A, but no other non-patch file.~%"
 		  (AREF FASL-TABLE FASL-FRAME-AREA)	;Area to allocate in
 		  SIZE))			;Amount to allocate
      (FASL-NEXT-NIBBLE)				;Skip modifier nibble for header Q
-     (LETF (((LOCF (AREF FASL-TABLE FASL-LIST-AREA)) MACRO-COMPILED-PROGRAM)
-	    ((LOCF (AREF FASL-TABLE FASL-ARRAY-AREA)) MACRO-COMPILED-PROGRAM))
+     (LETF (((AREF FASL-TABLE FASL-LIST-AREA) MACRO-COMPILED-PROGRAM)
+	    ((AREF FASL-TABLE FASL-ARRAY-AREA) MACRO-COMPILED-PROGRAM))
        (DO ((I 1 (1+ I)))			;Fill in boxed Qs
 	   (( I Q-COUNT))
 	 ;; OBJ gets the object to be stored.
@@ -910,7 +910,7 @@ It was more recently redefined by patch file ~A, but no other non-patch file.~%"
 		     (FEF-DEBUGGING-INFO-PRESENT-P FEF))
 		;; If this constant is the fef's debugging info alist,
 		;; read it in in a special area.
-		(LETF (((LOCF (AREF FASL-TABLE FASL-LIST-AREA)) DEBUG-INFO-AREA))
+		(LETF (((AREF FASL-TABLE FASL-LIST-AREA) DEBUG-INFO-AREA))
 		  (SETQ OBJ (FASL-NEXT-VALUE)))
 		;; See if any macros that were used in this fef
 		;; have changed their sxhashes since the fef was compiled.
