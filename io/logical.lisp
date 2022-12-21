@@ -1,6 +1,6 @@
 ; -*- Mode:LISP; Package:FILE-SYSTEM; Base:8; Readtable:ZL -*-
 
-;;;; Logical pathnames and hosts
+;;;; Logical pathnames
 
 (DEFUN TRANSLATED-PATHNAME (PATHNAME)
   "Return translated pathname made from PATHNAME.
@@ -20,9 +20,8 @@ Otherwise, ACTUAL-PATHNAME is returned."
  
 (DEFMETHOD (LOGICAL-PATHNAME :STRING-FOR-PRINTING) ()
   (LET* ((DEFAULT-CONS-AREA PATHNAME-AREA)
-	 (DIR (IF (ATOM DIRECTORY)		;lose!
-		  (LIST (STRING-OR-WILD DIRECTORY))
-		  (MAPCAR #'STRING-OR-WILD DIRECTORY)))
+	 (DIR (IF (ATOM DIRECTORY) (LIST (STRING-OR-WILD DIRECTORY))
+		(MAPCAR 'STRING-OR-WILD DIRECTORY)))
 	 (DEV (LOGICAL-DEVICE-STRING))
 	 (NAM (LOGICAL-NAME-STRING))
 	 (TYP (LOGICAL-TYPE-STRING))
@@ -30,7 +29,7 @@ Otherwise, ACTUAL-PATHNAME is returned."
 	(FORMAT NIL "~A: ~@[~A: ~]~:[~{~A; ~}~;~*~]~@[~A~]~@[ ~A~]~@[ ~A~]"
 	    (SEND HOST :NAME-AS-FILE-COMPUTER)
 	    DEV
-	    (SI:MEMBER-EQUAL DIRECTORY '(NIL (:UNSPECIFIC)))
+	    (SYS:MEMBER-EQUAL DIRECTORY '(NIL (:UNSPECIFIC)))
 	    DIR NAM TYP (IF (NUMBERP VER) (FORMAT NIL "~D" VER) VER))))
 
 (DEFMETHOD (LOGICAL-PATHNAME :STRING-FOR-DIRECTORY) ()
@@ -39,7 +38,7 @@ Otherwise, ACTUAL-PATHNAME is returned."
 	(DEV (LOGICAL-DEVICE-STRING)))
     (FORMAT NIL "~@[~A: ~]~:[~{~A;~^ ~}~;~]"
 	    DEV
-	    (SI:MEMBER-EQUAL DIRECTORY '(NIL (:UNSPECIFIC)))
+	    (SYS:MEMBER-EQUAL DIRECTORY '(NIL (:UNSPECIFIC)))
 	    DIR)))
 
 (DEFF LOGICAL-NAME-STRING 'ITS-FN1-STRING)
@@ -63,7 +62,7 @@ Otherwise, ACTUAL-PATHNAME is returned."
 ;;; Contrary to its name, this can also return NIL or numbers as well as strings
 (DEFUN LOGICAL-VERSION-STRING ()
   (DECLARE (:SELF-FLAVOR LOGICAL-PATHNAME))
-  (CASE VERSION
+  (SELECTQ VERSION
     (:UNSPECIFIC "")
     (NIL NIL)
     (:NEWEST ">")
@@ -80,27 +79,27 @@ Otherwise, ACTUAL-PATHNAME is returned."
       ((> J END)
        (SETQ DIR (NREVERSE DIR))
        (VALUES :UNSPECIFIC DIR NAM TYP VERS))
-    (SETQ CH (IF (= J END) #/SPACE (CHAR NAMESTRING J)))
-    (COND ((CHAR= CH #/)
-	   (INCF J))
-	  ((MEMQ CH '(#/; #/: #/ #/ #/SPACE #/TAB #/.))
-	   (COND ((OR ( I J) (CHAR= CH #/) (CHAR= CH #/))
-		  (AND (MEMQ CH '(#/ #/))
+    (SETQ CH (IF (= J END) #/SP (AREF NAMESTRING J)))
+    (COND ((= CH '#/)
+	   (SETQ J (1+ J)))
+	  ((MEMQ CH '(#/; #/: #/ #/ #/SP #/TAB #/.))
+	   (COND ((OR ( I J) (= CH #/) (= CH #/))
+		  (AND (MEM #'= CH '(#/ #/))
 		       (OR ( I J)
 			   (AND ( (1+ J) END)
-				(CHAR (CHAR NAMESTRING (1+ J)) #/SPACE)))
-		       (PATHNAME-ERROR (1+ J) NAMESTRING
-				       "An unquoted ~C must be a component unto itself." CH))
-		  (MULTIPLE-VALUE-SETQ (TEM Q)
-		    (CASE CH
-		      (#/ (VALUES :UNSPECIFIC NIL))
-		      (#/ (VALUES NIL NIL))
+				( (AREF NAMESTRING (1+ J)) #/SP)))
+		       (PATHNAME-ERROR J
+			       "An unquoted ~C must be a component unto itself." CH))
+		  (MULTIPLE-VALUE (TEM Q)
+		    (SELECTQ CH
+		      (#/ (VALUES :UNSPECIFIC NIL))
+		      (#/ (VALUES NIL NIL))
 		      (T (UNQUOTE-LOGICAL-STRING NAMESTRING I J))))
 		  (IF (AND (NOT Q) (STRING= TEM "*"))
-		      (SETQ TEM ':WILD))
-		  (CASE CH
-		    (#/: NIL)			;Ignore "devices"
-		    (#/; (PUSH TEM DIR))
+		      (SETQ TEM :WILD))
+		  (SELECTQ CH
+		    (#/: NIL)			;Ignore "devices"
+		    (#/; (PUSH TEM DIR))
 		    (OTHERWISE
 		     (COND (VERS)
 			   (TYPP (SETQ VERS (COND ((MEMQ TEM '(:UNSPECIFIC :WILD)) TEM)
@@ -108,14 +107,13 @@ Otherwise, ACTUAL-PATHNAME is returned."
 							(COND ((STRING= TEM ">") :NEWEST)
 							      ((STRING= TEM "<") :OLDEST)
 							      ((NUMERIC-P TEM)))))
-						  (T (PATHNAME-ERROR J NAMESTRING
+						  (T (PATHNAME-ERROR J
 						       "Version not numeric")))))
 			   (NAMP (SETQ TYP TEM TYPP T))
 			   (T (SETQ NAM TEM NAMP T)))))))
 	   (SETQ I (1+ J))))))
 
-(DEFMETHOD (LOGICAL-PATHNAME :QUOTE-CHARACTER) ()
-  #/)
+(DEFMETHOD (LOGICAL-PATHNAME :QUOTE-CHARACTER) () #/)
 
 (DEFMETHOD (LOGICAL-PATHNAME :CHARACTER-NEEDS-QUOTING-P) (CH)
   (OR ( #/a CH #/z)
@@ -192,7 +190,6 @@ Otherwise, ACTUAL-PATHNAME is returned."
       SUCCESS)))
 
 (DEFUN LOGICAL-PATHNAME-PASS-ON (&REST REST)
-  (DECLARE (:SELF-FLAVOR LOGICAL-PATHNAME))
   (LEXPR-SEND (SEND SELF :TRANSLATED-PATHNAME) REST))
 
 (DEFMETHOD (LOGICAL-PATHNAME :STRING-FOR-HOST) LOGICAL-PATHNAME-PASS-ON)
@@ -211,7 +208,6 @@ Otherwise, ACTUAL-PATHNAME is returned."
 (DEFMETHOD (LOGICAL-PATHNAME :PARSE-TRUENAME) LOGICAL-PATHNAME-PASS-ON)
 (DEFMETHOD (LOGICAL-PATHNAME :DIRECTORY-LIST) LOGICAL-PATHNAME-PASS-ON)
 (DEFMETHOD (LOGICAL-PATHNAME :DIRECTORY-LIST-STREAM) LOGICAL-PATHNAME-PASS-ON)
-(DEFMETHOD (LOGICAL-PATHNAME :ALL-DIRECTORIES) LOGICAL-PATHNAME-PASS-ON)
 (DEFMETHOD (LOGICAL-PATHNAME :STRING-FOR-DIRED) LOGICAL-PATHNAME-PASS-ON)
 
 (DEFMETHOD (LOGICAL-PATHNAME :MAIL-FILE-FORMAT-COMPUTER) LOGICAL-PATHNAME-PASS-ON)
@@ -222,7 +218,6 @@ Otherwise, ACTUAL-PATHNAME is returned."
 (DEFMETHOD (LOGICAL-PATHNAME :PATCH-FILE-PATHNAME) LOGICAL-PATHNAME-PASS-ON)
 (DEFMETHOD (LOGICAL-PATHNAME :NEW-TYPE-AND-VERSION) LOGICAL-PATHNAME-PASS-ON)
 
-
 (DEFFLAVOR LOGICAL-HOST
 	(NAME					;Logical device name
 	 PHYSICAL-HOST				;Host that turns into
@@ -244,7 +239,7 @@ Otherwise, ACTUAL-PATHNAME is returned."
   :LOGICAL)
 
 ;;; old name
-;(defmethod (logical-host :host) () physical-host)
+(defmethod (logical-host :host) () physical-host)
 
 ;;; These characteristics of a logical host are the same as those of the physical host
 (DEFMETHOD (LOGICAL-HOST :NETWORK-TYPE) LOGICAL-HOST-PASS-ON)
@@ -297,7 +292,7 @@ FROM-PATTERN and TO-PATTERN may be pathnames or namestrings."
 	(delete-duplicates
 	  (append (send logical-host :translations)
 		  (ncons (decode-translation logical-host from-pattern to-pattern)))
-	  :key #'car)))
+	  :key 'car)))
 
 (defun decode-translation (logical-host from-pattern to-pattern)
   (let ((parsed-from-pattern (parse-pathname from-pattern logical-host)))
@@ -380,42 +375,33 @@ TRANSLATIONS is a list of translations to use: each element looks like
 (defun make-logical-pathname-host (host-name &key (warn-about-redefinition t))
   "Defines HOST-NAME to be the name of a logical host.
 If this conflicts the name or nickname of any physical host,
-then and error is signalled, and the new logical host may be allowed to
+then and error os signalled, and the new logical host  may be allowed to
 override that name of the physical host.
 This function loads the file SYS: SITE; host-name TRANSLATIONS, which should contain
 a call to FS:SET-LOGICAL-PATHNAME-HOST to set up the translations for the host."
   (setq host-name (string-upcase (string host-name)))
-  (let ((old (get-pathname-host host-name t))
-	new file-id loaded-id)
+  (let ((host (get-pathname-host host-name t)))
     (catch-error-restart ((fs:remote-network-error fs:file-not-found)
 			  "Give up loading logical pathname translations for ~A" host-name)
-      (when (typep old 'logical-host)
-	(setq loaded-id (send old :get 'make-logical-pathname-host))
-	;; if previously defined by hand, don't load translations and clobber it
-	(cond ((not loaded-id)
-	       (return-from make-logical-pathname-host old))
-	      (warn-about-redefinition
-	       (format *error-output* "~&Warning: The logical host ~A is being redefined"
-		       old))))
+      (if (and (typep host 'logical-host)
+	       warn-about-redefinition)
+	  (format *error-output* "~&Warning: The logical host ~A is being redefined" host))
       ;; no need to give error if redefining physical host, as set-logical-pathname-host errs
-      (let ((pathname (make-pathname :host "SYS"
-				     :device :unspecific
-				     :directory '("SITE")
-				     :name host-name
-				     :canonical-type :logical-pathname-translations
-				     :version :newest)))
-	(setq file-id (with-open-file (stream pathname :direction :probe
+      (let* ((pathname (make-pathname :host "SYS"
+				      :device :unspecific
+				      :directory '("SITE")
+				      :name host-name
+				      :canonical-type :logical-pathname-translations))
+	     (loaded-id (si:get-file-loaded-id pathname nil))
+	     (file-id (with-open-file (stream pathname :direction :probe
 					      	       :if-does-not-exist :error)
-			(send stream :info)))
+			(send stream :info))))
 	(unless (equal loaded-id file-id)
-	  (load pathname :verbose nil :package (symbol-package 'foo)))))
-    (cond ((typep (setq new (get-pathname-host host-name nil)) 'logical-host)
-	   (send new :set :get 'make-logical-pathname-host file-id)
-	   new)
-	  (t (format *error-output*
-		     "~&Warning: The logical host ~S was not defined by ~S."
-		     host-name 'make-logical-pathname-host)
-	     nil))))
+	  (load pathname :verbose nil))))
+    (unless (typep (setq host (fs:get-pathname-host host-name nil)) 'fs:logical-host)
+      (format *error-output*
+	      "~&Warning: The logical host ~S was not defined by MAKE-LOGICAL-PATHNAME-HOST."))
+    host))
 
 ;;;; Errors from untranslatable pathnames.
 
@@ -436,12 +422,21 @@ a call to FS:SET-LOGICAL-PATHNAME-HOST to set up the translations for the host."
 			  :NEW-PATHNAME :NAME :WILD :TYPE :WILD :VERSION :WILD))))
 
 (COMPILE-FLAVOR-METHODS UNKNOWN-LOGICAL-PATHNAME-TRANSLATION)
-
 
 (COMPILE-FLAVOR-METHODS LOGICAL-PATHNAME LOGICAL-HOST)
 
 ;;; This would be an initialization, except that this file is loaded too early.
 ;;; It is called from RESET-NON-SITE-HOSTS, which is an initialization.
-(DEFUN DEFINE-SYS-LOGICAL-DEVICE (&OPTIONAL IGNORE)
-  (MAKE-LOGICAL-PATHNAME-HOST "SYS" :WARN-ABOUT-REDEFINITION NIL))
-
+(DEFUN DEFINE-SYS-LOGICAL-DEVICE (&OPTIONAL (SYS-HOST-NAME (SI:GET-SITE-OPTION :SYS-HOST)))
+  (LET ((SYS-HOST (SET-LOGICAL-PATHNAME-HOST "SYS"
+		     :PHYSICAL-HOST SYS-HOST-NAME
+		     :TRANSLATIONS
+		     (LET ((TRANSL-ALIST (SI:GET-SITE-OPTION :SYS-HOST-TRANSLATION-ALIST)))
+		       ;; Does this particular sys-host have a specified set of translations?
+		       (OR (DOLIST (ELT TRANSL-ALIST)
+			     (IF (EQ (GET-PATHNAME-HOST (CAR ELT) T)
+				     (GET-PATHNAME-HOST SYS-HOST-NAME T))
+				 (RETURN (SYMBOL-VALUE (CDR ELT)))))
+			   ;; This is the default for random hosts.
+			   (SYMEVAL (CDR (ASSQ NIL TRANSL-ALIST))))))))
+    (SEND (SEND SYS-HOST :PHYSICAL-HOST) :SEND-IF-HANDLES :SET-SITE SI:SITE-NAME)))
