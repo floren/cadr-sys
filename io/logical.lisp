@@ -88,7 +88,7 @@ Otherwise, ACTUAL-PATHNAME is returned."
 		       (OR ( I J)
 			   (AND ( (1+ J) END)
 				( (AREF NAMESTRING (1+ J)) #/SP)))
-		       (PATHNAME-ERROR J
+		       (PATHNAME-ERROR J NAMESTRING
 			       "An unquoted ~C must be a component unto itself." CH))
 		  (MULTIPLE-VALUE (TEM Q)
 		    (SELECTQ CH
@@ -107,7 +107,7 @@ Otherwise, ACTUAL-PATHNAME is returned."
 							(COND ((STRING= TEM ">") :NEWEST)
 							      ((STRING= TEM "<") :OLDEST)
 							      ((NUMERIC-P TEM)))))
-						  (T (PATHNAME-ERROR J
+						  (T (PATHNAME-ERROR J NAMESTRING
 						       "Version not numeric")))))
 			   (NAMP (SETQ TYP TEM TYPP T))
 			   (T (SETQ NAM TEM NAMP T)))))))
