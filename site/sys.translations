@@ -1,1 +1,14 @@
 ;;;-*- Mode:LISP; Package:FS; Readtable:CL; Base:10 -*-
+
+;Don't forget that this file has to be read in by the very first
+;LISP-REINITIALIZE.  That is, before the ERROR-TABLE is loaded
+;and before things like LOCAL-FILE are loaded.
+;Be careful.
+
+(fs:set-logical-pathname-host "SYS"
+  :physical-host "MIT-OZ"
+  :translations '(("CHAOS;" "oz://tree//site//")
+		  ("SITE;" "oz://tree//site//")
+		  ("*;*;*;" "oz://tree//*//*//*//")
+		  ("*;*;" "oz://tree//*//*//")
+		  ("*;" "oz://tree//*//")))
