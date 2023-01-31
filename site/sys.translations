@@ -7,8 +7,8 @@
 
 (fs:set-logical-pathname-host "SYS"
   :physical-host "MIT-OZ"
-  :translations '(("CHAOS;" "oz://tree//site//")
-		  ("SITE;" "oz://tree//site//")
-		  ("*;*;*;" "oz://tree//*//*//*//")
-		  ("*;*;" "oz://tree//*//*//")
-		  ("*;" "oz://tree//*//")))
+  :translations '(("CHAOS;" "//tree//site//")
+		  ("SITE;" "//tree//site//")
+		  ("*;*;*;" "//tree//*//*//*//")
+		  ("*;*;" "//tree//*//*//")
+		  ("*;" "//tree//*//")))
