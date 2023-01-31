@@ -161,6 +161,55 @@
   "Return the debugger command function for CHAR, or NIL."
   (aref command-dispatch-table (char-bits char)
 			       (char-code (char-upcase char))))
+
+(defun describe-proceed-types (sg error-object)
+  "Print documentation of the available proceed-types and characters to get them.
+ERROR-OBJECT is the object to document.  Output goes to *STANDARD-OUTPUT*."
+  (when error-handler-running
+    (let* ((proceed-types  (send error-object ':user-proceed-types
+				 (sg-condition-proceed-types sg error-object)))
+	   (resume-handlers (symeval-in-stack-group 'condition-resume-handlers sg))
+	   (abort-handler (find-resume-handler abort-object nil resume-handlers)))
+      (do ((keywords (append proceed-types special-commands)
+		     (cdr keywords))
+	   (proceed-types proceed-types
+			  (cdr proceed-types))
+	   tem
+	   this-one-for-abort
+	   (i 0 (1+ i)))
+	  ((null keywords))
+	(if (zerop i)
+	    (format t "~&~%Commands available for this particular error:~2%"))
+	(format t "~C" (+ #/S-A i))
+	(when proceed-types
+	  (setq this-one-for-abort
+		(eq (find-resume-handler error-object (car keywords) resume-handlers)
+		    abort-handler))
+	  (if this-one-for-abort (setq abort-handler nil)))
+	(cond ((and (zerop i) (atom (car proceed-types)))
+	       ;; Resume only works for proceed-types that are atomic.
+	       (format t ", ~C" #/Resume))
+	      ((setq tem (assq (car keywords)
+			       (if proceed-types *proceed-type-special-keys*
+				 *special-command-special-keys*)))
+	       (format t ", ~C" (cdr tem)))
+	      ;; If Abort is synonymous with this one, mention that.
+	      (this-one-for-abort
+	       (format t ", ~C" #/Abort)))
+	(format t ":~13T")
+	(send error-object
+	      (if proceed-types
+		  ':document-proceed-type
+		':document-special-command)
+	      (car keywords) *standard-output* resume-handlers)
+	(send *standard-output* ':fresh-line))
+      (when abort-handler
+	;; Abort is not currently synonymous with any of the proceed types.
+	;; So document it specially.
+	(format t "~C:~13T" #/Abort)
+	(send abort-object ':document-proceed-type (second abort-handler)
+	      *standard-output* resume-handlers)
+	(send *standard-output* ':fresh-line)))))
 
 ;;;; Utility functions used by the top level, and various commands.
 
