@@ -537,6 +537,53 @@ new pathname and retry the open."
 			(OPEN ,FILENAME . ,OPTIONS)))
      . ,BODY))
 
+(DEFUN READING-FROM-STREAM-EXPANDER (FORM STREAM STREAM-CONSTRUCTION-FORM BODY)
+  (LET ((^EOF (GENSYM)) (^AVARS (GENSYM)) (^AVALS (GENSYM)))
+    `(WITH-OPEN-STREAM (,STREAM ,STREAM-CONSTRUCTION-FORM)
+       (MULTIPLE-VALUE-BIND (,^AVARS ,^AVALS)
+	   (FS:EXTRACT-ATTRIBUTE-BINDINGS ,STREAM)
+	 (LET ((,^EOF (NCONS (GENSYM))))
+	   (PROGV ,^AVARS ,^AVALS
+	     (DO ((,FORM (READ ,STREAM ,^EOF) (READ ,STREAM ,^EOF)))
+		 ((EQ ,FORM ,^EOF))
+	       ,@BODY)))))))
+
+(DEFMACRO FS:READING-FROM-STREAM ((FORM STREAM-CONSTRUCTION-FORM) &BODY BODY)
+  "Read one FORM at a file from FILE, reading till executing BODY each time.
+Reads until end of STREAM."
+  (READING-FROM-STREAM-EXPANDER FORM (GENSYM) STREAM-CONSTRUCTION-FORM BODY))
+
+(DEFMACRO FS:READING-FROM-FILE ((FORM FILE) &BODY BODY)
+  "Read one FORM at a time from FILE, executing BODY each time."
+  `(READING-FROM-STREAM (,FORM (OPEN ,FILE ':DIRECTION ':INPUT ':ERROR ':REPROMPT))
+     ,@BODY))
+
+(DEFMACRO FS:READING-FROM-FILE-CASE ((FORM FILE ERROR) &BODY CLAUSES)
+  "Like READING-FROM-FILE, but ERROR is bound to the error instance if
+an error happens.  CLAUSES are are like those in WITH-OPEN-FILE-CASE;
+:NO-ERROR must appear in one of them."
+  ;; The implementation has to search for the clause containing :NO-ERROR
+  ;; and wrap a READING-FROM-STREAM around its consequent body.
+  ;; ERROR actually is the STREAM in the WITH-OPEN-FILE-CASE, though this
+  ;; may change in the future.
+  (LET ((NO-ERROR-CLAUSE ()) (FIRST-PART ()))
+    (DOLIST (CLAUSE CLAUSES)
+      (SETQ FIRST-PART (FIRST CLAUSE))
+      (COND ((NULL FIRST-PART) ; Is this really the right thing ?
+	     ())
+	    ((EQ FIRST-PART ':NO-ERROR)
+	     (RETURN (SETQ NO-ERROR-CLAUSE CLAUSE)))
+	    ((AND (LISTP FIRST-PART) (MEMQ ':NO-ERROR FIRST-PART))
+	     (RETURN (SETQ NO-ERROR-CLAUSE CLAUSE)))
+	    (T ())))
+    (IF (NOT NO-ERROR-CLAUSE) ; A little misleading, I must admit
+	(FERROR () "No :NO-ERROR to be found in clauses.")
+      (SETQ CLAUSES (DELQ NO-ERROR-CLAUSE (COPYLIST CLAUSES))) ; Remove :NO-ERROR, 
+      `(CONDITION-CASE (,ERROR) (OPEN ,FILE ':DIRECTION ':INPUT ':ERROR ())
+	 ,@CLAUSES
+	 (,FIRST-PART
+	  ,(READING-FROM-STREAM-EXPANDER FORM (GENSYM) ERROR (CDR NO-ERROR-CLAUSE)))))))
+
 (DEFMACRO SELECTQ (TEST-OBJECT &BODY CLAUSES)
   "Execute the first clause that matches TEST-OBJECT.
 The first element of each clause is a match value or a list of match values.
