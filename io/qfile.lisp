@@ -366,7 +366,7 @@ If it does, returns the index of the first character in STRING after the handle.
   (LET ((HANDLE-END (STRING-SEARCH-SET '(#/SPACE #/NEWLINE) STRING)))
     (AND (NULL HANDLE-END)
 	 (FERROR NIL "Response over control connection was incorrectly formatted"))
-    (OR (STRING-EQUAL STRING HANDLE :END2 HANDLE-END)
+    (OR (STRING-EQUAL STRING HANDLE :END1 HANDLE-END)
 	(FERROR NIL "Response over control connection was for wrong file handle"))
     (1+ HANDLE-END)))
 
