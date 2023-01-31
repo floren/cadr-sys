@@ -1987,9 +1987,9 @@ VERBOSE non-NIL says it's ok to print a message saying what is being loaded.
  Default comes from *LOAD-VERBOSE*, normally T.
 SET-DEFAULT-PATHNAME non-NIL says set the default pathname for LOAD
  to the name of this file.  Default from *LOAD-SET-DEFAULT-PATHNAME*, normally T.
-PRINT non-NIL says print all forms loaded."
+PRINT non-NIL says print all forms loaded.
 IF-DOES-NOT-EXIST NIL says just return NIL for file-not-found.  Default T.
- In all other cases the value is the truename of the loaded file, or T.
+ In all other cases the value is the truename of the loaded file, or T."
   (DECLARE (ARGLIST FILE &KEY PACKAGE
 		    	      (VERBOSE *LOAD-VERBOSE*)
 			      (SET-DEFAULT-PATHNAME *LOAD-SET-DEFAULT-PATHNAME*)
