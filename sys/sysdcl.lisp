@@ -209,7 +209,7 @@
 		 "SYS: SYS; QCFILE"	;at 324, latest 324	- OK
 		 "SYS: SYS; QCP1"	;at 563+, latest 573	- WIP
 		 "SYS: SYS; QCP2"	;at 261+, latest 261	- OK
-		 "SYS: SYS; QCOPT"	;at 137+, latest 137	- OK! (137+)
+		 "SYS: SYS; QCOPT"	;at 137+, latest 137	- OK
 		 "SYS: SYS; QCLUKE"	;at 26, latest 26	- OK
 		 "SYS: SYS; QCPEEP"	;at 36, latest 36	- OK
 		 "SYS: SYS; QCLAP"))	;at 244, latest 244	- OK
@@ -338,9 +338,9 @@
   (:NICKNAMES "FS")
   (:PATHNAME-DEFAULT "SYS: IO;")
   (:MODULE BASIC-PATHNAMES ("ACCESS"	       ;at 13, latest 13	- OK	[MINI]
-			    "PATHNM"))	       ;at 538, latest 538	- OK! (538+)	[MINI]
-  (:MODULE HOST-PATHNAMES ("PATHST"	       ;at 181, latest 181	- OK! (181+)	[MINI]
-			   "LOGICAL"	       ;at -1, latest 1		- WIP	[NEW]
+			    "PATHNM"))	       ;at 538+, latest 538	- OK	[MINI]
+  (:MODULE HOST-PATHNAMES ("PATHST"	       ;at 181+, latest 181	- OK	[MINI]
+			   "LOGICAL"	       ;at 1, latest 1		- OK	[NEW][MINI]
 			   "SYS:FILE2;PATHNM"  ;at 163, latest 163	- OK	[MINI]
 			   "SYS:FILE;LMPARS")) ;at 113, latest 113	- OK	[MINI]
   (:MODULE FILE-IO ("OPEN"		       ;at 180+, latest 180	- OK	[MINI]
