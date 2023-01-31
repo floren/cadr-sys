@@ -358,9 +358,10 @@ This list describes how to bind the arguments and how to initialize them."
 	       (ART-FLOAT . 0f0)
 	       (ART-FPS-FLOAT . 0f0)
 	       (ART-FAT-STRING . #/ )
-	       (ART-COMPLEX-FLOAT . 0f0+0f0i)
+;;;---!!!	       (ART-COMPLEX-FLOAT . 0f0+0f0i)
 	       (ART-COMPLEX . 0)
-	       (ART-COMPLEX-FPS-FLOAT 0f0+0f0i)))))
+;;;---!!!	       (ART-COMPLEX-FPS-FLOAT 0f0+0f0i)
+	       ))))
 
 (DEFUN ARRAY-ELEMENT-TYPE (ARRAY)
   "Return a Common Lisp data type describing the objects that could be stored in ARRAY."
@@ -2382,7 +2383,7 @@ following any number of levels of forwarding."
 		      'ZWEI:*INITIAL-LISP-INDENT-OFFSET-ALIST*)))
     (LET ((X (ASSQ NAME (SYMBOL-VALUE VARIABLE))))
       (IF (NULL X)
-	  (PUSH (LIST NAME NUMBER 1) (SYMBOL-FUNCTION VARIABLE))
+	  (PUSH (LIST NAME NUMBER 1) (SYMBOL-VALUE VARIABLE))
 	(SETF (CDR X) (LIST NUMBER 1))))))
 
 (DEFUN DEFMACRO-COPY-INDENTATION-FOR-ZWEI (NAME NAME1)
