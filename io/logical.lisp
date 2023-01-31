@@ -244,7 +244,7 @@ Otherwise, ACTUAL-PATHNAME is returned."
   :LOGICAL)
 
 ;;; old name
-;(defmethod (logical-host :host) () physical-host)
+(defmethod (logical-host :host) () physical-host)
 
 ;;; These characteristics of a logical host are the same as those of the physical host
 (DEFMETHOD (LOGICAL-HOST :NETWORK-TYPE) LOGICAL-HOST-PASS-ON)
