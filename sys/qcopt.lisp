@@ -972,7 +972,13 @@ of a list satisfies the test. Eg (EQ . MEMQ)")
 		    (go loop)))
 	     (return (progn . ,body))))))
 
-(defoptimizer let-if-expand let-if (cond let) (form)
+(defun pbind (vars-and-vals loc)
+  (when vars-and-vals
+    `(%bind (,loc ,(caar vars-and-vals))
+	   (prog1 ,(cadar vars-and-vals)
+		  ,(pbind (cdr vars-and-vals) loc)))))
+
+(defrewrite let-if-expand let-if (form)
   (destructuring-bind (ignore cond vars-and-vals &body body) form
     (cond ((null cond) `(let () . ,body))		;Macros generate this
 	  ((eq cond t) `(let ,vars-and-vals . ,body))	;and this
@@ -981,14 +987,19 @@ of a list satisfies the test. Eg (EQ . MEMQ)")
 		 (extract-declarations body local-declarations nil)
 	       `(let ()
 		  (declare . ,decls)
-		  (cond (,cond ,(pbind vars-and-vals)))
+		  (cond (,cond ,(pbind vars-and-vals 'variable-location)))
 		  . ,body))))))
 
-(defun pbind (vars-and-vals)
-  (when vars-and-vals
-    `(%bind (variable-location ,(caar vars-and-vals))
-	   (prog1 ,(cadar vars-and-vals)
-		  ,(pbind (cdr vars-and-vals))))))
+(defrewrite letf-expand letf (form)
+  `(let ()
+     ,(pbind (cadr form) 'locf)
+     . ,(cddr form)))
+
+(defrewrite letf*-expand letf* (form)
+  `(let ()
+     ,@(loop for (place value) in (cadr form)
+	     collect `(%bind (locf ,place) ,value))
+     . ,(cddr form)))
 
 ;;; Turn (CONS foo NIL) into (NCONS foo), saving one instruction.
 (defoptimizer cons-ncons cons (ncons) (form)
