@@ -185,23 +185,22 @@ This includes various header and forwarding data types
 which point to storage."
   (%POINTER-TYPE-P (%P-LDB-OFFSET %%Q-DATA-TYPE POINTER OFFSET)))
 
-(DEFSUBST %P-CONTENTS-SAFE-P (POINTER)
-  "T if the word POINTER points to contains data safe to read out.
-It will be NIL if the word contains a forwarding pointer or a header."
-  (MEMQ (%P-DATA-TYPE POINTER)
+(DEFSUBST %DATA-TYPE-SAFE-P (DATA-TYPE)
+  (MEMQ DATA-TYPE
 	'(#.DTP-SYMBOL #.DTP-FIX #.DTP-EXTENDED-NUMBER #.DTP-LOCATIVE #.DTP-LIST
 	  #.DTP-U-ENTRY #.DTP-FEF-POINTER #.DTP-ARRAY-POINTER
 	  #.DTP-STACK-GROUP #.DTP-CLOSURE #.DTP-SMALL-FLONUM #.DTP-SELECT-METHOD
 	  #.DTP-INSTANCE #.DTP-ENTITY #.DTP-STACK-CLOSURE #.DTP-CHARACTER)))
 
+(DEFSUBST %P-CONTENTS-SAFE-P (POINTER)
+  "T if the word POINTER points to contains data safe to read out.
+It will be NIL if the word contains a forwarding pointer or a header."
+  (%DATA-TYPE-SAFE-P (%P-DATA-TYPE POINTER)))
+
 (DEFSUBST %P-CONTENTS-SAFE-P-OFFSET (POINTER OFFSET)
   "T if the word POINTER+OFFSET points to contains data safe to read out.
 It will be NIL if the word contains a forwarding pointer or a header."
-  (MEMQ (%P-LDB-OFFSET %%Q-DATA-TYPE POINTER OFFSET)
-	'(#.DTP-SYMBOL #.DTP-FIX #.DTP-EXTENDED-NUMBER #.DTP-LOCATIVE #.DTP-LIST
-	  #.DTP-U-ENTRY #.DTP-FEF-POINTER #.DTP-ARRAY-POINTER
-	  #.DTP-STACK-GROUP #.DTP-CLOSURE #.DTP-SMALL-FLONUM #.DTP-SELECT-METHOD
-	  #.DTP-INSTANCE #.DTP-ENTITY #.DTP-STACK-CLOSURE #.DTP-CHARACTER)))
+  (%DATA-TYPE-SAFE-P (%P-LDB-OFFSET %%Q-DATA-TYPE POINTER OFFSET)))
 
 (DEFUN %P-SAFE-CONTENTS-OFFSET (POINTER OFFSET)
   "Extract the contents of a word (which contains typed data) in a way that is always safe.
@@ -254,7 +253,7 @@ change even if it is printed out and read into a different system version."
 	   (SETQ Y (CAR X) X (CDR X))
 	   (OR (< (SETQ ROT (+ ROT 7)) 24.) (SETQ ROT (- ROT 24.)))
 	   (SETQ HASH (LOGXOR (ROT-24-BIT
-				(COND ((SYMBOLP Y) (%SXHASH-STRING (GET-PNAME Y) #o337))
+				(COND ((SYMBOLP Y) (%SXHASH-STRING (SYMBOL-NAME Y) #o337))
 				      ((STRINGP Y) (%SXHASH-STRING Y #o337))
 				      ((OR (INTEGERP X) (CHARACTERP X))
 				       (LDB 24. Y))
@@ -339,6 +338,29 @@ This list describes how to bind the arguments and how to initialize them."
 	     (SETQ TYPE (LDB %%ARRAY-TYPE-FIELD TYPE)))
 	 (NTH TYPE ARRAY-TYPES))
 	(T (ARRAY-TYPE-FROM-ELEMENT-TYPE TYPE))))
+
+(DEFUN ARRAY-TYPE-NULL-ELEMENT (TYPE)
+  (CDR (ASSQ (ARRAY-CANONICALIZE-TYPE TYPE)
+	     '((ART-ERROR . NIL)
+	       (ART-1B . 0)
+	       (ART-2B . 0)
+	       (ART-4B . 0)
+	       (ART-8B . 0)
+	       (ART-16B . 0)
+	       (ART-32B . 0)
+	       (ART-Q . NIL)
+	       (ART-Q-LIST . NIL)
+	       (ART-STRING . #/ )
+	       (ART-STACK-GROUP-HEAD . NIL)
+	       (ART-SPECIAL-PDL . NIL)
+	       (ART-HALF-FIX . 0)
+	       (ART-REG-PDL . NIL)
+	       (ART-FLOAT . 0f0)
+	       (ART-FPS-FLOAT . 0f0)
+	       (ART-FAT-STRING . #/ )
+	       (ART-COMPLEX-FLOAT . 0f0+0f0i)
+	       (ART-COMPLEX . 0)
+	       (ART-COMPLEX-FPS-FLOAT 0f0+0f0i)))))
 
 (DEFUN ARRAY-ELEMENT-TYPE (ARRAY)
   "Return a Common Lisp data type describing the objects that could be stored in ARRAY."
@@ -488,7 +510,7 @@ The keywords are as follows:
     (IF (AND (> INDEX-LENGTH %ARRAY-MAX-SHORT-INDEX-LENGTH)
 	     (NOT DISPLACED-TO))
 	(SETQ LONG-ARRAY-P T))
-    (OR (= (%DATA-TYPE INDEX-LENGTH) DTP-FIX)
+    (OR (FIXNUMP INDEX-LENGTH)
 	(FERROR NIL "Attempt to make array too large; total length ~S" INDEX-LENGTH))
     ;; Process the LEADER and NAMED-STRUCTURE-SYMBOL arguments.
     (CHECK-TYPE LEADER-LIST LIST)
@@ -498,9 +520,9 @@ The keywords are as follows:
 	(FERROR NIL "Length of leader initialization list is greater than leader length"))
     (COND (NAMED-STRUCTURE-SYMBOL
 	   (IF LEADER-LENGTH
-	       (CHECK-TYPE LEADER-LENGTH (INTEGER 1))
+	       (SETQ LEADER-LENGTH (MAX LEADER-LENGTH 2))
 	     (UNLESS (= N-DIMENSIONS 1)
-	       (FERROR NIL "A named-structure array may not be ~S-dimensional"
+	       (FERROR NIL "A named-structure array may not be ~D-dimensional"
 		       N-DIMENSIONS))))
 	  (LEADER-LENGTH
 	   (CHECK-TYPE LEADER-LENGTH (INTEGER 0))))
@@ -517,8 +539,8 @@ The keywords are as follows:
 	;; or an already shifted over quantity (such as ART-Q, etc).
 	(IF (NOT (ZEROP (LDB %%ARRAY-TYPE-FIELD TYPE)))
 	    (SETQ TYPE (LDB %%ARRAY-TYPE-FIELD TYPE)))
-      (IF (FIXNUMP (SYMEVAL TYPE))
-	  (SETQ TYPE (LDB %%ARRAY-TYPE-FIELD (SYMEVAL TYPE)))
+      (IF (FIXNUMP (SYMBOL-VALUE TYPE))
+	  (SETQ TYPE (LDB %%ARRAY-TYPE-FIELD (SYMBOL-VALUE TYPE)))
 	(SETQ TYPE (FIND-POSITION-IN-LIST TYPE ARRAY-TYPE-KEYWORDS))))
     (SETQ ENTRIES-PER-Q (ARRAY-ELEMENTS-PER-Q TYPE))
     ;; This is positive if there are 1 or more entries per Q.  It is
@@ -787,9 +809,9 @@ FILL-POINTER, if specified, sets the fill pointer of ARRAY."
 		(IF (NOT (ZEROP (LDB %%ARRAY-TYPE-FIELD TYPE)))
 		    (SETQ TYPE (LDB %%ARRAY-TYPE-FIELD TYPE))))
 	       ((SYMBOLP TYPE)
-		(ETYPECASE (SYMEVAL TYPE)
+		(ETYPECASE (SYMBOL-VALUE TYPE)
 		  (FIXNUM
-		   (SETQ TYPE (LDB %%ARRAY-TYPE-FIELD (SYMEVAL TYPE))))
+		   (SETQ TYPE (LDB %%ARRAY-TYPE-FIELD (SYMBOL-VALUE TYPE))))
 		  (SYMBOL
 		   (SETQ TYPE (FIND-POSITION-IN-LIST TYPE ARRAY-TYPE-KEYWORDS)))))
 	       (T
@@ -797,7 +819,7 @@ FILL-POINTER, if specified, sets the fill pointer of ARRAY."
 		(IF (FIXNUMP TYPE)
 		    (IF (NOT (ZEROP (LDB %%ARRAY-TYPE-FIELD TYPE)))
 			(SETQ TYPE (LDB %%ARRAY-TYPE-FIELD TYPE)))
-		  (SETQ TYPE (LDB %%ARRAY-TYPE-FIELD (SYMEVAL TYPE))))))
+		  (SETQ TYPE (LDB %%ARRAY-TYPE-FIELD (SYMBOL-VALUE TYPE))))))
 	 (LET ((ENTRIES-PER-Q (ARRAY-ELEMENTS-PER-Q TYPE)))
 	   ;; This is positive if there are 1 or more entries per Q.  It is
 	   ;; negative if there are more than one Qs per entry.
@@ -929,6 +951,7 @@ If END is NIL or not specified, the active length of ARRAY is used."
   "Return the offset in Qs of the first array element from the array header.
 Not meaningful for displaced arrays."
   (+ (ARRAY-RANK ARRAY) (%P-LDB %%ARRAY-LONG-LENGTH-FLAG ARRAY)))
+
 
 (DEFUN MAKE-SYMBOL (PNAME &OPTIONAL PERMANENT-P)
   "Create a symbol with name PNAME.
@@ -956,7 +979,7 @@ PERMANENT-P forces areas to those normally used for symbols."
 ;;; This number is used only at the beginning of cold-load time,
 ;;; because the value is set up by the cold-load builder
 ;;; and is available from the very beginning.
-(DEFCONST KEYWORD-GARBAGE 643643)
+(DEFPARAMETER KEYWORD-GARBAGE #o643643)
 
 (ADD-INITIALIZATION "Keyword-garbage" '(SETQ KEYWORD-GARBAGE (LIST NIL)) '(ONCE))
 
@@ -1140,7 +1163,7 @@ PERMANENT-P forces areas to those normally used for symbols."
 (DEFUN DELQ (ITEM LIST &OPTIONAL (/#TIMES -1))
   "Destructively remove some or all occurrences of ITEM from LIST.
 If #TIMES is specified, it is a number saying how many occurrences to remove.
-You must do (SETQ FOO (DELQ X FOO)) to make sure FOO changes,
+vYou must do (SETQ FOO (DELQ X FOO)) to make sure FOO changes,
 in case the first element of FOO is X."
   (PROG (LL PL)
      A  (COND ((OR (= 0 /#TIMES) (ATOM LIST))
@@ -1780,7 +1803,7 @@ was read from, and we make a note of that fact when possible."
   "Returns the function definition of a function spec"
   ;; First, validate the function spec.
   (SETQ FUNCTION-SPEC (DWIMIFY-ARG-PACKAGE FUNCTION-SPEC 'FUNCTION-SPEC))
-  (COND ((SYMBOLP FUNCTION-SPEC) (FSYMEVAL FUNCTION-SPEC))
+  (COND ((SYMBOLP FUNCTION-SPEC) (SYMBOL-FUNCTION FUNCTION-SPEC))
 	((AND (CONSP FUNCTION-SPEC)
 	      (SETQ HANDLER (GET (CAR FUNCTION-SPEC) 'FUNCTION-SPEC-HANDLER)))
 	 (FUNCALL HANDLER 'FDEFINITION FUNCTION-SPEC))
@@ -1793,7 +1816,7 @@ The first value is T or NIL, the second is the definition if the first is T."
   ;; First, validate the function spec.
   (COND ((SYMBOLP FUNCTION-SPEC)
 	 (IF (FBOUNDP FUNCTION-SPEC)
-	     (VALUES T (FSYMEVAL FUNCTION-SPEC))))
+	     (VALUES T (SYMBOL-FUNCTION FUNCTION-SPEC))))
 	((AND (CONSP FUNCTION-SPEC)
 	      (SETQ HANDLER (GET (CAR FUNCTION-SPEC) 'FUNCTION-SPEC-HANDLER)))
 	 (MULTIPLE-VALUE-BIND (DEFINEDP DEFN)
@@ -1813,8 +1836,7 @@ continue with some other function spec.
 DEFINITION-TYPE is a symbol which has properties that say what /"defined/" means.
 Two possibilities are FDEFINEDP meaning /"is defined as a function/"
 and BOUNDP meaning /"is a symbol with a value/"."
-  (DO (TEM
-	(DEF-DECODER (GET DEFINITION-TYPE 'DWIMIFY)))
+  (DO (TEM (DEF-DECODER (GET DEFINITION-TYPE 'DWIMIFY)))
       (())
     (COND ((AND (FUNCALL (FIRST DEF-DECODER) FUNCTION-SPEC)
 		(FUNCALL (SECOND DEF-DECODER) FUNCTION-SPEC))
@@ -1878,7 +1900,7 @@ of the function that called this one."
 	((SYMBOLP FUNCTION-SPEC)
 	 ;; If it's a symbol, try symbols in other packages.
 	 (*CATCH 'DWIMIFY-PACKAGE
-	   (MAP-OVER-LOOKALIKE-SYMBOLS (GET-PNAME FUNCTION-SPEC) NIL
+	   (MAP-OVER-LOOKALIKE-SYMBOLS (SYMBOL-NAME FUNCTION-SPEC) NIL
 				       'DWIMIFY-PACKAGE-2
 				       ORIGINAL-SPEC DWIMIFY-INFO)
 	   NIL))
@@ -1917,7 +1939,7 @@ of the function that called this one."
 	 ;; Try replacing the second element with symbols in other packages.
 	 (*CATCH 'DWIMIFY-PACKAGE
 	   (MAP-OVER-LOOKALIKE-SYMBOLS
-	     (GET-PNAME (CADR FUNCTION-SPEC))
+	     (SYMBOL-NAME (CADR FUNCTION-SPEC))
 	     NIL
 	     #'(LAMBDA (NEW-SYMBOL SPEC ORIGINAL-SPEC DWIMIFY-INFO)
 		 (OR (EQ NEW-SYMBOL (CADR SPEC))
@@ -2021,10 +2043,13 @@ N to do nothing special and enter the normal error handler.
     (COMPILER-FDEFINEDP NIL)		;Default is no remembering of compiled definitions
     (DWIMIFY NIL)
     (GET (IF FUNCTION-SPEC-HASH-TABLE
-	     (FUNCTION-SPEC-GET-1 FUNCTION-SPEC ARG1)	;Default is to use plist hash table
+	     ;; Default is to use plist hash table
+	     (WITH-STACK-LIST (KEY FUNCTION-SPEC ARG1)
+	       (GETHASH KEY FUNCTION-SPEC-HASH-TABLE ARG2))
 	   (LOOP FOR (FS IND PROP) IN COLD-LOAD-FUNCTION-PROPERTY-LISTS
 		 WHEN (AND (EQUAL FS FUNCTION-SPEC) (EQ IND ARG1))
-		 RETURN PROP)))
+		 RETURN PROP))
+	 ARG2)
     (PUTPROP (LET ((DEFAULT-CONS-AREA BACKGROUND-CONS-AREA)
 		   (AREA (%AREA-NUMBER FUNCTION-SPEC)))
 	       (IF (OR (AREA-TEMPORARY-P AREA)
@@ -2034,7 +2059,8 @@ N to do nothing special and enter the normal error handler.
 		   (SETF (GETHASH (LIST FUNCTION-SPEC ARG2) FUNCTION-SPEC-HASH-TABLE) ARG1)
 		 (PUSH (LIST FUNCTION-SPEC ARG2 ARG1) COLD-LOAD-FUNCTION-PROPERTY-LISTS))))
     (PUSH-PROPERTY
-     (FUNCTION-SPEC-PUSH-PROPERTY-1 ARG1 FUNCTION-SPEC ARG2))
+     (WITH-STACK-LIST (KEY FUNCTION-SPEC ARG2)
+       (PUSH ARG1 (GETHASH KEY FUNCTION-SPEC-HASH-TABLE))))
     (OTHERWISE (FERROR NIL "~S is not implemented by the function spec ~S"
 		           FUNCTION FUNCTION-SPEC))))
 
@@ -2058,7 +2084,7 @@ N to do nothing special and enter the normal error handler.
 	      (MULTIPLE-VALUE-BIND (NEW-SYM DWIM-P)
 		  (*CATCH 'DWIMIFY-PACKAGE
 		    (MAP-OVER-LOOKALIKE-SYMBOLS
-		      (GET-PNAME INDICATOR)
+		      (SYMBOL-NAME INDICATOR)
 		      NIL
 		      #'(LAMBDA (NEW-SYMBOL SPEC ORIGINAL-SPEC DWIMIFY-INFO)
 			  (OR (EQ NEW-SYMBOL (CADDR SPEC))
@@ -2080,7 +2106,7 @@ N to do nothing special and enter the normal error handler.
   (LET ((PARENT (SECOND FUNCTION-SPEC))
 	(INDEX (THIRD FUNCTION-SPEC))
 	DIRECT-FEF)
-    (SETQ DIRECT-FEF (= (%DATA-TYPE PARENT) DTP-FEF-POINTER))
+    (SETQ DIRECT-FEF (TYPEP PARENT 'COMPILED-FUNCTION))
     (IF (NOT (AND (OR (AND (FIXNUMP INDEX) (NOT (MINUSP INDEX)))
 		      (SYMBOLP INDEX))
 		  (= (LENGTH FUNCTION-SPEC) 3)))
@@ -2095,7 +2121,7 @@ N to do nothing special and enter the normal error handler.
 	      TABLE OFFSET LOCAL-FUNCTION-MAP DEBUGGING-INFO)
 	  (WHEN (EQ (CAR-SAFE FEF) 'MACRO)
 	    (SETQ FEF (CDR FEF)))
-	  (UNLESS (= (%DATA-TYPE FEF) DTP-FEF-POINTER)
+	  (UNLESS (TYPEP FEF 'COMPILED-FUNCTION)
 	    (FERROR 'SYS:INVALID-FUNCTION-SPEC
 		    "The function spec ~S refers to ~S, which is not a FEF"
 		    FUNCTION-SPEC FEF))
@@ -2175,11 +2201,11 @@ Like (PUSH VALUE (FUNCTION-SPEC-GET FUNCTION-SPEC PROPERTY)) but faster."
 	(FERROR 'SYS:INVALID-FUNCTION-SPEC "The function spec ~S is invalid."
 		FUNCTION-SPEC)))))
 
-(DEFUN FUNCTION-SPEC-GET (FUNCTION-SPEC PROPERTY)
+(DEFUN FUNCTION-SPEC-GET (FUNCTION-SPEC PROPERTY &OPTIONAL DEFAULT)
   "Get the PROPERTY property of FUNCTION-SPEC.
 For symbols, this is just GET, but it works on any function spec."
   (IF (SYMBOLP FUNCTION-SPEC)
-      (GET FUNCTION-SPEC PROPERTY)
+      (GET FUNCTION-SPEC PROPERTY DEFAULT)
     ;; Look for a handler for this type of function spec.
     (LET ((HFUN
 	    (IF (NULL FUNCTION-SPEC-HASH-TABLE)
@@ -2195,20 +2221,11 @@ For symbols, this is just GET, but it works on any function spec."
 	  (AND (FUNCALL HFUN 'VALIDATE-FUNCTION-SPEC FUNCTION-SPEC)
 	       ;;previous line avoids lossage when compiling defselects which aren't present
 	       ;; in run time environment (yet), for example.		
-	       (FUNCALL HFUN 'GET FUNCTION-SPEC PROPERTY))
+	       (FUNCALL HFUN 'GET FUNCTION-SPEC PROPERTY DEFAULT))
 	(FERROR 'SYS:INVALID-FUNCTION-SPEC "The function spec ~S is invalid."
 		FUNCTION-SPEC)))))
 
-;;; This function exists only for the sake of an &rest argument to avoid consing
-(DEFUN FUNCTION-SPEC-GET-1 (&REST KEY)
-  (DECLARE (ARGLIST FUNCTION-SPEC INDICATOR))
-  (GETHASH KEY FUNCTION-SPEC-HASH-TABLE))
-
-(DEFUN FUNCTION-SPEC-PUSH-PROPERTY-1 (VALUE &REST KEY)
-  (DECLARE (ARGLIST VALUE FUNCTION-SPEC INDICATOR))
-  (PUTHASH KEY (CONS VALUE (GETHASH KEY FUNCTION-SPEC-HASH-TABLE))
-	   FUNCTION-SPEC-HASH-TABLE))
-
+
 (SETQ FS:THIS-IS-A-PATCH-FILE NIL)	;For the cold load
 
 (DEFVAR FDEFINE-FILE-PATHNAME NIL
@@ -2362,21 +2379,21 @@ following any number of levels of forwarding."
 (DEFUN DEFMACRO-SET-INDENTATION-FOR-ZWEI (NAME NUMBER)
   (LET ((VARIABLE (IF (BOUNDP 'ZWEI:*LISP-INDENT-OFFSET-ALIST*)
 		      'ZWEI:*LISP-INDENT-OFFSET-ALIST*
-		    'ZWEI:*INITIAL-LISP-INDENT-OFFSET-ALIST*)))
-    (LET ((X (ASSQ NAME (SYMEVAL VARIABLE))))
+		      'ZWEI:*INITIAL-LISP-INDENT-OFFSET-ALIST*)))
+    (LET ((X (ASSQ NAME (SYMBOL-VALUE VARIABLE))))
       (IF (NULL X)
-	  (PUSH (LIST NAME NUMBER 1) (SYMEVAL VARIABLE))
+	  (PUSH (LIST NAME NUMBER 1) (SYMBOL-FUNCTION VARIABLE))
 	(SETF (CDR X) (LIST NUMBER 1))))))
 
 (DEFUN DEFMACRO-COPY-INDENTATION-FOR-ZWEI (NAME NAME1)
   (LET ((VARIABLE (IF (BOUNDP 'ZWEI:*LISP-INDENT-OFFSET-ALIST*)
 		      'ZWEI:*LISP-INDENT-OFFSET-ALIST*
-		    'ZWEI:*INITIAL-LISP-INDENT-OFFSET-ALIST*)))
-    (LET ((X (ASSQ NAME (SYMEVAL VARIABLE)))
-	  (Y (ASSQ NAME1 (SYMEVAL VARIABLE))))
+		      'ZWEI:*INITIAL-LISP-INDENT-OFFSET-ALIST*)))
+    (LET ((X (ASSQ NAME (SYMBOL-VALUE VARIABLE)))
+	  (Y (ASSQ NAME1 (SYMBOL-VALUE VARIABLE))))
       (IF Y
 	  (IF (NULL X)
-	      (PUSH (CONS NAME (CDR Y)) (SYMEVAL VARIABLE))
+	      (PUSH (CONS NAME (CDR Y)) (SYMBOL-VALUE VARIABLE))
 	    (SETF (CDR X) (CDR Y)))))))
   
 ;;; Allow functions to be made obsolete wherever their definitions may be.
@@ -2384,15 +2401,14 @@ following any number of levels of forwarding."
   "Mark FUNCTION as obsolete, with string REASON as the reason.
 REASON should be a clause starting with a non-capitalized word.
 Uses of FUNCTION will draw warnings from the compiler."
-  `(PROGN (PUTPROP ',FUNCTION 'COMPILER:OBSOLETE 'COMPILER:STYLE-CHECKER)
+  `(PROGN (PUTPROP ',FUNCTION 'COMPILER::OBSOLETE 'COMPILER::STYLE-CHECKER)
 	  (PUTPROP ',FUNCTION (STRING-APPEND "is an obsolete function; " ,REASON)
 		   'COMPILER:OBSOLETE)))
 
 ;;; SETF of DOCUMENTATION expands into this.
-; not patched in 98.
 (DEFUN SET-DOCUMENTATION (SYMBOL DOC-TYPE VALUE)
   (LET* ((S (SYMBOL-NAME DOC-TYPE))
-	 (C (ASSOC S (GET SYMBOL 'DOCUMENTATION-PROPERTY))))
+	 (C (ASSOC-EQUAL S (GET SYMBOL 'DOCUMENTATION-PROPERTY))))
     (IF C
 	(SETF (CDR C) VALUE)
       (PUSH (CONS S VALUE) (GET SYMBOL 'DOCUMENTATION-PROPERTY))))
