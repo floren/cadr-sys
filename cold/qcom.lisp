@@ -75,8 +75,8 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
 
 ;;; Assign the byte pointers their values. Q-FIELDS becomes a list of just names.
 ;;; It goes into the cold load, along with the names and their values.
-(ASSIGN-ALTERNATE Q-FIELD-VALUES)
-(DEFCONST Q-FIELDS (GET-ALTERNATE Q-FIELD-VALUES))
+(SI::ASSIGN-ALTERNATE Q-FIELD-VALUES)
+(DEFCONST Q-FIELDS (SI::GET-ALTERNATE Q-FIELD-VALUES))
 
 ;;; Stuff in the REGION-BITS array, some of these bits also appear in the
 ;;; map in the same orientation.  
@@ -119,8 +119,8 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
 						;  if possible.
   ))
 
-(ASSIGN-ALTERNATE Q-REGION-BITS-VALUES)
-(DEFCONST Q-REGION-BITS (GET-ALTERNATE Q-REGION-BITS-VALUES))
+(SI::ASSIGN-ALTERNATE Q-REGION-BITS-VALUES)
+(DEFCONST Q-REGION-BITS (SI::GET-ALTERNATE Q-REGION-BITS-VALUES))
 
 (DEFCONST SYSTEM-COMMUNICATION-AREA-QS '(
   ;; LOCATIONS RELATIVE TO 400 IN CADR
@@ -333,7 +333,7 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
 						; doing an (ENABLE-TRAPPING)
 
 (DEFCONST HEADER-FIELD-VALUES '(%%HEADER-TYPE-FIELD 2305 %%HEADER-REST-FIELD 0023))
-(DEFCONST HEADER-FIELDS (GET-ALTERNATE HEADER-FIELD-VALUES))
+(DEFCONST HEADER-FIELDS (SI::GET-ALTERNATE HEADER-FIELD-VALUES))
 
 ;;; These are the values that go in the %%HEADER-TYPE-FIELD of a Q of
 ;;; data type DTP-HEADER.
@@ -377,16 +377,16 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
   %%ADI-RET-NUM-VALS-EXPECTING	0006		;For ADI-ST-BLOCK; number of values still room for.
   %%ADI-RPC-MICRO-STACK-LEVEL	0006
   ))
-(ASSIGN-ALTERNATE ADI-FIELD-VALUES)
-(DEFCONST ADI-FIELDS (GET-ALTERNATE ADI-FIELD-VALUES))
+(SI::ASSIGN-ALTERNATE ADI-FIELD-VALUES)
+(DEFCONST ADI-FIELDS (SI::GET-ALTERNATE ADI-FIELD-VALUES))
 
 ;;; These overlap the cdr-code field, which is not used in the special pdl.
 (DEFCONST SPECPDL-FIELD-VALUES '(
   %%SPECPDL-BLOCK-START-FLAG 3601		;Flag is set on first binding of each block of bindings
   %%SPECPDL-CLOSURE-BINDING 3701		;Flag is set on bindings made "before" entering function
   ))
-(ASSIGN-ALTERNATE SPECPDL-FIELD-VALUES)
-(DEFCONST SPECPDL-FIELDS (GET-ALTERNATE SPECPDL-FIELD-VALUES))
+(SI::ASSIGN-ALTERNATE SPECPDL-FIELD-VALUES)
+(DEFCONST SPECPDL-FIELDS (SI::GET-ALTERNATE SPECPDL-FIELD-VALUES))
 
 ;;; LINEAR-PDL-QS and LINEAR-PDL-FIELDS, and their elements, go in the real machine.
 (DEFCONST LINEAR-PDL-QS '(
@@ -396,7 +396,7 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
   %LP-CALL-STATE
   ))
 ;;; These are assigned values starting with 0 and incremented by -1
-(ASSIGN-VALUES-INIT-DELTA LINEAR-PDL-QS 0 0 -1)
+(SI::ASSIGN-VALUES-INIT-DELTA LINEAR-PDL-QS 0 0 -1)
 
 (DEFCONST %LP-CALL-BLOCK-LENGTH (LENGTH LINEAR-PDL-QS))
 (DEFCONST LLPFRM 4)			;# FIXED ALLOC QS IN LINAR PDL BLOCK (OBSOLETE, USE ABOVE)
@@ -453,8 +453,8 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
   %%LP-ENS-MACRO-LOCAL-BLOCK-ORIGIN 0010
   ))
 
-(ASSIGN-ALTERNATE LINEAR-PDL-FIELDS-VALUES)
-(DEFCONST LINEAR-PDL-FIELDS (GET-ALTERNATE LINEAR-PDL-FIELDS-VALUES))
+(SI::ASSIGN-ALTERNATE LINEAR-PDL-FIELDS-VALUES)
+(DEFCONST LINEAR-PDL-FIELDS (SI::GET-ALTERNATE LINEAR-PDL-FIELDS-VALUES))
 
 ;;; MICRO-STACK-FIELDS and its elements go in the real machine.
 (DEFCONST MICRO-STACK-FIELDS-VALUES '(
@@ -464,8 +464,8 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
   %%US-PPBSPC 2101				;Binding block pushed
   ))
 
-(ASSIGN-ALTERNATE MICRO-STACK-FIELDS-VALUES)
-(DEFCONST MICRO-STACK-FIELDS (GET-ALTERNATE MICRO-STACK-FIELDS-VALUES))
+(SI::ASSIGN-ALTERNATE MICRO-STACK-FIELDS-VALUES)
+(DEFCONST MICRO-STACK-FIELDS (SI::GET-ALTERNATE MICRO-STACK-FIELDS-VALUES))
 
 
 ;;;; M-FLAGS-FIELDS and M-ERROR-SUBSTATUS-FIELDS and their elements go in the real machine.
@@ -489,8 +489,8 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
   %%M-FLAGS-METER-ENABLE 2301			;Metering enabled for this stack group
   %%M-FLAGS-TRAP-ON-CALL 2401			;Trap on attempting to activate new frame.
   ))
-(ASSIGN-ALTERNATE M-FLAGS-FIELDS-VALUES)
-(DEFCONST M-FLAGS-FIELDS (GET-ALTERNATE M-FLAGS-FIELDS-VALUES))
+(SI::ASSIGN-ALTERNATE M-FLAGS-FIELDS-VALUES)
+(DEFCONST M-FLAGS-FIELDS (SI::GET-ALTERNATE M-FLAGS-FIELDS-VALUES))
 
 (DEFCONST M-ERROR-SUBSTATUS-FIELDS-VALUES '(	;MUST AGREE WITH DEFS IN UCONS
   %%M-ESUBS-TOO-FEW-ARGS 0001
@@ -500,8 +500,8 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
   %%M-ESUBS-BAD-DT 0401 
   %%M-ESUBS-BAD-QUOTE-STATUS 0501
   ))
-(ASSIGN-ALTERNATE M-ERROR-SUBSTATUS-FIELDS-VALUES)
-(DEFCONST M-ERROR-SUBSTATUS-FIELDS (GET-ALTERNATE M-ERROR-SUBSTATUS-FIELDS-VALUES))
+(SI::ASSIGN-ALTERNATE M-ERROR-SUBSTATUS-FIELDS-VALUES)
+(DEFCONST M-ERROR-SUBSTATUS-FIELDS (SI::GET-ALTERNATE M-ERROR-SUBSTATUS-FIELDS-VALUES))
 
 ;;; A "Numeric Argument Description" is what %ARGS-INFO and ARGS-INFO return.
 ;;; Such descriptors can also be hung on symbols' Q-ARGS-PROP properties.
@@ -523,8 +523,8 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
   %%ARG-DESC-MAX-ARGS 0006			;MAXIMUM NUMBER OF REQUIRED+OPTIONAL
 						; ARGS.  REST ARGS NOT COUNTED.
   ))
-(ASSIGN-ALTERNATE NUMERIC-ARG-DESC-INFO)
-(DEFCONST NUMERIC-ARG-DESC-FIELDS (GET-ALTERNATE NUMERIC-ARG-DESC-INFO))
+(SI::ASSIGN-ALTERNATE NUMERIC-ARG-DESC-INFO)
+(DEFCONST NUMERIC-ARG-DESC-FIELDS (SI::GET-ALTERNATE NUMERIC-ARG-DESC-INFO))
 
 (DEFCONST ARG-DESC-FIELD-VALUES '(
   %FEF-ARG-SYNTAX 160
@@ -543,8 +543,8 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
   %%FEF-ARG-SYNTAX 0403
   %%FEF-INIT-OPTION 0004 
   ))
-(ASSIGN-ALTERNATE ARG-DESC-FIELD-VALUES)
-(DEFCONST ARG-DESC-FIELDS (GET-ALTERNATE ARG-DESC-FIELD-VALUES))
+(SI::ASSIGN-ALTERNATE ARG-DESC-FIELD-VALUES)
+(DEFCONST ARG-DESC-FIELDS (SI::GET-ALTERNATE ARG-DESC-FIELD-VALUES))
 	;ARG-DESC-FIELDS GETS SET TO A LIST CONSISTING OF THE ALTERNATING MEMBERS OF 
 	;ARG-DESC-FIELD-VALUES
 
@@ -624,9 +624,9 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
   ARRAY-LONG-LENGTH-FLAG 1_13
   ARRAY-NAMED-STRUCTURE-FLAG 1_12))
 
-(DEFCONST ARRAY-FIELDS (GET-ALTERNATE ARRAY-FIELD-VALUES))
-(DEFCONST ARRAY-LEADER-FIELDS (GET-ALTERNATE ARRAY-LEADER-FIELD-VALUES))
-(DEFCONST ARRAY-MISCS (GET-ALTERNATE ARRAY-MISC-VALUES))
+(DEFCONST ARRAY-FIELDS (SI::GET-ALTERNATE ARRAY-FIELD-VALUES))
+(DEFCONST ARRAY-LEADER-FIELDS (SI::GET-ALTERNATE ARRAY-LEADER-FIELD-VALUES))
+(DEFCONST ARRAY-MISCS (SI::GET-ALTERNATE ARRAY-MISC-VALUES))
 
 (DEFCONST ARRAY-TYPES '(
   ART-ERROR
@@ -711,8 +711,8 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
   %%SELF-REF-INDEX 0014
   %%SELF-REF-WORD-INDEX 0113
   ))
-(ASSIGN-ALTERNATE SELF-REF-POINTER-FIELD-VALUES)
-(DEFCONST SELF-REF-POINTER-FIELDS (GET-ALTERNATE SELF-REF-POINTER-FIELD-VALUES))
+(SI::ASSIGN-ALTERNATE SELF-REF-POINTER-FIELD-VALUES)
+(DEFCONST SELF-REF-POINTER-FIELDS (SI::GET-ALTERNATE SELF-REF-POINTER-FIELD-VALUES))
 
 ;;; FEF header fields
 (DEFCONST FEFH-CONSTANT-VALUES '(
@@ -727,8 +727,8 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
   %%FEFH-FAST-ARG 2101
   %%FEFH-SV-BIND 2001
   ))
-(ASSIGN-ALTERNATE FEFH-CONSTANT-VALUES)
-(DEFCONST FEFH-CONSTANTS (GET-ALTERNATE FEFH-CONSTANT-VALUES))
+(SI::ASSIGN-ALTERNATE FEFH-CONSTANT-VALUES)
+(DEFCONST FEFH-CONSTANTS (SI::GET-ALTERNATE FEFH-CONSTANT-VALUES))
 
 ;;; FEF header q indexes
 (DEFCONST FEFHI-INDEXES '(
@@ -756,7 +756,7 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
   %%FEFHI-SVM-BITS 0026
   %%FEFHI-SVM-HIGH-BIT 2501
   ))
-(DEFCONST FEFHI-FIELDS (GET-ALTERNATE FEFHI-VALUES))
+(DEFCONST FEFHI-FIELDS (SI::GET-ALTERNATE FEFHI-VALUES))
 
 
 (DEFCONST PAGE-SIZE 400)
@@ -808,8 +808,8 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
   %%PHT2-ACCESS-AND-STATUS-BITS 2404 
   %%PHT2-PHYSICAL-PAGE-NUMBER 0016
   ))
-(ASSIGN-ALTERNATE PAGE-VALUES)
-(DEFCONST PAGE-HASH-TABLE-FIELDS (GET-ALTERNATE PAGE-VALUES))
+(SI::ASSIGN-ALTERNATE PAGE-VALUES)
+(DEFCONST PAGE-HASH-TABLE-FIELDS (SI::GET-ALTERNATE PAGE-VALUES))
 
 ;;; See SYS2;SGDEFS
 (DEFCONST STACK-GROUP-HEAD-LEADER-QS '(
@@ -884,7 +884,7 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
   %%SG-ST-SWAP-SV-ON-CALL-OUT 2501 
   %%SG-ST-SWAP-SV-OF-SG-THAT-CALLS-ME 2401
   ))
-(DEFCONST SG-STATE-FIELDS (GET-ALTERNATE SG-STATE-FIELD-VALUES))
+(DEFCONST SG-STATE-FIELDS (SI::GET-ALTERNATE SG-STATE-FIELD-VALUES))
 
 (DEFCONST SG-INST-DISPATCHES '(
   SG-MAIN-DISPATCH				;Main instruction dispatch
@@ -1163,10 +1163,10 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
   %DISK-COMMAND-RESET-CONTROLLER 16
   ;; Marksman also has get-status commands, not listed here.
   ))
-(ASSIGN-VALUES DISK-RQ-LEADER-QS 0)
-(ASSIGN-VALUES DISK-RQ-HWDS 0)
-(ASSIGN-ALTERNATE DISK-HARDWARE-VALUES)
-(DEFCONST DISK-HARDWARE-SYMBOLS (GET-ALTERNATE DISK-HARDWARE-VALUES))
+(SI::ASSIGN-VALUES DISK-RQ-LEADER-QS 0)
+(SI::ASSIGN-VALUES DISK-RQ-HWDS 0)
+(SI::ASSIGN-ALTERNATE DISK-HARDWARE-VALUES)
+(DEFCONST DISK-HARDWARE-SYMBOLS (SI::GET-ALTERNATE DISK-HARDWARE-VALUES))
 
 ;;; Definitions for interrupt-driven Unibus input channels
 ;;; Note that these start at 1 rather than at 0, to leave room for an array header
@@ -1190,7 +1190,7 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
   %UNIBUS-CHANNEL-CSR-CLEAR-BITS		;** Bits to clear at start of interrupt.
   %UNIBUS-CHANNEL-CSR-SET-BITS			;** Bits to set at start of interrupt.
   ))
-(ASSIGN-VALUES-INIT-DELTA UNIBUS-CHANNEL-QS 0 1 1)
+(SI::ASSIGN-VALUES-INIT-DELTA UNIBUS-CHANNEL-QS 0 1 1)
 
 ;;; Extra bits in the %UNIBUS-CHANNEL-CSR-BITS word.
 ;;; Only the bottom 16 bits actually have to do with the device's CSR register
@@ -1207,7 +1207,7 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
   %%UNIBUS-CSR-CLEAR-BITS-P 2501		;** %UNIBUS-CHANNEL-CSR-CLEAR-BITS is
 						;  significant.
   ))
-(ASSIGN-ALTERNATE UNIBUS-CSR-BIT-VALUES)
+(SI::ASSIGN-ALTERNATE UNIBUS-CSR-BIT-VALUES)
 
 (DEFCONST UNIBUS-CSR-BITS '(
   %%UNIBUS-CSR-OUTPUT
@@ -1257,9 +1257,9 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
 						; Get lost-count from here
   %CHAOS-LEADER-BIT-COUNT			;Receive stores bit-count before reading out
   ))
-(ASSIGN-VALUES CHAOS-BUFFER-LEADER-QS 0)
-(ASSIGN-ALTERNATE CHAOS-HARDWARE-VALUES)
-(DEFCONST CHAOS-HARDWARE-SYMBOLS (GET-ALTERNATE CHAOS-HARDWARE-VALUES))
+(SI::ASSIGN-VALUES CHAOS-BUFFER-LEADER-QS 0)
+(SI::ASSIGN-ALTERNATE CHAOS-HARDWARE-VALUES)
+(DEFCONST CHAOS-HARDWARE-SYMBOLS (SI::GET-ALTERNATE CHAOS-HARDWARE-VALUES))
 
 ;;;; Ethernet
 
@@ -1274,7 +1274,7 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
   %ether-input-csr-offset			;6
   %ether-device-address				;7
   ))
-(assign-values ether-register-offsets 0)
+(si::assign-values ether-register-offsets 0)
 
 ;;; Offsets of the leader elements
 (defconst ether-leader-offsets '(
@@ -1283,433 +1283,14 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
   %ether-leader-active-length			;2
   %ether-leader-transmit-count			;3
   ))
-(assign-values ether-leader-offsets 0)
+(si::assign-values ether-leader-offsets 0)
 
 ;;; Random parameters
 (defconst ether-random-parameters '(
   ether-maximum-packet-length 430		;Max length of packet in words = (// 560. 2)
   ether-unibus-block 0				;Use unibus blocks 0-3
   ))
-(assign-alternate ether-random-parameters)
-
-;;;; Definitions for LAMBDA configuration blocks. - in progress 4/07/84 - pace
-
-(defconst system-configuration-qs '(
-  %system-configuration-version-number		;version of this whole header - currently 1
-  %system-configuration-size			;size of this structure in 32 bit words
-  %system-configuration-number-of-processors	;number of processor configuration blocks
-						;after the system configuration block
-  %system-configuration-processor-block-size	;in 32 bit words
-  %system-configuration-share-struct-pointer	;what used to be stored at #xff000080
-  %system-configuration-debug-level
-
-  %system-configuration-lock
-
-  ;; an "owner" is either a slot number of owner,
-  ;; or -1 if not allocted, or -2 if not present on bus
-  %system-configuration-ethernet-owner		;3com ethernet
-  %system-configuration-tapemaster-owner	;half in tape
-  %system-configuration-mti-8-line-owner
-  %system-configuration-mti-16-line-owner
-  %system-configuration-quarter-inch-tape-owner
-  %system-configuration-sdu-serial-a-owner
-  %system-configuration-sdu-serial-b-owner
-  
-  %system-configuration-share-tty-0
-  %system-configuration-share-tty-1
-  %system-configuration-share-tty-2
-  %system-configuration-grey-owner		;med color
-  %system-configuration-grey-slot
-
-  %system-configuration-number-of-share-ttys ;number of share ttys UNIX has set up
-  %system-configuration-number-of-share-tty-pages ;how many pages might be share ttys
-
-  %system-configuration-spare-1
-  %system-configuration-spare-2
-  %system-configuration-spare-3
-  %system-configuration-spare-4
-  %system-configuration-spare-5
-  %system-configuration-spare-6
-  ))
-
-(assign-values system-configuration-qs)
-
-(defprop system-configuration-qs SYSCONF name-for-c)
-(defprop %system-configuration-version-number S_VERSION name-for-c)
-(defprop %system-configuration-size S_SIZE name-for-c)
-(defprop %system-configuration-number-of-processors S_NPROC name-for-c)
-(defprop %system-configuration-processor-block-size S_PSIZE name-for-c)
-(defprop %system-configuration-share-struct-pointer S_SSTRUCT name-for-c)
-(defprop %system-configuration-debug-level S_DEBUG name-for-c)
-(defprop %system-configuration-lock S_LOCK name-for-c)
-(defprop %system-configuration-ethernet-owner S_ETHER name-for-c)
-(defprop %system-configuration-tapemaster-owner S_TAPEMASTER name-for-c)
-(defprop %system-configuration-mti-8-line-owner S_MTI8 name-for-c)
-(defprop %system-configuration-mti-16-line-owner S_MTI16 name-for-c)
-(defprop %system-configuration-quarter-inch-tape-owner S_QTR name-for-c)
-(defprop %system-configuration-sdu-serial-a-owner S_SDUA name-for-c)
-(defprop %system-configuration-sdu-serial-b-owner S_SDUB name-for-c)
-(defprop %system-configuration-share-tty-0 S_STTY0 name-for-c)
-(defprop %system-configuration-share-tty-1 S_STTY1 name-for-c)
-(defprop %system-configuration-share-tty-2 S_STTY2 name-for-c)
-
-(defprop %system-configuration-grey-owner S_GREY_OWNER name-for-c)
-(defprop %system-configuration-grey-slot S_GREY_SLOT name-for-c)
-
-(defprop %system-configuration-number-of-share-tty-pages S_TTY_NPAGES name-for-c)
-(defprop %system-configuration-number-of-share-ttys S_NSHARE_TTY name-for-c)
-(defprop %system-configuration-spare-1 S_SPARE1 name-for-c)
-(defprop %system-configuration-spare-2 S_SPARE2 name-for-c)
-(defprop %system-configuration-spare-3 S_SPARE3 name-for-c)
-(defprop %system-configuration-spare-4 S_SPARE4 name-for-c)
-(defprop %system-configuration-spare-5 S_SPARE5 name-for-c)
-(defprop %system-configuration-spare-6 S_SPARE6 name-for-c)
-
-(defconst processor-configuration-qs '(
-  %processor-conf-sys-conf-ptr			;32 bit nubus address of sys conf
-  %processor-conf-slot-number			;slot number of RG board, etc
-  %processor-conf-major-version			;version number of processor from conf prom
-  %processor-conf-minor-version
-  %processor-conf-starting-processor-switches	;for prom and ulambda - bits below
-
-  ;; this is the actual share-iopb structure for the main user on this processor
-  ;; i.e. ulambda for the lispm
-  %processor-conf-share-runme			;set this when you want the iopb executed
-  %processor-conf-share-slot			;slot number of processor for this share-iopb
-  %processor-conf-share-type			;type of thing that set up the share-iopb
-						;should be different for each different "driver"
-						;   prom = 3
-						;   ulambda = 4
-						;   lisp user level = 5
-
-  %processor-conf-share-iopb			;8086 pointer to real iopb
-  %processor-conf-share-interrupt-addr		;8086 pointer to interrupt address, or 0
-  %processor-conf-share-spare-1
-  %processor-conf-share-spare-2
-  %processor-conf-share-spare-3
-  %processor-conf-share-spare-4
-  
-  %processor-conf-chaos-address			;chaos address of this processor
-
-  %processor-conf-send-chaos-share-dev		;for passing ethernet packets
-  %processor-conf-rcv-chaos-share-dev
-
-  %processor-conf-memory-base-0			;whole 32 bit nubus address
-  %processor-conf-memory-base-1			;low bit is 1 if 1/2 meg card & you
-  %processor-conf-memory-base-2			;want to initialize
-  %processor-conf-memory-base-3
-  %processor-conf-memory-base-4
-  %processor-conf-memory-base-5
-  %processor-conf-memory-base-6
-  %processor-conf-memory-base-7
-  %processor-conf-memory-base-8
-  %processor-conf-memory-base-9
-  %processor-conf-memory-bytes-0		;number of bytes long - 0 is not used
-  %processor-conf-memory-bytes-1
-  %processor-conf-memory-bytes-2
-  %processor-conf-memory-bytes-3
-  %processor-conf-memory-bytes-4
-  %processor-conf-memory-bytes-5
-  %processor-conf-memory-bytes-6
-  %processor-conf-memory-bytes-7
-  %processor-conf-memory-bytes-8
-  %processor-conf-memory-bytes-9
-
-  %processor-conf-vcmem-slot
-  %processor-conf-processor-type		;1 lambda, 2 68000
-
-  %processor-conf-micro-band
-  %processor-conf-load-band
-  %processor-conf-paging-band
-  %processor-conf-file-band
-
-  %processor-conf-base-multibus-mapping-register
-
-  %processor-conf-boot-status
-  %processor-conf-chaos-share-0
-  %processor-conf-chaos-share-1
-  %processor-conf-chaos-share-2
-  %processor-conf-chaos-share-3
-  %processor-conf-chaos-share-4
-
-  %processor-conf-spare-1
-  %processor-conf-spare-2
-  %processor-conf-spare-3
-  %processor-conf-spare-4
-  %processor-conf-spare-5
-  %processor-conf-spare-6
-
-  ))
-
-(assign-values processor-configuration-qs)
-
-;;; processor-configuration-qs
-(defprop processor-configuration-qs PROCCONF name-for-c)
-(defprop %processor-conf-sys-conf-ptr P_SYSPTR name-for-c)
-(defprop %processor-conf-slot-number P_SLOT name-for-c)
-(defprop %processor-conf-major-version P_MAJOR name-for-c)
-(defprop %processor-conf-minor-version P_MINOR name-for-c)
-(defprop %processor-conf-starting-processor-switches P_SWITCHES name-for-c)
-(defprop %processor-conf-share-runme P_RUNME name-for-c)
-(defprop %processor-conf-share-slot P_SSLOT name-for-c)
-(defprop %processor-conf-share-type P_TYPE name-for-c)
-(defprop %processor-conf-share-iopb P_IOPB name-for-c)
-(defprop %processor-conf-share-interrupt-addr P_INTR name-for-c)
-(defprop %processor-conf-share-spare-1 P_SPARE1 name-for-c)
-(defprop %processor-conf-share-spare-2 P_SPARE2 name-for-c)
-(defprop %processor-conf-share-spare-3 P_SPARE3 name-for-c)
-(defprop %processor-conf-share-spare-4 P_SPARE4 name-for-c)
-(defprop %processor-conf-chaos-address P_CHAOS_ADDR name-for-c)
-(defprop %processor-conf-send-chaos-share-dev P_SEND_SHAREDEV name-for-c)
-(defprop %processor-conf-rcv-chaos-share-dev P_RCV_SHAREDEV name-for-c)
-(defprop %processor-conf-memory-base-0 P_MEMB0 name-for-c)
-(defprop %processor-conf-memory-base-1 P_MEMB1 name-for-c)
-(defprop %processor-conf-memory-base-2 P_MEMB2 name-for-c)
-(defprop %processor-conf-memory-base-3 P_MEMB3 name-for-c)
-(defprop %processor-conf-memory-base-4 P_MEMB4 name-for-c)
-(defprop %processor-conf-memory-base-5 P_MEMB5 name-for-c)
-(defprop %processor-conf-memory-base-6 P_MEMB6 name-for-c)
-(defprop %processor-conf-memory-base-7 P_MEMB7 name-for-c)
-(defprop %processor-conf-memory-base-8 P_MEMB8 name-for-c)
-(defprop %processor-conf-memory-base-9 P_MEMB9 name-for-c)
-(defprop %processor-conf-memory-bytes-0 P_MEMP0 name-for-c)
-(defprop %processor-conf-memory-bytes-1 P_MEMP1 name-for-c)
-(defprop %processor-conf-memory-bytes-2 P_MEMP2 name-for-c)
-(defprop %processor-conf-memory-bytes-3 P_MEMP3 name-for-c)
-(defprop %processor-conf-memory-bytes-4 P_MEMP4 name-for-c)
-(defprop %processor-conf-memory-bytes-5 P_MEMP5 name-for-c)
-(defprop %processor-conf-memory-bytes-6 P_MEMP6 name-for-c)
-(defprop %processor-conf-memory-bytes-7 P_MEMP7 name-for-c)
-(defprop %processor-conf-memory-bytes-8 P_MEMP8 name-for-c)
-(defprop %processor-conf-memory-bytes-9 P_MEMP9 name-for-c)
-
-(defprop %processor-conf-vcmem-slot P_VCMEM_SLOT name-for-c)
-(defprop %processor-conf-processor-type P_PROC_TYPE name-for-c)
-(defprop %processor-conf-micro-band P_MICRO_BAND name-for-c)
-(defprop %processor-conf-load-band P_LOAD_BAND name-for-c)
-(defprop %processor-conf-paging-band P_PAGING_BAND name-for-c)
-(defprop %processor-conf-file-band P_FILE_BAND name-for-c)
-(defprop %processor-conf-base-multibus-mapping-register P_BASE_MULTIBUS_MAP name-for-c)
-(defprop %processor-conf-boot-status P_BOOTED name-for-c)
-(defprop %processor-conf-chaos-share-0 P_CHSH0 name-for-c)
-(defprop %processor-conf-chaos-share-1 P_CHSH1 name-for-c)
-(defprop %processor-conf-chaos-share-2 P_CHSH2 name-for-c)
-(defprop %processor-conf-chaos-share-3 P_CHSH3 name-for-c)
-(defprop %processor-conf-chaos-share-4 P_CHSH4 name-for-c)
-(defprop %processor-conf-spare-1 P_SPARE1 name-for-c)
-(defprop %processor-conf-spare-2 P_SPARE2 name-for-c)
-(defprop %processor-conf-spare-3 P_SPARE3 name-for-c)
-(defprop %processor-conf-spare-4 P_SPARE4 name-for-c)
-(defprop %processor-conf-spare-5 P_SPARE5 name-for-c)
-(defprop %processor-conf-spare-6 P_SPARE6 name-for-c)
-
-
-(defconst lambda-processor-switches-bits '(
-  %%processor-switch-use-stat2-for-usec-clock 3701
-  %%processor-switch-allow-boot-chars 3601
-  %%processor-switch-use-multiplier-in-uc-tv 3501
-  %%processor-switch-use-disk-sharing-protocol 3401
-  %%processor-switch-prom-jumps-to-cold-boot 3301
-  %%processor-switch-slot-numbers-set-up 3201
-  %%processor-switch-2x2-stuff-valid-in-conf-structure 3101
-
-  %%processor-switch-cache-permit-for-video-buffer	0301
-  %%processor-switch-cache-permit			0201
-  %%processor-switch-packet-size-code   		0002
-  ))
-
-(assign-alternate lambda-processor-switches-bits)
-
-(defprop %%processor-switch-use-stat2-for-usec-clock USE_USEC_CLOCK name-for-c)
-(defprop %%processor-switch-allow-boot-chars ALLOW_BOOT_CHARS name-for-c)
-(defprop %%processor-switch-use-multiplier-in-uc-tv USE_MULTIPLIER name-for-c)
-(defprop %%processor-switch-use-disk-sharing-protocol USE_DISK_SHARE name-for-c)
-(defprop %%processor-switch-prom-jumps-to-cold-boot PROM_COLD_BOOTS name-for-c)
-(defprop %%processor-switch-slot-numbers-set-up SLOT_NUMBERS_SET_UP name-for-c)
-(defprop %%processor-switch-2x2-stuff-valid-in-conf-structure VALID_2X2 name-for-c)
-(defprop %%processor-switch-cache-permit-for-video-buffer VIDEO_CACHE name-for-c)
-(defprop %%processor-switch-cache-permit CACHE_ON name-for-c)
-(defprop %%processor-switch-packet-size-code BLK_XFER_SIZE name-for-c)
-
-
-(DEFCONST chaos-share-dev-qs '(
-  %chaos-share-csr
-  %chaos-share-size				;number of words before buffer
-  %chaos-share-buf-size				;buf size in bytes
-  %chaos-share-intr-addr			;32 bit nubus address
-  %chaos-share-pkt-length			;number of bytes in packet
-  ;; buffer is here
-  ))
-
-(assign-values chaos-share-dev-qs)
-
-(defprop chaos-share-dev-qs chsharedev name-for-c)
-(defprop %chaos-share-csr S_CSR name-for-c)
-(defprop %chaos-share-size S_OFFSET name-for-c)
-(defprop %chaos-share-buf-size S_BUFSIZ name-for-c)
-(defprop %chaos-share-intr-addr S_INTR name-for-c)
-(defprop %chaos-share-pkt-length S_LENGTH name-for-c)
-
-
-(defconst chaos-share-dev-csr-bits '(
-  %%chaos-share-dev-valid-bit 0001
-  ))
-
-(assign-alternate chaos-share-dev-csr-bits)
-
-(defprop %%chaos-share-dev-valid-bit VALID name-for-c)
-
-(defconst share-tty-qs '(
-  %share-tty-lisp-to-unix-buffer	;word offset from beginng of structure to xmit buffer
-  %share-tty-unix-to-lisp-buffer 	;word offset from beginng of structure to rcv buffer
-  %share-tty-buf-size			;in bytes
-  %share-tty-unix-intr
-  %share-tty-lam-intr
-  %share-tty-lisp-to-unix-out-ptr	;offset in bytes ...
-  %share-tty-lisp-to-unix-in-ptr
-  %share-tty-unix-to-lisp-out-ptr
-  %share-tty-unix-to-lisp-in-ptr
-  %share-tty-lcsr
-  %share-tty-ucsr
-  %share-tty-owner
-	))
-
-(assign-values share-tty-qs)
-
-(defprop share-tty-qs TTYSHARE name-for-c)
-
-(defprop %share-tty-lisp-to-unix-buffer S_RXOFFS name-for-c-byte)
-(defprop %share-tty-unix-to-lisp-buffer S_TXOFFS name-for-c-byte)
-(defprop %share-tty-buf-size S_BUFSIZ name-for-c-byte)
-(defprop %share-tty-unix-intr S_UNIXINTR name-for-c)
-(defprop %share-tty-lam-intr S_LAMINTR name-for-c)
-(defprop %share-tty-lisp-to-unix-out-ptr S_RXRP name-for-c-byte)
-(defprop %share-tty-lisp-to-unix-in-ptr	S_RXWP name-for-c-byte)
-(defprop %share-tty-unix-to-lisp-out-ptr S_TXRP name-for-c-byte)
-(defprop %share-tty-unix-to-lisp-in-ptr S_TXWP name-for-c-byte)
-(defprop %share-tty-lcsr S_LCSR name-for-c-byte)
-(defprop %share-tty-ucsr S_UCSR name-for-c-byte)
-(defprop %share-tty-owner S_OWNER name-for-c)
-
-(defconst share-tty-csr-bits '(
-  %%share-tty-csr-carrier 0001
-  %%share-tty-csr-raw 0101
-  ))
-
-(assign-alternate share-tty-csr-bits)
-
-(defprop %%share-tty-csr-carrier SHR_CARR name-for-c)
-(defprop %%share-tty-csr-raw SHR_RAW name-for-c)
-
-(defconst share-struct-qs '(
-  %share-struct-lock
-  %share-struct-max-iopbs
-  %share-struct-current-iopb
-  %share-struct-start-of-valid-table		;the valid table is max-iopbs long, followed
-						;by the iopb table which is also max-iopbs
-  ))
-
-(assign-values share-struct-qs)
-
-(global:proclaim '(global:special system-configuration-qs
-				  %system-configuration-version-number
-				  %system-configuration-size
-				  %system-configuration-number-of-processors
-		  
-				  %system-configuration-processor-block-size
-				  %system-configuration-share-struct-pointer
-				  %system-configuration-debug-level
-
-				  %system-configuration-lock
-		  
-				  %system-configuration-ethernet-owner
-				  %system-configuration-tapemaster-owner
-				  %system-configuration-mti-8-line-owner
-				  %system-configuration-mti-16-line-owner
-				  %system-configuration-quarter-inch-tape-owner
-				  %system-configuration-sdu-serial-a-owner
-				  %system-configuration-sdu-serial-b-owner
-		  
-				  %system-configuration-share-tty-0
-				  %system-configuration-share-tty-1
-				  %system-configuration-share-tty-2
-
-				  processor-configuration-qs 
-				  %processor-conf-sys-conf-ptr
-				  %processor-conf-slot-number
-				  %processor-conf-major-version
-				  %processor-conf-minor-version
-				  %processor-conf-starting-processor-switches
-
-				  %processor-conf-share-runme
-				  %processor-conf-share-slot
-				  %processor-conf-share-type
-
-				  %processor-conf-share-iopb
-				  %processor-conf-share-interrupt-addr
-				  %processor-conf-share-spare-1
-				  %processor-conf-share-spare-2
-				  %processor-conf-share-spare-3
-				  %processor-conf-share-spare-4
-
-				  %processor-conf-chaos-address
-
-				  %processor-conf-send-chaos-share-dev
-				  %processor-conf-rcv-chaos-share-dev
-
-				  %processor-conf-memory-base-0
-				  %processor-conf-memory-base-1
-				  %processor-conf-memory-base-2
-				  %processor-conf-memory-base-3
-				  %processor-conf-memory-base-4
-				  %processor-conf-memory-base-5
-				  %processor-conf-memory-base-6
-				  %processor-conf-memory-base-7
-				  %processor-conf-memory-base-8
-				  %processor-conf-memory-base-9
-				  %processor-conf-memory-bytes-0
-				  %processor-conf-memory-bytes-1
-				  %processor-conf-memory-bytes-2
-				  %processor-conf-memory-bytes-3
-				  %processor-conf-memory-bytes-4
-				  %processor-conf-memory-bytes-5
-				  %processor-conf-memory-bytes-6
-				  %processor-conf-memory-bytes-7
-				  %processor-conf-memory-bytes-8
-				  %processor-conf-memory-bytes-9
-
-				  lambda-processor-switches-bits 
-				  %%processor-switch-use-stat2-for-usec-clock
-				  %%processor-switch-allow-boot-chars
-				  %%processor-switch-use-multiplier-in-uc-tv
-				  %%processor-switch-use-disk-sharing-protocol
-
-				  chaos-share-dev-qs 
-				  %chaos-share-csr
-				  %chaos-share-size
-				  %chaos-share-buf-size
-				  %chaos-share-intr-addr
-				  %chaos-share-pkt-length
-
-				  chaos-share-dev-csr-bits
-				  %%chaos-share-dev-valid-bit
-				  share-tty-qs
-				  %share-tty-lisp-to-unix-buffer
-				  %share-tty-unix-to-lisp-buffer
-				  %share-tty-buf-size
-				  %share-tty-unix-intr
-				  %share-tty-lam-intr
-				  %share-tty-lisp-to-unix-out-ptr
-				  %share-tty-lisp-to-unix-in-ptr
-				  %share-tty-unix-to-lisp-out-ptr
-				  %share-tty-unix-to-lisp-in-ptr
-				  share-struct-qs
-				  %share-struct-lock
-				  %share-struct-max-iopbs
-				  %share-struct-current-iopb
-				  %share-struct-start-of-valid-table
-				  ))
-
+(si::assign-alternate ether-random-parameters)
 
 (DEFCONST A-MEMORY-ARRAY-LOCATIONS '(
   MOUSE-CURSOR-PATTERN	1600
@@ -1717,7 +1298,7 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
   MOUSE-X-SCALE-ARRAY	1700
   MOUSE-Y-SCALE-ARRAY	1720
   ))
-(DEFCONST A-MEMORY-ARRAY-SYMBOLS (GET-ALTERNATE A-MEMORY-ARRAY-LOCATIONS))
+(DEFCONST A-MEMORY-ARRAY-SYMBOLS (SI::GET-ALTERNATE A-MEMORY-ARRAY-LOCATIONS))
 
 
 ;;; Use of DTP-INSTANCE.  Points to a structure whose header is of
@@ -1767,7 +1348,7 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
   ;; If the instance-descriptor is an array, it must not be so long as to
   ;; contain a long-length Q.
   ))
-(ASSIGN-VALUES INSTANCE-DESCRIPTOR-OFFSETS 0)
+(SI::ASSIGN-VALUES INSTANCE-DESCRIPTOR-OFFSETS 0)
 
 (DEFCONST METER-ENABLES-VALUES '(
   %%METER-PAGE-FAULT-ENABLE 0001		;Page fault metering
@@ -1784,37 +1365,37 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
   %METER-FUNCTION-UNWIND-EVENT
   %METER-STACK-GROUP-SWITCH-EVENT
   ))
-(ASSIGN-ALTERNATE METER-ENABLES-VALUES)
-(DEFCONST METER-ENABLES (GET-ALTERNATE METER-ENABLES-VALUES))
-(ASSIGN-VALUES METER-EVENTS 0 1)
+(SI::ASSIGN-ALTERNATE METER-ENABLES-VALUES)
+(DEFCONST METER-ENABLES (SI::GET-ALTERNATE METER-ENABLES-VALUES))
+(SI::ASSIGN-VALUES METER-EVENTS 0 1)
 
 (DEFUN ASSIGN-QCOM-VALUES ()
-  (ASSIGN-VALUES ADI-KINDS 0)
-  (ASSIGN-VALUES ADI-STORING-OPTIONS 0)
-  (ASSIGN-ALTERNATE ARG-DESC-FIELD-VALUES)
-  (ASSIGN-ALTERNATE ARRAY-FIELD-VALUES)
-  (ASSIGN-ALTERNATE ARRAY-LEADER-FIELD-VALUES)
-  (ASSIGN-ALTERNATE ARRAY-MISC-VALUES)
-  (ASSIGN-VALUES ARRAY-TYPES 19.)
-  (ASSIGN-VALUES FEF-ARG-SYNTAX 4)
-  (ASSIGN-VALUES FEF-DES-DT 11)
-  (ASSIGN-VALUES FEF-FUNCTIONAL 15)
-  (ASSIGN-VALUES FEF-INIT-OPTION 0)
-  (ASSIGN-VALUES FEF-NAME-PRESENT 20)
-  (ASSIGN-VALUES FEF-QUOTE-STATUS 7)
-  (ASSIGN-VALUES FEF-SPECIALNESS 16)
-  (ASSIGN-VALUES FEFHI-INDEXES 0)
-  (ASSIGN-ALTERNATE FEFHI-VALUES)
-  (ASSIGN-ALTERNATE HEADER-FIELD-VALUES)
-  (ASSIGN-VALUES Q-CDR-CODES 0)
-  (ASSIGN-VALUES Q-DATA-TYPES 0)
-  (ASSIGN-VALUES Q-HEADER-TYPES 0)
-  (ASSIGN-ALTERNATE SG-STATE-FIELD-VALUES)
-  (ASSIGN-VALUES SG-STATES 0)
-  (ASSIGN-VALUES SG-INST-DISPATCHES 0)
-  (ASSIGN-VALUES SPECIAL-PDL-LEADER-QS 0)
-  (ASSIGN-VALUES STACK-GROUP-HEAD-LEADER-QS 0)
-  (ASSIGN-VALUES SYSTEM-COMMUNICATION-AREA-QS 0)
-  (ASSIGN-VALUES REG-PDL-LEADER-QS 0))
+  (SI::ASSIGN-VALUES ADI-KINDS 0)
+  (SI::ASSIGN-VALUES ADI-STORING-OPTIONS 0)
+  (SI::ASSIGN-ALTERNATE ARG-DESC-FIELD-VALUES)
+  (SI::ASSIGN-ALTERNATE ARRAY-FIELD-VALUES)
+  (SI::ASSIGN-ALTERNATE ARRAY-LEADER-FIELD-VALUES)
+  (SI::ASSIGN-ALTERNATE ARRAY-MISC-VALUES)
+  (SI::ASSIGN-VALUES ARRAY-TYPES 19.)
+  (SI::ASSIGN-VALUES FEF-ARG-SYNTAX 4)
+  (SI::ASSIGN-VALUES FEF-DES-DT 11)
+  (SI::ASSIGN-VALUES FEF-FUNCTIONAL 15)
+  (SI::ASSIGN-VALUES FEF-INIT-OPTION 0)
+  (SI::ASSIGN-VALUES FEF-NAME-PRESENT 20)
+  (SI::ASSIGN-VALUES FEF-QUOTE-STATUS 7)
+  (SI::ASSIGN-VALUES FEF-SPECIALNESS 16)
+  (SI::ASSIGN-VALUES FEFHI-INDEXES 0)
+  (SI::ASSIGN-ALTERNATE FEFHI-VALUES)
+  (SI::ASSIGN-ALTERNATE HEADER-FIELD-VALUES)
+  (SI::ASSIGN-VALUES Q-CDR-CODES 0)
+  (SI::ASSIGN-VALUES Q-DATA-TYPES 0)
+  (SI::ASSIGN-VALUES Q-HEADER-TYPES 0)
+  (SI::ASSIGN-ALTERNATE SG-STATE-FIELD-VALUES)
+  (SI::ASSIGN-VALUES SG-STATES 0)
+  (SI::ASSIGN-VALUES SG-INST-DISPATCHES 0)
+  (SI::ASSIGN-VALUES SPECIAL-PDL-LEADER-QS 0)
+  (SI::ASSIGN-VALUES STACK-GROUP-HEAD-LEADER-QS 0)
+  (SI::ASSIGN-VALUES SYSTEM-COMMUNICATION-AREA-QS 0)
+  (SI::ASSIGN-VALUES REG-PDL-LEADER-QS 0))
 
 (ASSIGN-QCOM-VALUES)			;Foo.  ASSIGN-VALUES, etc had better be defined.
