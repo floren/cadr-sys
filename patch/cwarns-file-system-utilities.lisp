@@ -1,5 +1,5 @@
 
-;System FILE-SYSTEM-UTILITIES made by LISPM at 11/24/22 07:04:10  -*-Mode: Lisp; Package: User; Base: 10.-*-
+;System FILE-SYSTEM-UTILITIES made by LISPM at 2/01/23 04:10:54  -*-Mode: Lisp; Package: User; Base: 10.-*-
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: FILE; FSDEFS LISP >"
@@ -30,7 +30,9 @@
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: FILE; FSGUTS LISP >"
-  '((:COMPILE NIL)))
+  '((:COMPILE NIL
+     (FS::LMFS-DIRECTORY-LIST NIL NIL
+      (COMPILER::OBSOLETE :OBSOLETE NIL "~S ~A." PROCESS-WHOSTATE "is an obsolete function; this function is now SI:PROCESS-WAIT-WHOSTATE")))))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS

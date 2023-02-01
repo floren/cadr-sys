@@ -1,5 +1,5 @@
 
-;System OUTER-SYSTEM made by LISPM at 10/24/22 08:56:46  -*-Mode: Lisp; Package: User; Base: 10.-*-
+;System OUTER-SYSTEM made by LISPM at 1/31/23 20:55:08  -*-Mode: Lisp; Package: User; Base: 10.-*-
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: IO1; XGP LISP >"
@@ -539,7 +539,9 @@ or use READ-CHAR-NO-HANG or READ-BYTE-NO-HANG")))))
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: FILE; FSGUTS LISP >"
-  '((:COMPILE NIL)))
+  '((:COMPILE NIL
+     (FS::LMFS-DIRECTORY-LIST NIL NIL
+      (COMPILER::OBSOLETE :OBSOLETE NIL "~S ~A." PROCESS-WHOSTATE "is an obsolete function; this function is now SI:PROCESS-WAIT-WHOSTATE")))))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS

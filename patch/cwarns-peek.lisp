@@ -1,9 +1,11 @@
 
-;System PEEK made by LISPM at 10/24/22 06:23:33  -*-Mode: Lisp; Package: User; Base: 10.-*-
+;System PEEK made by LISPM at 1/31/23 19:21:36  -*-Mode: Lisp; Package: User; Base: 10.-*-
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: WINDOW; PEEK LISP >"
-  '((:COMPILE NIL)))
+  '((:COMPILE NIL
+     (TV::PEEK-WHOSTATE NIL NIL
+      (COMPILER::OBSOLETE :OBSOLETE NIL "~S ~A." PROCESS-WHOSTATE "is an obsolete function; this function is now SI:PROCESS-WAIT-WHOSTATE")))))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS

@@ -1,5 +1,5 @@
 
-;System EH made by LISPM at 10/24/22 08:10:39  -*-Mode: Lisp; Package: User; Base: 10.-*-
+;System EH made by LISPM at 1/31/23 20:22:44  -*-Mode: Lisp; Package: User; Base: 10.-*-
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: EH; EH LISP >"
@@ -11,7 +11,9 @@
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: EH; EHF LISP >"
-  '((:COMPILE NIL)))
+  '((:COMPILE NIL
+     ((:PROPERTY SYSTEM:DIVIDE-BY-ZERO EH::MAKE-UCODE-ERROR-FUNCTION) NIL NIL
+      (COMPILER::NOT-IGNORED :IMPLAUSIBLE NIL "The variable ~S, which is declared to be ignored, was referenced" EH::ETE)))))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS

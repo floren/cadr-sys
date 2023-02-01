@@ -1,5 +1,5 @@
 
-;System TV made by LISPM at 10/24/22 05:27:05  -*-Mode: Lisp; Package: User; Base: 10.-*-
+;System TV made by LISPM at 1/31/23 18:34:09  -*-Mode: Lisp; Package: User; Base: 10.-*-
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: WINDOW; TVDEFS LISP >"
@@ -8,7 +8,9 @@
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: WINDOW; SCRMAN LISP >"
-  '((:COMPILE NIL)))
+  '((:COMPILE NIL
+     (TV::SCREEN-ACTIVITY-HAS-CHANGED NIL NIL
+      (COMPILER::NOT-IGNORED :IMPLAUSIBLE NIL "The variable ~S, which is declared to be ignored, was referenced" TV::ON-P)))))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
@@ -58,7 +60,9 @@
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: WINDOW; WHOLIN LISP >"
-  '((:COMPILE NIL)))
+  '((:COMPILE NIL
+     (TV::WHO-LINE-RUN-STATE-UPDATE NIL NIL
+      (COMPILER::OBSOLETE :OBSOLETE NIL "~S ~A." PROCESS-WHOSTATE "is an obsolete function; this function is now SI:PROCESS-WAIT-WHOSTATE")))))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
@@ -71,7 +75,9 @@
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: WINDOW; BASSTR LISP >"
-  '((:COMPILE NIL)))
+  '((:COMPILE NIL
+     (TV::KBD-ESC-OUTPUT-HOLD NIL NIL
+      (COMPILER::OBSOLETE :OBSOLETE NIL "~S ~A." PROCESS-WHOSTATE "is an obsolete function; this function is now SI:PROCESS-WAIT-WHOSTATE")))))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS

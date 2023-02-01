@@ -1,5 +1,5 @@
 
-;System SYSTEM-INTERNALS made by LISPM at 10/24/22 03:07:17  -*-Mode: Lisp; Package: User; Base: 10.-*-
+;System SYSTEM-INTERNALS made by LISPM at 1/31/23 17:02:25  -*-Mode: Lisp; Package: User; Base: 10.-*-
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: SYS2; PRODEF LISP >"
@@ -23,7 +23,10 @@
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: SYS2; ADVISE LISP >"
-  '((:COMPILE NIL)))
+  '((:COMPILE NIL
+     (SI::ADVISE-FIND-SLOT NIL NIL
+      (COMPILER::FREE-VARIABLE :MISSING-DECLARATION NIL "The variable ~S is used free; assumed special." SI::CLASSS)
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." CLASS)))))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
@@ -86,7 +89,13 @@
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: SYS; EVAL LISP >"
-  '((:COMPILE NIL)))
+  '((:COMPILE NIL
+     (LETF NIL NIL
+      (COMPILER::VARIABLE-NOT-SYMBOL :IMPOSSIBLE NIL "~S appears in a list of variables to be bound." (SI::TEM (QUOTE LOCF) (CAAR SI::VARS-LEFT)))
+      (COMPILER::FREE-VARIABLE :MISSING-DECLARATION NIL "The variable ~S is used free; assumed special." SI::TEM))
+     (LETF* NIL NIL
+      (COMPILER::VARIABLE-NOT-SYMBOL :IMPOSSIBLE NIL "~S appears in a list of variables to be bound." (SI::TEM (QUOTE LOCF) (CAAR SI::VARS-LEFT)))
+      (COMPILER::FREE-VARIABLE :MISSING-DECLARATION NIL "The variable ~S is used free; assumed special." SI::TEM)))))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
@@ -167,7 +176,8 @@
      (LISP-REINITIALIZE NIL NIL
       (COMPILER:UNDEFINED-FUNCTION-USED :PROBABLE-ERROR NIL "The undefined function ~S was called" CADR::CLEAR-UNIBUS-MAP)
       (COMPILER::FREE-VARIABLE :MISSING-DECLARATION NIL "The variable ~S is used free; assumed special." SI::RG-QUAD-SLOT)
-      (COMPILER::FREE-VARIABLE :MISSING-DECLARATION NIL "The variable ~S is used free; assumed special." SI::SDU-QUAD-SLOT)))))
+      (COMPILER::FREE-VARIABLE :MISSING-DECLARATION NIL "The variable ~S is used free; assumed special." SI::SDU-QUAD-SLOT)
+      (COMPILER::FREE-VARIABLE :MISSING-DECLARATION NIL "The variable ~S is used free; assumed special." SI::*RSET)))))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
@@ -182,7 +192,27 @@
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: SYS2; NUMER LISP >"
-  '((:COMPILE NIL)))
+  '((:COMPILE NIL
+     (TAN NIL NIL
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." SI::X))
+     (TAND NIL NIL
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." SI::X))
+     (ASIN NIL NIL
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." SI::X))
+     (ACOS NIL NIL
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." SI::X))
+     (SINH NIL NIL
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." SI::X))
+     (COSH NIL NIL
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." SI::X))
+     (TANH NIL NIL
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." SI::X))
+     (ASINH NIL NIL
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." SI::X))
+     (ACOSH NIL NIL
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." SI::X))
+     (ATANH NIL NIL
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." SI::X)))))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
@@ -232,7 +262,9 @@
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: SYS; QMISC LISP >"
-  '((:COMPILE NIL)))
+  '((:COMPILE NIL
+     (SI::DESCRIBE-STACK-GROUP NIL NIL
+      (COMPILER:UNDEFINED-FUNCTION-USED :PROBABLE-ERROR NIL "The undefined function ~S was called" SYSTEM:SG-UCODE)))))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
@@ -267,7 +299,9 @@
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: SYS2; RESOUR LISP >"
-  '((:COMPILE NIL)))
+  '((:COMPILE NIL
+     (DEALLOCATE-RESOURCE NIL NIL
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." SI::DEINITIALIZER)))))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
@@ -292,10 +326,7 @@
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: SYS2; STEP LISP >"
-  '((:COMPILE NIL
-     (SI::STEP-CMDR NIL NIL
-      (COMPILER::FREE-VARIABLE :MISSING-DECLARATION NIL "The variable ~S is used free; assumed special." SI::STEP-AUTO)
-      (COMPILER::FREE-VARIABLE :MISSING-DECLARATION NIL "The variable ~S is used free; assumed special." CHAR)))))
+  '((:COMPILE NIL)))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
