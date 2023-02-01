@@ -221,7 +221,7 @@
 
 ;;; Must be last.
 (:DEF SYMBOL
-      (:! (:+ (:- ANY-BUT-EOF BREAK))
+      (:! (:* (:- ANY-BUT-EOF BREAK))
 	  BREAK)
   UNTYI-FUNCTION)
 
