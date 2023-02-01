@@ -1,4 +1,4 @@
-   ;;;-*- Mode:LISP; Package:SYSTEM-INTERNALS; Base:8 -*-
+;;;-*- Mode:LISP; Package:SYSTEM-INTERNALS; Base:8 -*-
 ;;; Declarations for SYSTEM's initally loaded
 ;;; ** (c) Copyright 1984 Massachusetts Institute of Technology **
 
@@ -15,7 +15,7 @@
   (:SHORT-NAME "SYS")
   (:PATCHABLE "SYS: PATCH;")
   (:MODULE ALLDEFS ("SYS: SYS2; DEFMAC"	;at 78, latest 80	- WIP
-		    "SYS: SYS2; LMMAC"	;at 372+, latest 389	- BORK (372+)
+		    "SYS: SYS2; LMMAC"	;at 372+, latest 389	- WIP
 		    "SYS: EH; ERRMAC"	;at -1, latest 2	- WIP	[NEW]
 		    "SYS: SYS2; STRUCT"	;at 322+, latest 322	- OK
 		    "SYS: SYS2; SETF"	;at 97, latest 97	- OK
@@ -25,8 +25,8 @@
 		      SYSTEM-INTERNALS	;WIP [MINI][COLD]
 		      FORMAT		;OK [MINI]
 		      CHAOS		;OK [MINI]
-		      COMPILER		;WIP [MINI]
-		      FILE-SYSTEM	;WIP [MINI]
+		      COMPILER		;WIP (1 file left) [MINI]
+		      FILE-SYSTEM	;OK [MINI]
 		      QFASL-REL		;OK
 		      TIME		;OK
 		      TV		;OK
@@ -93,7 +93,7 @@
 		 "SYS: SYS; QMISC"	 ;at 659+, latest 659	- OK	[MINI]
 		 "SYS: IO1; HARDCOPY"	 ;at 1, latest 1	- OK
 		 "SYS: SYS; QNEW"	 ;at 20, latest 20	- OK
-		 "SYS: SYS; QRAND"	 ;at 408, latest 412	- WIP	[COLD]
+		 "SYS: SYS; QRAND"	 ;at 412+, latest 412	- OK	[COLD]
 		 "SYS: SYS2; QTRACE"	 ;at 152+, latest 152	- OK
 		 "SYS: SYS2; RAT"	 ;at 46+, latest 46	- OK
 		 "SYS: IO; READ"	 ;at 437, latest 437	- BORK (428+)	[COLD]
@@ -112,8 +112,8 @@
 		 "SYS: SYS2; ANALYZE"	 ;at 19+, latest 19	- OK
 		 "SYS: SYS2; CLMAC"	 ;at 4, latest 4	- OK
 		 ))
-  (:MODULE RDTBL ("SYS: IO; RDTBL"	 ;at 167, latest 169	- WIP	[COLD]
-		  "SYS: IO; CRDTBL"))	 ;at 34(?)+, latest 35	- WIP	[COLD]
+  (:MODULE RDTBL ("SYS: IO; RDTBL"	 ;at 169, latest 169	- OK	[COLD]
+		  "SYS: IO; CRDTBL"))	 ;at 35, latest 35	- OK	[COLD]
   (:MODULE EXPORT ("SYS: COLD; EXPORT")) ;at 31, latest 31	- OK
   (:COMPILE-LOAD DEFS)
   (:COMPILE-LOAD MAIN (:FASLOAD DEFS))
@@ -235,7 +235,7 @@
 		 "INDENT"		;at 107, latest 107	- OK
 		 "INSERT"		;at 35, latest 35	- OK
 		 "METH"			;at 49, latest 49	- OK
-		 "PRIMIT"		;at 175, latest 175	- OK
+		 "PRIMIT"		;at 175, latest 175	- OK <BAD CDR-CODE>
 		 "NPRIM"		;at 34, latest 34	- OK
 		 "HISTORY"		;at 18, latest 18	- OK
 		 "FONT"			;at 88, latest 88	- OK
@@ -279,7 +279,7 @@
   (:PACKAGE FED)
   (:MODULE DEFS "SYS: IO1; FNTDEF")	;at 20, latest 20	- OK
   (:MODULE MAIN (
-		 "SYS: IO1; FNTCNV"	;at 83, latest 83	- OK
+		 "SYS: IO1; FNTCNV"	;at 83, latest 83	- OK <BAD CDR-CODE>
 		 "SYS: WINDOW; FED"	;at 200+, latest 200	- OK
 		 ))
   (:READFILE DEFS)
@@ -290,8 +290,8 @@
   (:PACKAGE EH)
   (:PATHNAME-DEFAULT "SYS: EH;")
   (:COMPILE-LOAD ("EH"			;at 336, latest 340	- WIP	[MINI]
-		  "EHF"			;at 225, latest 229	- WIP	[MINI]
-		  "EHC"			;at 233, latest 236	- WIP	[MINI]
+		  "EHF"			;at 229, latest 229	- OK	[MINI]
+		  "EHC"			;at 233+, latest 236	- WIP	[MINI]
 		  "EHW")))		;at 109, latest 109	- OK
 
 (DEFSYSTEM TV				;OK
@@ -333,7 +333,7 @@
   (:COMPILE-LOAD CHAOS)
   (:COMPILE-LOAD FILE))
 
-(DEFSYSTEM FILE-SYSTEM			;WIP [MINI]
+(DEFSYSTEM FILE-SYSTEM			;OK [MINI]
   (:PACKAGE FILE-SYSTEM)
   (:NICKNAMES "FS")
   (:PATHNAME-DEFAULT "SYS: IO;")
@@ -445,7 +445,7 @@
 		 "SYS: IO; FREAD"	;at 30, latest 30	- OK
 		 "SYS: SYS2; USYMLD"))	;at 188, latest 188	- OK
   (:COMPILE-LOAD ASS)
-  (:READFILE ("SYS: COLD; QCOM"		;at 579, latest 583	- WIP
+  (:READFILE ("SYS: COLD; QCOM"		;at 579+, latest 583	- WIP
 	      "SYS: COLD; DEFMIC"	;at 200, latest 200	- OK
 	      "SYS: SYS; CADSYM")	;at 25, latest 25	- OK     v
 	     (:FASLOAD ASS))
