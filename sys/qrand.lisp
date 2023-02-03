@@ -157,69 +157,6 @@ It may also be an instance or named structure; then it is sent a :REMPROP messag
 			 :PROPERTY-LIST-LOCATION :SET :SETPLIST :SET-PROPERTY-LIST
 			 :WHICH-OPERATIONS))
     (T (FERROR NIL "Don't know how to ~S a plist" OP))))
-
-(DEFSUBST LOCATIVEP (X)
-  "T if X is a locative."
-  (EQ (%DATA-TYPE X) #.DTP-LOCATIVE))
-
-(DEFSUBST %POINTERP (X)
-  "T if X points to storage; NIL if it is an immediate quantity."
-  (NOT (MEMQ (%DATA-TYPE X)
-	     '(#.DTP-FIX #.DTP-SMALL-FLONUM #.DTP-U-ENTRY #.DTP-CHARACTER))))
-
-(DEFSUBST %POINTER-TYPE-P (DATA-TYPE-CODE)
-  "T if DATA-TYPE-CODE is a the code for a data type that points to storage."
-  (NOT (MEMQ DATA-TYPE-CODE
-	     '(#.DTP-FIX #.DTP-SMALL-FLONUM #.DTP-U-ENTRY #.DTP-CHARACTER
-	       #.DTP-TRAP #.DTP-SELF-REF-POINTER #.DTP-HEADER #.DTP-ARRAY-HEADER))))
-
-(DEFSUBST %P-POINTERP (POINTER)
-  "T if the word POINTER points to contains a data type that points to some storage.
-This includes various header and forwarding data types
-which point to storage."
-  (%POINTER-TYPE-P (%P-DATA-TYPE POINTER)))
-
-(DEFSUBST %P-POINTERP-OFFSET (POINTER OFFSET)
-  "T if the word POINTER+OFFSET points to contains a data type that points to some storage.
-This includes various header and forwarding data types
-which point to storage."
-  (%POINTER-TYPE-P (%P-LDB-OFFSET %%Q-DATA-TYPE POINTER OFFSET)))
-
-(DEFSUBST %DATA-TYPE-SAFE-P (DATA-TYPE)
-  (MEMQ DATA-TYPE
-	'(#.DTP-SYMBOL #.DTP-FIX #.DTP-EXTENDED-NUMBER #.DTP-LOCATIVE #.DTP-LIST
-	  #.DTP-U-ENTRY #.DTP-FEF-POINTER #.DTP-ARRAY-POINTER
-	  #.DTP-STACK-GROUP #.DTP-CLOSURE #.DTP-SMALL-FLONUM #.DTP-SELECT-METHOD
-	  #.DTP-INSTANCE #.DTP-ENTITY #.DTP-STACK-CLOSURE #.DTP-CHARACTER)))
-
-(DEFSUBST %P-CONTENTS-SAFE-P (POINTER)
-  "T if the word POINTER points to contains data safe to read out.
-It will be NIL if the word contains a forwarding pointer or a header."
-  (%DATA-TYPE-SAFE-P (%P-DATA-TYPE POINTER)))
-
-(DEFSUBST %P-CONTENTS-SAFE-P-OFFSET (POINTER OFFSET)
-  "T if the word POINTER+OFFSET points to contains data safe to read out.
-It will be NIL if the word contains a forwarding pointer or a header."
-  (%DATA-TYPE-SAFE-P (%P-LDB-OFFSET %%Q-DATA-TYPE POINTER OFFSET)))
-
-(DEFUN %P-SAFE-CONTENTS-OFFSET (POINTER OFFSET)
-  "Extract the contents of a word (which contains typed data) in a way that is always safe.
-The word is OFFSET words after where POINTER points.
-If the contents are a valid Lisp data type, they are returned accurately.
-If the contents point to storage but are not valid Lisp data
- (such as, forwarding pointers and symbol and instance headers)
- then a locative is returned.
-If the contents do not point to storage and are not valid Lisp data
- (such as, a self-ref-pointer or an array header) then a fixnum is returned.
-The second value is T if the accurate contents were returned."
-  (IF (%P-CONTENTS-SAFE-P-OFFSET POINTER OFFSET)
-      (VALUES (%P-CONTENTS-OFFSET POINTER OFFSET) T)
-    (IF (%P-POINTERP-OFFSET POINTER OFFSET)
-	(%P-CONTENTS-AS-LOCATIVE-OFFSET POINTER OFFSET)
-      (%P-LDB-OFFSET %%Q-POINTER POINTER OFFSET))))
-
-(DEFSUBST %POINTER-PLUS (PTR1 PTR2)
-  (%MAKE-POINTER-OFFSET DTP-FIX PTR1 PTR2))
 
 (DEFMACRO ROT-24-BIT (VALUE BITS)
   (ONCE-ONLY (VALUE BITS)
