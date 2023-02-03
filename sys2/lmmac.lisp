@@ -103,10 +103,12 @@ a cross-compiler in Maclisp for the Lisp machine."
   `(FUNCALL ,OBJECT ,OPERATION . ,ARGUMENTS))
 
 ;; sigh^2
-(DEFSUBST LEXPR-SEND (OBJECT OPERATION &REST ARGS)
+;;>> this is a macro to get around fuxking bd in the sublis-eval-once crock.
+;;>>  I want lunar language tools!!
+(DEFMACRO LEXPR-SEND (OBJECT OPERATION &REST ARGS)
   "Send a message to OBJECT, with operation OPERATION and ARGUMENTS.
 The last one of ARGUMENTS actually is a list of arguments, not one argument."
-  (APPLY OBJECT OPERATION ARGS))
+  `(APPLY ,OBJECT ,OPERATION . ,ARGS))
 
 (DEFSUBST SEND-IF-HANDLES (OBJECT OPERATION &REST ARGUMENTS)
   "Send the message OPERATION to OBJECT if OBJECT handles that message.
@@ -429,11 +431,11 @@ The second value is T if the accurate contents were returned."
 	(%P-CONTENTS-AS-LOCATIVE-OFFSET POINTER OFFSET)
       (%P-LDB-OFFSET %%Q-POINTER POINTER OFFSET))))
 
-(DEFSUBST %POINTER-PLUS (PTR1 DISP)
+(DEFSUBST %POINTER-PLUS (PTR1 PTR2)
   "Return a fixnum which represents a pointer DISP words past PTR1.
 The argumentts had better be locatives into the same object
 for this operation to be meaningful;
-otherwise, their relative position will be changed by GC.")
+otherwise, their relative position will be changed by GC."
   (%MAKE-POINTER-OFFSET DTP-FIX PTR1 PTR2))
 
 (DEFSUBST %POINTER-LESSP (PTR1 PTR2)
@@ -1263,7 +1265,7 @@ On abnormal exit (throwing, errors, etc) close STREAM with argument :ABORT."
 	 (AND ,GENSYM (NOT (ERRORP ,GENSYM))
 	      (SEND ,GENSYM :CLOSE .FILE-ABORTED-FLAG.))))))
 
-(DEFMACRO WITH-OPEN-STREAM-CASE ((STREAM CONSTRUCTION-FORM) &BODY CLAUSES)
+(DEFMACRO WITH-OPEN-STREAM-CASE ((STREAM CONSTRUCTION-FORM) &BODY BODY)
   "Use CONSTRUCTOR-FORM to open a stream, using the CLAUSES as in CONDITION-CASE.
 The CLAUSES may contain a :NO-ERROR clause which will be executed,
 with STREAM bound to the resulting stream, if CONSTRUCTOR-FORM does not get an error.
@@ -1278,7 +1280,7 @@ On abnormal exit (throwing, errors, etc) STREAM is closed with argument :ABORT."
 	       . ,BODY)
 	     (SETQ .FILE-ABORTED-FLAG. NIL))
 	 (AND ,GENSYM (NOT (ERRORP ,GENSYM))
-	      (SEND ,GENSYM :CLOSE .FILE-ABORTED-FLAG.)))))))
+	      (SEND ,GENSYM :CLOSE .FILE-ABORTED-FLAG.))))))
 
 (DEFMACRO WITH-OPEN-FILE ((STREAM FILENAME . OPTIONS) &BODY BODY)
   "Execute the BODY with the variable STREAM bound to a stream for file FILENAME.
