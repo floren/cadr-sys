@@ -1681,13 +1681,6 @@ Syntax is identical to the beginning of a defmethod for the same method."
 			     (%P-LDB-OFFSET #o2020 FEF2 I)))
 		     (RETURN NIL))))))))
 
-(DEFUN %P-SAFE-CONTENTS-OFFSET (POINTER OFFSET)
-  (IF (MEMBER (%P-LDB-OFFSET %%Q-DATA-TYPE POINTER OFFSET)
-	      '(#,DTP-EXTERNAL-VALUE-CELL-POINTER #,DTP-SELF-REF-POINTER
-		#,DTP-ONE-Q-FORWARD))
-      (%P-CONTENTS-AS-LOCATIVE-OFFSET POINTER OFFSET)
-    (%P-CONTENTS-OFFSET POINTER OFFSET)))
-
 ;;; This is left as the method definition if you abort out of the recompilation
 ;;; caused by defining a previously undefined method.
 (DEFF ABORTED-DEFINITION 'PROG1)
