@@ -13,6 +13,8 @@
   "The value which SI:PROCESSOR-TYPE-CODE has when you run on a CADR.")
 (DEFCONST LAMBDA-TYPE-CODE 2
   "The value which SI:PROCESSOR-TYPE-CODE has when you run on a LAMBDA.")
+(DEFCONST EXPLORER-TYPE-CODE 3
+  "The value which SI:PROCESSOR-TYPE-CODE has when you run on an Explorer.")
 
 (SETQ TV:MORE-PROCESSING-GLOBAL-ENABLE T)
 
