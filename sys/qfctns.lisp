@@ -1994,15 +1994,6 @@ The printing is done without quoting characters, like PRINC."
 
 ;;;; Array functions.
 
-(DEFUN ARRAYDIMS (ARRAY &AUX TYPE)
-  "Return a list of the array-type and dimensions of ARRAY.
-This is an obsolete Maclisp function."
-  (AND (SYMBOLP ARRAY) (SETQ ARRAY (FSYMEVAL ARRAY)))
-  (CHECK-TYPE ARRAY ARRAY)
-	;SHOULD CHECK FOR INVZ
-  (SETQ TYPE (NTH (%P-LDB-OFFSET %%ARRAY-TYPE-FIELD ARRAY 0) ARRAY-TYPES))
-  (CONS TYPE (ARRAY-DIMENSIONS ARRAY)))
-
 (DEFUN ARRAY-DIMENSIONS (ARRAY &AUX INDEX-LENGTH RANK LONG-ARRAY-P DIMS PRODUCT)
   "Return a list of the dimensions of ARRAY."
   (AND (SYMBOLP ARRAY) (SETQ ARRAY (FSYMEVAL ARRAY)))
@@ -2101,25 +2092,6 @@ of the existing size.  VECTOR must have a fill pointer."
        (ARRAYP (%P-CONTENTS-OFFSET ARRAY OFFSET))
        (= (%P-LDB-OFFSET %%ARRAY-INDEX-LENGTH-IF-SHORT ARRAY 0) 3)
        (%P-CONTENTS-OFFSET ARRAY (+ 2 OFFSET))))
-
-(DEFUN ARRAY (&QUOTE X TYPE &EVAL &REST DIMLIST)
-  "Obsolete Maclisp function for creating an array.  Don't use it."
-  (APPLY #'*ARRAY (CONS X (CONS TYPE DIMLIST))))
-
-(DEFUN *ARRAY (X TYPE &REST DIMLIST &AUX ARRAY)
-  "Obsolete Maclisp function for growing an array.  Don't use it."
-  (AND (MEMQ TYPE '(READTABLE OBARRAY))
-       (FERROR NIL "The array type ~S is not defined in Zetalisp" TYPE))
-  (SETQ ARRAY
-	(MAKE-ARRAY DIMLIST :TYPE (IF (EQ TYPE 'FLONUM) 'ART-FLOAT 'ART-Q)))
-  (IF (EQ TYPE 'FIXNUM)
-      (FILL-ARRAY ARRAY NIL 0))
-  (COND ((NULL X)
-	 ARRAY)
-	((SYMBOLP X)
-	 (RPLACA (FUNCTION-CELL-LOCATION X) ARRAY)
-	 X)
-	(T (FERROR NIL "~S is not a legal first arg for *ARRAY" X))))
 
 (DEFUN MAKE-ARRAY-INTO-NAMED-STRUCTURE (ARRAY &OPTIONAL NSS)
   "ARRAY is made into a named structure and is returned."
