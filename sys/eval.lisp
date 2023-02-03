@@ -918,6 +918,15 @@ Returns the first value of EXP."
 Compiles fast when VALUE-NUMBER is a constant."
   (nth value-number (multiple-value-list (eval1 exp))))
 
+(defun multiple-value-call (function &quote &rest forms)
+  "Call FUNCTION like FUNCALL, but use all values returned by each of FORMS.
+FUNCALL would use only the first value returned by each of them.
+This conses, alas."
+  (let ((args (mapcan #'(lambda (form)
+			  `(:spread ,(multiple-value-list (eval1 form))))
+		      forms)))
+    (apply #'call function args)))
+
 (defun multiple-value-list (&quote exp)
   "Evaluate the expression EXP and return a list of the values it returns."
   (multiple-value-list (eval1 exp)))
@@ -1055,6 +1064,15 @@ Compiles fast when VALUE-NUMBER is a constant."
   "Prevent all optimization or open coding of our arguments.
 Aside from that effect, it is equivalent to PROGN."
   (eval-body body))
+
+(defun locally (&quote &rest body)
+  "Common Lisp local declaration construct.
+LOCALLY is like PROGN except that Common Lisp says that declarations
+are allowed only in LOCALLY, not in PROGN, and because PROGN is treated
+specially as a top-level form by the compiler."
+  (declare (zwei:indentation 0 1))
+  (gobble-declarations-from-body (vars body)
+    (eval-body body)))
 
 (defun progn (&quote &rest body)
   "Evaluate all the arguments in order and return the value of the last one.
