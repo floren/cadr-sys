@@ -15,7 +15,7 @@
   (:SHORT-NAME "SYS")
   (:PATCHABLE "SYS: PATCH;")
   (:MODULE ALLDEFS ("SYS: SYS2; DEFMAC"	;at 78, latest 80	- WIP
-		    "SYS: SYS2; LMMAC"	;at 372+, latest 389	- WIP
+		    "SYS: SYS2; LMMAC"	;at 389+, latest 389	- OK
 		    "SYS: EH; ERRMAC"	;at -1, latest 2	- WIP	[NEW]
 		    "SYS: SYS2; STRUCT"	;at 322+, latest 322	- OK
 		    "SYS: SYS2; SETF"	;at 97, latest 97	- OK
@@ -58,7 +58,7 @@
   (:MODULE MAIN ("SYS: SYS2; ADVISE"	 ;at 38, latest 38	- OK
 		 "SYS: SYS2; BAND"	 ;at 44, latest 44	- OK
 		 "SYS: SYS2; CHARACTER"	 ;at 22+, latest 22	- OK	[COLD]
-		 "SYS: SYS; CLPACK"	 ;at 151, latest 153	- WIP (relatively minor)	[COLD]
+		 "SYS: SYS; CLPACK"	 ;at 153, latest 153	- OK	[COLD]
 		 "SYS: WINDOW; COLD"	 ;at 129, latest 129	- OK	[COLD]
 		 "SYS: SYS2; DEFSEL"	 ;at 70, latest 70	- OK	[MINI]
 		 "SYS: IO; DISK"	 ;at 292+, latest 292	- OK	[MINI]
@@ -77,16 +77,18 @@
 		 "SYS: NETWORK; PACKAGE" ;at 7, latest 7	- OK	[MINI]
 		 "SYS: IO1; INC"	 ;at 8, latest 8	- OK
 		 "SYS: IO1; INFIX"	 ;at 11, latest 11	- OK
+		 "SYS: COLD; LISP"	 ;at 2+, latest 2	- OK	[COLD]
 		 "SYS: SYS2; LOGIN"	 ;at 87, latest 87	- OK	[MINI]
 		 "SYS: SYS2; LOOP"	 ;at 829, latest 829	- OK
-		 "SYS: SYS; LTOP"	 ;at 495+, latest 498	- WIP	[COLD]
+		 "SYS: SYS; LTOP"	 ;at 498+, latest 498	- OK	[COLD]
+		 "SYS: SYS2; MACARR"	 ;at 1+, latest 1	- OK	[NEW]
 		 "SYS: SYS2; MAKSYS"	 ;at 180, latest 180	- OK
-		 "SYS: IO; MINI"	 ;at 88+, latest 90	- WIP	[COLD]
+		 "SYS: IO; MINI"	 ;at 90+, latest 90	- OK	[COLD]
 		 "SYS: SYS2; NUMER"	 ;at 62, latest 62	- OK	[MINI]
 		 "SYS: SYS2; PATCH"	 ;at 167+, latest 167	- OK
 		 "SYS: SYS2; PLANE"	 ;at 32, latest 32	- OK
 		 "SYS: IO; PRINT"	 ;at 177, latest 183	- WIP	[COLD]
-		 "SYS: SYS2; PROCES"	 ;at 157+, latest 159	- WIP	[MINI]
+		 "SYS: SYS2; PROCES"	 ;at 157+, latest 159	- OK	[MINI]
 		 "SYS: IO; QIO"		 ;at 217, latest 217	- BORK (210+)	[COLD]
 		 "SYS: SYS; QFASL"	 ;at 463+, latest 463	- OK	[COLD]
 		 "SYS: SYS; QFCTNS"	 ;at 774+, latest 774	- OK	[COLD]
@@ -207,7 +209,7 @@
 		 "SYS: SYS; MLAP"	;at 51, latest 51	- OK
 		 "SYS: SYS; QCFASD"	;at 248, latest 248	- OK
 		 "SYS: SYS; QCFILE"	;at 324, latest 324	- OK
-		 "SYS: SYS; QCP1"	;at 563+, latest 573	- WIP
+		 "SYS: SYS; QCP1"	;at 563+, latest 573 	- WIP (next+2)
 		 "SYS: SYS; QCP2"	;at 261+, latest 261	- OK
 		 "SYS: SYS; QCOPT"	;at 137+, latest 137	- OK
 		 "SYS: SYS; QCLUKE"	;at 26, latest 26	- OK
@@ -318,7 +320,8 @@
 		 "CHOICE"		;at 116, latest 116	- OK
 		 "CSRPOS"		;at 10+, latest 10	- OK
 		 "INSPCT"		;at 159+, latest 159	- OK
-		 "RH"))			;at 164, latest 164	- OK
+		 "RH"			;at 164, latest 164	- OK <BAD CDR-CODE>
+		 ))
   (:COMPILE-LOAD DEFS)
   (:COMPILE-LOAD MAIN (:FASLOAD DEFS)))
 
@@ -524,7 +527,8 @@
 	    "SYS: SYS2; CHARACTER QFASL >"
 	    "SYS: SYS; CLPACK QFASL >"
 	    "SYS: COLD; GLOBAL QFASL >"
-	    "SYS: COLD; SYSTEM QFASL >"))
+	    "SYS: COLD; SYSTEM QFASL >"
+	    "SYS: COLD; LISP QFASL >"))
 
 (DEFCONST LAMBDA-COLD-LOAD-FILE-LIST
 	  '("SYS: FONTS; CPTFON QFASL"
