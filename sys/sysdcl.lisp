@@ -22,11 +22,11 @@
 		    "SYS: SYS; TYPES")	;at 72+, latest 72	- BORK (70+)	[COLD]
 	   :PACKAGE SI)
   (:COMPONENT-SYSTEMS FONTS		;OK
-		      SYSTEM-INTERNALS	;WIP [MINI][COLD]
-		      FORMAT		;OK [MINI]
-		      CHAOS		;OK [MINI]
-		      COMPILER		;WIP (1 file left) [MINI]
-		      FILE-SYSTEM	;OK [MINI]
+		      SYSTEM-INTERNALS	;WIP 			[MINI][COLD]
+		      FORMAT		;OK 			[MINI]
+		      CHAOS		;OK 			[MINI]
+		      COMPILER		;WIP (1 file left)	[MINI]
+		      FILE-SYSTEM	;OK			[MINI]
 		      QFASL-REL		;OK
 		      TIME		;OK
 		      TV		;OK
@@ -35,7 +35,7 @@
 		      ZWEI              ;OK
 		      FED		;OK
 		      COLOR		;OK
-		      EH		;WIP [MINI]
+		      EH		;OK			[MINI]
 		      PRESS		;OK
 		      MATH		;OK
 		      HACKS		;OK
@@ -288,12 +288,12 @@
   (:COMPILE-LOAD MAIN (:READFILE DEFS)))
 
 ;;; error handler, debugger
-(DEFSYSTEM EH				;WIP [MINI]
+(DEFSYSTEM EH				;OK [MINI]
   (:PACKAGE EH)
   (:PATHNAME-DEFAULT "SYS: EH;")
-  (:COMPILE-LOAD ("EH"			;at 336, latest 340	- WIP	[MINI]
+  (:COMPILE-LOAD ("EH"			;at 340+, latest 340	- OK	[MINI]
 		  "EHF"			;at 229, latest 229	- OK	[MINI]
-		  "EHC"			;at 233+, latest 236	- WIP	[MINI]
+		  "EHC"			;at 236+, latest 236	- OK	[MINI]
 		  "EHW")))		;at 109, latest 109	- OK
 
 (DEFSYSTEM TV				;OK
