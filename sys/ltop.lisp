@@ -565,7 +565,7 @@ Many variables are rebound, as specified in SI::*BREAK-BINDINGS*."
     (MULTIPLE-VALUE-SETQ (SAVED-BUFFER SAVED-BUFFER-POSITION)
       (SEND OLD-STANDARD-INPUT :SEND-IF-HANDLES :SAVE-RUBOUT-HANDLER-BUFFER))
     (FORMAT T "~&;Breakpoint ~?  ~:@C to continue, ~:@C to quit.~%"
-	    FORMAT-STRING ARGS #/RESUME #/ABORT)
+	    FORMAT-STRING FORMAT-ARGS #/RESUME #/ABORT)
     (LET* ((LAST-TIME-READTABLE NIL)
 	   (VALUE
 	     (DO-FOREVER
@@ -591,7 +591,7 @@ Many variables are rebound, as specified in SI::*BREAK-BINDINGS*."
 		     (THROW-FLAG T))
 		 (CATCH-ERROR-RESTART ((SYS:ABORT ERROR)
 				       "Return to BREAK ~?"
-				       FORMAT-STRING ARGS)
+				       FORMAT-STRING FORMAT-ARGS)
 		   (MULTIPLE-VALUE-BIND (TEM1 TEM)
 		       (WITH-INPUT-EDITING (*STANDARD-INPUT* '((:FULL-RUBOUT :FULL-RUBOUT)
 							       (:ACTIVATION CHAR= #/END)))
@@ -619,7 +619,7 @@ Many variables are rebound, as specified in SI::*BREAK-BINDINGS*."
 		   (SETQ THROW-FLAG NIL))
 		 (WHEN THROW-FLAG
 		   (FORMAT T "~&;Back to Breakpoint ~?  ~:@C to continue, ~:@C to quit.~%"
-			   FORMAT-STRING ARGS #/RESUME #/ABORT))))))
+			   FORMAT-STRING FORMAT-ARGS #/RESUME #/ABORT))))))
       ;; Before returning, restore and redisplay rubout handler's buffer so user
       ;; gets what he sees, if we broke out of reading through the rubout handler.
       ;; If we weren't inside there, the rubout handler buffer is now empty because
@@ -738,11 +738,11 @@ The default for it is SYS:WARM-INITIALIZATION-LIST."
 	       (SETQ HEAD-OF-LIST T))
 	      (T (FERROR NIL "Illegal keyword ~S" S))))))
   (SELECTOR (OR WHEN DEFAULT-WHEN) STRING=
-    ((NIL) (SETQ WHEN NIL))
-    ((NORMAL) (SETQ WHEN NIL))
-    ((NOW) (SETQ WHEN ':NOW))
-    ((REDO) (SETQ WHEN ':REDO))
-    ((FIRST) (SETQ WHEN ':FIRST)))
+    ((:NIL) (SETQ WHEN NIL))
+    ((:NORMAL) (SETQ WHEN NIL))
+    ((:NOW) (SETQ WHEN ':NOW))
+    ((:REDO) (SETQ WHEN ':REDO))
+    ((:FIRST) (SETQ WHEN ':FIRST)))
   (INIT-LIST-CHECK LIST-NAME)
   (SETQ INIT
         (DOLIST (L (SYMBOL-VALUE LIST-NAME)
