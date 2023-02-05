@@ -1,6 +1,6 @@
 ;; -*- Mode: Lisp; Package: SI; Base:10; Readtable:ZL -*-
 
-(setq initial-lisp-symbols '(
+(defconst initial-lisp-symbols '(
  &ALLOW-OTHER-KEYS
  &AUX
  &BODY
@@ -759,4 +759,4 @@
  YES-OR-NO-P
  ZEROP
 
-)
+))
