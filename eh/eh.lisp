@@ -1144,6 +1144,22 @@ UNINTERESTING-FUNCTIONS is a list of functions that are uninteresting."
 		      ((ATOM (RP-FUNCTION-WORD RP NEW-FRAME)) FRAME)
 		      (T NEW-FRAME)))))))
 
+(defun sg-frame-for-pdl-index (sg index)
+  (do ((frame (sg-innermost-open sg) (sg-next-open sg frame)))
+      ((null frame) nil)
+    (when ( frame index)
+      (return frame))))
+
+(defun virtual-address-to-pdl-index (sg vadr)
+  (let* ((rp (sg-regular-pdl sg))
+	 (offset (si::array-data-offset rp)))
+    (if (or (< (%pointer vadr)
+	       (%pointer-plus rp offset))
+	    ( (%pointer vadr)
+	       (%pointer-plus rp (+ (sg-regular-pdl-pointer sg) offset))))
+	nil
+      (%pointer-difference vadr (%pointer-plus rp offset)))))
+
 (DEFUN SG-ERRING-FUNCTION (SG &OPTIONAL (FRAME (SG-AP SG)))
   "Return a /"function name/" that represents the macro instruction that erred, in SG."
   (LET ((CURRENT-UPC (SG-TRAP-MICRO-PC SG))
@@ -1461,6 +1477,28 @@ ERRORP NIL means retrun a third value which describes the problem, if any."
 	   (LET* ((RP (SG-REGULAR-PDL SG))
 		  (RPIDX (+ LOCALNUM FRAME (RP-LOCAL-BLOCK-ORIGIN RP FRAME))))
 	     (RETURN (AREF RP RPIDX) (ALOC RP RPIDX))))))
+
+(defun sg-frame-stack-temporary-value (sg frame number &optional (error t))
+  "Return the value of the NUMBER'th temporary pushed onto the stack in FRAME.
+The second value returned is the location where the temporary is stored."
+  (declare (values value location barf))
+  (check-type number number)
+  (let* ((rp (sg-regular-pdl sg))
+	 (function (rp-function-word rp frame))
+	 (n-locals 0) (nargs 0))
+    (when (sg-frame-active-p sg frame)
+      (when (legitimate-function-p function)
+	(setq nargs (sg-number-of-spread-args sg frame))
+	(setq n-locals (fef-number-of-locals function))))
+    (let* ((prev-open (sg-previous-open sg frame))
+	   (upper (if prev-open (- prev-open 4) (sg-regular-pdl-pointer sg))))
+      ;;>> took out test for ( number 0)
+      (if (< (setq number (+ frame n-locals nargs 1 number)) upper)
+	  (values (aref rp number) (locf (aref rp number)))
+	(let ((string "There are only ~D temporar~:@P in this stack frame"))
+	  (if error
+	      (ferror nil string (- upper frame n-locals nargs 1))
+	    (values nil nil (format nil string (- upper frame n-locals nargs 1)))))))))
 
 (DEFUN SG-FRAME-VALUE-LIST (SG FRAME &OPTIONAL NEW-NUMBER-OF-VALUES
 			    (ORIGINAL-FRAME FRAME)
@@ -2286,6 +2324,36 @@ If LOC is not bound in SG, the global binding is used."
   (COND ((%P-CONTENTS-SAFE-P LOCATIVE)
 	 (PRINT-CAREFULLY "printing" (PRIN1 (CAR LOCATIVE))))
 	(T (FORMAT T "#<~A ~O>" (%P-DATA-TYPE LOCATIVE) (%P-POINTER LOCATIVE)))))
+
+(DEFUN P-PRIN1-CAREFUL-1 (LOCATIVE &OPTIONAL (STREAM *STANDARD-OUTPUT*))
+  "Print the contents of LOCATIVE, catching and reporting errors in printing.
+This version does some invisible pointer following."
+  (IF (%P-CONTENTS-SAFE-P LOCATIVE)
+      (PRINT-CAREFULLY "printing"
+	(format stream "~S ~S ~S: ~S"
+		(nth (%p-cdr-code locative) q-cdr-codes)
+		(nth (%p-data-type locative) q-data-types)
+		(%p-pointer locative)
+		(CONTENTS LOCATIVE)))
+    (let ((type (q-data-types (%p-data-type locative))))
+      (cond ((null type)
+	     (format stream "#<~S UNKNOWN-DATA-TYPE-~S ~S>"
+		     (nth (%p-cdr-code locative) q-cdr-codes)
+		     (%p-data-type locative)
+		     (%p-pointer locative)))
+	    (t
+	     (format stream "#<~S ~S ~S~@[ ~S~]>"
+		     (nth (%p-cdr-code locative) q-cdr-codes)
+		     type
+		     (%p-pointer locative)
+		     (cond ((memq (%p-data-type locative)
+				  '(#.DTP-EXTERNAL-VALUE-CELL-POINTER
+				    #.DTP-ONE-Q-FORWARD
+				    #.DTP-HEADER-FORWARD
+				    #.DTP-BODY-FORWARD))
+			    (p-prin1-careful-1 (%make-pointer dtp-locative
+							      (%p-pointer locative))
+					       nil)))))))))
 
 ;;; Initialize the error handler at warm boot time.
 (ADD-INITIALIZATION "ERROR-HANDLER-INITIALIZE" '(INITIALIZE) '(WARM))
