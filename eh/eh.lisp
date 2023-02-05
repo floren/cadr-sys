@@ -36,6 +36,7 @@
 					;on the stack since it was called, up to the time
 					;it called the next subroutine or got the error.
 (DEFVAR ERROR-TABLE)			;List of ETEs.
+(DEFVAR EXTRA-ERROR-TABLE)		;Used in  -- defvar is to prevent cadr compiler barf
 (DEFVAR ERROR-TABLE-NUMBER -1)		;Microcode version number for ERROR-TABLE.
 (DEFVAR BEGIN-QARYR)			;See SG-ERRING-FUNCTION
 (DEFVAR END-QARYR)			;..
@@ -60,8 +61,7 @@
 	(UNLESS ( (LENGTH SEGMENT) SIZE)
 	  (ADJUST-ARRAY-SIZE SEGMENT (+ SIZE #o1000)))
 	SEGMENT)
-    (MAKE-ARRAY (MAX SIZE SAVED-PDL-SEGMENT-MINIMUM-SIZE)
-		':TYPE ART-Q ':AREA WORKING-STORAGE-AREA)))
+    (MAKE-ARRAY (MAX SIZE SAVED-PDL-SEGMENT-MINIMUM-SIZE) :AREA WORKING-STORAGE-AREA)))
 
 (DEFUN FREE-SAVED-PDL-SEGMENT (SEGMENT)
   (SETF (AREF SEGMENT 0) NIL)
@@ -80,8 +80,7 @@
 (DEFVAR ERROR-HANDLER-REPRINT-ERROR T
   "Non-NIL => RUN-SG should reprint the error message on return from debugged SG.")
 
-(DEFVAR ERROR-HANDLER-AREA
-	(MAKE-AREA ':NAME 'ERROR-HANDLER-AREA)
+(DEFVAR ERROR-HANDLER-AREA (MAKE-AREA :NAME 'ERROR-HANDLER-AREA)
   "The error handler conses in this area, to make sure it can operate
 even if other crucial areas are full.")
 
@@ -98,19 +97,19 @@ even if other crucial areas are full.")
 to make sure we have a reserve of free space in it."
   (WITHOUT-INTERRUPTS
     (CONDITION-CASE ()
-        (LET ((ARRAY (MAKE-ARRAY MINIMUM-FREE-SPACE ':AREA ERROR-HANDLER-AREA)))
+        (LET ((ARRAY (MAKE-ARRAY MINIMUM-FREE-SPACE :AREA ERROR-HANDLER-AREA)))
 	  (RETURN-STORAGE ARRAY)
 	  (SETQ STRUCTURE-SUCCESS T))
       (ERROR NIL))
     (CONDITION-CASE ()
-        (LET ((LIST (MAKE-LIST MINIMUM-FREE-SPACE ':AREA ERROR-HANDLER-AREA)))
+        (LET ((LIST (MAKE-LIST MINIMUM-FREE-SPACE :AREA ERROR-HANDLER-AREA)))
 	  (RETURN-STORAGE LIST)
 	  (SETQ LIST-SUCCESS T))
       (ERROR NIL)))
-  (OR (AND LIST-SUCCESS STRUCTURE-SUCCESS)
-      ERROR-HANDLER-SPACE-WARNING-GIVEN
-      (PROGN (SETQ ERROR-HANDLER-SPACE-WARNING-GIVEN T)
-	     (FORMAT T "~&Warning: error handler consing space is getting low!"))))
+  (UNLESS (OR (AND LIST-SUCCESS STRUCTURE-SUCCESS)
+	      ERROR-HANDLER-SPACE-WARNING-GIVEN)
+    (SETQ ERROR-HANDLER-SPACE-WARNING-GIVEN T)
+    (FORMAT T "~&Warning: error handler consing space is getting low!")))
 
 (ADD-INITIALIZATION 'ASSURE-FREE-SPACE
 		    '(ASSURE-FREE-SPACE) '(:AFTER-FLIP :NORMAL))
@@ -156,10 +155,10 @@ to allow that frame to be selected even though it isn't active.")
 even if it is a call to a normally uninteresting function.
 This is set when we break on entry to or exit from an uninteresting function.")
 
-(DEFVAR EH-SG NIL
+(DEFVAR EH-SG :UNBOUND
   "In expressions evaluated by the debugger, this is the stack group that got the error.")
 
-(DEFVAR EH-FRAME NIL
+(DEFVAR EH-FRAME :UNBOUND
   "In expressions evaluated by the debugger, this is the frame pointer of the current frame.")
 
 (DEFVAR EH-ERROR NIL
@@ -178,7 +177,6 @@ describing the error being handled.")
 can't determine the amount of room on the screen.
 This is also the minimum number of instructions to disassemble.")
 
-;;;*** Not patched in system 98 -- functions nonexistent in 99 have been removed ***
 ;; Calls to these functions should not be mentioned as frames
 ;; when stack-censoring is going on in interpreted functions.
 ;; This should include all functions that have &QUOTE args and are open-compiled.
@@ -192,9 +190,9 @@ This is also the minimum number of instructions to disassemble.")
 				    DO* DO*-NAMED SI::DO*-INTERNAL SI::DO-BODY
 				    MULTIPLE-VALUE MULTIPLE-VALUE-LIST
 				    MULTIPLE-VALUE-PROG1 MULTIPLE-VALUE-CALL
-				    FUNCTION FLET LABELS MACROLET
+				    FUNCTION FLET LABELS MACROLET LETF LETF*
 				    PROGV PROGW LET-IF UNWIND-PROTECT
-				    BREAKON-THIS-TIME COND AND OR STORE)
+				    BREAKON-THIS-TIME COND AND OR)
   "Run-time support functions for the interpreter, which the debugger should not show you.")
 
 (DEFVAR SG-STEPPING-TABLE NIL
@@ -203,40 +201,38 @@ This is also the minimum number of instructions to disassemble.")
 ;;; These logically go in SGDEFS but that isn't loaded till much later.
 (DEFVAR CURRENT-STACK-GROUP :UNBOUND
   "The stack group now running.")
+(FORWARD-VALUE-CELL 'CURRENT-STACK-GROUP '%CURRENT-STACK-GROUP)
 
 (DEFVAR CURRENT-STACK-GROUP-RESUMER :UNBOUND
   "The stack group that resumed the one now running.")
+(FORWARD-VALUE-CELL 'CURRENT-STACK-GROUP-RESUMER '%CURRENT-STACK-GROUP-PREVIOUS-STACK-GROUP)
 
-(FORWARD-VALUE-CELL 'CURRENT-STACK-GROUP '%CURRENT-STACK-GROUP)
-(FORWARD-VALUE-CELL 'CURRENT-STACK-GROUP-RESUMER
-		    '%CURRENT-STACK-GROUP-PREVIOUS-STACK-GROUP)
-
-(DEFMACRO PRINT-CAREFULLY (IGNORE &BODY BODY)
+(DEFMACRO PRINT-CAREFULLY (&BODY BODY)
   "If BODY gets an error, print a message saying /"error printing/"."
   `(CONDITION-BIND ((ERROR 'PROCEED-WITH-ABORT-PRINTING))
      . ,BODY))
 
 (DEFUN PROCEED-WITH-ABORT-PRINTING (CONDITION)
-  (WHEN (MEMQ ':ABORT-PRINTING (SEND CONDITION ':PROCEED-TYPES))
-    ':ABORT-PRINTING))
+  (WHEN (MEMQ :ABORT-PRINTING (SEND CONDITION :PROCEED-TYPES))
+    :ABORT-PRINTING))
 
 ;Might as well have this loaded as soon as condition handling can run.
-(DEFUN SI:CONDITION-CASE-THROW (ERROR TAG)
-  (*THROW TAG ERROR))
+(DEFUN SI::CONDITION-CASE-THROW (ERROR TAG)
+  (THROW TAG ERROR))
 
-(DEFUN SI:IGNORE-ERRORS-HANDLER (CONDITION TAG)
-  (UNLESS (SEND CONDITION ':DANGEROUS-CONDITION-P)
-    (*THROW TAG T)))
+(DEFUN SI::IGNORE-ERRORS-HANDLER (CONDITION TAG)
+  (UNLESS (SEND CONDITION :DANGEROUS-CONDITION-P)
+    (THROW TAG T)))
 
-(DEFUN SI:ERRSET-HANDLER (CONDITION TAG PRINTFLAG)
-  (UNLESS (OR ERRSET (SEND CONDITION ':DANGEROUS-CONDITION-P))
+(DEFUN SI::ERRSET-HANDLER (CONDITION TAG PRINTFLAG)
+  (UNLESS (OR ERRSET (SEND CONDITION :DANGEROUS-CONDITION-P))
     (WHEN PRINTFLAG
       (TERPRI ERROR-OUTPUT)
-      (SEND CONDITION ':PRINT-ERROR-MESSAGE CURRENT-STACK-GROUP T ERROR-OUTPUT))
-    (*THROW TAG CONDITION)))
+      (SEND CONDITION :PRINT-ERROR-MESSAGE CURRENT-STACK-GROUP T ERROR-OUTPUT))
+    (THROW TAG NIL)))
 
-(DEFUN SI:CATCH-ERROR-RESTART-THROW (IGNORE TAG)
-  (*THROW TAG NIL))
+(DEFUN SI::CATCH-ERROR-RESTART-THROW (IGNORE TAG)
+  (THROW TAG NIL))
 
 ;;; Save a stack group's state on its stack so we can use it and then restore the state.
 ;;; The information goes on the pdl in a fake frame belonging to the function FOOTHOLD.
@@ -309,7 +305,7 @@ before finding the data to be popped."
   "Push the value X on to the regular pdl of stack group SG."
   (SETQ PP (1+ (SG-REGULAR-PDL-POINTER SG)))
   (SETF (AREF (SG-REGULAR-PDL SG) PP) X)
-  (%P-STORE-CDR-CODE (ALOC (SG-REGULAR-PDL SG) PP) CDR-NEXT)
+  (%P-STORE-CDR-CODE (LOCF (AREF (SG-REGULAR-PDL SG) PP)) CDR-NEXT)
   (SETF (SG-REGULAR-PDL-POINTER SG) PP)
   (INCF (SG-PDL-PHASE SG))
   X)
@@ -328,7 +324,7 @@ Set the %%SPECPDL-BLOCK-START-flag bit of the word pushed according to FLAG."
   (SETF (SG-SPECIAL-PDL-POINTER SG) PP)
   (SETQ PDL (SG-SPECIAL-PDL SG))
   (SETF (AREF PDL PP) X)
-  (%P-DPB FLAG %%SPECPDL-BLOCK-START-FLAG (ALOC PDL PP))
+  (%P-DPB FLAG %%SPECPDL-BLOCK-START-FLAG (LOCF (AREF PDL PP)))
   X)
 
 (DEFUN SG-SPECPDL-POP (SG &AUX PP)
@@ -358,44 +354,45 @@ You must do SG-SAVE-STATE before doing this."
 
 ;;;; Running things in the other stack group.
 
-(DEFUN RUN-SG (SG &AUX RESULT INNER-TRAP-ON-CALL)
+(DEFUN RUN-SG (SG &AUX RESULT)
   "Activate a call block in stack group SG, made with SG-OPEN-CALL-BLOCK.
 The FUNCTION with which the call block was made should call the error
 handler stack group with one argument.  That argument is returned from RUN-SG.
 If the value is EH:LOSE, we throw to EH:QUIT.
 Provide this stack group as an argument to the function to be run
 so it knows who to call back."
-  (%P-STORE-CDR-CODE (ALOC (SG-REGULAR-PDL SG)	;Terminate arg list assumed there
-			   (SG-REGULAR-PDL-POINTER SG))
+  (%P-STORE-CDR-CODE (LOCF (AREF (SG-REGULAR-PDL SG)	;Terminate arg list assumed there
+				 (SG-REGULAR-PDL-POINTER SG)))
 		     CDR-NIL)
   (SETF (SG-CURRENT-STATE SG) SG-STATE-INVOKE-CALL-ON-RETURN)
   (SETQ LAST-SECOND-LEVEL-ERROR-HANDLER-SG CURRENT-STACK-GROUP)
   (SETF (SG-FLAGS-MAR-MODE SG) 0)			;Turn off the MAR (why??)
   (ASSURE-FREE-SPACE)
   (SETQ RESULT (STACK-GROUP-RESUME SG NIL))
-  (SETQ INNER-TRAP-ON-CALL
-	(SG-FLAGS-TRAP-ON-CALL SG))
-  (SG-RESTORE-STATE SG)
-  ;; If the guy set trap-on-call before returning, leave it on.
-  (IF (NOT (ZEROP INNER-TRAP-ON-CALL))
-      (SETF (SG-FLAGS-TRAP-ON-CALL SG) 1))
-  (COND ((AND ERROR-HANDLER-RUNNING ERROR-HANDLER-REPRINT-ERROR)
-	 (COND ((NEQ CURRENT-STACK-GROUP LAST-SECOND-LEVEL-ERROR-HANDLER-SG)
-		(FORMAT T "~%Back to ")
-		(PRINT-CAREFULLY "error message"
-		  (SEND EH-ERROR ':PRINT-ERROR-MESSAGE SG T *STANDARD-OUTPUT*))
-		(WARN-ABOUT-SPECIAL-VARIABLES SG)))
-	 (SETQ LAST-SECOND-LEVEL-ERROR-HANDLER-SG CURRENT-STACK-GROUP)))
-  (COND ((EQ RESULT 'LOSE)
-	 (*THROW 'QUIT NIL)))
+  (LET ((INNER-TRAP-ON-CALL (SG-FLAGS-TRAP-ON-CALL SG))
+	(INNER-PLIST (SG-PLIST SG)))
+    (SG-RESTORE-STATE SG)
+    ;; If the guy set trap-on-call before returning, leave it on.
+    (IF (NOT (ZEROP INNER-TRAP-ON-CALL))
+	(SETF (SG-FLAGS-TRAP-ON-CALL SG) 1))
+    (SETF (SG-PLIST SG) INNER-PLIST))
+  (WHEN (AND ERROR-HANDLER-RUNNING ERROR-HANDLER-REPRINT-ERROR)
+    (UNLESS (EQ CURRENT-STACK-GROUP LAST-SECOND-LEVEL-ERROR-HANDLER-SG)
+      (FORMAT T "~%Back to ")
+      (PRINT-CAREFULLY "error message"
+	(SEND EH-ERROR :PRINT-ERROR-MESSAGE SG T *STANDARD-OUTPUT*))
+      (WARN-ABOUT-SPECIAL-VARIABLES SG))
+    (SETQ LAST-SECOND-LEVEL-ERROR-HANDLER-SG CURRENT-STACK-GROUP))
+  (IF (EQ RESULT 'LOSE)
+      (THROW 'QUIT NIL))
   RESULT)
 
 (DEFUN SG-RUN-GOODBYE (SG)
   "Restart stack group SG, expecting it not to return.
 If done in a second-level error handler stack group,
 the error handler stack group is marked as free."
-  (%P-STORE-CDR-CODE (ALOC (SG-REGULAR-PDL SG)	;Terminate arg list
-			   (SG-REGULAR-PDL-POINTER SG))
+  (%P-STORE-CDR-CODE (LOCF (AREF (SG-REGULAR-PDL SG)	;Terminate arg list
+				 (SG-REGULAR-PDL-POINTER SG)))
 		     CDR-NIL)
   (SETF (SG-CURRENT-STATE SG) SG-STATE-INVOKE-CALL-ON-RETURN)
   (ASSURE-FREE-SPACE)
@@ -405,8 +402,7 @@ the error handler stack group is marked as free."
 
 ;;; Not initialized until used, so that we don't try to create it
 ;;; until the window system exists.
-(DEFVAR COLD-LOAD-STREAM-SAVED-SCREEN
-	:UNBOUND
+(DEFVAR COLD-LOAD-STREAM-SAVED-SCREEN :UNBOUND
   "Bit array used to save the screen while the debugger uses the cold load stream.")
 
 (DEFVAR COLD-LOAD-STREAM-DEBUGGER-SG NIL
@@ -431,7 +427,7 @@ which had to switch to the cold load stream.")
       (RESTORE-SCREEN-FOR-COLD-LOAD-STREAM)
       (SETQ COLD-LOAD-STREAM-DEBUGGER-SG NIL))
     (PUSH SG FREE-SECOND-LEVEL-ERROR-HANDLER-SG-LIST)
-    (AND CURRENT-PROCESS (SEND CURRENT-PROCESS ':REVOKE-RUN-REASON SG))))
+    (AND CURRENT-PROCESS (SEND CURRENT-PROCESS :REVOKE-RUN-REASON SG))))
 
 ;;; Set *TERMINAL-IO* to the cold load stream and print STRING as an explanation.
 ;;; Saves the contents of the screen so it can be restored on exit from the debugger.
@@ -441,8 +437,8 @@ which had to switch to the cold load stream.")
     (SAVE-SCREEN-FOR-COLD-LOAD-STREAM)
     (SETQ COLD-LOAD-STREAM-DEBUGGER-SG CURRENT-STACK-GROUP))
   (SETQ TV:COLD-LOAD-STREAM-OWNS-KEYBOARD T)
-  (SEND *TERMINAL-IO* ':HOME-CURSOR)
-  (SEND *TERMINAL-IO* ':CLEAR-EOL)
+  (SEND *TERMINAL-IO* :HOME-CURSOR)
+  (SEND *TERMINAL-IO* :CLEAR-EOL)
   (FORMAT *TERMINAL-IO* "--> ~A, using the cold load stream <--~2%" STRING))
 
 (DEFUN SAVE-SCREEN-FOR-COLD-LOAD-STREAM (&OPTIONAL DONT-HOME-CURSOR)
@@ -451,15 +447,15 @@ which had to switch to the cold load stream.")
 	  (MAKE-PIXEL-ARRAY
 	    (PIXEL-ARRAY-WIDTH (TV:MAIN-SCREEN-AND-WHO-LINE))
 	    (PIXEL-ARRAY-HEIGHT (TV:MAIN-SCREEN-AND-WHO-LINE))
-	    ':TYPE ART-1B)))
+	    :TYPE ART-1B)))
   (BITBLT TV:ALU-SETA
 	  (PIXEL-ARRAY-WIDTH (TV:MAIN-SCREEN-AND-WHO-LINE))
 	  (PIXEL-ARRAY-HEIGHT (TV:MAIN-SCREEN-AND-WHO-LINE))
 	  (TV:MAIN-SCREEN-AND-WHO-LINE) 0 0
 	  COLD-LOAD-STREAM-SAVED-SCREEN 0 0)
   (UNLESS DONT-HOME-CURSOR
-    (SEND TV:COLD-LOAD-STREAM ':HOME-CURSOR)
-    (SEND TV:COLD-LOAD-STREAM ':CLEAR-EOL)))
+    (SEND TV:COLD-LOAD-STREAM :HOME-CURSOR)
+    (SEND TV:COLD-LOAD-STREAM :CLEAR-EOL)))
 
 
 (DEFUN RESTORE-SCREEN-FOR-COLD-LOAD-STREAM (&OPTIONAL DONT-ASK)
@@ -532,7 +528,7 @@ Use STACK-GROUP-RESUME to make SG take off and run."
 	 (SPP (SG-SPECIAL-PDL-POINTER SG) (1- SPP))
 	 (P))
 	(NIL)
-      (SETQ P (ALOC SP SPP))
+      (SETQ P (LOCF (AREF SP SPP)))
       (OR (= (%P-DATA-TYPE P) DTP-FIX) (FERROR NIL "Where's my saved microstack?"))
       (AND (NOT (ZEROP (%P-LDB %%SPECPDL-BLOCK-START-FLAG P)))
 	   (RETURN (SETF (SG-SPECIAL-PDL-POINTER SG) (1- SPP)))))
@@ -545,7 +541,7 @@ Use STACK-GROUP-RESUME to make SG take off and run."
 	   ;; So is BOT.
 	   (SPP (1- (SG-SPECIAL-PDL-POINTER SG)) (- SPP 2)))
 	  ((OR (< SPP BOT)
-	       (NOT (ZEROP (%P-LDB %%SPECPDL-CLOSURE-BINDING (ALOC SP SPP)))))
+	       (NOT (ZEROP (%P-LDB %%SPECPDL-CLOSURE-BINDING (LOCF (AREF SP SPP))))))
 	   ;; SPP points to a pair that doesn't belong to this frame
 	   ;; or else should not be flushed.
 	   (SETF (SG-SPECIAL-PDL-POINTER SG)
@@ -560,7 +556,7 @@ Use STACK-GROUP-RESUME to make SG take off and run."
 	(LOGAND (- (SG-PDL-PHASE SG) (- PP (SETQ PP (1- FRAME))))
 		(1- SI:PDL-BUFFER-LENGTH)))
   (SETF (SG-REGULAR-PDL-POINTER SG) PP)
-  ;Put back the function.  Convert from a name to a function.
+  ;; Put back the function.  Convert from a name to a function.
   (SG-REGPDL-PUSH
     (COND ((SI:VALIDATE-FUNCTION-SPEC (CAR FORM)) (FDEFINITION (CAR FORM)))
 	  (T (CAR FORM)))
@@ -582,10 +578,10 @@ Use STACK-GROUP-RESUME to make SG take off and run."
   ;; If there is a rest arg, set cdr coding so it looks like a tail of the list of args.
   ;; Otherwise, make the list of args end with NIL.
   (COND (LEXPR-CALL
-	 (%P-STORE-CDR-CODE (ALOC RP (1- (SG-REGULAR-PDL-POINTER SG))) CDR-NORMAL)
-	 (%P-STORE-CDR-CODE (ALOC RP (SG-REGULAR-PDL-POINTER SG)) CDR-ERROR))
+	 (%P-STORE-CDR-CODE (LOCF (AREF RP (1- (SG-REGULAR-PDL-POINTER SG)))) CDR-NORMAL)
+	 (%P-STORE-CDR-CODE (LOCF (AREF RP (SG-REGULAR-PDL-POINTER SG))) CDR-ERROR))
 	(T
-	 (%P-STORE-CDR-CODE (ALOC RP (SG-REGULAR-PDL-POINTER SG)) CDR-NIL)))
+	 (%P-STORE-CDR-CODE (LOCF (AREF RP (SG-REGULAR-PDL-POINTER SG))) CDR-NIL)))
   (SETF (SG-IPMARK SG) FRAME)
   (SETF (SG-AP SG) FRAME)
   ;; Now send the SG on its way
@@ -628,12 +624,12 @@ In other respects, like SG-EVAL."
 	;; Set up SG so that FRAME is the innermost frame left.
 	(WITHOUT-INTERRUPTS
 	  ;; Copy out the data of the frames beyond that one.
-	  (%BLT-TYPED (ALOC (SG-REGULAR-PDL SG) PREV-FRAME)
-		      (ALOC REGPDL-SEGMENT 0)
+	  (%BLT-TYPED (LOCF (AREF (SG-REGULAR-PDL SG) PREV-FRAME))
+		      (LOCF (AREF REGPDL-SEGMENT 0))
 		      (- (1+ REGPDL-POINTER) PREV-FRAME)
 		      1)
-	  (%BLT-TYPED (ALOC (SG-SPECIAL-PDL SG) PREV-FRAME-SPECPDL-INDEX)
-		      (ALOC SPECPDL-SEGMENT 0)
+	  (%BLT-TYPED (LOCF (AREF (SG-SPECIAL-PDL SG) PREV-FRAME-SPECPDL-INDEX))
+		      (LOCF (AREF SPECPDL-SEGMENT 0))
 		      (- (1+ SPECPDL-POINTER) PREV-FRAME-SPECPDL-INDEX)
 		      1)
 	  ;; Reset M-FLAGS QBBFL to its state in that frame.
@@ -648,12 +644,12 @@ In other respects, like SG-EVAL."
 	    (SG-EVAL SG FORM REBIND-STREAMS REGPDL-SEGMENT SPECPDL-SEGMENT)
 	  ;; Copy back the frames we removed.
 	  (WITHOUT-INTERRUPTS
-	    (%BLT-TYPED (ALOC REGPDL-SEGMENT 0)
-			(ALOC (SG-REGULAR-PDL SG) PREV-FRAME)
+	    (%BLT-TYPED (LOCF (AREF REGPDL-SEGMENT 0))
+			(LOCF (AREF (SG-REGULAR-PDL SG) PREV-FRAME))
 			(- (1+ REGPDL-POINTER) PREV-FRAME)
 			1)
-	    (%BLT-TYPED (ALOC SPECPDL-SEGMENT 0)
-			(ALOC (SG-SPECIAL-PDL SG) PREV-FRAME-SPECPDL-INDEX)
+	    (%BLT-TYPED (LOCF (AREF SPECPDL-SEGMENT 0))
+			(LOCF (AREF (SG-SPECIAL-PDL SG) PREV-FRAME-SPECPDL-INDEX))
 			(- (1+ SPECPDL-POINTER) PREV-FRAME-SPECPDL-INDEX)
 			1)
 	    (SETF (SG-AP SG) AP)
@@ -762,7 +758,7 @@ LABEL, VALUE, COUNT and ACTION are like the args to *UNWIND-STACK.
 DISPOSAL is SETUP just to set up the call, CALL to make the call and not free the EH,
  FREE to make the call and free the EH"
   (SG-SAVE-STATE SG)
-  (AND COUNT (SETQ COUNT (1+ COUNT)))  ;Make up for the frame pushed by SG-SAVE-STATE.
+  (AND COUNT (INCF COUNT))  ;Make up for the frame pushed by SG-SAVE-STATE.
   (SG-OPEN-CALL-BLOCK SG 0 'FH-UNWINDER)
   (SG-REGPDL-PUSH LABEL SG)
   (SG-REGPDL-PUSH VALUE SG)
@@ -770,8 +766,8 @@ DISPOSAL is SETUP just to set up the call, CALL to make the call and not free th
   (SG-REGPDL-PUSH ACTION SG)
   (SG-REGPDL-PUSH (SG-FLAGS-TRAP-ON-CALL SG) SG)
   (SETF (SG-FLAGS-TRAP-ON-CALL SG) 0)
-  (%P-STORE-CDR-CODE (ALOC (SG-REGULAR-PDL SG)	;Terminate arg list
-			   (SG-REGULAR-PDL-POINTER SG))
+  (%P-STORE-CDR-CODE (LOCF (AREF (SG-REGULAR-PDL SG)	;Terminate arg list
+				 (SG-REGULAR-PDL-POINTER SG)))
 		     CDR-NIL)
   (SETF (SG-CURRENT-STATE SG) SG-STATE-INVOKE-CALL-ON-RETURN)
   (WITHOUT-INTERRUPTS
@@ -822,7 +818,7 @@ This is a high-level function, in that SG's state is preserved."
 		   X-SG X-FRAME X-ERROR SG EH-P PREV-FH)
   (UNWIND-PROTECT
     (LET* ((TAG `("Return to debugger level ~D." ,ERROR-DEPTH)))
-      (*CATCH TAG
+      (CATCH TAG
 	;; Note: no special variables should be bound
 	;; outside this point (when we return to the error handler sg).
 	(STACK-GROUP-RESUME SG
@@ -830,8 +826,8 @@ This is a high-level function, in that SG's state is preserved."
 		(// X//) (//// X////) (////// X//////)
 		(*VALUES* XVALUES)
 		(EH-SG X-SG) (EH-FRAME X-FRAME) (EH-ERROR X-ERROR)
-		CONDITION-HANDLERS
-		CONDITION-DEFAULT-HANDLERS
+		(CONDITION-HANDLERS NIL)
+		(CONDITION-DEFAULT-HANDLERS NIL)
 		;; It's best to heap-cons this to avoid frightening the user.
 		(CONDITION-RESUME-HANDLERS
 		  (LIST* `((SYS:ABORT ERROR) ,TAG T ,TAG
@@ -863,7 +859,7 @@ This is a high-level function, in that SG's state is preserved."
 		  X-SG X-FRAME X-ERROR SG EH-P PREV-FH)
   (UNWIND-PROTECT
     (LET* ((TAG `("Return to debugger level ~D." ,ERROR-DEPTH)))
-      (*CATCH TAG
+      (CATCH TAG
 	(STACK-GROUP-RESUME
 	  SG
 	  ;; Note: no special variables should be bound
@@ -872,16 +868,17 @@ This is a high-level function, in that SG's state is preserved."
 		(// X//) (//// X////) (////// X//////) (- FORM)
 		(*VALUES* XVALUES)
 		(EH-SG X-SG) (EH-FRAME X-FRAME) (EH-ERROR X-ERROR)
-		CONDITION-HANDLERS
-		CONDITION-DEFAULT-HANDLERS
+		(CONDITION-HANDLERS NIL)
+		(CONDITION-DEFAULT-HANDLERS NIL)
 		;; It's best to heap-cons this to avoid frightening the user.
 		(CONDITION-RESUME-HANDLERS
 		  (LIST* `((SYS:ABORT ERROR) ,TAG T ,TAG
 			   SI:CATCH-ERROR-RESTART-THROW ,TAG)
 			 T CONDITION-RESUME-HANDLERS))
-		(*EVALHOOK* NIL) (*APPLYHOOK* NIL) (ERRSET-STATUS NIL))
-	    (WITH-SELF-VARIABLES-BOUND
-	      (MULTIPLE-VALUE-LIST (EVAL FORM))))))
+		(*EVALHOOK* NIL)
+		(*APPLYHOOK* NIL)
+		(ERRSET-STATUS NIL))
+	    (MULTIPLE-VALUE-LIST (EVAL FORM)))))
       ;; This is in case the catch catches.
       (STACK-GROUP-RESUME SG 'LOSE))
     (SETF (SG-FOOTHOLD-DATA CURRENT-STACK-GROUP) PREV-FH)
@@ -898,7 +895,7 @@ This is a high-level function, in that SG's state is preserved."
 ;	   (OLD-TERMINAL-IO *TERMINAL-IO*) 
 ;	   (OLD-STANDARD-OUTPUT *STANDARD-OUTPUT*) (OLD-STANDARD-INPUT *STANDARD-INPUT*)
 	   WIN-P RESULT)
-      (*CATCH TAG
+      (CATCH TAG
 	;; Note: no special variables should be bound
 	;; outside this point (when we return to the error handler sg).
 	(LET ((+ X+) (++ X++) (+++ X+++) (* X*) (** X**) (*** X***)
@@ -912,16 +909,15 @@ This is a high-level function, in that SG's state is preserved."
 	      (*ERROR-OUTPUT* SI:SYN-TERMINAL-IO)
 	      (*EVALHOOK* NIL) (*APPLYHOOK* NIL) (ERRSET-STATUS NIL)
 	      (RUBOUT-HANDLER NIL)
-	      CONDITION-HANDLERS
-	      CONDITION-DEFAULT-HANDLERS
+	      (CONDITION-HANDLERS NIL)
+	      (CONDITION-DEFAULT-HANDLERS NIL)
 	      ;; It's best to heap-cons this to avoid frightening the user.
 	      (CONDITION-RESUME-HANDLERS
 		(LIST* `((SYS:ABORT ERROR) ,TAG T ,TAG
 			 SI:CATCH-ERROR-RESTART-THROW ,TAG)
 		       T CONDITION-RESUME-HANDLERS)))
-	  (WITH-SELF-VARIABLES-BOUND
-	    (SETQ RESULT (MULTIPLE-VALUE-LIST (SI:EVAL-ABORT-TRIVIAL-ERRORS FORM))
-		  WIN-P T))))
+	  (SETQ RESULT (MULTIPLE-VALUE-LIST (SI:EVAL-ABORT-TRIVIAL-ERRORS FORM))
+		WIN-P T)))
       (COND (WIN-P
 ;	     (SETQ *TERMINAL-IO* OLD-TERMINAL-IO
 ;		   *STANDARD-OUTPUT* OLD-STANDARD-OUTPUT
@@ -944,7 +940,7 @@ This is a high-level function, in that SG's state is preserved."
     (WITHOUT-INTERRUPTS
       (STACK-GROUP-PRESET FH-AUX-SG 'SET-TRAP-ON-CALL CURRENT-STACK-GROUP)
       (FUNCALL FH-AUX-SG NIL)))
-  (*THROW LABEL VALUE))
+  (THROW LABEL VALUE))
 
 (DEFUN FH-UNWINDER (LABEL VALUE COUNT ACTION TRAP-ON-CALL-FLAG)
   (UNLESS (ZEROP TRAP-ON-CALL-FLAG)
@@ -961,17 +957,19 @@ This is a high-level function, in that SG's state is preserved."
 (DEFUN SG-INNERMOST-ACTIVE (SG)
   "Returns the currently executing frame in SG."
   (IF (EQ SG CURRENT-STACK-GROUP)
-      (SG-NEXT-ACTIVE CURRENT-STACK-GROUP
-		      (%POINTER-DIFFERENCE (%STACK-FRAME-POINTER)
-					   (ALOC (SG-REGULAR-PDL CURRENT-STACK-GROUP) 0)))
+      (SG-NEXT-ACTIVE
+	CURRENT-STACK-GROUP
+	(%POINTER-DIFFERENCE (%STACK-FRAME-POINTER)
+			     (LOCF (AREF (SG-REGULAR-PDL CURRENT-STACK-GROUP) 0))))
     (SG-AP SG)))
 
 (DEFUN SG-INNERMOST-OPEN (SG)
   "Returns the innermost open frame in SG."
   (IF (EQ SG CURRENT-STACK-GROUP)
-      (SG-NEXT-OPEN CURRENT-STACK-GROUP
-		    (%POINTER-DIFFERENCE (%STACK-FRAME-POINTER)
-					 (ALOC (SG-REGULAR-PDL CURRENT-STACK-GROUP) 0)))
+      (SG-NEXT-OPEN
+	CURRENT-STACK-GROUP
+	(%POINTER-DIFFERENCE (%STACK-FRAME-POINTER)
+			     (LOCF (AREF (SG-REGULAR-PDL CURRENT-STACK-GROUP) 0))))
     (SG-IPMARK SG)))
 
 (DEFUN SG-NEXT-OPEN (SG FRAME)
@@ -1144,22 +1142,6 @@ UNINTERESTING-FUNCTIONS is a list of functions that are uninteresting."
 		      ((ATOM (RP-FUNCTION-WORD RP NEW-FRAME)) FRAME)
 		      (T NEW-FRAME)))))))
 
-(defun sg-frame-for-pdl-index (sg index)
-  (do ((frame (sg-innermost-open sg) (sg-next-open sg frame)))
-      ((null frame) nil)
-    (when ( frame index)
-      (return frame))))
-
-(defun virtual-address-to-pdl-index (sg vadr)
-  (let* ((rp (sg-regular-pdl sg))
-	 (offset (si::array-data-offset rp)))
-    (if (or (< (%pointer vadr)
-	       (%pointer-plus rp offset))
-	    ( (%pointer vadr)
-	       (%pointer-plus rp (+ (sg-regular-pdl-pointer sg) offset))))
-	nil
-      (%pointer-difference vadr (%pointer-plus rp offset)))))
-
 (DEFUN SG-ERRING-FUNCTION (SG &OPTIONAL (FRAME (SG-AP SG)))
   "Return a /"function name/" that represents the macro instruction that erred, in SG."
   (LET ((CURRENT-UPC (SG-TRAP-MICRO-PC SG))
@@ -1243,9 +1225,8 @@ The first argument is ARGNO = 0.
 Returns NIL if the function doesn't have such an argument, or name is unknown.
 Rest arguments do not count; use (EH:REST-ARG-NAME function 0)."
   (COND ((= (%DATA-TYPE FUNCTION) DTP-FEF-POINTER)
-	 (COMPILER:DISASSEMBLE-ARG-NAME FUNCTION ARGNO))
-	((CONSP (SETQ ARGL (COND ((LEGITIMATE-FUNCTION-P FUNCTION)
-				  (ARGLIST FUNCTION T)))))
+	 (COMPILER::DISASSEMBLE-ARG-NAME FUNCTION ARGNO))
+	((CONSP (SETQ ARGL (AND (LEGITIMATE-FUNCTION-P FUNCTION) (ARGLIST FUNCTION T))))
 	 (DO ((ARGL ARGL (CDR ARGL))
 	      (I ARGNO))
 	     ((OR (NULL ARGL)
@@ -1289,19 +1270,13 @@ been modified, we can only get the latest values)."
        (SETQ ANS (NCONC ANS (COPY-LIST REST-ARG-VALUE))))
   (CONS FUNCTION ANS))
 
-;Brand S compatibility names.
-(DEFF ARG 'EH-ARG)
-(DEFF LOC 'EH-LOC)
-(DEFF VAL 'EH-VAL)
-(DEFF FUN 'EH-FUN)
-
 (DEFUN EH-ARG (&OPTIONAL (NAME-OR-NUMBER 0) (ERRORP T))
   "Return the value of specified arg in current frame.
 Specify either a number (origin 0) or a symbol (package does not matter)."
   (IF NAME-OR-NUMBER
       (MULTIPLE-VALUE-BIND (VAL1 NIL BARF)
 	  (SG-FRAME-ARG-VALUE EH-SG EH-FRAME NAME-OR-NUMBER ERRORP)
-	(IF BARF (FORMAT T "~&~A" BARF VAL1) VAL1))
+	(IF BARF (FORMAT *ERROR-OUTPUT* "~&~A" BARF VAL1) VAL1))
     (MULTIPLE-VALUE-BIND (VAL NIL)
 	(SG-LISTIFY-ARGS-AND-LOCALS EH-SG EH-FRAME)
       VAL)))
@@ -1312,52 +1287,49 @@ Specify either a number (origin 0) or a symbol (package does not matter)."
   (IF NAME-OR-NUMBER
       (MULTIPLE-VALUE-BIND (VAL1 NIL BARF)
 	  (SG-FRAME-LOCAL-VALUE EH-SG EH-FRAME NAME-OR-NUMBER ERRORP)
-	(IF BARF (FORMAT T "~&~A" BARF) VAL1))
+	(IF BARF (FORMAT *ERROR-OUTPUT* "~&~A" BARF) VAL1))
     (MULTIPLE-VALUE-BIND (NIL VAL)
 	(SG-LISTIFY-ARGS-AND-LOCALS EH-SG EH-FRAME)
       VAL)))
 
-(DEFUN EH-VAL (&OPTIONAL (NUMBER 0))
+(DEFUN EH-VAL (&OPTIONAL (NUMBER 0) (ERRORP T))
   "Return the value of specified value being returned by current frame.
 NUMBER is which value to return (origin 0)"
   (MULTIPLE-VALUE-BIND (VAL1 NIL BARF)
-      (SG-FRAME-VALUE-VALUE EH-SG EH-FRAME NUMBER NIL)
-    (IF BARF (FORMAT T "~&~A" BARF) VAL1)))
+      (SG-FRAME-VALUE-VALUE EH-SG EH-FRAME NUMBER ERRORP)
+    (IF BARF (FORMAT *ERROR-OUTPUT* "~&~A" BARF) VAL1)))
 
 (DEFUN EH-FUN (&AUX (RP (SG-REGULAR-PDL EH-SG)))
   "Return the name of the function called in the current frame."
   (FUNCTION-NAME (RP-FUNCTION-WORD RP EH-FRAME)))
 
-(DEFSETF EH-ARG SET-EH-ARG)
-(DEFSETF EH-LOC SET-EH-LOC)
-(DEFSETF EH-VAL SET-EH-VAL)
-(DEFSETF EH-FUN SET-EH-FUN)
-
-(DEFPROP EH-ARG EH-ARG-LOCATION SI:LOCF-METHOD)
-(DEFPROP EH-LOC EH-LOC-LOCATION SI:LOCF-METHOD)
-(DEFPROP EH-VAL EH-VAL-LOCATION SI:LOCF-METHOD)
-(DEFPROP EH-FUN EH-FUN-LOCATION SI:LOCF-METHOD)
+(defun eh-stack-temporary (&optional (number 0) (errorp t))
+  (multiple-value-bind (val1 nil barf)
+      (sg-frame-stack-temporary-value eh-sg eh-frame number errorp)
+    (if barf (format *error-output* "~&~A" barf) val1)))
 
 (DEFUN SET-EH-ARG (NAME-OR-NUMBER VALUE)
   (MULTIPLE-VALUE-BIND (NIL LOC)
-      (SG-FRAME-ARG-VALUE EH-SG EH-FRAME NAME-OR-NUMBER)
-    (RPLACD LOC VALUE)
-    VALUE))
+      (SG-FRAME-ARG-VALUE EH-SG EH-FRAME NAME-OR-NUMBER T)
+    (SETF (CONTENTS LOC) VALUE)))
 
 (DEFUN SET-EH-LOC (NAME-OR-NUMBER VALUE)
   (MULTIPLE-VALUE-BIND (NIL LOC)
-      (SG-FRAME-LOCAL-VALUE EH-SG EH-FRAME NAME-OR-NUMBER)
-    (RPLACD LOC VALUE)
-    VALUE))
+      (SG-FRAME-LOCAL-VALUE EH-SG EH-FRAME NAME-OR-NUMBER T)
+    (SETF (CONTENTS LOC) VALUE)))
 
 (DEFUN SET-EH-VAL (NAME-OR-NUMBER VALUE)
   (MULTIPLE-VALUE-BIND (NIL LOC)
       (SG-FRAME-VALUE-VALUE EH-SG EH-FRAME NAME-OR-NUMBER T)
-    (AND LOC (RPLACD LOC VALUE))
-    VALUE))
+    (AND LOC (SETF (CONTENTS LOC) VALUE))))
 
 (DEFUN SET-EH-FUN (VALUE &AUX (RP (SG-REGULAR-PDL EH-SG)))
   (SETF (RP-FUNCTION-WORD RP EH-FRAME) VALUE))
+
+(defun set-eh-stack-temporary (number value)
+  (multiple-value-bind (nil loc)
+      (sg-frame-stack-temporary-value eh-sg eh-frame number t)
+    (and loc (setf (contents loc) value))))
 
 (DEFUN EH-ARG-LOCATION (NAME-OR-NUMBER)
   (MULTIPLE-VALUE-BIND (NIL LOC)
@@ -1376,6 +1348,29 @@ NUMBER is which value to return (origin 0)"
 
 (DEFUN EH-FUN-LOCATION (&AUX (RP (SG-REGULAR-PDL EH-SG)))
   (LOCF (RP-FUNCTION-WORD RP EH-FRAME)))
+
+(defun eh-stack-temporary-location (number)
+  (multiple-value-bind (nil loc)
+      (sg-frame-stack-temporary-value eh-sg eh-frame number t)
+    loc))
+
+(DEFSETF EH-ARG SET-EH-ARG)
+(DEFSETF EH-LOC SET-EH-LOC)
+(DEFSETF EH-VAL SET-EH-VAL)
+(DEFSETF EH-FUN SET-EH-FUN)
+(defsetf eh-stack-temporary set-eh-stack-temporary)
+
+(DEFLOCF EH-ARG EH-ARG-LOCATION)
+(DEFLOCF EH-LOC EH-LOC-LOCATION)
+(DEFLOCF EH-VAL EH-VAL-LOCATION)
+(DEFLOCF EH-FUN EH-FUN-LOCATION)
+(deflocf eh-stack-temporary eh-stack-temporary-location)
+
+(DEFF ARG 'EH-ARG)
+(DEFF LOC 'EH-LOC)
+(DEFF VAL 'EH-VAL)
+(DEFF FUN 'EH-FUN)
+(deff stack-temporary 'eh-stack-temporary)
 
 (DEFUN SG-FRAME-ARG-VALUE (SG FRAME ARGNUM &OPTIONAL (ERRORP T))
   "Return the value and location of arg number ARGNUM in FRAME in SG.
@@ -1387,52 +1382,56 @@ ERRORP non-NIL means signal an error if ARGNUM is invalid.
 ERRORP NIL means retrun a third value which describes the problem, if any."
   (DECLARE (VALUES VALUE LOCATION BARF))
   (CHECK-TYPE ARGNUM (OR SYMBOL STRING NUMBER))
-  (BLOCK FUNCTION
-    (PROG* ((FUNCTION (RP-FUNCTION-WORD (SG-REGULAR-PDL SG) FRAME))
-	    (NUM-ARGS (SG-NUMBER-OF-SPREAD-ARGS SG FRAME))
-	    ARG-NAME
-	    (REST-ARG-P
-	      (AND (LEGITIMATE-FUNCTION-P FUNCTION)
-		   (LDB-TEST #o2402 (ARGS-INFO FUNCTION)))))
-	   (IF (SYMBOLP ARGNUM)
-	       (OR (DOTIMES (I NUM-ARGS)
-		     (IF (STRING-EQUAL (STRING (ARG-NAME FUNCTION I)) (STRING ARGNUM))
-			 (RETURN (SETQ ARGNUM I))))
-		   ;; If this function takes a rest arg and we have
-		   ;; specified its name, handle it (it is local number 0).
-		   (AND REST-ARG-P
-			(STRING-EQUAL (STRING (LOCAL-NAME FUNCTION 0)) (STRING ARGNUM))
-			(RETURN-FROM FUNCTION
-			  (COND ((CONSP FUNCTION)
-				 (VALUES (SG-REST-ARG-VALUE SG FRAME) T))
-				(T (SG-FRAME-LOCAL-VALUE SG FRAME 0)))))))
-	   (IF (SYMBOLP ARGNUM)
-	       (LET ((STRING (FORMAT NIL "No arg named ~S" ARGNUM)))
-		 (IF ERRORP (FERROR NIL STRING) (RETURN NIL NIL STRING))))
+  (LET* ((FUNCTION (RP-FUNCTION-WORD (SG-REGULAR-PDL SG) FRAME))
+	 (NUM-ARGS (SG-NUMBER-OF-SPREAD-ARGS SG FRAME))
+	 (REST-ARG-P (AND (LEGITIMATE-FUNCTION-P FUNCTION)
+			  (LDB-TEST #o2402 (ARGS-INFO FUNCTION))))
+	 ARG-NAME ERROR-STRING)
+    (IF (SYMBOLP ARGNUM)
+	(OR (DOTIMES (I NUM-ARGS)
+	      (IF (STRING= (STRING (ARG-NAME FUNCTION I)) (STRING ARGNUM))
+		  (RETURN (SETQ ARGNUM I))))
+	    ;; If this function takes a rest arg and we have
+	    ;; specified its name, handle it (it is local number 0).
+	    (AND REST-ARG-P
+		 (STRING= (STRING (LOCAL-NAME FUNCTION 0)) (STRING ARGNUM))
+		 (RETURN-FROM SG-FRAME-ARG-VALUE
+		   (IF (CONSP FUNCTION)
+		       (VALUES (SG-REST-ARG-VALUE SG FRAME) T)
+		       (SG-FRAME-LOCAL-VALUE SG FRAME 0))))))
+    (COND ((SYMBOLP ARGNUM)
+	   (SETQ ERROR-STRING "No arg named ~S"))
+	  ((< ARGNUM 0)
+	   (SETQ ERROR-STRING "No argument number ~D, silly!"))
+	  (T
 	   (SETQ ARG-NAME (ARG-NAME FUNCTION ARGNUM))
-	   (IF (AND ( ARGNUM NUM-ARGS) (SG-FRAME-ACTIVE-P SG FRAME))
-	       (LET ((LOC (NTHCDR (- ARGNUM NUM-ARGS)
-				  (AND REST-ARG-P (SG-REST-ARG-VALUE SG FRAME)))))
-		 (IF LOC (RETURN (CAR LOC) (LOCF (CAR LOC)))
-		   (LET ((STRING (FORMAT NIL "Argument number ~D is out of range in current frame" ARGNUM)))
-		     (IF ERRORP (FERROR NIL STRING) (RETURN NIL NIL STRING))))))
-	   ;; Is this variable bound special in THIS frame?
-	   (MULTIPLE-VALUE-BIND (START END)
-	       (SG-FRAME-SPECIAL-PDL-RANGE SG FRAME)
-	     (COND (START
-		    (DO ((SP (SG-SPECIAL-PDL SG))
-			 (I START (+ 2 I)))
-			(( I END))
-		      (AND (EQ (SYMBOL-FROM-VALUE-CELL-LOCATION (AREF SP (1+ I)))
-			       ARG-NAME)
-			   ;; Yes, it is, so return its special binding
-			   ;; and that binding's location when the SG is running.
-			   (RETURN-FROM FUNCTION
-			     (MULTIPLE-VALUE-BIND (VALUE NIL LOCATION)
-				 (SYMEVAL-IN-STACK-GROUP ARG-NAME SG FRAME T)
-			       (VALUES VALUE LOCATION))))))))
-	   (RETURN (AREF (SG-REGULAR-PDL SG) (+ FRAME ARGNUM 1))
-		   (ALOC (SG-REGULAR-PDL SG) (+ FRAME ARGNUM 1))))))
+	   (WHEN (AND ( ARGNUM NUM-ARGS) (SG-FRAME-ACTIVE-P SG FRAME))
+	     (LET ((LOC (NTHCDR (- ARGNUM NUM-ARGS)
+				(AND REST-ARG-P (SG-REST-ARG-VALUE SG FRAME)))))
+	       (IF LOC
+		   (RETURN-FROM SG-FRAME-ARG-VALUE
+		     (VALUES (CAR LOC) (LOCF (CAR LOC))))
+		 (SETQ ERROR-STRING "Argument number ~D is out of range in current frame"))))))
+    (IF ERROR-STRING
+	(IF ERRORP
+	    (FERROR NIL ERROR-STRING ARGNUM)
+	    (VALUES NIL NIL (FORMAT NIL ERROR-STRING ARGNUM)))
+      ;; Is this variable bound special in THIS frame?
+      (MULTIPLE-VALUE-BIND (START END)
+	  (SG-FRAME-SPECIAL-PDL-RANGE SG FRAME)
+	(WHEN START
+	  (DO ((SP (SG-SPECIAL-PDL SG))
+	       (I START (+ 2 I)))
+	      (( I END))
+	    (AND (EQ ARG-NAME (SYMBOL-FROM-VALUE-CELL-LOCATION (AREF SP (1+ I))))
+		 ;; Yes, it is, so return its special binding
+		 ;; and that binding's location when the SG is running.
+		 (RETURN-FROM SG-FRAME-ARG-VALUE
+		   (MULTIPLE-VALUE-BIND (VALUE NIL LOCATION)
+		       (SYMEVAL-IN-STACK-GROUP ARG-NAME SG FRAME T)
+		     (VALUES VALUE LOCATION)))))))
+      (VALUES (AREF (SG-REGULAR-PDL SG) (+ FRAME ARGNUM 1))
+	      (LOCF (AREF (SG-REGULAR-PDL SG) (+ FRAME ARGNUM 1)))))))
 
 (DEFUN SG-FRAME-LOCAL-VALUE (SG FRAME LOCALNUM &OPTIONAL (ERRORP T))
   "Return the value and location of local variable number LOCALNUM in FRAME in SG.
@@ -1443,40 +1442,39 @@ ERRORP non-NIL means signal an error if ARGNUM is invalid.
 ERRORP NIL means retrun a third value which describes the problem, if any."
   (DECLARE (VALUES VALUE LOCATION BARF))
   (CHECK-TYPE LOCALNUM (OR SYMBOL STRING NUMBER))
-  (BLOCK FUNCTION
-    (PROG* ((FUNCTION (RP-FUNCTION-WORD (SG-REGULAR-PDL SG) FRAME))
-	    (NUM-LOCALS (SG-NUMBER-OF-LOCALS SG FRAME))
-	    LOCAL-NAME)
-	   (IF (SYMBOLP LOCALNUM)
-	       (DOTIMES (I NUM-LOCALS)
-		 (IF (STRING-EQUAL (STRING (LOCAL-NAME FUNCTION I)) (STRING LOCALNUM))
-		     (RETURN (SETQ LOCALNUM I)))))
-	   (IF (SYMBOLP LOCALNUM)
-	       (LET ((STRING (FORMAT NIL "No local named ~S" LOCALNUM)))
-		 (IF ERRORP (FERROR NIL STRING) (RETURN NIL NIL STRING))))
-	   (IF ( LOCALNUM NUM-LOCALS)
-	       (LET ((STRING (FORMAT NIL "Local number ~D is out of range in current frame"
-				     LOCALNUM)))
-		 (IF ERRORP (FERROR NIL STRING) (RETURN NIL NIL STRING))))
-	   (SETQ LOCAL-NAME (LOCAL-NAME FUNCTION LOCALNUM))
-	   ;; Is this variable bound special in THIS frame?
-	   (MULTIPLE-VALUE-BIND (START END)
-	       (SG-FRAME-SPECIAL-PDL-RANGE SG FRAME)
-	     (COND (START
-		    (DO ((SP (SG-SPECIAL-PDL SG))
-			 (I START (+ 2 I)))
-			(( I END))
-		      (AND (EQ (SYMBOL-FROM-VALUE-CELL-LOCATION (AREF SP (1+ I)))
-			       LOCAL-NAME)
-			   ;; Yes, it is, so return its special binding
-			   ;; and that binding's location when the SG is running.
-			   (RETURN-FROM FUNCTION
-			     (MULTIPLE-VALUE-BIND (VALUE NIL LOCATION)
-				 (SYMEVAL-IN-STACK-GROUP LOCAL-NAME SG FRAME T)
-			       (VALUES VALUE LOCATION))))))))
-	   (LET* ((RP (SG-REGULAR-PDL SG))
-		  (RPIDX (+ LOCALNUM FRAME (RP-LOCAL-BLOCK-ORIGIN RP FRAME))))
-	     (RETURN (AREF RP RPIDX) (ALOC RP RPIDX))))))
+  (LET* ((FUNCTION (RP-FUNCTION-WORD (SG-REGULAR-PDL SG) FRAME))
+	 (NUM-LOCALS (SG-NUMBER-OF-LOCALS SG FRAME))
+	 LOCAL-NAME ERROR-STRING)
+    (IF (SETQ ERROR-STRING
+	      (OR (IF (SYMBOLP LOCALNUM)
+		      (DOTIMES (I NUM-LOCALS "No local named ~S")
+			(WHEN (STRING= (STRING (LOCAL-NAME FUNCTION I)) (STRING LOCALNUM))
+			  (SETQ LOCALNUM I)
+			  (RETURN NIL))))
+		  (IF (NOT (< -1 LOCALNUM NUM-LOCALS))
+		      "Local number ~D is out of range in current frame")))
+	(IF ERRORP (FERROR NIL ERROR-STRING LOCALNUM)
+	  (VALUES NIL NIL (FORMAT NIL ERROR-STRING LOCALNUM)))
+      (SETQ LOCAL-NAME (LOCAL-NAME FUNCTION LOCALNUM))
+      ;; Is this variable bound special in THIS frame?
+      (MULTIPLE-VALUE-BIND (START END)
+	  (SG-FRAME-SPECIAL-PDL-RANGE SG FRAME)
+	(WHEN START
+	  (DO ((SP (SG-SPECIAL-PDL SG))
+	       (I START (+ 2 I)))
+	      (( I END))
+	    (AND (EQ (SYMBOL-FROM-VALUE-CELL-LOCATION (AREF SP (1+ I)))
+		     LOCAL-NAME)
+		 ;; Yes, it is, so return its special binding
+		 ;; and that binding's location when the SG is running.
+		 (RETURN-FROM SG-FRAME-LOCAL-VALUE
+		   (MULTIPLE-VALUE-BIND (VALUE NIL LOCATION)
+		       (SYMEVAL-IN-STACK-GROUP LOCAL-NAME SG FRAME T)
+		     (VALUES VALUE LOCATION))))))
+	(LET* ((RP (SG-REGULAR-PDL SG))
+	       (RPIDX (+ LOCALNUM FRAME (RP-LOCAL-BLOCK-ORIGIN RP FRAME))))
+	  (VALUES (AREF RP RPIDX)
+		  (LOCF (AREF RP RPIDX))))))))
 
 (defun sg-frame-stack-temporary-value (sg frame number &optional (error t))
   "Return the value of the NUMBER'th temporary pushed onto the stack in FRAME.
@@ -1520,14 +1518,14 @@ This may alter the length of the list which is the first value.
 The value you get is the altered one, in that case."
   (DECLARE (VALUES VALUE-LIST TAIL-LOCATION-OR-TOTAL-EXPECTED NUMBER-RETURNED-SO-FAR))
   (COND ((= (RP-DESTINATION RP FRAME)
-	    (LDB #o1602 (OR (GET 'COMPILER:D-RETURN 'COMPILER:QLVAL) #o100000)))
+	    (LDB #o1602 (OR (GET 'COMPILER::D-RETURN 'COMPILER::QLVAL) #o100000)))
 	 (SG-FRAME-VALUE-LIST SG (SG-NEXT-ACTIVE SG FRAME)
 			      NEW-NUMBER-OF-VALUES ORIGINAL-FRAME))
 	((NOT (ZEROP (RP-ADI-PRESENT RP FRAME)))
 	 (DO ((IDX (- FRAME 4) (- IDX 2)))
 	     (())
-	   (LET ((TYPE (LDB SI:%%ADI-TYPE (AREF RP IDX)))
-		 (MORE-P (%P-LDB %%ADI-PREVIOUS-ADI-FLAG (ALOC RP (1- IDX)))))
+	   (LET ((TYPE (LDB SI::%%ADI-TYPE (AREF RP IDX)))
+		 (MORE-P (%P-LDB %%ADI-PREVIOUS-ADI-FLAG (LOCF (AREF RP (1- IDX))))))
 	     (AND (OR (= TYPE ADI-RETURN-INFO)
 		      (= TYPE ADI-USED-UP-RETURN-INFO))
 		  (LET ((STORING-OPTION (NTH (LDB %%ADI-RET-STORING-OPTION (AREF RP IDX))
@@ -1547,9 +1545,9 @@ The value you get is the altered one, in that case."
 				     (MAX 0 (MIN NEW-NUMBER-OF-VALUES NUM-TOTAL)))
 			       ;; Must store these in a way that preserves cdr-codes.
 			       (SETF (%P-LDB %%ADI-RET-NUM-VALS-EXPECTING
-					     (ALOC RP IDX))
+					     (LOCF (AREF RP IDX)))
 				     (- NUM-TOTAL NEW-NUMBER-OF-VALUES))
-			       (SETF (CAR (ALOC RP (1- IDX)))
+			       (SETF (CAR (LOCF (AREF RP (1- IDX))))
 				     (%MAKE-POINTER-OFFSET DTP-LOCATIVE POINTER
 							   NEW-NUMBER-OF-VALUES)))
 			     ;; Make all the words for storing the values in
@@ -1569,7 +1567,7 @@ The value you get is the altered one, in that case."
 			   (SG-FRAME-VALUE-LIST SG (+ %LP-CALL-BLOCK-LENGTH
 						      (%POINTER-DIFFERENCE
 							(AREF RP (1- IDX))
-							(ALOC RP 0)))
+							(LOCF (AREF RP 0))))
 						NEW-NUMBER-OF-VALUES ORIGINAL-FRAME))
 			  ((EQ STORING-OPTION 'ADI-ST-MAKE-LIST)
 			   ;; Find the stack word that contains the pointer
@@ -1577,7 +1575,7 @@ The value you get is the altered one, in that case."
 			   (LET ((LIST-SLOT-IDX
 				  (DO ((IDX1 IDX (- IDX1 2)))
 				      ((ZEROP (%P-LDB %%ADI-PREVIOUS-ADI-FLAG
-						      (ALOC RP (1- IDX1))))
+						      (LOCF (AREF RP (1- IDX1)))))
 				       (- IDX1 2)))))
 			     ;; If specified, add some values to the end of the list
 			     ;; or flush some.
@@ -1587,17 +1585,17 @@ The value you get is the altered one, in that case."
 				    (LET ((EXTRA (- NEW-NUMBER-OF-VALUES
 						    (LENGTH (AREF RP LIST-SLOT-IDX)))))
 				      (RPLACD (AREF RP (1- IDX)) (MAKE-LIST EXTRA))
-				      (SETF (CAR (ALOC RP (1- IDX)))
+				      (SETF (CAR (LOCF (AREF RP (1- IDX))))
 					    (NTHCDR EXTRA (AREF RP (1- IDX))))))
-				   (T (SETF (CAR (ALOC RP (1- IDX)))
+				   (T (SETF (CAR (LOCF (AREF RP (1- IDX))))
 					    (NTHCDR NEW-NUMBER-OF-VALUES
 						    (LOCF (AREF RP LIST-SLOT-IDX))))
-				      (RPLACD (AREF RP (1- IDX)) NIL)))
+				      (SETF (CDR (AREF RP (1- IDX))) NIL)))
 			     ;; Return the list, a flag, and the length of the list.
-			     (RETURN (AREF RP LIST-SLOT-IDX)
-				     (ALOC RP (1- IDX))
-				     (LENGTH (AREF RP LIST-SLOT-IDX))
-				     (= TYPE ADI-USED-UP-RETURN-INFO)))))))
+			     (RETURN (VALUES (AREF RP LIST-SLOT-IDX)
+					     (LOCF (AREF RP (1- IDX)))
+					     (LENGTH (AREF RP LIST-SLOT-IDX))
+					     (= TYPE ADI-USED-UP-RETURN-INFO))))))))
 	     (IF (ZEROP MORE-P)
 		 ;; Ok, the ultimate frame being returned to is not asking for mult values.
 		 ;; So, if this frame has not got a trap-on-exit, it has returned no values.
@@ -1619,8 +1617,7 @@ The value you get is the altered one, in that case."
 	   (SG-AC-T SG))
 	  ((AND (SETQ PREV (SG-PREVIOUS-ACTIVE SG FRAME INNERMOST-VISIBLE-FRAME))
 		(RP-FUNCTION-WORD RP PREV)
-		(EQ (RP-FUNCTION-WORD RP PREV)
-		    #'FOOTHOLD)
+		(EQ (RP-FUNCTION-WORD RP PREV) #'FOOTHOLD)
 		(SETQ DOUBLEPREV (SG-PREVIOUS-ACTIVE SG PREV INNERMOST-VISIBLE-FRAME))
 		(OR (AND (EQ (RP-FUNCTION-WORD RP DOUBLEPREV)
 			     #'FH-STREAM-BINDING-EVALER)
@@ -1629,7 +1626,7 @@ The value you get is the altered one, in that case."
 			     #'FH-APPLIER-NO-RESTART)
 			 (SETQ ERROR (CAR (AREF RP (+ DOUBLEPREV 2))))))
 		(CONDITION-TYPEP ERROR 'EXIT-TRAP-ERROR))
-	   (CAR (SEND ERROR ':VALUES))))))
+	   (CAR (SEND ERROR :VALUES))))))
 
 (DEFUN SG-FRAME-VALUE-VALUE (SG FRAME NUMBER &OPTIONAL CREATE-SLOT)
   "Return the value of the NUMBER'th value being returned by FRAME.
@@ -1639,7 +1636,7 @@ this makes a difference if FRAME has been asked to return arbitrarily
 many values with MULTIPLE-VALUE-LIST."
   (IF CREATE-SLOT
       (CHECK-TYPE NUMBER NUMBER)
-    (CHECK-TYPE NUMBER (OR NUMBER NULL)))
+      (CHECK-TYPE NUMBER (OR NUMBER NULL)))
   (MULTIPLE-VALUE-BIND (VALUE-LIST TAIL-LOCATION NUM-ALREADY)
       (SG-FRAME-VALUE-LIST SG FRAME)
     (IF (NULL NUMBER)
@@ -1647,8 +1644,9 @@ many values with MULTIPLE-VALUE-LIST."
       (AND CREATE-SLOT ( NUM-ALREADY NUMBER)
 	   (MULTIPLE-VALUE (VALUE-LIST TAIL-LOCATION NUM-ALREADY)
 	     (SG-FRAME-VALUE-LIST SG FRAME (1+ NUMBER))))
-      (LET ((SLOT (NTHCDR NUMBER VALUE-LIST)))
-	(AND SLOT (VALUES (CAR SLOT) (LOCF (CAR SLOT))))))))
+      (LET ((SLOT (AND ( NUMBER 0) (NTHCDR NUMBER VALUE-LIST))))
+	(AND SLOT (VALUES (CAR SLOT)
+			  (LOCF (CAR SLOT))))))))
 
 (DEFUN SG-RETURN-ADDITIONAL-VALUE (SG FRAME VALUE)
   "Add VALUE onto the list of values being returned by FRAME.
@@ -1665,7 +1663,7 @@ Returns T if we were able to add another value."
 	   ;; Now see whether a slot exists for the additional value.
 	   (LET ((SLOT (NTHCDR NUM-ALREADY VALUE-LIST)))
 	     ;; If so, store in it
-	     (AND SLOT (RPLACA SLOT VALUE))
+	     (AND SLOT (SETF (CONTENTS SLOT) VALUE))
 	     ;; and return non-NIL if the slot exists.
 	     SLOT)))))
 
@@ -1710,7 +1708,7 @@ The third value indicates a rest arg that does not overlap the stack frame."
     (IF (TYPEP FUNCTION 'COMPILED-FUNCTION)
 	(AREF RP (+ AP (RP-LOCAL-BLOCK-ORIGIN RP AP)))
       (IF (> NARGS-SUPPLIED NARGS-EXPECTED)
-	  (%MAKE-POINTER DTP-LIST (ALOC RP (+ AP NARGS-EXPECTED 1)))
+	  (%MAKE-POINTER DTP-LIST (LOCF (AREF RP (+ AP NARGS-EXPECTED 1))))
 	NIL))
     REST-ARG
     LEXPR-CALL))
@@ -1728,21 +1726,21 @@ The third value indicates a rest arg that does not overlap the stack frame."
 	   (END (1+ NARGS)))
 	  (( I END)
 	   (OR (= I 1)
-	       (%P-STORE-CDR-CODE (ALOC RP (+ FRAME I -1)) CDR-NIL)))
-	(%P-STORE-CDR-CODE (ALOC RP (+ FRAME I)) CDR-NEXT))
+	       (%P-STORE-CDR-CODE (LOCF (AREF RP (+ FRAME I -1))) CDR-NIL)))
+	(%P-STORE-CDR-CODE (LOCF (AREF RP (+ FRAME I))) CDR-NEXT))
       (DO ((I 0 (1+ I))
 	   (N-LOCALS (SG-NUMBER-OF-LOCALS SG FRAME)))
 	  (( I N-LOCALS)
 	   (OR (ZEROP I)
-	       (%P-STORE-CDR-CODE (ALOC RP (+ FRAME LOCALP I -1)) CDR-NIL)))
-	(%P-STORE-CDR-CODE (ALOC RP (+ FRAME LOCALP I)) CDR-NEXT))
+	       (%P-STORE-CDR-CODE (LOCF (AREF RP (+ FRAME LOCALP I -1))) CDR-NIL)))
+	(%P-STORE-CDR-CODE (LOCF (AREF RP (+ FRAME LOCALP I))) CDR-NEXT))
       (WHEN (AND TEM EXPLICIT-REST-ARG)
-	(%P-STORE-CDR-CODE (ALOC RP (+ FRAME LOCALP -1)) CDR-NORMAL))
+	(%P-STORE-CDR-CODE (LOCF (AREF RP (+ FRAME LOCALP -1))) CDR-NORMAL))
       (VALUES (IF (PLUSP NARGS)
-		  (%MAKE-POINTER DTP-LIST (ALOC RP (1+ FRAME)))
+		  (%MAKE-POINTER DTP-LIST (LOCF (AREF RP (1+ FRAME))))
 		(SG-REST-ARG-VALUE SG FRAME))
 	      (AND (PLUSP (SG-NUMBER-OF-LOCALS SG FRAME))
-		   (%MAKE-POINTER DTP-LIST (ALOC RP (+ FRAME LOCALP))))))))
+		   (%MAKE-POINTER DTP-LIST (LOCF (AREF RP (+ FRAME LOCALP)))))))))
 
 (DEFUN LEGITIMATE-FUNCTION-P (FUNCTION)
   "T if FUNCTION is a reasonable argument to give to ARGS-INFO."
@@ -1758,15 +1756,15 @@ The third value indicates a rest arg that does not overlap the stack frame."
 				    (NARGS-SUPPLIED (RP-NUMBER-ARGS-SUPPLIED RP AP)))
   "Returns the number of spread args present in FRAME in SG.
 /"Spread/" args means that the elements of a rest arg normally do not count."
-  (COND ((LEGITIMATE-FUNCTION-P FUNCTION)
-	 (SETQ ARGS-INFO (ARGS-INFO FUNCTION))
-	 (SETQ REST-ARG-P (LDB-TEST 2402 ARGS-INFO))
-	 (SETQ NARGS-EXPECTED (LDB %%ARG-DESC-MAX-ARGS ARGS-INFO))))
+  (WHEN (LEGITIMATE-FUNCTION-P FUNCTION)
+    (SETQ ARGS-INFO (ARGS-INFO FUNCTION))
+    (SETQ REST-ARG-P (LDB-TEST (BYTE 2 #O2424) ARGS-INFO))
+    (SETQ NARGS-EXPECTED (LDB %%ARG-DESC-MAX-ARGS ARGS-INFO)))
   ;; The args that can be asked for are the ones supplied,
   ;; except that FEFs make slots for all args they expect whether supplied or not,
   ;; and if there is a rest arg it any unexpected spread args
   ;; are considered to be part of that.
-  (COND ((= (%DATA-TYPE FUNCTION) DTP-FEF-POINTER)
+  (COND ((TYPEP FUNCTION 'COMPILED-FUNCTION)
 	 (IF REST-ARG-P NARGS-EXPECTED
 	   (MAX (1- (RP-LOCAL-BLOCK-ORIGIN RP AP)) NARGS-EXPECTED NARGS-SUPPLIED)))
 	(T (IF REST-ARG-P
@@ -1777,12 +1775,12 @@ The third value indicates a rest arg that does not overlap the stack frame."
   "Return the number of local variable slots present in FRAME in SG."
   (SETQ RP (SG-REGULAR-PDL SG)
 	FUNCTION (RP-FUNCTION-WORD RP FRAME))
-  (IF (= (%DATA-TYPE FUNCTION) DTP-FEF-POINTER)
+  (IF (TYPEP FUNCTION 'COMPILED-FUNCTION)
       (FEF-NUMBER-OF-LOCALS FUNCTION)
     0))
 
 (DEFUN FEF-NUMBER-OF-LOCALS (FUNCTION)
-  (LENGTH (CADR (ASSQ 'COMPILER:LOCAL-MAP (DEBUGGING-INFO FUNCTION)))))
+  (LENGTH (CADR (ASSQ 'COMPILER::LOCAL-MAP (DEBUGGING-INFO FUNCTION)))))
 
 ;;; These functions know about the location tags used in the ERROR-TABLE
 ;;; entries, and how to creates locatives to them, fetch from them,
@@ -1799,7 +1797,7 @@ or VMA meaning the saved last memory address,
 or RMD meaning the saved last memory data,
 or a list (PP number) where number is negative,
  to index down the stack."
-  (SELECTQ LOC
+  (CASE LOC
     (M-A (SG-AC-A SG))
     (M-B (SG-AC-B SG))
     (M-C (SG-AC-C SG))
@@ -1828,7 +1826,8 @@ or a list (PP number) where number is negative,
 	     (AREF (SG-REGULAR-PDL SG) (+ (SG-REGULAR-PDL-POINTER SG) (CADR LOC))))
 	    ((BAD-HACKER LOC "Unknown tag"))))))
 
-(DEFSETF SG-CONTENTS (SG LOC) (VAL) `(SG-STORE ,VAL ,SG ,LOC))
+(DEFSETF SG-CONTENTS (SG LOC) (VAL)
+  `(SG-STORE ,VAL ,SG ,LOC))
 
 ;;; Metamorphosis
 (DEFUN SG-STORE (X SG LOC)
@@ -1876,11 +1875,11 @@ or a list (PP number) where number is negative,
     (M-K (LOCF (SG-AC-K SG)))
     (A-QCSTKG (%MAKE-POINTER DTP-LOCATIVE SG))
     (A-SG-PREVIOUS-STACK-GROUP (LOCF (SG-PREVIOUS-STACK-GROUP SG)))
-    (PP (ALOC (SG-REGULAR-PDL SG) (SG-REGULAR-PDL-POINTER SG)))
+    (PP (LOCF (AREF (SG-REGULAR-PDL SG) (SG-REGULAR-PDL-POINTER SG))))
     (RMD (%MAKE-POINTER DTP-LOCATIVE (SG-SAVED-VMA SG)))
     (OTHERWISE
       (COND ((AND (CONSP LOC) (EQ (CAR LOC) 'PP))
-	     (ALOC (SG-REGULAR-PDL SG) (+ (SG-REGULAR-PDL-POINTER SG) (CADR LOC))))
+	     (LOCF (AREF (SG-REGULAR-PDL SG) (+ (SG-REGULAR-PDL-POINTER SG) (CADR LOC)))))
 	    ((BAD-HACKER LOC "Unknown tag"))))))
 
 ;;; Printoutosis (is that a disease?)
@@ -1903,6 +1902,7 @@ As a special feature, LOC can be a number; then LOC itself is the value."
 (DEFUN SG-FIXNUM-STORE (X SG LOC)
   "Set the pointer field of status item LOC in SG to X."
   (%P-DPB X %%Q-POINTER (SG-LOCATE SG LOC)))
+
 
 (DEFUN SG-BINDING-POSITION (SG VARIABLE)
   "Return the position in SG's specpdl of the outermost binding of VARIABLE.
@@ -1911,9 +1911,9 @@ Returns NIL if VARIABLE is not bound in stack group SG."
        (LIM (1+ (SG-SPECIAL-PDL-POINTER SG)))
        (SP (SG-SPECIAL-PDL SG)))
       (( I LIM))
-    (IF (AND (%P-POINTERP (ALOC SP I))
-	     (EQ (%P-CONTENTS-AS-LOCATIVE (ALOC SP I))
-		 (VALUE-CELL-LOCATION VARIABLE)))
+    (IF (AND (%P-POINTERP (LOCF (AREF SP I)))
+	     (EQ (%P-CONTENTS-AS-LOCATIVE (LOCF (AREF SP I)))
+		 (LOCF (SYMBOL-VALUE VARIABLE))))
 	(RETURN (1- I)))))
 
 (DEFVAR INSERT-BINDING-IN-CLOSURE-TEMP)
@@ -1934,9 +1934,9 @@ which is used as the closure value cell.  In this case,
 the cell's contents are not changed, so they become VARIABLE's value."
   (WITHOUT-INTERRUPTS
     (UNLESS (GET-LOCATION-OR-NIL (%MAKE-POINTER DTP-LIST CLOSURE)
-				 (VALUE-CELL-LOCATION VARIABLE))
+				 (LOCF (SYMBOL-VALUE VARIABLE)))
       (LET ((POSITION (SG-BINDING-POSITION CURRENT-STACK-GROUP BEFORE-VARIABLE))
-	    (OVCELL (FOLLOW-CELL-FORWARDING (VALUE-CELL-LOCATION VARIABLE) T)))
+	    (OVCELL (FOLLOW-CELL-FORWARDING (LOCF (SYMBOL-VALUE VARIABLE)) T)))
 	(UNLESS XVCELL
 	  (SETQ XVCELL (LIST NIL))
 	  ;; Copy the current global value into the new binding cell.
@@ -1955,19 +1955,19 @@ the cell's contents are not changed, so they become VARIABLE's value."
 	  (SETF (SG-SPECIAL-PDL-POINTER CURRENT-STACK-GROUP)
 		(GET-OWN-SPECIAL-PDL-POINTER))
 	  (SG-INSERT-SPECIAL-BINDING CURRENT-STACK-GROUP POSITION
-				     (VALUE-CELL-LOCATION VARIABLE) T)
+				     (LOCF (SYMBOL-VALUE VARIABLE)) T)
 	  (%P-DPB (%P-LDB %%SPECPDL-BLOCK-START-FLAG
-			  (ALOC (SG-SPECIAL-PDL CURRENT-STACK-GROUP) (+ POSITION 2)))
+			  (LOCF (AREF (SG-SPECIAL-PDL CURRENT-STACK-GROUP) (+ POSITION 2))))
 		  %%SPECPDL-BLOCK-START-FLAG
-		  (ALOC (SG-SPECIAL-PDL CURRENT-STACK-GROUP) POSITION))
+		  (LOCF (AREF (SG-SPECIAL-PDL CURRENT-STACK-GROUP) POSITION)))
 	  (%P-DPB 0 %%SPECPDL-BLOCK-START-FLAG
-		  (ALOC (SG-SPECIAL-PDL CURRENT-STACK-GROUP) (+ POSITION 2)))
-	  (%P-STORE-DATA-TYPE (VALUE-CELL-LOCATION VARIABLE) DTP-FIX)
-	  (%P-STORE-POINTER (VALUE-CELL-LOCATION VARIABLE) XVCELL)
-	  (%P-STORE-DATA-TYPE (VALUE-CELL-LOCATION VARIABLE)
+		  (LOCF (AREF (SG-SPECIAL-PDL CURRENT-STACK-GROUP) (+ POSITION 2))))
+	  (%P-STORE-DATA-TYPE (LOCF (SYMBOL-VALUE VARIABLE)) DTP-FIX)
+	  (%P-STORE-POINTER (LOCF (SYMBOL-VALUE VARIABLE)) XVCELL)
+	  (%P-STORE-DATA-TYPE (LOCF (SYMBOL-VALUE VARIABLE))
 			      DTP-EXTERNAL-VALUE-CELL-POINTER))
 	(SETF (CDR (%MAKE-POINTER DTP-LIST CLOSURE))
-	      (LIST* (VALUE-CELL-LOCATION VARIABLE)
+	      (LIST* (LOCF (SYMBOL-VALUE VARIABLE))
 		     (%MAKE-POINTER DTP-LOCATIVE XVCELL)
 		     (CDR (%MAKE-POINTER DTP-LIST CLOSURE)))))
       T)))
@@ -1980,9 +1980,9 @@ and is therefore removed from the binding stack."
     (WHEN POSITION
       (WITHOUT-INTERRUPTS
 	(%P-DPB (%P-LDB %%SPECPDL-BLOCK-START-FLAG
-			(ALOC (SG-SPECIAL-PDL CURRENT-STACK-GROUP) POSITION))
+			(LOCF (AREF (SG-SPECIAL-PDL CURRENT-STACK-GROUP) POSITION)))
 		%%SPECPDL-BLOCK-START-FLAG
-		(ALOC (SG-SPECIAL-PDL CURRENT-STACK-GROUP) (+ POSITION 2)))
+		(LOCF (AREF (SG-SPECIAL-PDL CURRENT-STACK-GROUP) (+ POSITION 2))))
 	;; Deleting the binding does not update the actual specpdl pointer
 	;; we are running with.  So it has the effect of duplicating this binding
 	;; of INSERT-BINDING-IN-CLOSURE-TEMP.
@@ -1992,7 +1992,7 @@ and is therefore removed from the binding stack."
 	      (GET-OWN-SPECIAL-PDL-POINTER))
 	(SG-DELETE-SPECIAL-BINDING CURRENT-STACK-GROUP POSITION))))
   (REMPROP (%MAKE-POINTER DTP-LIST CLOSURE)
-	   (VALUE-CELL-LOCATION VARIABLE)))
+	   (LOCF (SYMBOL-VALUE VARIABLE))))
 
 (DEFUN SG-INSERT-SPECIAL-BINDING (SG POSITION BOUND-LOCATION &OPTIONAL CLOSURE-FLAG)
   "Insert a binding for BOUND-LOCATION into the special pdl for SG.
@@ -2005,14 +2005,14 @@ If CLOSURE-FLAG is non-NIL, the inserted binding is marked as
 **WARNING** unsafe to use on the current stack group
 without hairy precautions; see source for EH:INSERT-BINDING-FROM-CLOSURE."
   (RELOCATE-SPECPDL-PORTION SG POSITION 2)
-  (%BLT-TYPED BOUND-LOCATION (ALOC (SG-SPECIAL-PDL SG) POSITION) 1 1)
+  (%BLT-TYPED BOUND-LOCATION (LOCF (AREF (SG-SPECIAL-PDL SG) POSITION)) 1 1)
   (SETF (AREF (SG-SPECIAL-PDL SG) (1+ POSITION)) BOUND-LOCATION)
-  (%P-STORE-CDR-CODE (ALOC (SG-SPECIAL-PDL SG) POSITION) 0)
-  (%P-STORE-CDR-CODE (ALOC (SG-SPECIAL-PDL SG) (1+ POSITION)) 0)
+  (%P-STORE-CDR-CODE (LOCF (AREF (SG-SPECIAL-PDL SG) POSITION)) 0)
+  (%P-STORE-CDR-CODE (LOCF (AREF (SG-SPECIAL-PDL SG) (1+ POSITION))) 0)
   (%P-DPB (IF CLOSURE-FLAG 1 0) %%SPECPDL-CLOSURE-BINDING
-	  (ALOC (SG-SPECIAL-PDL SG) POSITION))
+	  (LOCF (AREF (SG-SPECIAL-PDL SG) POSITION)))
   (%P-DPB (IF CLOSURE-FLAG 1 0) %%SPECPDL-CLOSURE-BINDING
-	  (ALOC (SG-SPECIAL-PDL SG) (1+ POSITION))))
+	  (LOCF (AREF (SG-SPECIAL-PDL SG) (1+ POSITION)))))
 
 (DEFUN SG-DELETE-SPECIAL-BINDING (SG POSITION)
   "Delete one binding from the special pdl for SG.
@@ -2021,25 +2021,25 @@ and the data that was at POSITION is moved down.
 **WARNING** unsafe to use on the current stack group
 without hairy precautions; see source for SYS:DELETE-BINDING-FROM-CLOSURE."
   ;; Restore the binding's saved old value.
-  (%BLT-TYPED (ALOC (SG-SPECIAL-PDL SG) POSITION)
+  (%BLT-TYPED (LOCF (AREF (SG-SPECIAL-PDL SG) POSITION))
 	      (AREF (SG-SPECIAL-PDL SG) (1+ POSITION))
 	      1 1)
   (RELOCATE-SPECPDL-PORTION SG POSITION -2))
 
 (DEFUN RELOCATE-SPECPDL-PORTION (SG START DISTANCE)
-  (CHECK-ARG-TYPE DISTANCE FIXNUM)
-  (CHECK-ARG-TYPE START FIXNUM)
-  (CHECK-ARG-TYPE SG STACK-GROUP)
+  (CHECK-TYPE DISTANCE FIXNUM)
+  (CHECK-TYPE START FIXNUM)
+  (CHECK-TYPE SG STACK-GROUP)
   (UNLESS (ZEROP DISTANCE)
     (LET ((SP (SG-SPECIAL-PDL SG))
 	  (SPP (SG-SPECIAL-PDL-POINTER SG))
 	  (RP (SG-REGULAR-PDL SG)))
       (IF (PLUSP DISTANCE)
-	  (%BLT (ALOC SP SPP) (ALOC SP (+ SPP DISTANCE))
+	  (%BLT (LOCF (AREF SP SPP)) (LOCF (AREF SP (+ SPP DISTANCE)))
 		(- SPP START -1) -1)
-	(%BLT (ALOC SP (- START DISTANCE)) (ALOC SP START)
+	(%BLT (LOCF (AREF SP (- START DISTANCE))) (LOCF (AREF SP START))
 	      (- SPP START -1 (- DISTANCE)) 1))
-      (LET ((SPBEG (ALOC SP 0)))
+      (LET ((SPBEG (LOCF (AREF SP 0))))
 	(DOTIMES (I (IF (EQ SG CURRENT-STACK-GROUP)
 			(SG-INNERMOST-OPEN SG)
 		      (1+ (SG-REGULAR-PDL-POINTER SG))))
@@ -2057,7 +2057,7 @@ without hairy precautions; see source for SYS:DELETE-BINDING-FROM-CLOSURE."
 		(())
 	      (WHEN (= (LDB %%ADI-TYPE (AREF RP IDX)) ADI-BIND-STACK-LEVEL)
 		(INCF (AREF RP (1- IDX)) DISTANCE))
-	      (IF (ZEROP (%P-LDB %%ADI-PREVIOUS-ADI-FLAG (ALOC RP (1- IDX))))
+	      (IF (ZEROP (%P-LDB %%ADI-PREVIOUS-ADI-FLAG (LOCF (AREF RP (1- IDX)))))
 		  (RETURN))))))))
 
 (DEFUN SYMBOL-FROM-VALUE-CELL-LOCATION (LOC &AUX SYM)
@@ -2073,6 +2073,118 @@ without hairy precautions; see source for SYS:DELETE-BINDING-FROM-CLOSURE."
 	      (= (%POINTER-DIFFERENCE LOC SYM) 1))		; internal value-cell
 	 SYM)
 	(T LOC)))						;not a symbol
+
+(DEFUN SYMEVAL-IN-STACK-GROUP (SYM SG &OPTIONAL FRAME AS-IF-CURRENT)
+  "Find the value of SYM in the binding environment of stack group SG's frame FRAME.
+If FRAME is NIL, it means the stack group's current frame.
+FRAME can be 0 to mean the global environment.
+Don't call this if the stack-group could be running in another process
+and thus changing its state.
+
+If the variable's binding is unbound, the first value is NIL and so is the second.
+Otherwise, the first value is the variable's value and the second is non-NIL
+ (in fact, it is a copy of the third value).
+
+The third value is the location of the binding, or NIL if there is no location.
+If the variable was closure-bound, this location will contain an EVCP.
+If AS-IF-CURRENT is non-nil, we return a LOCATION for where
+ the value WOULD be when that SG is running.
+The first value, however, is the current value -- not what is now stored in that location."
+  (DECLARE (VALUES VALUE BOUNDFLAG LOCATION))
+  (COND ((OR (EQ FRAME 0)
+	     (AND (NEQ SG CURRENT-STACK-GROUP)
+		  (NOT AS-IF-CURRENT)))
+	 (LET ((VCL (FOLLOW-CELL-FORWARDING (LOCF (SYMBOL-VALUE SYM)) NIL))
+	       (SP (SG-SPECIAL-PDL SG))
+	       (SPP (OR (AND (EQ FRAME 0) 0)
+			(AND FRAME (SG-PREVIOUS-INTERESTING-ACTIVE SG FRAME)
+			     (SG-FRAME-SPECIAL-PDL-INDEX
+			       SG (SG-PREVIOUS-INTERESTING-ACTIVE SG FRAME)))
+			(SG-SPECIAL-PDL-POINTER SG))))
+	   (OR (ZEROP (SG-IN-SWAPPED-STATE SG))	;If its bindings are swapped out
+	       ( SPP 0)
+	       (DO ((I SPP (1- I))		;then search through them
+		    (P))
+		   (( I 0))
+		 (SETQ P (LOCF (AREF SP I)))
+		 (SELECT (%P-DATA-TYPE P)
+		   (DTP-LOCATIVE
+		    ;; If this is a binding pair
+		    (SETQ P (%MAKE-POINTER-OFFSET DTP-LOCATIVE P -1))
+		    (IF (EQ (AREF SP I) VCL)
+			;;and is for this variable, then return
+			;;the saved value, invz'ing if necc
+			(IF (LOCATION-BOUNDP (FOLLOW-CELL-FORWARDING P T))
+			    (RETURN-FROM SYMEVAL-IN-STACK-GROUP (VALUES (CAR P) P P))
+			    (RETURN-FROM SYMEVAL-IN-STACK-GROUP (VALUES NIL NIL P)))
+		      (DECF I)))		;Space over second Q of binding pair
+		   (OTHERWISE))))		;Ignore non-binding blocks
+	   ;; The variable isn't bound in that stack group, so we want its global value.
+	   ;; Must ignore bindings in our own stack group.
+	   (SETQ SP (SG-SPECIAL-PDL CURRENT-STACK-GROUP)
+		 SPP (GET-OWN-SPECIAL-PDL-POINTER SP))
+	   (LET ((LOCATION (LOCF (SYMEVAL SYM))))
+	     (DO ((I SPP (1- I))
+		  (P))
+		 (( I 0) (RETURN-FROM SYMEVAL-IN-STACK-GROUP
+			    (VALUES (AND (LOCATION-BOUNDP (FOLLOW-CELL-FORWARDING LOCATION T))
+					 (CONTENTS LOCATION))
+				    (AND (LOCATION-BOUNDP (FOLLOW-CELL-FORWARDING LOCATION T))
+					 LOCATION)
+				    LOCATION)))
+	       (SETQ P (LOCF (AREF SP I)))
+	       (SELECT (%P-DATA-TYPE P)
+		 (DTP-LOCATIVE
+		  (SETQ P (%MAKE-POINTER-OFFSET DTP-LOCATIVE P -1))
+		  (IF (EQ (AREF SP I) VCL) (SETQ LOCATION P))
+		  (DECF I))
+		 (OTHERWISE))))))
+	((AND (EQ SG CURRENT-STACK-GROUP)
+	      (NULL FRAME))
+	 (VALUES (SYMBOL-VALUE SYM) (LOCF (SYMBOL-VALUE SYM)) (LOCF (SYMBOL-VALUE SYM))))
+	(T
+	 ;; Use specific frame in our current stack group,
+	 ;; or in another stack group as if it were current.
+	 (LET* ((VCL (FOLLOW-CELL-FORWARDING (LOCF (SYMBOL-VALUE SYM)) NIL))
+	        (SP (SG-SPECIAL-PDL SG))
+		(INNERMOST-BINDING NIL)
+		(SPP (IF (EQ SG CURRENT-STACK-GROUP)
+			 (GET-OWN-SPECIAL-PDL-POINTER SP)
+		       (SG-SPECIAL-PDL-POINTER SG)))
+		(FRAMEP
+		  (OR (LET ((INNERMOST-VISIBLE-FRAME (SG-AP SG)))
+			(AND (SG-PREVIOUS-ACTIVE SG FRAME)
+			     (SG-FRAME-SPECIAL-PDL-INDEX
+			       SG (SG-PREVIOUS-ACTIVE SG FRAME))))
+		      SPP)))
+	   ;; Search through special pdl from the pointer out to specified frame
+	   ;; and remember the LAST (outermost) binding we find!
+	   ;; That is where the binding in the specified frame was saved.
+	   (DO ((I SPP (1- I)))
+	       (( I FRAMEP))
+	     (LET ((P (LOCF (AREF SP I))))
+	       (SELECT (%P-DATA-TYPE P)
+		 (DTP-LOCATIVE				;If this is a binding pair
+		  (SETQ P (%MAKE-POINTER-OFFSET DTP-LOCATIVE P -1))
+		  (IF (EQ (AREF SP I) VCL)		;and is for this variable, then save
+		      (SETQ INNERMOST-BINDING P))	;pointer to the value-slot.
+		  (DECF I)))))				;Space over second Q of binding pair
+	   ;; No bindings since then -- use current one.
+	   (OR INNERMOST-BINDING
+	       (SETQ INNERMOST-BINDING (LOCF (SYMBOL-VALUE SYM))))
+	   ;; Now we have the right LOCATION in INNERMOST-BINDING.
+	   ;; But if not really current stack group, just pretending,
+	   ;; then the current contents of that location is not the right VALUE.
+	   (IF (EQ SG CURRENT-STACK-GROUP)
+	       (VALUES (AND (LOCATION-BOUNDP (FOLLOW-CELL-FORWARDING INNERMOST-BINDING T))
+			    (CONTENTS INNERMOST-BINDING))
+		       (AND (LOCATION-BOUNDP (FOLLOW-CELL-FORWARDING INNERMOST-BINDING T))
+			    INNERMOST-BINDING)
+		       INNERMOST-BINDING)
+	     (MULTIPLE-VALUE-BIND (VALUE NIL BOUNDP)
+		 ;; So get the right value.
+		 (SYMEVAL-IN-STACK-GROUP SYM SG FRAME NIL)
+	       (VALUES VALUE (AND BOUNDP INNERMOST-BINDING) INNERMOST-BINDING)))))))
 
 (DEFLOCF SYMEVAL-IN-STACK-GROUP (SYM SG &OPTIONAL FRAME)
   `(SYMEVAL-LOCATION-IN-STACK-GROUP ,SYM ,SG ,FRAME))
@@ -2092,120 +2204,6 @@ If FRAME is non-NIL, the value of the binding seen in that frame in SG is what i
       (SYMEVAL-IN-STACK-GROUP SYMBOL SG FRAME)
     (SETF (CONTENTS LOCATION) VALUE)))
   
-(DEFUN SYMEVAL-IN-STACK-GROUP (SYM SG &OPTIONAL FRAME AS-IF-CURRENT)
-  "Find the value of SYM in the binding environment of stack group SG's frame FRAME.
-If FRAME is NIL, it means the stack group's current frame.
-FRAME can be 0 to mean the global environment.
-Don't call this if the stack-group could be running in another process
-and thus changing its state.
-
-If the variable's binding is unbound, the first value is NIL and so is the second.
-Otherwise, the first value is the variable's value and the second is non-NIL
- (in fact, it is a copy of the third value).
-
-The third value is the location of the binding, or NIL if there is no location.
-If the variable was closure-bound, this location will contain an EVCP.
-If AS-IF-CURRENT is non-nil, we return a LOCATION for where
- the value WOULD be when that SG is running.
-The first value, however, is the current value -- not what is now stored in that location."
-  (DECLARE (VALUES VALUE LOCATION BOUNDFLAG))
-  (COND ((OR (EQ FRAME 0)
-	     (AND (NEQ SG CURRENT-STACK-GROUP)
-		  (NOT AS-IF-CURRENT)))
-	 (PROG RESULT
-	       ((VCL (FOLLOW-CELL-FORWARDING (VALUE-CELL-LOCATION SYM) NIL))
-		(SP (SG-SPECIAL-PDL SG))
-		(SPP (OR (AND (EQ FRAME 0) 0)
-			 (AND FRAME (SG-PREVIOUS-INTERESTING-ACTIVE SG FRAME)
-			      (SG-FRAME-SPECIAL-PDL-INDEX
-				SG (SG-PREVIOUS-INTERESTING-ACTIVE SG FRAME)))
-			 (SG-SPECIAL-PDL-POINTER SG))))
-	   (OR (ZEROP (SG-IN-SWAPPED-STATE SG))	;If its bindings are swapped out
-	       ( SPP 0)
-	       (DO ((I SPP (1- I))		;then search through them
-		    (P))
-		   (( I 0))
-		 (SETQ P (ALOC SP I))
-		 (SELECT (%P-DATA-TYPE P)
-		   (DTP-LOCATIVE
-		    ;; If this is a binding pair
-		    (SETQ P (%MAKE-POINTER-OFFSET DTP-LOCATIVE P -1))
-		    (IF (EQ (AREF SP I) VCL)
-			;;and is for this variable, then return
-			;;the saved value, invz'ing if necc
-			(IF (LOCATION-BOUNDP (FOLLOW-CELL-FORWARDING P T))
-			    (RETURN-FROM RESULT (CAR P) P P)
-			  (RETURN-FROM RESULT NIL NIL P))
-		      (DECF I)))		;Space over second Q of binding pair
-		   (OTHERWISE ))))		;Ignore non-binding blocks
-	   ;; The variable isn't bound in that stack group, so we want its global value.
-	   ;; Must ignore bindings in our own stack group.
-	   (SETQ SP (SG-SPECIAL-PDL CURRENT-STACK-GROUP)
-		 SPP (GET-OWN-SPECIAL-PDL-POINTER SP))
-	   (LET ((LOCATION (LOCF (SYMEVAL SYM))))
-	     (DO ((I SPP (1- I))
-		  (P))
-		 (( I 0) (RETURN-FROM RESULT
-			    (AND (LOCATION-BOUNDP (FOLLOW-CELL-FORWARDING LOCATION T))
-				 (CONTENTS LOCATION))
-			    (AND (LOCATION-BOUNDP (FOLLOW-CELL-FORWARDING LOCATION T))
-				 LOCATION)
-			    LOCATION))
-	       (SETQ P (ALOC SP I))
-	       (SELECT (%P-DATA-TYPE P)
-		 (DTP-LOCATIVE
-		  (SETQ P (%MAKE-POINTER-OFFSET DTP-LOCATIVE P -1))
-		  (COND ((EQ (AREF SP I) VCL)
-			 (SETQ LOCATION P)))
-		  (DECF I))
-		 (OTHERWISE ))))))
-	((AND (EQ SG CURRENT-STACK-GROUP)
-	      (NULL FRAME))
-	 (VALUES (SYMEVAL SYM) (VALUE-CELL-LOCATION SYM) (VALUE-CELL-LOCATION SYM)))
-	(T
-	 ;; Use specific frame in our current stack group,
-	 ;; or in another stack group as if it were current.
-	 (LET* ((VCL (FOLLOW-CELL-FORWARDING (VALUE-CELL-LOCATION SYM) NIL))
-	        (SP (SG-SPECIAL-PDL SG))
-		(INNERMOST-BINDING NIL)
-		(SPP (IF (EQ SG CURRENT-STACK-GROUP)
-			 (GET-OWN-SPECIAL-PDL-POINTER SP)
-		       (SG-SPECIAL-PDL-POINTER SG)))
-		(FRAMEP
-		  (OR (LET ((INNERMOST-VISIBLE-FRAME (SG-AP SG)))
-			(AND (SG-PREVIOUS-ACTIVE SG FRAME)
-			     (SG-FRAME-SPECIAL-PDL-INDEX
-			       SG (SG-PREVIOUS-ACTIVE SG FRAME))))
-		      SPP)))
-	   ;; Search through special pdl from the pointer out to specified frame
-	   ;; and remember the LAST (outermost) binding we find!
-	   ;; That is where the binding in the specified frame was saved.
-	   (DO ((I SPP (1- I)))
-	       (( I FRAMEP))
-	     (LET ((P (ALOC SP I)))
-	       (SELECT (%P-DATA-TYPE P)
-		 (DTP-LOCATIVE				;If this is a binding pair
-		  (SETQ P (%MAKE-POINTER-OFFSET DTP-LOCATIVE P -1))
-		  (IF (EQ (AREF SP I) VCL)		;and is for this variable, then save
-		      (SETQ INNERMOST-BINDING P))	;pointer to the value-slot.
-		  (DECF I)))))				;Space over second Q of binding pair
-	   ;; No bindings since then -- use current one.
-	   (OR INNERMOST-BINDING
-	       (SETQ INNERMOST-BINDING (VALUE-CELL-LOCATION SYM)))
-	   ;; Now we have the right LOCATION in INNERMOST-BINDING.
-	   ;; But if not really current stack group, just pretending,
-	   ;; then the current contents of that location is not the right VALUE.
-	   (IF (EQ SG CURRENT-STACK-GROUP)
-	       (VALUES (AND (LOCATION-BOUNDP (FOLLOW-CELL-FORWARDING INNERMOST-BINDING T))
-			    (CONTENTS INNERMOST-BINDING))
-		       (AND (LOCATION-BOUNDP (FOLLOW-CELL-FORWARDING INNERMOST-BINDING T))
-			    INNERMOST-BINDING)
-		       INNERMOST-BINDING)
-	     (MULTIPLE-VALUE-BIND (VALUE NIL BOUNDP)
-		 ;; So get the right value.
-		 (SYMEVAL-IN-STACK-GROUP SYM SG FRAME NIL)
-	       (VALUES VALUE (AND BOUNDP INNERMOST-BINDING) INNERMOST-BINDING)))))))
-
 (DEFUN CELL-LOCATION-IN-STACK-GROUP (LOC SG &OPTIONAL FRAME)
   "Find the current location of the binding for location LOC in SG.
 LOC should be the value-cell-location of a symbol, usually.
@@ -2214,46 +2212,45 @@ when SG is not running, SG's binding for LOC.
 If LOC is not bound in SG, the global binding is used."
   (DECLARE (VALUES VALUE LOCATION))
   (COND ((NEQ SG CURRENT-STACK-GROUP)
-	 (BLOCK RESULT
-	   (DO ((SP (SG-SPECIAL-PDL SG))
-		(SPP (OR (AND FRAME (SG-PREVIOUS-INTERESTING-ACTIVE SG FRAME)
-			      (SG-FRAME-SPECIAL-PDL-INDEX
-				SG (SG-PREVIOUS-INTERESTING-ACTIVE SG FRAME)))
-			 (SG-SPECIAL-PDL-POINTER SG))))
-	       ()
-	     (OR (ZEROP (SG-IN-SWAPPED-STATE SG))	;If its bindings are swapped out
-		 ( SPP 0)
-		 (DO ((I SPP (1- I))		;then search through them
-		      (P))
-		     (( I 0))
-		   (SETQ P (ALOC SP I))
-		   (SELECT (%P-DATA-TYPE P)
-		     (DTP-LOCATIVE		;If this is a binding pair
-		      (SETQ P (%MAKE-POINTER-OFFSET DTP-LOCATIVE P -1))
-		      (IF (EQ (AREF SP I) LOC)	;and is for this variable, then return
-			  (RETURN-FROM RESULT P)
-			(DECF I)))		;Space over second Q of binding pair
-		     (OTHERWISE ))))		;Ignore non-binding blocks
-	     ;; The cell isn't bound in that stack group, so we want its global value.
-	     ;; Must ignore bindings in our own stack group.
-	     (SETQ SP (SG-SPECIAL-PDL CURRENT-STACK-GROUP)
-		   SPP (GET-OWN-SPECIAL-PDL-POINTER SP))
-	     (DO ((LOCATION LOC)
-		  (I SPP (1- I))
-		  (P))
-		 (( I 0) (RETURN-FROM RESULT LOCATION))
-	       (SETQ P (ALOC SP I))
-	       (SELECT (%P-DATA-TYPE P)
-		 (DTP-LOCATIVE
-		  (SETQ P (%MAKE-POINTER-OFFSET DTP-LOCATIVE P -1))
-		  (COND ((EQ (AREF SP I) LOC)
-			 (SETQ LOCATION P)))
-		  (DECF I))
-		 (OTHERWISE ))))))
+	 (DO ((SP (SG-SPECIAL-PDL SG))
+	      (SPP (OR (AND FRAME (SG-PREVIOUS-INTERESTING-ACTIVE SG FRAME)
+			    (SG-FRAME-SPECIAL-PDL-INDEX
+			      SG (SG-PREVIOUS-INTERESTING-ACTIVE SG FRAME)))
+		       (SG-SPECIAL-PDL-POINTER SG))))
+	     ()
+	   (OR (ZEROP (SG-IN-SWAPPED-STATE SG))	;If its bindings are swapped out
+	       ( SPP 0)
+	       (DO ((I SPP (1- I))		;then search through them
+		    (P))
+		   (( I 0))
+		 (SETQ P (LOCF (AREF SP I)))
+		 (SELECT (%P-DATA-TYPE P)
+		   (DTP-LOCATIVE		;If this is a binding pair
+		    (SETQ P (%MAKE-POINTER-OFFSET DTP-LOCATIVE P -1))
+		    (IF (EQ (AREF SP I) LOC)	;and is for this variable, then return
+			(RETURN-FROM CELL-LOCATION-IN-STACK-GROUP P)
+		      (DECF I)))		;Space over second Q of binding pair
+		   (OTHERWISE ))))		;Ignore non-binding blocks
+	   ;; The cell isn't bound in that stack group, so we want its global value.
+	   ;; Must ignore bindings in our own stack group.
+	   (SETQ SP (SG-SPECIAL-PDL CURRENT-STACK-GROUP)
+		 SPP (GET-OWN-SPECIAL-PDL-POINTER SP))
+	   (DO ((LOCATION LOC)
+		(I SPP (1- I))
+		(P))
+	       (( I 0) (RETURN-FROM CELL-LOCATION-IN-STACK-GROUP LOCATION))
+	     (SETQ P (LOCF (AREF SP I)))
+	     (SELECT (%P-DATA-TYPE P)
+	       (DTP-LOCATIVE
+		(SETQ P (%MAKE-POINTER-OFFSET DTP-LOCATIVE P -1))
+		(IF (EQ (AREF SP I) LOC) (SETQ LOCATION P))
+		(DECF I))
+	       (OTHERWISE)))))
 	((NULL FRAME)
 	 LOC)
 	(T
-	 (FERROR NIL "FRAME-relative CELL-LOCATION in current stack group not yet implemented"))))
+	 (FERROR NIL
+		 "FRAME-relative CELL-LOCATION in current stack group not yet implemented"))))
 
 ;;;; Various initialization routines.
 
@@ -2281,7 +2278,7 @@ If LOC is not bound in SG, the global binding is used."
 			 :NEW-TYPE-AND-VERSION "TBL" %MICROCODE-VERSION-NUMBER))
 	    (:LAMBDA (SEND (FS:PARSE-PATHNAME "SYS: UBIN; ULAMBDA")
 			   :NEW-TYPE-AND-VERSION "LMC-TBL" %MICROCODE-VERSION-NUMBER)))
-	  :PACKAGE "EH")))
+	  :PACKAGE (SYMBOL-PACKAGE 'FOO))))
 
 ;; Divides up MICROCODE-ERROR-TABLE into CALLS-SUB-LIST, RESTART-LIST, and ERROR-TABLE.
 (DEFUN ASSURE-TABLE-PROCESSED (&AUX (DEFAULT-CONS-AREA WORKING-STORAGE-AREA))
@@ -2319,41 +2316,14 @@ If LOC is not bound in SG, the global binding is used."
 (DEFUN TRAPPING-ENABLED-P NIL 
   (NOT (ZEROP (LDB %%M-FLAGS-TRAP-ENABLE %MODE-FLAGS))))
 
-(DEFUN P-PRIN1-CAREFUL (LOCATIVE &AUX)
+(DEFUN P-PRIN1-CAREFUL (LOCATIVE &OPTIONAL (STREAM *STANDARD-OUTPUT*))
   "Print the contents of LOCATIVE, catching and reporting errors in printing."
-  (COND ((%P-CONTENTS-SAFE-P LOCATIVE)
-	 (PRINT-CAREFULLY "printing" (PRIN1 (CAR LOCATIVE))))
-	(T (FORMAT T "#<~A ~O>" (%P-DATA-TYPE LOCATIVE) (%P-POINTER LOCATIVE)))))
-
-(DEFUN P-PRIN1-CAREFUL-1 (LOCATIVE &OPTIONAL (STREAM *STANDARD-OUTPUT*))
-  "Print the contents of LOCATIVE, catching and reporting errors in printing.
-This version does some invisible pointer following."
   (IF (%P-CONTENTS-SAFE-P LOCATIVE)
-      (PRINT-CAREFULLY "printing"
-	(format stream "~S ~S ~S: ~S"
-		(nth (%p-cdr-code locative) q-cdr-codes)
-		(nth (%p-data-type locative) q-data-types)
-		(%p-pointer locative)
-		(CONTENTS LOCATIVE)))
-    (let ((type (q-data-types (%p-data-type locative))))
-      (cond ((null type)
-	     (format stream "#<~S UNKNOWN-DATA-TYPE-~S ~S>"
-		     (nth (%p-cdr-code locative) q-cdr-codes)
-		     (%p-data-type locative)
-		     (%p-pointer locative)))
-	    (t
-	     (format stream "#<~S ~S ~S~@[ ~S~]>"
-		     (nth (%p-cdr-code locative) q-cdr-codes)
-		     type
-		     (%p-pointer locative)
-		     (cond ((memq (%p-data-type locative)
-				  '(#.DTP-EXTERNAL-VALUE-CELL-POINTER
-				    #.DTP-ONE-Q-FORWARD
-				    #.DTP-HEADER-FORWARD
-				    #.DTP-BODY-FORWARD))
-			    (p-prin1-careful-1 (%make-pointer dtp-locative
-							      (%p-pointer locative))
-					       nil)))))))))
+      (PRINT-CAREFULLY "printing" (PRIN1 (CONTENTS LOCATIVE) STREAM))
+    (SI:PRINTING-RANDOM-OBJECT (NIL STREAM)
+      (IF (Q-DATA-TYPES (%P-DATA-TYPE LOCATIVE))
+	  (PRINC (Q-DATA-TYPES (%P-DATA-TYPE LOCATIVE)) stream)
+	(FORMAT STREAM "Data-type #o~O" (%P-DATA-TYPE LOCATIVE))))))
 
 ;;; Initialize the error handler at warm boot time.
 (ADD-INITIALIZATION "ERROR-HANDLER-INITIALIZE" '(INITIALIZE) '(WARM))
@@ -2388,13 +2358,15 @@ This version does some invisible pointer following."
     ;;   (RESUME-FOOTHOLD), to resume from C-Break or C-M-Break.
     (LET (SG ETE SG2)
       (SETQ SG CURRENT-STACK-GROUP-RESUMER)
-      (SETF (SG-PROCESSING-ERROR-FLAG SG) 0) ;Re-enable error trapping in that SG
-      (SETF (SG-INST-DISP SG) 0)	;Turn off single-step mode (for foothold)
+      (SETF (SG-PROCESSING-ERROR-FLAG SG) 0)	;Re-enable error trapping in that SG
+      (SETF (SG-INST-DISP SG) 0)		;Turn off single-step mode (for foothold)
       (SETF (SG-FLAGS-TRAP-ON-CALL SG) 0)
       (UNLESS M
 	;; If microcode error, compute the ETE.
-	(SETQ ETE (AND (BOUNDP 'ERROR-TABLE)
-		       (CDR (ASSQ (SG-TRAP-MICRO-PC SG) ERROR-TABLE))))
+	(SETQ ETE (OR (AND (BOUNDP 'ERROR-TABLE)
+			   (CDR (ASSQ (SG-TRAP-MICRO-PC SG) ERROR-TABLE)))
+		      (AND (BOUNDP 'EXTRA-ERROR-TABLE)
+			   (CDR (ASSQ (SG-TRAP-MICRO-PC SG) EXTRA-ERROR-TABLE)))))
 	;; Clean things up after specific kinds of ucode errors.
 	(LET ((TEM (GET (CAR ETE) 'ENTER-ERROR-HANDLER)))
 	  (IF TEM (FUNCALL TEM SG ETE))))
@@ -2407,6 +2379,9 @@ This version does some invisible pointer following."
 		  ((AND (CONSP M) (EQ (CAR M) 'RESUME-FOOTHOLD))
 		   (SG-RESTORE-STATE SG 1)
 		   (SETF (SG-CURRENT-STATE SG) SG-STATE-RESUMABLE)
+		   (COND ((GETF (SG-PLIST SG) 'SINGLE-MACRO-DISPATCH)
+			  (SETF (GETF (SG-PLIST SG) 'SINGLE-MACRO-DISPATCH) NIL)
+			  (SETF (SG-INST-DISP SG) 2)))
 		   (STACK-GROUP-RESUME SG NIL))
 		  ((NULL M)
 		   ;; Microcode error.
@@ -2414,8 +2389,8 @@ This version does some invisible pointer following."
 				 (MAKE-STACK-GROUP
 				   (FORMAT NIL "SECOND-LEVEL-ERROR-HANDLER-~D"
 					   (INCF SECOND-LEVEL-ERROR-HANDLER-COUNT))
-				   ':REGULAR-PDL-SIZE #o6000
-				   ':SAFE 0)))
+				   :REGULAR-PDL-SIZE #o6000
+				   :SAFE 0)))
 		   (STACK-GROUP-PRESET SG2 'SIGNAL-MICROCODE-ERROR
 				       SG ETE)
 		   (FUNCALL SG2))
@@ -2427,8 +2402,8 @@ This version does some invisible pointer following."
 				 (MAKE-STACK-GROUP
 				   (FORMAT NIL "SECOND-LEVEL-ERROR-HANDLER-~D"
 					   (INCF SECOND-LEVEL-ERROR-HANDLER-COUNT))
-				   ':REGULAR-PDL-SIZE #o6000
-				   ':SAFE 0)))
+				   :REGULAR-PDL-SIZE #o6000
+				   :SAFE 0)))
 		   (STACK-GROUP-PRESET SG2 'SECOND-LEVEL-ERROR-HANDLER
 				       SG M)
 		   (FUNCALL SG2)))))))
@@ -2453,7 +2428,7 @@ This version does some invisible pointer following."
 			       (INHIBIT-SCHEDULING-FLAG T)
 			       (ERROR-HANDLER-RUNNING T)
 			       (ERROR-HANDLER-REPRINT-ERROR NIL))
-  (*CATCH 'QUIT
+  (CATCH 'QUIT
     (CATCH-ERROR-RESTART ((SYS:ABORT ERROR)
 			  "Abort from where a microcode error is being signaled.")
       (LET* ((DEFAULT-CONS-AREA ERROR-HANDLER-AREA)
@@ -2473,7 +2448,7 @@ This version does some invisible pointer following."
 	    (LET ((PC (AREF (SG-SPECIAL-PDL SG) I)))
 	      (PUSH PC SAVED-MICRO-PCS))
 	    (OR (ZEROP (%P-LDB %%SPECPDL-BLOCK-START-FLAG
-			       (ALOC (SG-SPECIAL-PDL SG) I)))
+			       (LOCF (AREF (SG-SPECIAL-PDL SG) I))))
 		(RETURN NIL)))
 	  (SETQ SAVED-MICRO-PCS (NREVERSE SAVED-MICRO-PCS)))
 	(UNLESS INHIBIT-SIGNAL-MICROCODE-ERROR-LOSSAGE
@@ -2491,18 +2466,18 @@ This version does some invisible pointer following."
 	(LET ((CONDITION-RESULT
 		(SG-FUNCALL-NO-RESTART
 		  SG 'SIGNAL-CONDITION
-		  ERROR-OBJECT (SEND ERROR-OBJECT ':UCODE-PROCEED-TYPES)
+		  ERROR-OBJECT (SEND ERROR-OBJECT :UCODE-PROCEED-TYPES)
 		  NIL
 		  (LIST* (SG-TRAP-MICRO-PC SG) ETE
 			 (SG-AP SG) (SG-IPMARK SG)
 			 SAVED-MICRO-PCS)
 		  )))
 	  (WHEN (CAR CONDITION-RESULT)
-	    (LEXPR-SEND ERROR-OBJECT ':PROCEED-UCODE-WITH-ARGS (CAR CONDITION-RESULT)
+	    (LEXPR-SEND ERROR-OBJECT :PROCEED-UCODE-WITH-ARGS (CAR CONDITION-RESULT)
 			SG (CDR CONDITION-RESULT))
 	    (SETF (SG-CURRENT-STATE SG) SG-STATE-RESUMABLE)
 	    (PROCEED-SG SG))
-	  (FERROR NIL "Proceed-type ~S not handled~%by microcode error ~S."
+	  (FERROR NIL "Proceed-type ~S not handled~% by microcode error ~S."
 		  (CAR CONDITION-RESULT) ERROR-OBJECT)))))
   ;; In case of abort within the above.
   (SG-ABORT SG))
@@ -2538,7 +2513,7 @@ You may specify the process to debug, or you will be offered each candidate."
 
 (DEFUN AWAITING-BACKGROUND-ERROR-P (PROCESS)
   (AND (TYPEP PROCESS 'SI:PROCESS)
-       (SEND PROCESS ':ACTIVE-P)    ;Return NIL if process is arrested!
+       (SEND PROCESS :ACTIVE-P)    ;Return NIL if process is arrested!
        (SI:PROCESS-IS-IN-ERROR-P PROCESS)))
 
 (DEFUN EH (&OPTIONAL PROCESS)
@@ -2554,11 +2529,11 @@ and that process is arrested for the duration."
 (DEFF DBG 'DEBUG)				;brand s name
 
 (DEFUN DEBUG (&OPTIONAL PROCESS
-	   &AUX PKG SG ARREST-REASON
-	   CURRENT-FRAME INNERMOST-VISIBLE-FRAME ERROR-LOCUS-FRAME
-	   INNERMOST-FRAME-IS-INTERESTING
-	   EH-ERROR
-	   (ERROR-HANDLER-RUNNING NIL))
+	      &AUX PKG SG ARREST-REASON
+	      CURRENT-FRAME INNERMOST-VISIBLE-FRAME ERROR-LOCUS-FRAME
+	      INNERMOST-FRAME-IS-INTERESTING
+	      EH-ERROR
+	      (ERROR-HANDLER-RUNNING NIL))
   "Invoke the debugger to look at a process, window or stack group.
 Supplying NIL means find a process which is waiting to be looked at for an error.
 If the process is waiting to be looked at for an error,
@@ -2570,26 +2545,26 @@ and that process is arrested for the duration."
   ;; ERROR-HANDLER-RUNNING is NOT set.
   ;; The catch tag EXIT is used to return from EH.
   ;; If arg is a window or stream, extract process from it.
-  (OR (NULL PROCESS) (TYPEP PROCESS ':STACK-GROUP) (TYPEP PROCESS 'SI:PROCESS)
-      (SETQ PROCESS (SEND PROCESS ':PROCESS)))
+  (OR (NULL PROCESS) (TYPEP PROCESS 'STACK-GROUP) (TYPEP PROCESS 'SI:PROCESS)
+      (SETQ PROCESS (SEND PROCESS :PROCESS)))
   (IF (OR (NULL PROCESS)
 	  (AWAITING-BACKGROUND-ERROR-P PROCESS))
       (HANDLE-BACKGROUND-ERROR PROCESS)
     ;; If arg is an active non-erring process, make it get an error.
     (IF (AND (TYPEP PROCESS 'SI:PROCESS)
-	     (SEND PROCESS ':ACTIVE-P)
+	     (SEND PROCESS :ACTIVE-P)
 	     (NOT (SYMEVAL-IN-STACK-GROUP 'ERROR-HANDLER-RUNNING
 					  (PROCESS-STACK-GROUP PROCESS))))
 	(LET ((CELL (LIST NIL)))
-	  (SEND PROCESS ':INTERRUPT 'INVOKE-DEBUGGER-FOR-EH *TERMINAL-IO* CELL)
+	  (SEND PROCESS :INTERRUPT 'INVOKE-DEBUGGER-FOR-EH *TERMINAL-IO* CELL)
 	  (PROCESS-WAIT "Background error" 'CAR CELL))
       ;; If arg is process or was converted to one, stop it.
       (COND ((TYPEP PROCESS 'SI:PROCESS)
-	     (SEND PROCESS ':ARREST-REASON CURRENT-PROCESS)
+	     (SEND PROCESS :ARREST-REASON CURRENT-PROCESS)
 	     (SETQ ARREST-REASON CURRENT-PROCESS)
 	     (SETQ SG (PROCESS-STACK-GROUP PROCESS)))
 	    (T (SETQ SG PROCESS PROCESS NIL)))
-      (OR (TYPEP SG ':STACK-GROUP) (FERROR NIL "~S not a stack group" SG))
+      (OR (TYPEP SG 'STACK-GROUP) (FERROR NIL "~S not a stack group" SG))
       (SETQ INNERMOST-VISIBLE-FRAME (SG-AP SG))
       (SETQ CURRENT-FRAME (SG-OUT-TO-INTERESTING-ACTIVE SG INNERMOST-VISIBLE-FRAME))
       (SETQ ERROR-LOCUS-FRAME CURRENT-FRAME)
@@ -2599,16 +2574,16 @@ and that process is arrested for the duration."
       (SETQ PKG (SYMEVAL-IN-STACK-GROUP '*PACKAGE* SG))
       (UNWIND-PROTECT
 	(PROGN
-	  (*CATCH 'QUIT
+	  (CATCH 'QUIT
 	    (CATCH-ERROR-RESTART ((SYS:ABORT ERROR) "Exit the debugger.")
 	      (PKG-BIND (IF (EQ (TYPEP PKG) 'PACKAGE) PKG "USER")
 		(PRINT-CAREFULLY "frame"
 		  (FORMAT T "~&~S~%Backtrace: " SG)
 		  (SHORT-BACKTRACE SG NIL 3)))))
 	  (FORMAT T "~&Note: running in process ~A, not the one being debugged.
-Type ~C to exit the debugger." (PROCESS-NAME CURRENT-PROCESS) #/RESUME)
-	  (*CATCH 'EXIT (COMMAND-LOOP SG (SETQ EH-ERROR (SG-TRAP-TAG SG)))))
-	(AND ARREST-REASON (SEND PROCESS ':REVOKE-ARREST-REASON ARREST-REASON))))))
+Type ~C to exit the debugger." (PROCESS-NAME CURRENT-PROCESS) #/RESUME)
+	  (CATCH 'EXIT (COMMAND-LOOP SG (SETQ EH-ERROR (SG-TRAP-TAG SG)))))
+	(AND ARREST-REASON (SEND PROCESS :REVOKE-ARREST-REASON ARREST-REASON))))))
 
 (DEFPROP INVOKE-DEBUGGER-FOR-EH T :ERROR-REPORTER)
 (DEFUN INVOKE-DEBUGGER-FOR-EH (*TERMINAL-IO* CELL)
@@ -2642,13 +2617,13 @@ the same value or a corrected value if it doesn't like that one.")
   `(PROG ((.L. INHERITED-VARIABLES) .VAR. .VAL.)
      LP (SETQ .VAR. (IF (ATOM (CAR .L.)) (CAR .L.) (CAAR .L.))
 	      .VAL. (SYMEVAL-IN-STACK-GROUP .VAR. ,SG))
-	(%BIND (VALUE-CELL-LOCATION .VAR.)
+	(%BIND (LOCF (SYMBOL-VALUE .VAR.))
 	       (IF (ATOM (CAR .L.)) .VAL. (FUNCALL (CADAR .L.) .VAL.)))
 	(OR (ATOM (SETQ .L. (CDR .L.))) (GO LP))
 	(RETURN (PROGN . ,BODY))))
 
 (DEFUN VALIDATE-PACKAGE (P)
-  (IF (TYPEP P 'PACKAGE) P SI:PKG-USER-PACKAGE))
+  (IF (TYPEP P '*PACKAGE*) P SI:PKG-USER-PACKAGE))
 
 (DEFUN VALIDATE-BASE (B)
   (IF (MEMQ B '(8 10.)) B 10.))		;These are the only reasonable bases for debugging
@@ -2718,8 +2693,7 @@ the same value or a corrected value if it doesn't like that one.")
     ;; normally be the case for :BREAK
     (IF (EQ (AREF RP AP) #'FOOTHOLD) (SG-RESTORE-STATE SG 0)))
   ;; Handle weird things like (BREAK): create a condition-object.
-  (IF (CONSP EH-ERROR)
-      (SETQ EH-ERROR (APPLY 'MAKE-CONDITION EH-ERROR)))
+  (IF (CONSP EH-ERROR) (SETQ EH-ERROR (APPLY #'MAKE-CONDITION EH-ERROR)))
   (SETF (SG-TRAP-TAG SG) EH-ERROR)
   ;; Clear the SG's trap-on-call flag so that our uses of SG-APPLY will not trap.
   ;; The SG-RESTORE-STATE, above, may have restored the flag to 1.
@@ -2728,34 +2702,34 @@ the same value or a corrected value if it doesn't like that one.")
   (ASSURE-FREE-SPACE)
   (AND MSG (USE-COLD-LOAD-STREAM MSG))
   ;; Turn on interrupts if not in cold load stream.
-  (UNLESS (EQ SI:COLD-LOAD-STREAM *TERMINAL-IO*)
+  (UNLESS (EQ *TERMINAL-IO* SI:COLD-LOAD-STREAM)
     (SETQ INHIBIT-SCHEDULING-FLAG NIL))
   ;; If not running in the scheduler, give us a run reason in case we died after
   ;; becoming inactive, before getting back to the scheduler.
   (OR (NULL CURRENT-PROCESS)
-      (SEND CURRENT-PROCESS ':RUN-REASON CURRENT-STACK-GROUP))
+      (SEND CURRENT-PROCESS :RUN-REASON CURRENT-STACK-GROUP))
   (IF (VARIABLE-BOUNDP TV:COLD-LOAD-STREAM-OWNS-KEYBOARD)
       (SETQ SAVED-COLD-LOAD-STREAM-OWNS-KEYBOARD TV:COLD-LOAD-STREAM-OWNS-KEYBOARD))
-  (LET-GLOBALLY ((TV:COLD-LOAD-STREAM-OWNS-KEYBOARD
+  (LET-GLOBALLY ((TV::COLD-LOAD-STREAM-OWNS-KEYBOARD
 		   (OR (EQ *TERMINAL-IO* TV:COLD-LOAD-STREAM)
-		       TV:COLD-LOAD-STREAM-OWNS-KEYBOARD)))
+		       TV::COLD-LOAD-STREAM-OWNS-KEYBOARD)))
     ;; Try to see if *TERMINAL-IO* is reasonable and if not fix it.
-    (LET ((WO (ERRSET (SEND *TERMINAL-IO* ':WHICH-OPERATIONS) NIL))
+    (LET ((WO (ERRSET (SEND *TERMINAL-IO* :WHICH-OPERATIONS) NIL))
 	  (ERROR-HANDLER-REPRINT-ERROR NIL))
       (IF (NULL WO) (USE-COLD-LOAD-STREAM "*TERMINAL-IO* clobbered")
-	(COND ((MEMQ ':NOTICE (CAR WO))
-	       (DO-FOREVER
-		 (CATCH-ERROR-RESTART ((ERROR SYS:ABORT) "Continue entering the debugger.")
-		   (LET (;; :NOTICE can change *TERMINAL-IO* of a background process
-			 (OLD-TIO *TERMINAL-IO*)
-			 ;; Send this message in non-erring stack
-			 (WINDOW-BAD (SEND *TERMINAL-IO* ':NOTICE ':ERROR)))
-		     (IF (EQ WINDOW-BAD 'TV:COLD-LOAD-STREAM)
-			 (USE-COLD-LOAD-STREAM "window-system problems")
-		       (AND (NEQ *TERMINAL-IO* OLD-TIO)
-			    (NOT WINDOW-BAD)
-			    (SG-FUNCALL SG #'SET '*TERMINAL-IO* *TERMINAL-IO*))))
-		   (RETURN NIL)))))))
+	(WHEN (MEMQ :NOTICE (CAR WO))
+	  (DO-FOREVER
+	    (CATCH-ERROR-RESTART ((ERROR SYS:ABORT) "Continue entering the debugger.")
+	      (LET (;; :NOTICE can change *TERMINAL-IO* of a background process
+		    (OLD-TIO *TERMINAL-IO*)
+		    ;; Send this message in non-erring stack
+		    (WINDOW-BAD (SEND *TERMINAL-IO* :NOTICE :ERROR)))
+		(IF (EQ WINDOW-BAD 'TV:COLD-LOAD-STREAM)
+		    (USE-COLD-LOAD-STREAM "window-system problems")
+		  (AND (NEQ *TERMINAL-IO* OLD-TIO)
+		       (NOT WINDOW-BAD)
+		       (SG-FUNCALL SG #'SET '*TERMINAL-IO* *TERMINAL-IO*))))
+	      (RETURN NIL))))))
     ;; Turn off interrupts if switched to cold load stream.
     (IF (EQ SI:COLD-LOAD-STREAM *TERMINAL-IO*)
 	(SETQ INHIBIT-SCHEDULING-FLAG T))
@@ -2768,22 +2742,22 @@ the same value or a corrected value if it doesn't like that one.")
     ;; These catches are so that quitting out of the printing of the error message
     ;; leaves you in the error handler at its
     ;; normal command level rather than quitting out of the whole program.
-    (*CATCH 'QUIT
+    (CATCH 'QUIT
       (CATCH-ERROR-RESTART ((ERROR SYS:ABORT) "Abort printing error message, enter debugger.")
 	(SETF (VALUES ERROR-LOCUS-FRAME CURRENT-FRAME
 		      INNERMOST-VISIBLE-FRAME INNERMOST-FRAME-IS-INTERESTING)
-	      (SEND EH-ERROR ':FIND-CURRENT-FRAME SG))
+	      (SEND EH-ERROR :FIND-CURRENT-FRAME SG))
 	;; Print the error message, using appropriate package, base, etc.
 	(INHERITING-VARIABLES-FROM (SG)
 	  (PRINT-CAREFULLY "error message"
-	    (SEND *STANDARD-OUTPUT* ':FRESH-LINE)
-	    (SEND EH-ERROR ':PRINT-ERROR-MESSAGE
+	    (SEND *STANDARD-OUTPUT* :FRESH-LINE)
+	    (SEND EH-ERROR :PRINT-ERROR-MESSAGE
 		  SG NIL *STANDARD-OUTPUT*))
 	  (PRINT-BRIEF-ERROR-BACKTRACE SG EH-ERROR)
-	  (SEND EH-ERROR ':MAYBE-CLEAR-INPUT *STANDARD-INPUT*))))
+	  (SEND EH-ERROR :MAYBE-CLEAR-INPUT *STANDARD-INPUT*))))
     ;; Offer any special commands, such as wrong-package correction.
     ;; Then enter the command loop.
-    (SEND EH-ERROR ':DEBUGGER-COMMAND-LOOP SG)))
+    (SEND EH-ERROR :DEBUGGER-COMMAND-LOOP SG)))
 
 (DEFUN FOLLOW-SYN-STREAM-IN-STACK-GROUP (SYM SG)
   "Evaluate SYM as an I//O stream in stack group SG, and trace synonyms.
@@ -2800,3 +2774,5 @@ we get the value of *TERMINAL-IO* in SG."
 		(SYMBOLP PTR))
 	   (SETQ SYM PTR))
 	  (T (RETURN VAL)))))
+
+
