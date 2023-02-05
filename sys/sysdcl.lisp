@@ -88,7 +88,7 @@
 		 "SYS: SYS2; PATCH"	 ;at 167+, latest 167	- OK
 		 "SYS: SYS2; PLANE"	 ;at 32, latest 32	- OK
 		 "SYS: IO; PRINT"	 ;at 177, latest 183	- WIP	[COLD]
-		 "SYS: SYS2; PROCES"	 ;at 157+, latest 159	- OK	[MINI]
+		 "SYS: SYS2; PROCES"	 ;at 159+, latest 159	- OK	[MINI]
 		 "SYS: IO; QIO"		 ;at 217, latest 217	- BORK (210+)	[COLD]
 		 "SYS: SYS; QFASL"	 ;at 463+, latest 463	- OK	[COLD]
 		 "SYS: SYS; QFCTNS"	 ;at 774+, latest 774	- OK	[COLD]
