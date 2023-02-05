@@ -370,12 +370,14 @@ so it knows who to call back."
   (ASSURE-FREE-SPACE)
   (SETQ RESULT (STACK-GROUP-RESUME SG NIL))
   (LET ((INNER-TRAP-ON-CALL (SG-FLAGS-TRAP-ON-CALL SG))
-	(INNER-PLIST (SG-PLIST SG)))
+	;; (INNER-PLIST (SG-PLIST SG))
+	)
     (SG-RESTORE-STATE SG)
     ;; If the guy set trap-on-call before returning, leave it on.
     (IF (NOT (ZEROP INNER-TRAP-ON-CALL))
 	(SETF (SG-FLAGS-TRAP-ON-CALL SG) 1))
-    (SETF (SG-PLIST SG) INNER-PLIST))
+    ;; (SETF (SG-PLIST SG) INNER-PLIST)
+    )
   (WHEN (AND ERROR-HANDLER-RUNNING ERROR-HANDLER-REPRINT-ERROR)
     (UNLESS (EQ CURRENT-STACK-GROUP LAST-SECOND-LEVEL-ERROR-HANDLER-SG)
       (FORMAT T "~%Back to ")
@@ -1141,6 +1143,22 @@ UNINTERESTING-FUNCTIONS is a list of functions that are uninteresting."
 		(COND ((NULL NEW-FRAME) FRAME)
 		      ((ATOM (RP-FUNCTION-WORD RP NEW-FRAME)) FRAME)
 		      (T NEW-FRAME)))))))
+
+(defun sg-frame-for-pdl-index (sg index)
+  (do ((frame (sg-innermost-open sg) (sg-next-open sg frame)))
+      ((null frame) nil)
+    (when ( frame index)
+      (return frame))))
+
+(defun virtual-address-to-pdl-index (sg vadr)
+  (let* ((rp (sg-regular-pdl sg))
+	 (offset (si::array-data-offset rp)))
+    (if (or (< (%pointer vadr)
+	       (%pointer-plus rp offset))
+	    ( (%pointer vadr)
+	       (%pointer-plus rp (+ (sg-regular-pdl-pointer sg) offset))))
+	nil
+      (%pointer-difference vadr (%pointer-plus rp offset)))))
 
 (DEFUN SG-ERRING-FUNCTION (SG &OPTIONAL (FRAME (SG-AP SG)))
   "Return a /"function name/" that represents the macro instruction that erred, in SG."
@@ -2324,6 +2342,36 @@ If LOC is not bound in SG, the global binding is used."
       (IF (Q-DATA-TYPES (%P-DATA-TYPE LOCATIVE))
 	  (PRINC (Q-DATA-TYPES (%P-DATA-TYPE LOCATIVE)) stream)
 	(FORMAT STREAM "Data-type #o~O" (%P-DATA-TYPE LOCATIVE))))))
+
+(DEFUN P-PRIN1-CAREFUL-1 (LOCATIVE &OPTIONAL (STREAM *STANDARD-OUTPUT*))
+  "Print the contents of LOCATIVE, catching and reporting errors in printing.
+This version does some invisible pointer following."
+  (IF (%P-CONTENTS-SAFE-P LOCATIVE)
+      (PRINT-CAREFULLY "printing"
+	(format stream "~S ~S ~S: ~S"
+		(nth (%p-cdr-code locative) q-cdr-codes)
+		(nth (%p-data-type locative) q-data-types)
+		(%p-pointer locative)
+		(CONTENTS LOCATIVE)))
+    (let ((type (q-data-types (%p-data-type locative))))
+      (cond ((null type)
+	     (format stream "#<~S UNKNOWN-DATA-TYPE-~S ~S>"
+		     (nth (%p-cdr-code locative) q-cdr-codes)
+		     (%p-data-type locative)
+		     (%p-pointer locative)))
+	    (t
+	     (format stream "#<~S ~S ~S~@[ ~S~]>"
+		     (nth (%p-cdr-code locative) q-cdr-codes)
+		     type
+		     (%p-pointer locative)
+		     (cond ((memq (%p-data-type locative)
+				  '(#.DTP-EXTERNAL-VALUE-CELL-POINTER
+				    #.DTP-ONE-Q-FORWARD
+				    #.DTP-HEADER-FORWARD
+				    #.DTP-BODY-FORWARD))
+			    (p-prin1-careful-1 (%make-pointer dtp-locative
+							      (%p-pointer locative))
+					       nil)))))))))
 
 ;;; Initialize the error handler at warm boot time.
 (ADD-INITIALIZATION "ERROR-HANDLER-INITIALIZE" '(INITIALIZE) '(WARM))
@@ -2379,9 +2427,9 @@ If LOC is not bound in SG, the global binding is used."
 		  ((AND (CONSP M) (EQ (CAR M) 'RESUME-FOOTHOLD))
 		   (SG-RESTORE-STATE SG 1)
 		   (SETF (SG-CURRENT-STATE SG) SG-STATE-RESUMABLE)
-		   (COND ((GETF (SG-PLIST SG) 'SINGLE-MACRO-DISPATCH)
-			  (SETF (GETF (SG-PLIST SG) 'SINGLE-MACRO-DISPATCH) NIL)
-			  (SETF (SG-INST-DISP SG) 2)))
+		   ;; (COND ((GETF (SG-PLIST SG) 'SINGLE-MACRO-DISPATCH)
+		   ;; 	  (SETF (GETF (SG-PLIST SG) 'SINGLE-MACRO-DISPATCH) NIL)
+		   ;; 	  (SETF (SG-INST-DISP SG) 2)))
 		   (STACK-GROUP-RESUME SG NIL))
 		  ((NULL M)
 		   ;; Microcode error.
@@ -2623,7 +2671,7 @@ the same value or a corrected value if it doesn't like that one.")
 	(RETURN (PROGN . ,BODY))))
 
 (DEFUN VALIDATE-PACKAGE (P)
-  (IF (TYPEP P '*PACKAGE*) P SI:PKG-USER-PACKAGE))
+  (IF (TYPEP P 'PACKAGE) P SI:PKG-USER-PACKAGE))
 
 (DEFUN VALIDATE-BASE (B)
   (IF (MEMQ B '(8 10.)) B 10.))		;These are the only reasonable bases for debugging
