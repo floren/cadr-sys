@@ -1,27 +1,32 @@
-;;; The error handler commands -*- Mode:LISP; Package:EH; Readtable:T; Base:8; Lowercase:T -*-
+;;; Error handler commands -*- Mode:LISP; Package:EH; Readtable:ZL; Base:8; Lowercase:T -*-
 
 ;;; Copyright (C) Hyperbolic Systems Inc., 1982.  All wrongs reversed.
 
 ;; Commands in the dispatch table are given the SG and the ERROR-OBJECT,
 ;; and a third arg which is the numeric argument may or may not be passed.
 
+;;>> this seems to be no longer true! -------------------------------
 ;; Any command which wants to return out of the error handler should
 ;; do a throw to FINISHED after restarting the erring stack group.
+;;>> ----------------------------------------------------------------
+
+;; See elso EHBPT for breakpointing and single-stepping commands
 
 (defvar window-error-handler-old-window nil
   "If inside window error handler, this is either the old selected window or T if none.")
 
-(defvar eh-command-char :unbound
+(defvar *command-char* :unbound
   "While calling a debugger command, this is the command character.")
 
-(defconst *proceed-type-special-keys*
-	  '((:store-new-value . #/m-C))
+(defparameter *proceed-type-special-keys*
+;character lossage
+	      '((:store-new-value . #/m-C))
   "Alist of proceed types vs. standard commands that proceed with those proceed types.")
 
-(defconst *special-command-special-keys* nil
+(defparameter *special-command-special-keys* nil
   "Alist of special-command keywords vs. standard characters that run them.")
 
-(defvar special-commands :unbound
+(defvar *special-commands* :unbound
   "List of special command keywords provided by this error.")
 
 (defconst *inhibit-debugger-proceed-prompt* nil
@@ -29,26 +34,25 @@
 
 (defun command-loop (error-sg error-object
 		     &aux function sexp 
-		     (evalhook nil)
-		     special-commands
+		     (*evalhook* nil)
+		     (*special-commands* nil)
 		     (window-error-handler-old-window nil)
 		     io-buffer
 		     reading-command)
   (when error-object
-    (setq special-commands (send error-object ':special-command ':which-operations))
-    (send error-object ':initialize-special-commands))
-  (when (memq ':io-buffer (send *standard-input* ':which-operations))
-    (setq io-buffer (send *standard-input* ':io-buffer))
+    (setq *special-commands* (send error-object :special-command :which-operations))
+    (send error-object :initialize-special-commands))
+  (when (setq io-buffer (send *standard-input* :send-if-handles :io-buffer))
     (%bind (locf (tv:io-buffer-output-function io-buffer)) 'io-buffer-output-function)
     (%bind (locf (tv:io-buffer-input-function io-buffer)) nil))
   (inheriting-variables-from (error-sg)  ;Do this every time around the loop in case of setq
     (catch-error-restart ((sys:abort error) "Return to debugger command loop.")
-      (*catch 'quit
+      (catch 'quit
 	(show-function-and-args error-sg)
 	(warn-about-special-variables error-sg)
 	(unless *inhibit-debugger-proceed-prompt*
 	  (describe-proceed-types error-sg error-object)))))
-  (error-restart (sys:abort "Return to debugger command loop")
+  (error-restart (abort "Return to debugger command loop")
     (do ((numeric-arg nil nil)
 	 (-)
 	 (+ (symeval-in-stack-group '- error-sg))
@@ -66,46 +70,58 @@
 	(unless error-handler-running
 	  (setq error-depth 1))
 	(catch-error-restart ((sys:abort error) "Return to debugger command loop.")
-	  (*catch 'quit
+	  (catch 'quit
 	    (fresh-line *standard-output*)
 	    (dotimes (i error-depth)
-	      (send *standard-output* ':tyo #/))
+	      (send *standard-output* :tyo #/))
 	    (do-forever				;This loop processes numeric args
 	      ;; Read the next command or sexp, with combined rubout processing.
-	      (multiple-value (function sexp)
+	      (multiple-value-setq (function sexp)
 		(command-loop-read))
 	      ;; If it's a character, execute the definition or complain.
 	      (cond ((numberp function)
 		     (setq numeric-arg
-			   (if (null numeric-arg) function (+ function (* 10. numeric-arg))))
-		     (tyo #/space))
+			   (cond ((null numeric-arg)
+				  (format t " Argument: ~C"
+					  (if (eq function -1) #/- (digit-char function)))
+				  function)
+				 ((eq function -1)
+				  (beep)
+				  numeric-arg)
+				 (t
+				  (princ (digit-char function))
+				  (+ function (* 10. numeric-arg))))))
 		    (function
-		     (tyo #/space)  ;Print a space after the echo in case it prints something
-		     (let ((eh-command-char sexp))
-		       (return (if (not numeric-arg)
-				   (funcall function error-sg error-object)
-				 (funcall function error-sg error-object numeric-arg)))))
+		     (if numeric-arg (tyo #/space))
+		     (format t "~C " sexp)
+		     (if (not (fdefinedp function))
+			 (return (format t "~S undefined debugger function!!" function))
+		       (let ((*command-char* (int-char sexp)))
+			 (return (if (not numeric-arg)
+				     (funcall function error-sg error-object)
+				     (funcall function error-sg error-object numeric-arg))))))
 		    ;; If there was no command, there was a sexp, so eval it.
 		    (t
-		     (*catch 'quit
+		     (catch 'quit
 		       (setq +++ ++ ++ + + -)
 		       (let (values)
 			 (unwind-protect
-			     (setq values (sg-eval-in-frame error-sg (setq - sexp) current-frame t))
+			     (setq values (sg-eval-in-frame error-sg
+							    (setq - sexp) current-frame t))
 			   (push (unless (eq values error-flag) values) *values*))
-			 (cond ((neq values error-flag)
-				(setq ////// //// //// //)
-				(setq *** ** ** *)
-				(setq // values * (car //))
-				(dolist (value //)
-				  (terpri)
-				  (funcall (or prin1 #'prin1) value))))))
+			 (unless (eq values error-flag)
+			   (setq ////// //// //// //)
+			   (setq *** ** ** *)
+			   (setq // values * (car //))
+			   (dolist (value //)
+			     (terpri)
+			     (print-carefully () (funcall (or prin1 #'prin1) value))))))
 		     (return))))))))))
 
 ;Errors in error handler commands can be reported this way.
 (defun barf (format-string &rest args)
-  (apply 'format t format-string args)
-  (*throw 'quit nil))
+  (apply #'format t format-string args)
+  (throw 'quit nil))
 
 (defvar reading-command nil
   "Used in the debugger. Bound to T while reading a command char, for the io-buffer function.")
@@ -114,35 +130,44 @@
 ;; or a s-expression.  Return FUNCTION and CHAR or return NIL and the s-expression.
 (defun command-loop-read ()
   (prog (char sexp flag function)
-    retry
-       ;; Read a character.
-       (let ((reading-command t))
-	 (setq char (send *standard-input* ':tyi)))
-       ;; Now, if the char is special, echo and return it.
-       (cond ((rassq char *proceed-type-special-keys*)
-	      (format t "~C" char)
-	      (return 'com-proceed-specified-type char))
-	     ((rassq char *special-command-special-keys*)
-	      (format t "~C" char)
-	      (return 'com-special-command char))
-	     ((or ( 0 (char-bits char))
-		  (command-lookup char))
-	      (cond ((setq function (command-lookup char))
-		     (and (eq function 'com-number)
-			  (setq function (digit-char-p (char-code char))))
-		     (format t "~C" char)
-		     (return function char))))
-	     ((= char #/rubout) (go retry)))	;Ignore rubouts
+     retry
+	;; Read a character.
+	(let ((reading-command t))
+	  (setq char (send *standard-input* :tyi)))
+	;; Now, if the char is special, echo and return it.
+;character lossage
+	(cond ((rassq char *proceed-type-special-keys*)
+	       (return (values 'com-proceed-specified-type char)))
+	      ((rassq char *special-command-special-keys*)
+	       (return (values 'com-special-command char)))
+	      ((or ( 0 (char-bits char))
+		   (command-lookup char))
+	       (when (setq function (command-lookup char))
+		 (cond ((eq function 'com-rubout)
+			(go retry))
+		       ((eq function 'com-number)
+			(setq function (or (digit-char-p (make-char char))
+					   -1))))	;else it's a "-"
+		 (return (values function char)))))
        ;; Otherwise, unread it and read an s-exp instead.
-       (send *standard-input* ':untyi char)
+       (send *standard-input* :untyi char)
        (multiple-value (sexp flag)
 	 (with-input-editing (*standard-input*  '((:full-rubout :full-rubout)
-						  (:activation = #/end))
-						  (:prompt " Eval: "))
-	   (si:read-for-top-level)))
+						  (:activation = #/end)
+						  (:prompt " Eval: ")))
+	   (si:read-for-top-level nil nil nil)))
        (when (eq flag ':full-rubout)
 	 (go retry))
-       (return nil sexp)))
+       (return (values nil sexp))))
+
+;; Rubout.  Flush numeric arg.
+(defun com-rubout (ignore ignore &optional ignore)
+  "Flushes the numeric arg, if any."
+  (throw 'quit nil))
+
+;; Control-0 though Control-Meta-9, Control-- through Control-Meta--
+(setf (documentation 'com-number 'function)
+      "Used to give a numeric argument to debugger commands.")
 
 (defun io-buffer-output-function (ignore char &aux tem)
   (cond ;; Blips shouldn't get here, but don't die
@@ -150,11 +175,13 @@
 	;; Don't intercept commands
 	((and reading-command (command-lookup char)) char)
 	((setq tem (assq char tv:kbd-intercepted-characters))
-	 (multiple-value-prog1 (funcall (cadr tem) char))
-	 (format t "~&Back to debugger.~%"))
+	 (multiple-value-prog1
+	   (funcall (cadr tem) char)
+	   (format t "~&Back to debugger.~%")))
 	;; Compatibility with ancient history
-	((eq char #/c-G)			
-	 (tv:kbd-intercept-abort #/c-G))
+;character lossage
+	((eq char (char-int #/c-G))
+	 (tv:kbd-intercept-abort (char-int #/c-G)))
 	(t char)))
 
 (defun command-lookup (char)
@@ -162,15 +189,16 @@
   (aref command-dispatch-table (char-bits char)
 			       (char-code (char-upcase char))))
 
+
 (defun describe-proceed-types (sg error-object)
   "Print documentation of the available proceed-types and characters to get them.
 ERROR-OBJECT is the object to document.  Output goes to *STANDARD-OUTPUT*."
   (when error-handler-running
-    (let* ((proceed-types  (send error-object ':user-proceed-types
+    (let* ((proceed-types  (send error-object :user-proceed-types
 				 (sg-condition-proceed-types sg error-object)))
 	   (resume-handlers (symeval-in-stack-group 'condition-resume-handlers sg))
 	   (abort-handler (find-resume-handler abort-object nil resume-handlers)))
-      (do ((keywords (append proceed-types special-commands)
+      (do ((keywords (append proceed-types *special-commands*)
 		     (cdr keywords))
 	   (proceed-types proceed-types
 			  (cdr proceed-types))
@@ -180,7 +208,7 @@ ERROR-OBJECT is the object to document.  Output goes to *STANDARD-OUTPUT*."
 	  ((null keywords))
 	(if (zerop i)
 	    (format t "~&~%Commands available for this particular error:~2%"))
-	(format t "~C" (+ #/S-A i))
+	(format t "~C" (+ (char-int #/S-A) i))
 	(when proceed-types
 	  (setq this-one-for-abort
 		(eq (find-resume-handler error-object (car keywords) resume-handlers)
@@ -188,33 +216,33 @@ ERROR-OBJECT is the object to document.  Output goes to *STANDARD-OUTPUT*."
 	  (if this-one-for-abort (setq abort-handler nil)))
 	(cond ((and (zerop i) (atom (car proceed-types)))
 	       ;; Resume only works for proceed-types that are atomic.
-	       (format t ", ~C" #/Resume))
+	       (format t ", ~C" #/Resume))
 	      ((setq tem (assq (car keywords)
 			       (if proceed-types *proceed-type-special-keys*
 				 *special-command-special-keys*)))
 	       (format t ", ~C" (cdr tem)))
 	      ;; If Abort is synonymous with this one, mention that.
 	      (this-one-for-abort
-	       (format t ", ~C" #/Abort)))
+	       (format t ", ~C" #/Abort)))
 	(format t ":~13T")
 	(send error-object
 	      (if proceed-types
-		  ':document-proceed-type
-		':document-special-command)
+		  :document-proceed-type
+		  :document-special-command)
 	      (car keywords) *standard-output* resume-handlers)
-	(send *standard-output* ':fresh-line))
+	(send *standard-output* :fresh-line))
       (when abort-handler
 	;; Abort is not currently synonymous with any of the proceed types.
 	;; So document it specially.
-	(format t "~C:~13T" #/Abort)
-	(send abort-object ':document-proceed-type (second abort-handler)
+	(format t "~C:~13T" #/Abort)
+	(send abort-object :document-proceed-type (second abort-handler)
 	      *standard-output* resume-handlers)
-	(send *standard-output* ':fresh-line)))))
+	(send *standard-output* :fresh-line)))))
 
 ;;;; Utility functions used by the top level, and various commands.
 
 (defun print-brief-error-backtrace (sg error-object)
-  error-object
+  (declare (ignore error-object))
   (format t "~&While in the function ")
   (short-backtrace sg nil error-message-backtrace-length error-locus-frame)
   (terpri)
@@ -225,13 +253,13 @@ ERROR-OBJECT is the object to document.  Output goes to *STANDARD-OUTPUT*."
   "Like PROMPT-AND-READ but executes in the erring stack group."
   (declare (arglist option format-string &rest format-args))
   (cond (window-error-handler-old-window
-	 (apply 'window-read-object prompt-and-read-args))
+	 (apply #'window-read-object prompt-and-read-args))
 	(t
 	 (let ((otoc (sg-flags-trap-on-call error-sg)))
 	   (setf (sg-flags-trap-on-call error-sg) 0)
 	   (unwind-protect
 	     (values-list
-	       (sg-eval-in-frame error-sg `(apply 'prompt-and-read ',prompt-and-read-args)
+	       (sg-eval-in-frame error-sg `(apply #'prompt-and-read ',prompt-and-read-args)
 				 current-frame t))
 	     (setf (sg-flags-trap-on-call error-sg) otoc))))))
 
@@ -245,11 +273,11 @@ Deactivates the debugger window if one was in use."
   (and window-error-handler-old-window
        (tv:delaying-screen-management
 	 (if (eq window-error-handler-old-window t)
-	     (send error-handler-window ':deselect t)
-	     (send window-error-handler-old-window ':select))
+	     (send error-handler-window :deselect t)
+	     (send window-error-handler-old-window :select))
 	 ;;If this doesn't leave the window still on the screen, it is useless, so free it.
 	 (or (tv:sheet-exposed-p error-handler-window)
-	     (send error-handler-window ':deactivate)))))
+	     (send error-handler-window :deactivate)))))
 
 (defun proceed-error-sg (&rest args)
   (leaving-error-handler)
@@ -262,6 +290,9 @@ Deactivates the debugger window if one was in use."
   (leaving-error-handler)
   (without-interrupts
     (free-second-level-error-handler-sg %current-stack-group)
+    (cond ((getf (sg-plist sg) 'single-macro-dispatch)
+	   (setf (getf (sg-plist sg) 'single-macro-dispatch) nil)
+	   (setf (sg-inst-disp sg) 2)))
     (stack-group-resume sg val)))
 
 ;;;; Backtrace commands.
@@ -277,6 +308,7 @@ Deactivates the debugger window if one was in use."
 ;; This prints out like the Maclisp BAKTRACE, and does not TERPRI at beginning
 ;; nor end.
 
+;; Conrtol-B
 (defun com-short-backtrace (sg ignore &optional (n most-positive-fixnum))
   "Prints a brief (function names only) backtrace of the stack.
 Optional numeric arg determines how far back to go."
@@ -285,10 +317,9 @@ Optional numeric arg determines how far back to go."
 (defun short-backtrace (sg ignore &optional (n most-positive-fixnum) start-frame uninteresting-flag)
   (print-backtrace sg n start-frame uninteresting-flag
 		   #'(lambda (sg frame count)
-		       (let ((width
-			       (or (send *standard-output* ':send-if-handles
-					 ':size-in-characters)
-				   40.)))
+		       (let ((width (or (send *standard-output* :send-if-handles
+								:size-in-characters)
+					40.)))
 			 (format:breakline width nil
 			   (or (zerop count) (princ "  "))
 			   (prin1 (function-name
@@ -329,9 +360,9 @@ Optional numeric arg determines how far back to go."
 	    (rp-exit-pc rp frame)))		; which is one greater than the D-LAST.  
   (if describe-function-source-file (describe-function-source-file function))
   (terpri)
-  (when (eq (car-safe function-name) ':method)
+  (when (eq (car-safe function-name) :method)
     (print-carefully "self"
-      (format t "   (SELF is ~S)~%" (symeval-in-stack-group 'self sg frame))))
+      (format t "   (~S is ~S)~%" 'self (symeval-in-stack-group 'self sg frame))))
   (print-frame-args sg frame 3))
 
 (defun print-frame-args (sg frame indent
@@ -493,15 +524,15 @@ Includes internal /"uninteresting/" frames, such as EVAL and PROG, etc."
 ;; Control-L, form.
 (defun com-clear-and-show (sg error-object &rest ignore)
   "Clears the screen and redisplays the error message."
-  (send *standard-output* ':clear-screen)
+  (send *standard-output* :clear-screen)
   (print-carefully "error message"
-    (send error-object ':print-error-message sg nil *standard-output*))
+    (send error-object :print-error-message sg nil *standard-output*))
   (show-function-and-args sg)
   (warn-about-special-variables sg)
   (describe-proceed-types sg error-object)
   (unless error-handler-running
     (format t "~2&Examine-only mode; you cannot resume or alter execution.
-Type ~C to exit the debugger.~%" #/resume))
+Type ~C to exit the debugger.~%" #/resume))
   nil)
 
 ;; Control-Meta-Q
@@ -525,28 +556,28 @@ function whose name contains that string."
   (setq frame 
 	(do ((frame current-frame (sg-next-active sg frame))
 	     (rp (sg-regular-pdl sg))
-	     (name)
-	     )
+	     (name))
 	    ((null frame) nil)
 	  (setq name (function-name (rp-function-word rp frame)))
-	  (setq name
-		(cond ((stringp name) name)
-		      ((symbolp name) (string name))
-		      (t (format nil "~S" name))))
-	  (and (string-search key name)
-	       (return frame))))
-  (cond ((null frame)
-	 (format t "Search failed.~%"))
-	(t
-	 (setq current-frame frame)
-	 (cond ((not flag) (show-function-and-args sg))
-	       (t (show-all sg))))))
+	  (setq name (cond ((stringp name) name)
+			   ((symbolp name) (string name))
+			   (t (format nil "~S" name))))
+	  (when (string-search key name)
+	    (return frame))))
+  (if (null frame)
+      (format t "Search failed.~%")
+    (setq current-frame frame)
+    (if flag
+	(show-all sg)
+        (show-function-and-args sg))))
 
+;; Not bound to any key
 (defun com-search-and-show-all (sg error-object &optional (count 1))
   "Prompts for a string and searches down the stack for a frame containing a call to a
 function whose name contains that string, and then displays args, locals and compiled code."
   (com-search sg error-object count t))
 
+;; Control-M
 (defun com-bug-report (ignore error-object &optional arg)
   "Mails a bug report containing a backtrace of the stack.
 You are prompted for a message. The depth of stack backtrace included is determined
@@ -557,26 +588,39 @@ by the optional numeric argument."
 	(format t "Please type a precise, detailed description
 of what you did that led up to the bug.
 ")
-	(bug (send error-object ':bug-report-recipient-system)
+	(bug (send error-object :bug-report-recipient-system)
 	     (string-append (zwei:qsend-get-message)
-			    #/return
+			    #/newline
 			    (format:output nil
-			      (send error-object ':bug-report-description
+			      (send error-object :bug-report-description
 				    *standard-output* arg)))))
     (format t " Mail a bug report.   Entering the editor...")
-    (bug (send error-object ':bug-report-recipient-system)
+    (bug (send error-object :bug-report-recipient-system)
 	 (format:output nil
 	   "Insert your description of the circumstances here:
 
 
 "
-	   (send error-object ':bug-report-description *standard-output* arg))
+	   (send error-object :bug-report-description *standard-output* arg))
 	 52.)))		;This is the length of the constant, above, minus one.
 
 ;;;; The guts of the commands on the previous page.
 
 ;; SHOW-FUNCTION-AND-ARGS is regular printing tty stuff.
 ;; SHOW-ALL clears the screen and then fills it up.
+(defun show-function-and-args (sg &optional show-ucode)
+  (print-function-and-args sg current-frame)
+  (let* ((rp (sg-regular-pdl sg))
+	 (function (rp-function-word rp current-frame)))
+    (when (and show-ucode
+	       (typep function 'microcode-function)
+	       (or (get (function-name function) 'compiler::mclap)
+		   (get (function-name function) 'compiler::mclap-loaded-info))
+	       (fboundp 'compiler:ma-print))
+      (compiler::ma-print (function-name function)
+			  (cons (sg-trap-micro-pc sg)
+				(cdddr (symeval-in-stack-group 'ucode-error-status sg)))))))
+
 (defun show-function-and-args (sg)
   (print-function-and-args sg current-frame))
 
@@ -584,11 +628,12 @@ of what you did that led up to the bug.
   "Print everything about the current frame, including locals and disassembly."
   (setq rp (sg-regular-pdl sg)
 	function (rp-function-word rp current-frame))
-  (send *standard-output* ':clear-screen)
+  (send *standard-output* :clear-window)
   ;; Print the header, including the function name
   (format t "Frame address ~D" current-frame)
-  (if (not (zerop (rp-adi-present rp current-frame)))
-      (show-adi rp (- current-frame 4)))
+  (unless (zerop (rp-adi-present rp current-frame))
+    (terpri)
+    (show-adi rp (- current-frame 4)))
   (terpri)
   (if (typep function 'compiled-function)
       (show-all-macro sg current-frame)
@@ -605,7 +650,7 @@ of what you did that led up to the bug.
 (defun show-frame-briefly-for-bug-message (sg frame &aux rp function)
   (setq rp (sg-regular-pdl sg)
 	function (rp-function-word rp frame))
-  (send *standard-output* ':fresh-line)
+  (send *standard-output* :fresh-line)
   (if (typep function 'compiled-function)
       (format t "~S (P.C. = ~D)" (fef-name function) (rp-exit-pc rp frame))
     (prin1 (function-name function)))
@@ -615,8 +660,9 @@ of what you did that led up to the bug.
 (defun show-frame-for-bug-message (sg frame &aux rp function)
   (setq rp (sg-regular-pdl sg)
 	function (rp-function-word rp frame))
-  (if (not (zerop (rp-adi-present rp frame)))
-      (show-adi rp (- frame 4)))
+  (unless (zerop (rp-adi-present rp frame))
+    (terpri)
+    (show-adi rp (- frame 4)))
   (terpri)
   (if (typep function 'compiled-function)
       (show-all-macro sg frame t)
@@ -629,23 +675,25 @@ of what you did that led up to the bug.
 	    (*read-base* (symeval-in-stack-group '*read-base* sg)))
 	(if (eq *print-base* *read-base*)
 	    (unless (numberp *print-base*)
-	      (format t "~&Warning: *PRINT-BASE* and *READ-BASE* are ~D." *print-base*))
-	  (format t "~&Warning: *PRINT-BASE* is ~D but *READ-BASE* is ~D (both decimal).~%"
-		  *print-base* *read-base*)))
+	      (format t "~&Warning: ~S and ~S are ~D."
+		      '*print-base* '*read-base* *print-base*))
+	  (format t "~&Warning: ~S is ~D but ~S is ~D (both decimal).~%"
+		  '*print-base* *print-base* '*read-base* *read-base*)))
     (error
-      (format t "~&Warning: error while trying to find *PRINT-BASE* and *READ-BASE* in ~S."
-	      sg)))
+      (format t "~&Warning: error while trying to find ~S and ~S in ~S."
+	      '*print-base* '*read-base* sg)))
   (condition-case ()
       (let ((areaname (area-name (symeval-in-stack-group 'default-cons-area sg))))
 	(or (eq areaname 'working-storage-area)
 	    (format t "~&Warning: the default cons area is ~S~%" areaname)))
     (error
-      (format t "~&Warning: error while trying to find DEFAULT-CONS-AREA in ~S." sg)))
+      (format t "~&Warning: error while trying to find ~S in ~S." 'default-cons-area sg)))
   (condition-case ()
       (if (symeval-in-stack-group 'tail-recursion-flag sg)
-	  (format t "~&Note: TAIL-RECURSION-FLAG is set, so some frames may no longer be on the stack.~%"))
+	  (format t "~&Note: ~S is set, so some frames may no longer be on the stack.~%"
+		  'tail-recursion-flag))
     (error
-      (format t "~&Warning: error while trying to find TAIL-RECURSION-FLAG in ~S." sg)))
+      (format t "~&Warning: error while trying to find ~S in ~S." 'tail-recursion-flag sg)))
   (format t "~&;Reading in base ~D in package ~A with ~A.~&"
 	  *read-base* *package* *readtable*))
 
@@ -660,8 +708,8 @@ of what you did that led up to the bug.
   (format t "~%~S (P.C. = ~D)" name pc-now)
   (when no-disassembled-code (describe-function-source-file name))
   (terpri)
-  (when (eq (car-safe name) ':method)
-    (format t "  (SELF is ")
+  (when (eq (car-safe name) :method)
+    (format t "  (~S is " 'self)
     (print-carefully "SELF"
       (prin1 (symeval-in-stack-group 'self sg frame)))
     (format t ")~%"))
@@ -685,12 +733,13 @@ of what you did that led up to the bug.
 	   ;; Figure out how many instructions will fit in the stream we are using.
 	   (setq nlines
 		 (max disassemble-instruction-count	;don't show absurdly few
-		      (cond ((send *standard-output* ':operation-handled-p
-				   		     ':size-in-characters)
+		      (cond ((send *standard-output* :operation-handled-p
+				   		     :size-in-characters)
 			     (setq nlines (nth-value 1
-				            (send *standard-output* ':size-in-characters))
+				            (send *standard-output* :size-in-characters))
 				   where (nth-value 1
-					    (send *standard-output* ':read-cursorpos ':character)))
+					    (send *standard-output* :read-cursorpos
+								    :character)))
 			     ;; Leave 1 line for prompt, 1 for extra terpri
 			     (- nlines where 2))
 			    (t 0))))		;Don't know size of window, use default count
@@ -705,11 +754,11 @@ of what you did that led up to the bug.
 	     (compiler::disassemble-instruction function pc))
 	   ;; This kludge is to prevent prompt from triggering a **MORE** when it comes out
 	   ;; on the bottom line of the window
-	   (send *standard-output* ':send-if-handles ':notice ':input-wait)))))
+	   (send *standard-output* :send-if-handles :notice :input-wait)))))
 
 (defun show-adi (rp idx)
   "Print the ADI at index IDX in the regular pdl RP"
-  (format t "~2%Additional information supplied with call:")
+  (format t "~%Additional information supplied with call:")
   (do ((idx idx (- idx 2)))
       (())
     (let ((type (ldb %%adi-type (aref rp idx)))
@@ -720,7 +769,7 @@ of what you did that led up to the bug.
 	(adi-bind-stack-level
 	 (format t "~% Binding stack level: ~S" (aref rp (1- idx))))
 	(adi-restart-pc
-	 (format t "~% Restart PC on *THROW: ~D" (aref rp (1- idx))))
+	 (format t "~% Restart PC on ~S: ~D" 'throw (aref rp (1- idx))))
 	(otherwise
 	 (format t "~% ~S" (nth type adi-kinds))))
       (if (zerop more-p) (return)))))
@@ -755,11 +804,10 @@ of what you did that led up to the bug.
 
 ;; Control-Meta-S: Print names and values of specials bound by this frame.
 ;; If SELF is bound in this frame, its instance variables are also included.
-(defun com-print-frame-bindings (sg error-object &optional count
-				 &aux start end (sp (sg-special-pdl sg))
-				 self-included special-vars)
+(defun com-print-frame-bindings (sg ignore &optional count
+				 &aux start end (sp (sg-special-pdl sg)))
+				 ;; self-included special-vars
   "Lists the names and values of all special variables bound by this frame."
-  error-object
   ;; Find range of special pdl for this frame together with
   ;; all uninteresting frames called by it.
   (do ((previous-int (sg-previous-interesting-active sg current-frame
@@ -773,93 +821,112 @@ of what you did that led up to the bug.
   (cond (start
 	 (if (null count) (format t "~&Names and values of specials bound in this frame:~%"))
 	 ;; Now look through the specials bound in this frame.
-	 ;; Maybe print one or all, but in any case compute SELF-INCLUDED
-	 ;; and SPECIAL-VARS.
 	 (do ((i start (+ i 2)))
 	     (( i end))
-	   (push (symbol-from-value-cell-location (aref sp (1+ i)))
-		 special-vars)
-	   (if (eq (car special-vars) 'self)
-	       (setq self-included i))
-	   (when (or (null count) (= count (lsh (- i start) -1)))
-	     (format t "~:[~% ~S: ~;~&Value of ~S in this frame:~&   ~]"
-		     count (car special-vars))
-	     (multiple-value-bind (val error)	;Value
-		 (catch-error (funcall (or prin1 #'prin1) (aref sp i)) nil)
-	       (if error (setq val (princ "void")))
-	       (when count
-		 (setq ////// //// //// // // (list val))
-		 (setq *** ** ** * * val)
-		 (setq +++ ++ ++ + + - - (value-cell-location (car special-vars)))))))
-	 ;; List the instance variable of SELF also if SELF is bound in this frame.
-	 (if (and self-included
-		  (typep (aref sp self-included) ':instance)
-		  ;; But not if want only one variable and already got it.
-		  (or (null count)
-		      ( count (lsh (- end start) -1))))
-	     (let* ((self-value (aref sp self-included))
-		    (self-flavor 
-		     (si:instance-flavor self-value))
-		    (self-vars (si:flavor-all-instance-variables-slow self-flavor)))
-	       (unless count
-		 (format t "~2&Non-special instance variables of ~S~&" self-value))
-	       (do ((sv self-vars (cdr sv))
-		    (count-unspecial (lsh (- end start) -1))
-		    (i 1 (1+ i)))
-		   ((null sv))
-		 (when (and (not (memq (car sv) special-vars))
-			    (or (null count)
-				(= (1+ count) (incf count-unspecial))))
-		   (format t "~:[~% ~S: ~;~&Value of instance variable ~S within SELF:~&   ~]"
-			   count (car sv))
-		   (multiple-value-bind (val error)
-		       (catch-error (funcall (or prin1 #'prin1)
-					     (%instance-ref self-value i)) nil)
-		     (if error (setq val (princ "void")))
-		     (cond (count
-			    (setq ////// //// //// // // (list val))
-			    (setq *** ** ** * * val)
-			    (setq +++ ++ ++ + + - - (%instance-loc self-value i))))))))))
+	   (let ((sym (symbol-from-value-cell-location (aref sp (1+ i)))))
+	     ;;(push tem special-vars)
+	     ;;(if (eq sym 'self)
+	     ;;  (setq self-included i))
+	     (when (or (null count) (= count (lsh (- i start) -1)))
+	       (format t "~:[~% ~S: ~;~&Value of ~S in this frame:~&   ~]" count sym)
+	       (multiple-value-bind (val error)
+		   (catch-error (funcall (or prin1 #'prin1) (aref sp i)) nil)
+		 (cond (error (princ "void"))
+		       (count (got-values val (aref sp (1+ i)) nil))))))))
+;; instance variables are NOT special!! Use m-I
+;	 ;; List the instance variable of SELF also if SELF is bound in this frame.
+;	 (if (and self-included
+;		  (typep (aref sp self-included) 'instance)
+;		  ;; But not if want only one variable and already got it.
+;		  (or (null count)
+;		      ( count (lsh (- end start) -1))))
+;	     (let* ((self-value (aref sp self-included))
+;		    (self-flavor 
+;		     (si::instance-flavor self-value))
+;		    (self-vars (si::flavor-all-instance-variables-slow self-flavor)))
+;	       (unless count
+;		 (format t "~2&Non-special instance variables of ~S~&" self-value))
+;	       (do ((sv self-vars (cdr sv))
+;		    (count-unspecial (lsh (- end start) -1))
+;		    (i 1 (1+ i)))
+;		   ((null sv))
+;		 (when (and (not (memq (car sv) special-vars))
+;			    (or (null count)
+;				(= (1+ count) (incf count-unspecial))))
+;		   (format t "~:[~% ~S: ~;~&Value of instance variable ~S within ~S:~&   ~]"
+;			   count (car sv) 'self)
+;		   (multiple-value-bind (val error)
+;		       (catch-error (funcall (or prin1 #'prin1)
+;					     (%instance-ref self-value i)) nil)
+;		     (cond (error (princ "void"))
+;			   (count (got-values val (%instance-loc self-value i) nil)))))))))
 	(t (format t "~&No specials bound in this frame"))))
 
 ;; Meta-S: Print the value as seen in the current frame (at the point at which
 ;; it called out or erred) of a specified variable.
-;; Instance variables of SELF's value are also allowed.
-(defun com-print-variable-frame-value (sg error-object &optional ignore)
+(defun com-print-variable-frame-value (sg ignore &optional ignore &aux var)
   "Print the value of a special variable within the context of the current stack frame.
 Prompts for the variable name."
-  error-object
-  (terpri)
-  (multiple-value-bind (var full-rubout
-			self-value self-pos)
-      (with-input-editing (*standard-input* '((:full-rubout :full-rubout)
-					      (:activation = #/end)
-					      (:prompt "Value in this frame of special variable: ")))
-	(si:read-for-top-level))
-    (if (eq full-rubout ':full-rubout) (return-from com-print-variable-frame-value nil))
-    (multiple-value-bind (value boundflag)
+  ;;(terpri)
+  (with-input-editing (*standard-input*
+			'(;(:full-rubout :full-rubout) -- too obnoxious
+			  (:activation char= #/end)
+			  (:prompt "Value in this frame of special variable: ")))
+    (setq var (si:read-for-top-level nil nil nil))
+    (multiple-value-bind (value boundflag loc)
 	(symeval-in-stack-group var sg current-frame)
-      (terpri)
-      (setq ////// //// //// //)
-      (setq *** ** ** *)
-      (setq +++ ++ ++ + + - - var)
-      (cond (boundflag (funcall (or prin1 #'prin1) (setq * value)))
-	    ((progn
-	      (setq self-value
-		    (symeval-in-stack-group 'self sg current-frame))
-	      (and (instancep self-value)
-		   (setq self-pos
-			 (find-position-in-list
-			   var
-			   (si:flavor-all-instance-variables-slow
-			     (si:instance-flavor self-value))))))
-	     (funcall (or prin1 #'prin1) (setq * (%instance-ref self-value (1+ self-pos)))))
-	    (t (princ (setq * "Void"))))
-      (setq // (list *)))))
+      (if boundflag
+	  (got-values value loc nil)
+	(princ "Void")))))
+;; look goddam it! Instance variables are NOT special!!!
+;	(let* ((self-value (symeval-in-stack-group 'self sg current-frame))
+;	       (self-pos (and (instancep self-value)
+;			      (find-position-in-list var
+;						     (si::flavor-all-instance-variables-slow
+;						       (si::instance-flavor self-value))))))
+;	  (if self-pos
+;	      (got-values (%instance-ref self-value (1+ self-pos))
+;			  (%make-pointer-offset dtp-locative self-value (1+ self-pos))
+;			  nil)
+;	    (princ "Void")
+;	    nil))))))
+
+;; Meta-I: Print value of instance variable of SELF
+(defun com-print-instance-variable (sg ignore &optional ignore)
+  "Print the value of an instance VARIABLE of SELF within the context of the current frame.
+Prompts for the instance variable name.
+With a numeric argument, displays all instance variables of SELF."
+  (let ((self-value (symeval-in-stack-group 'self sg current-frame))
+	ivars var val)
+    (unless (instancep self-value)
+      (format t "~&~S is not an instance" 'self)
+      (return-from com-print-instance-variable nil))
+    (setq ivars (si::flavor-all-instance-variables-slow (si::instance-flavor self-value)))
+    (do-forever
+      (with-input-editing (*standard-input*
+			    '((:prompt "Value in this frame of instance variable: ")
+			      (:activation char= #/end)
+			      ;(:full-rubout :full-rubout) -- too obnoxious
+			      (:command char= #/hand-right)
+			      ))
+	(setq val (si:read-for-top-level nil nil nil))
+	(if (setq var (or (memq val ivars) (mem #'string-equal val ivars)))
+	    (let* ((pos (find-position-in-list (setq var (car var)) ivars))
+		   (loc (locf (%instance-ref self-value (1+ pos)))))
+	      (return-from com-print-instance-variable
+		(if (location-boundp loc)
+		    (got-values (contents loc) loc nil)
+		  (princ "void")
+		  (got-values nil loc nil))))
+	  (parse-ferror "~S is not an instance variable of ~S" val self-value)))
+      ;; If doesn't return, then luser typed Help
+      (format t "~&Instance variables of ~S are:~%~4@T ~S" 'self (car ivars))
+      (format:breakline nil (princ "    ") (dolist (v (cdr ivars)) (prin1 v))))))
 
-(defun com-print-frame-handlers (sg error-object &optional ignore)
-  "Lists the condition handlers set up in this frame. (includes resume and default handlers)"
-  error-object
+;; Control-Meta-H
+(defun com-print-frame-handlers (sg ignore &optional arg)
+  "Lists the condition handlers set up in this frame. (includes resume and default handlers)
+With an argument, shows all condition handlers active in this frame."
   (let ((handlers-outside (symeval-in-stack-group 'condition-handlers sg
 						  (sg-next-active sg current-frame)))
 	(default-handlers-outside (symeval-in-stack-group 'condition-default-handlers sg
@@ -871,31 +938,140 @@ Prompts for the variable name."
 						  current-frame))
 	(resume-handlers (symeval-in-stack-group 'condition-resume-handlers sg
 						 current-frame)))
-    (unless (eq handlers handlers-outside)
-      (if (null handlers)
+    (unless (and (null arg) (eq handlers handlers-outside))
+      (if (and (null arg) (null handlers))
 	  (format t "~&Condition handlers bound off, hidden from lower levels.")
-	(format t "~&Condition handlers:~%")
-	(dolist (h (ldiff handlers handlers-outside))
+	(format t "~&~:[No ~]Condition handlers:~%" handlers)
+	(dolist (h (if arg handlers (ldiff handlers handlers-outside)))
 	  (format t "~& Handler for ~S" (car h)))))
-    (unless (eq default-handlers default-handlers-outside)
-      (if (null default-handlers)
+    (unless (and (null arg) (eq default-handlers default-handlers-outside))
+      (if (and (null arg) (null default-handlers))
 	  (format t "~&Default handlers bound off, hidden from lower levels.")
-	(format t "~&Default handlers:~%")
-	(dolist (h (ldiff default-handlers default-handlers-outside))
+	(format t "~&~:[No ~]Default handlers:~%" default-handlers)
+	(dolist (h (if arg default-handlers (ldiff default-handlers default-handlers-outside)))
 	  (format t "~& Default handler for ~S" (car h)))))
-    (unless (eq resume-handlers resume-handlers-outside)
+    (unless (and (null arg) (eq resume-handlers resume-handlers-outside))
       (format t "~&Resume handlers:~%")
-      (dolist (h (ldiff resume-handlers resume-handlers-outside))
-	(if (eq h t)
-	    (format t "~& Barrier hiding all resume handlers farther out.")
-	  (format t "~& Resume handler for ~S,~%  " (car h))
-	  (unless (listp (cadr h))
-	    (format t "proceed type ~S,~%  " (cadr h)))
-	  (apply 'format t (cadddr h)))))
-    (and (eq resume-handlers resume-handlers-outside)
-	 (eq default-handlers default-handlers-outside)
-	 (eq handlers handlers-outside)
-	 (format t "~&No handlers set up in this frame."))))
+      (dolist (h (if arg resume-handlers (ldiff resume-handlers resume-handlers-outside)))
+	(cond ((eq h t)
+	       (format t "~& Barrier hiding all resume handlers farther out.")
+	       (return nil))
+	      (t
+	       (format t "~& Resume handler for ~S,~%  " (car h))
+	       (unless (consp (cadr h))
+		 (format t "proceed type ~S,~%  " (cadr h)))
+	       (apply #'format t (cadddr h))))))
+    (if (and (eq resume-handlers resume-handlers-outside)
+	     (eq default-handlers default-handlers-outside)
+	     (eq handlers handlers-outside)
+	     (null arg))
+	(format t "~&No handlers set up in this frame."))))
+
+
+;; Meta-T
+(defun com-show-stack-temporaries (sg ignore &optional arg
+				   &aux (*print-level* error-message-prinlevel)
+				        (*print-length* error-message-prinlength)
+				   (rp (sg-regular-pdl sg)))
+  "With no argument, show temporary values pushed onto stack by this stack frame.
+With an argument of 0, also displays pending open frames, and arguments pushed
+ for them (presumably as arguments)
+With an argument of -1, displays each word of the regular pdl from the current frame
+ to the pdl-pointer. You don't -really- want to do this, do you?"
+  (cond ((eq arg -1)
+	 (let ((end (sg-regular-pdl-pointer sg))
+	       (rp (sg-regular-pdl sg)))
+	   (loop for i from (1+ current-frame) below end do
+		 (format t "~%~4D: " i)
+		 (p-prin1-careful-1 (locf (aref rp i))))))
+	(t
+	 (loop for this-frame = current-frame then (sg-previous-open sg this-frame)
+	       for firstp = t then nil
+	       while (and this-frame ( this-frame (sg-regular-pdl-pointer sg)))
+	       as function = (rp-function-word rp this-frame)
+	       as n-locals = 0 and nargs = 0 and nargs-expected = 0
+	       as rest-arg-value = nil and rest-arg-p = nil and lexpr-call = nil
+	       until (and (not firstp) (or (eq arg 0)
+					   (sg-frame-active-p sg this-frame)
+					   (eq function #'foothold)))
+	    do (if (eq function #'foothold)
+		   (show-foothold sg this-frame)
+		 (when (sg-frame-active-p sg this-frame)
+		   (when (legitimate-function-p function)
+		     (setq nargs-expected
+			   (ldb %%arg-desc-max-args (args-info function)))
+		     (setq nargs (sg-number-of-spread-args sg this-frame))
+		     (multiple-value-setq (rest-arg-value rest-arg-p lexpr-call)
+		       (sg-rest-arg-value sg this-frame))
+		     (setq n-locals (fef-number-of-locals function))))
+		 (let* ((prev-open (sg-previous-open sg this-frame))
+			(total (- (if prev-open (- prev-open 4) (sg-regular-pdl-pointer sg))
+				  this-frame)))
+		   (catch-error (format t "~2&~S" (function-name function)) nil)
+		   (when (typep function 'compiled-function)
+		     (format t " (P.C. = ~D)" (rp-exit-pc rp this-frame)))
+		   (format t "~%Frame index ~D" this-frame)
+		   (format t "~%~D arg~:P, ~D local~:P, ~D total in frame"
+			   nargs n-locals total)
+		   (if (not (zerop (rp-adi-present rp this-frame)))
+		       (show-adi rp (- this-frame 4)))
+		   (do ((i 0 (1+ i))
+			(index (1+ this-frame) (1+ index)))
+		       (( i total))
+		     (block printed
+		       (cond ((< i nargs)
+			      (and nargs-expected
+				   (= i nargs-expected)
+				   (format t "~%  --Extraneous args:--"))
+			      (format t "~%  Arg ~D: " i))
+			     ((and (= i nargs) rest-arg-p)
+			      (format t "~%Rest arg: "))
+			     ((and (= i nargs) lexpr-call)
+			      (format t "~%Extraneous rest arg: ")
+			      (p-prin1-careful-1 (locf rest-arg-value))
+			      (return-from printed))
+			     ((< i (+ n-locals nargs))
+			      (format t "~%Local ~D: " (- i nargs)))
+			     (t (format t "~% ~s Temp ~D: "
+					(%pointer-plus rp (+ (si:array-data-offset rp)
+							     index))
+					(- i nargs n-locals))))
+		       (p-prin1-careful-1 (locf (aref rp index)))))))
+	       (terpri)))))
+
+(defun show-foothold (sg frame)
+  (format t "~%Foothold data:")
+  (let ((end-of-foothold-data (- (sg-previous-open sg frame) 4))
+	(rp (sg-regular-pdl sg)))
+    (do ((i (1+ frame) (+ i 2))
+	 (sg-q si::stack-group-head-leader-qs (cdr sg-q)))
+	((> i end-of-foothold-data))
+      (format t "~&~30S: " (car sg-q))
+      (let ((dtp (ldb (byte (byte-size %%q-data-type) 0) (aref rp (1+ i)))))
+	(if (memq (car sg-q) si::sg-accumulators)
+	    (format t "#<~:[Data type ~O~;~:*~A~*~] ~O>"
+		    (q-data-types dtp) dtp (%pointer (aref rp i)))
+	  (setq dtp (%make-pointer dtp (aref rp i)))
+	  (p-prin1-careful (locf dtp)))))))
+
+
+;>>
+
+;; Control-Meta-C
+(defun com-print-open-catch-frames (sg ignore &optional ignore)
+  "Print information about all CATCH and UNWIND-PROTECT frames
+open around the current function"
+  
+  )
+
+
+(defun com-print-lexical-environment (sg ignore &optional arg)
+  (declare (ignore arg))
+
+
+
+
+  )
 
 ;;;; Other informational commands.
 
@@ -903,79 +1079,63 @@ Prompts for the variable name."
 (defun com-arglist (sg &rest ignore)
   "Returns the arglist for the current stack frame function."
   (let ((function (rp-function-word (sg-regular-pdl sg) current-frame)))
-    (format t "~&Argument list for ~S is ~A.~%"
-	    (function-name function)
-	    (arglist function)))
+    (multiple-value-bind (arglist values)
+	(arglist function nil)
+      (format t "~&Argument list for ~S is ~S~@[  ~S~].~%"
+	      (function-name function) arglist values)))
   nil)
+
+(defun got-values (star minus barf)
+  (terpri)
+  (if barf (princ barf)
+    (setq ////// //// //// // // (list star))
+    (setq *** ** ** * * star)
+    (setq +++ ++ ++ + + - - minus)
+    (print-carefully nil (funcall (or prin1 #'prin1) star))))
 
 ;; Control-Meta-A
 (defun com-get-arg (sg ignore &optional (arg 0))
   "Sets * to the nth arg to the current function, where n is a numeric argument (default 0)
 Also sets + to a locative to the arg."
-  (terpri)
   (multiple-value-bind (a b barf)
      (sg-frame-arg-value sg current-frame arg nil)
-    (if barf (princ barf)
-      (setq ////// //// //// // // (list a))
-      (setq *** ** ** * * a)
-      (setq +++ ++ ++ + + - - b)
-      (funcall (or prin1 #'prin1) *))))
-
-;; Control-F
-(defun com-show-foothold (sg &rest ignore)
-  (let ((end-of-foothold-data (- (sg-previous-open sg current-frame) 4))
-	(rp (sg-regular-pdl sg)))
-    (cond ((not (eq (rp-function-word rp current-frame) #'foothold))
-	   (ferror nil "This is not a FOOTHOLD frame.")))
-    (do ((i (1+ current-frame) (+ i 2))
-	 (sg-q si:stack-group-head-leader-qs (cdr sg-q)))
-	((> i end-of-foothold-data))
-      (format t "~&~s:~35t#<~s ~o>"
-	      (car sg-q)
-	      (or (nth (%p-ldb-offset %%q-pointer
-				      rp
-				      (+ 1 i (si:array-data-offset rp)))
-		       q-data-types)
-		  'bad-data-type)
-	      (%p-ldb-offset %%q-pointer rp (+ i (si:array-data-offset rp)))))))
+    (got-values a b barf)))
 
 ;; Control-Meta-L
 (defun com-get-local (sg ignore &optional (arg 0))
   "Sets * to the nth local of he current function, where n is a numeric argument
 /(default 0) Also sets + to a locative to the local."
-  (terpri)
   (multiple-value-bind (a b barf)
       (sg-frame-local-value sg current-frame arg nil)
-    (if barf (princ barf)
-      (setq ////// //// //// // // (list a))
-      (setq *** ** ** * * a)
-      (setq +++ ++ ++ + + - - b)
-      (funcall (or prin1 #'prin1) *))))
+    (got-values a b barf)))
 
 ;; Control-Meta-V
 (defun com-get-value (sg ignore &optional (arg 0))
   "Sets * to the nth value being returned by the current function, where n is a numeric
 argument (default 0) Also sets + to a locative to the value."
-  (terpri)
   (multiple-value-bind (a b barf)
       (sg-frame-value-value sg current-frame arg nil)
-    (if barf (princ barf)
-      (setq ////// //// //// // // (list a))
-      (setq *** ** ** * * a)
-      (setq +++ ++ ++ + + - - b)
-      (funcall (or prin1 #'prin1) *))))
+    (got-values a b barf)))
 
-;; c-m-F
+
+;; Control-Meta-F
 (defun com-get-function (sg ignore &optional ignore)
   "Sets * to the current function, and + to a locative to the it."
-  (setq ////// //// //// //)
-  (setq *** ** ** *)
-  (setq +++ ++ ++ + + -)
-  (setq - (locf (rp-function-word (sg-regular-pdl sg) current-frame))
-	* (contents -)
-	// (list *))
-  (terpri t)
-  (funcall (or prin1 #'prin1) *))
+  (let ((loc (locf (rp-function-word (sg-regular-pdl sg) current-frame))))
+    (got-values (contents loc) loc nil)))
+
+;; Control-Meta-T
+(defun com-get-stack-temporary (sg ignore &optional (arg 0))
+  "Sets * to the nth temporary pushed onto the stack, where is a numeric argument
+/(default 0) Also sets + to a locative to the local."
+  (multiple-value-bind (a b barf)
+      (sg-frame-stack-temporary-value sg current-frame arg nil)
+    (got-values a b barf)))
+
+;; Control-Meta-D
+(defun com-describe-* (ignore ignore &optional ignore)
+  "Describes the value of *"
+  (got-values (describe *) + nil))
 
 ;; Control-E
 (defun com-edit-frame-function (sg &rest ignore)
@@ -987,70 +1147,68 @@ argument (default 0) Also sets + to a locative to the value."
       (if fn (ed fn)
 	(format t "~&This frame's function's name cannot be determined.")))))
 
-;;; Meta-T
-;(defun com-show-frame-temporaries (sg ignore &optional ignore &aux index rp)
-;  "Lists temporaries already pushed onto the stack when execution was interrupted."
-;  (setq index current-frame
-;	rp (sg-regular-pdl sg))
-;  (unless (zerop (rp-adi-present rp index))
-;    (do ((idx (- index 4) (- idx 2))
-;	 more-p)
-;	((zerop more-p)
-;	 (setq index idx))
-;      (setq more-p (%p-ldb %%adi-previous-adi-flag (aloc rp (1- idx))))))
-;  (cerror "Foo!" "meta-t ~D//~D" index current-frame))
-
 
 ;;;; HELP!
-(defconst com-help-alist '(((#/G "General"
-			     "General information about using the debugger") #/G #/g)
-			   ((#/I "Information"
-			         "Various ways of obtaining information about the current stack frame")
-				 #/I #/i #/E #/e)
-			   ((#/F "Stack Frames" "Selecting Stack Frames to examine") #/F #/f)
-			   ((#/S "Stepping" "Stepping though through the program") #/S #/s)
-			   ((#/P "Proceeding"
-			         "Proceeding from this error and resuming execution")
-			         #/P #/p #/X #/x)
-			   ((#/T "Transferring"
-			         "Transferring to other systems: Edit, Bug report, Window-based Debugger")
-				 #/T #/t)
-			   ((#/D "Describe"
-			     "Give the documentation of the function associated with a command key")
-				 #/D #/d #/C #/c)
-			   ((#/abort "Abort" t) #/abort #/c-Z #/c-G)
-			   ((#/help "Help" t) #/help #/?))
+
+(defconst *com-help-alist* '(((com-help-general "General"
+			      "General information about using the debugger") #/G #/g)
+			    ((com-help-information "Information"
+			      "Various ways of obtaining information about the current stack frame")
+			     #/I #/i #/E #/e)
+			    ((com-help-frames "Stack Frames"
+			      "Selecting Stack Frames to examine") #/F #/f)
+			    ((com-help-stepping "Stepping"
+			      "Stepping though through the program") #/S #/s)
+			    ((com-help-proceeding "Proceeding"
+			      "Proceeding from this error and resuming execution")
+			      #/P #/p #/X #/x)
+			    ((com-help-transferring "Transferring"
+			      "Transferring to other systems: Edit, Bug report, Window-based Debugger")
+			     #/T #/t)
+			    ((com-help-describe-command "Describe"
+			      "Give the documentation of the function associated with a command key")
+			     #/D #/d #/C #/c)
+			    ((ignore "Abort" t) #/abort #/c-Z #/c-G)
+			    ((#/help "Help" t) #/help #/?))
   "FQUERY options for used in giving help for debugger commands.")
 
 ;; ?, <help>
-(defun com-help (sg error-object &rest ignore)
+(defun com-help (sg error-object &optional ignore)
   "Help for using the debugger"
-  (tagbody
-   again
-      (selectq (fquery `(:choices ,com-help-alist
-				  :help-function nil)
-		       "Help for debugger commands. Choose a topic: ")
-	(#/G (format t "
+  (prog (command)
+   loop
+      (with-stack-list (options :choices *com-help-alist* :help-function nil)
+	(case (setq command (fquery options "Help for debugger commands. Choose a topic: "))
+	  (#/help
+	   (terpri)
+	   (princ "For additional help in using the debugger, type one of the following:")
+	   (terpri)
+	   (dolist (x *com-help-alist*)
+	     (unless (eq (third (car x)) t)
+	       (format t "~&  ~:C~6T~A" (cadr x) (or (third (car x)) (second (car x))))))
+	   (go loop))
+	  (t (funcall command sg error-object))))))
 
-You are in the debugger.  If you don't want to debug this error, type ~C.
+(defun com-help-general (ignore ignore)	       
+  (format t "~2%You are in the debugger.  If you don't want to debug this error, type ~C.
 Otherwise you can evaluate expressions in the context of the error, examine
 the stack, and proceed//throw//return to recover.
   If you type in a Lisp form, it will be evaluated, and the results printed,
-using ~A and base ~D in package ~A. This
+using ~a and base ~d in package ~a. This
 evaluation uses the variable environment of the stack frame you are examining.
   Type ~c or ~c to get back to top level, or the previous debugger level.
 While in the debugger, ~c quits back to the debugger top level.
   If you think this error indicates a bug in the Lisp machine system, use the
 ~:c command."
-		     #/Abort *readtable* *read-base* *package*
-		     #/Abort #/c-Z #/c-G #/c-M))
-	(#/I (format t "
+		     #/Abort *readtable* *read-base* *package*
+		     #/Abort #/c-Z #/c-G #/c-M))
 
-~c or ~\lozenged-string\ clears screen and retypes error message.
+(defun com-help-information (ignore ignore)
+  (format t "~2%~c or ~\lozenged-string\ clears screen and retypes error message.
 ~c clears screen and types args, locals and compiled code.
 ~c gives a backtrace of function names.
 ~c gives a backtrace of function names and argument names and values.
-~c is line ~c but shows EVALs, PROGs, CONDs, etc.
+~c is like ~c but shows ~Ss, ~Ss, ~Ss, etc.
 ~c prints an argument to the current function, and sets * to be that
    argument to let you do more complicated things with it.
    + is set to a locative to that argument, should you want to modify it.
@@ -1064,15 +1222,17 @@ While in the debugger, ~c quits back to the debugger top level.
 ~c prints the value in this frame of a special variable you specify.
 ~c lists all special variable bindings in this frame.
 
-Use the functions (EH-ARG n), (EH-LOC n), (EH-VAL n) and (EH-FUN) to get the
+Use the functions (~S n), (~S n), (~S n) and (~S) to get the
 value of an arg, local, value or function-object respectively from an
 expression being evaluated. For args and locals, n can be a name or a number.
-EH-VAL allows numbers only. LOCF and SETF on those expressions are also allowed.
-" #/c-L "Clear Screen" #/m-L #/c-B #/c-m-B #/m-B #/c-B
-  #/c-m-A #/c-m-A #/c-m-L #/c-m-A #/c-m-V #/c-m-A #/c-m-F #/c-A #/m-S #/c-m-S))
-	(#/F (format t "
+~S allows numbers only. ~S and ~S on those expressions are also allowed.
+" #/c-L "Clear Screen" #/m-L #/c-B #/c-m-B #/m-B #/c-B 'eval 'prog 'cond
+  #/c-m-A #/c-m-A #/c-m-L #/c-m-A #/c-m-V #/c-m-A #/c-m-F #/c-A #/m-S #/c-m-S
+  'eh:arg 'eh:loc 'eh:val 'eh:fun 'eh:val 'locf 'setf))
 
-~c or ~\lozenged-char\ goes down a frame, ~c or ~\lozenged-char\ goes up.
+(defun com-help-frames (ignore ignore)
+  (format t "~%
+~c or ~\lozenged-character\ goes down a frame, ~c or ~\lozenged-character\ goes up.
 ~c and ~c are similar but show args, locals and compiled code.
 ~c and ~c are similar to ~c and ~c, but they show
    all the internal EVALs, PROGs, CONDs, etc. of interpreted code,
@@ -1080,11 +1240,12 @@ EH-VAL allows numbers only. LOCF and SETF on those expressions are also allowed.
 ~c and ~c go to the top and bottom of the stack, respectively.
 ~c reads a string and searches down the stack for a frame
    calling a function whose name contains that substring.
-" #/c-N #/line #/c-P #/return #/m-N #/m-P #/c-m-N #/c-m-P #/c-N #/c-P #/m-< #/m-> #/c-S))
-	(#/S (if error-handler-running
-		 (format t "
+" #/c-N #/line #/c-P #/return #/m-N #/m-P #/c-m-N #/c-m-P #/c-N #/c-P
+  #/m-< #/m-> #/c-S))
 
-~c toggles the trap-on-exit flag for the current frame.
+(defun com-help-stepping (ignore ignore)
+  (if error-handler-running
+      (format t "~2%~c toggles the trap-on-exit flag for the current frame.
 ~c sets the trap-on-exit flag for the current frame and all outer frames.
 ~c clears this flag for the current frame and all outer frames.
 Trap on exit also occurs if the frame is thrown through.
@@ -1092,62 +1253,50 @@ Trap on exit also occurs if the frame is thrown through.
 ~c toggles the trap-on-next-function-call flag.
 Functions which get a trap on entry are automatically flagged for
 trap on exit as well.  You can un-flag them with ~c.
-" #/c-X #/m-X #/c-m-X #/c-D #/resume #/m-D #/c-X)
-	       (format t "
+" #/c-X #/m-X #/c-m-X #/c-D #/resume #/m-D #/c-X)
+    (format t "~2%You cannot use the stepping commands, since you are in examine-only mode.
+~C exits the debugger." #/resume)))
 
-You cannot use the stepping commands, since you are in examine-only mode.
-~C exits the debugger." #/resume)))
-	(#/P (cond (error-handler-running
-		    (format t "
-
-~c aborts to previous debugger or other command loop, or to top level.
+(defun com-help-proceeding (sg error-object)
+  (cond (error-handler-running
+	 (format t "~2%~c aborts to previous debugger or other command loop, or to top level.
 ~c returns a value or values from the current frame.
 ~c offers to reinvoke the current frame with the same arguments
    originally supplied (as best as they can be determined).
 ~c offers to reinvoke the current frame, letting you alter
    some of the arguments, or use more or fewer arguments.
-~c throws to a specific tag." #/c-Z #/c-R #/c-m-R #/m-R #/c-T)
-		    (describe-proceed-types sg error-object))
-		   (t
-		    (format t "
+~c throws to a specific tag." #/c-Z #/c-R #/c-m-R #/m-R #/c-T)
+	 (describe-proceed-types sg error-object))
+	(t
+	 (format t "~2%You cannot continue execution, since you are in examine-only mode.
+~C exits the debugger." #/resume))))
 
-You cannot continue execution, since you are in examine-only mode.
-~C exits the debugger." #/resume))))
-	(#/T (format t "
-
-~c calls the editor to edit the current function.
+(defun com-help-transferring (ignore ignore)
+  (format t "~2%~c calls the editor to edit the current function.
 ~c enters the editor to send a bug message, and puts the error
   message and a backtrace into the message automatically.
   A numeric argument says how many stack frames to put in the backtrace.
 ~c switches to the window-based debugger.
-" #/c-E #/c-M #/c-m-W))
-	(#/D (com-help-describe-command error-object sg))
-	(#/help
-	 (format t "~&For additional help in using the debugger, type one of the following:~%")
-	 (dolist (x com-help-alist)
-	   (unless (eq (third (car x)) t)
-	     (format t "~&  ~:C~6T~A" (cadr x) (or (third (car x)) (second (car x))))))
-	 (go again))
-	(#/abort))))
+" #/c-E #/c-M #/c-m-W))
 
-(defun com-help-describe-command (error-object sg &aux char)
+(defun com-help-describe-command (sg error-object &aux char)
   "Prompts for a character and describes what the current meaning of that keystoke
 is as a command to the error-handler."
   (format t "~&Describe Command. Type command character: ")
   (let ((reading-command t))			;let abort, etc through
-    (setq char (send *standard-input* ':tyi)))
+    (setq char (send *standard-input* :tyi)))
   (let* ((command (command-lookup char))
 	 (resume-handlers (symeval-in-stack-group 'condition-resume-handlers sg))
-	 (proceed-types (send error-object ':user-proceed-types
+	 (proceed-types (send error-object :user-proceed-types
 			      (sg-condition-proceed-types sg error-object)))
-	 (keywords (append proceed-types special-commands))
+	 (keywords (append proceed-types *special-commands*))
 	 tem)
     (format t "~:C~&~C: " char char)
     (cond ((setq tem (rassq char *proceed-type-special-keys*))
-	   (send error-object ':document-proceed-type (car tem)
+	   (send error-object :document-proceed-type (car tem)
 		 *standard-output* resume-handlers))
 	  ((setq tem (rassq char *special-command-special-keys*))
-	   (send error-object ':document-special-command (car tem)
+	   (send error-object :document-special-command (car tem)
 		 *standard-output* resume-handlers))
 	  ((null command)
 	   (if (zerop (char-bits char))
@@ -1158,17 +1307,17 @@ you can examine information in the environment of the stack frame you are examin
 		       *readtable* *read-base* *package*)
 	     (format t "is not currently a defined debugger command.")))
 	  ((eq command 'com-proceed-specified-type)
-	   (if (not (< -1 (- char (char-code #/s-A)) (length keywords)))
+	   (if (not (< -1 (- char (char-int #/s-A)) (length keywords)))
 	       (format t "is not currently a defined debugger command.")
-	     (send error-object (if (< (- char (char-code #/s-A)) (length proceed-types))
-				    ':document-proceed-type
-				    ':document-special-command)
-		   (nth (- char (char-code #/s-A)) keywords)
+	     (send error-object (if (< (- char (char-int #/s-A)) (length proceed-types))
+				    :document-proceed-type
+				    :document-special-command)
+		   (nth (- char (char-int #/s-A)) keywords)
 		   *standard-output* resume-handlers)))
 	  (t (if (documentation command)
 		 (format t "~A" (documentation command))
 	         (format t "~S is not documented" command))
-	     (send *standard-output* ':fresh-line)
+	     (send *standard-output* :fresh-line)
 	     (case command
 	       (com-abort
 		(let ((abort-handler (find-resume-handler abort-object nil resume-handlers)))
@@ -1176,60 +1325,55 @@ you can examine information in the environment of the stack frame you are examin
 			   (when (eq (find-resume-handler error-object x resume-handlers)
 				     abort-handler)
 			     (format t "~&This command is currently synonymous with ~C: "
-				     (+ (char-code #/s-A) (position x proceed-types)))
-			     (send error-object ':document-proceed-type x
+				     (+ (char-int #/s-A) (position x proceed-types)))
+			     (send error-object :document-proceed-type x
 				   *standard-output* resume-handlers)
 			     (return t))))
 			(abort-handler
-			 (send abort-object ':document-proceed-type (second abort-handler)
+			 (send abort-object :document-proceed-type (second abort-handler)
 			       *standard-output* resume-handlers))
 			(t (format t "There is no way to abort from this error.")))))
 	       (com-proceed
 		(if proceed-types
-		    (progn (format t "~&This command is currently synonymous with ~C: " #/s-A)
-			   (send error-object ':document-proceed-type (car proceed-types)
+		    (progn (format t "~&This command is currently synonymous with ~C: "
+				   #/s-A)
+			   (send error-object :document-proceed-type (car proceed-types)
 				 *standard-output* resume-handlers))
 		  (format t "There is no way to proceed from this error."))))))))
 
 ;;;; Commands for resuming execution.
 
 ;; Abort.  If there is a numeric arg, just flush the arg.
-(defun com-abort (sg error-object &optional count)
+(defun com-abort (sg error-object &optional arg)
   "Aborts out of this error if possible."
-  (if count (*throw 'quit nil))
-  (com-top-level-throw sg error-object))
-
-;; Rubout.  Flush numeric arg.
-(defun com-flush-numeric-arg (ignore ignore &rest ignore)
-  "Flushes the numeric arg, if any."
-  (*throw 'quit nil))
+  (if arg (throw 'quit nil)
+    (com-top-level-throw sg error-object)))
 
 ;; Control-Z.
-(defun com-top-level-throw (sg error-object &optional (count 1))
+(defun com-top-level-throw (sg ignore &optional ignore)
   "Throws to the top level in the current process."
-  error-object count
   (leaving-error-handler)
   (error-handler-must-be-running) 
-  (cond ((eq sg si:scheduler-stack-group)
+  (cond ((eq sg si::scheduler-stack-group)
 	 (format t "~&Restarting the scheduler.")
 	 (let ((proc (symeval-in-stack-group 'current-process sg)))
 	   (when proc
-	     (si:process-blast proc)
+	     (si::process-blast proc)
 	     (format t "~%Blasting ~S so this won't happen again" proc)))
-	 (stack-group-preset sg (si:appropriate-process-scheduler))
+	 (stack-group-preset sg (si::appropriate-process-scheduler))
 	 (sg-run-goodbye sg))
 	(t
 	 (let ((sg-to-abort sg)
 	       (sg-innermost-frame innermost-visible-frame))
-	   (cond ((and (neq sg (process-initial-stack-group current-process))
-		       (not (memq sg (send current-process ':coroutine-stack-groups)))
-		       (null (symeval-in-stack-group
-			       'condition-resume-handlers sg)))
-		  ;; Running in a random stack group, get rid of it then throw in the
-		  ;; initial stack group.
-		  (unwind-sg sg %current-stack-group nil nil)
-		  (setq sg-to-abort (process-initial-stack-group current-process))
-		  (setq sg-innermost-frame (sg-ap sg)) ))
+	   (when (and (neq sg (process-initial-stack-group current-process))
+		      (not (memq sg (send current-process :coroutine-stack-groups)))
+		      (null (symeval-in-stack-group
+			      'condition-resume-handlers sg)))
+	     ;; Running in a random stack group, get rid of it then throw in the
+	     ;; initial stack group.
+	     (unwind-sg sg %current-stack-group nil nil)
+	     (setq sg-to-abort (process-initial-stack-group current-process))
+	     (setq sg-innermost-frame (sg-ap sg)) )
 	   ;; Prevent any trap-on-exits from this throw.
 	   (do ((frame sg-innermost-frame (sg-next-active sg-to-abort frame)))
 	       ((null frame))
@@ -1246,13 +1390,14 @@ you can examine information in the environment of the stack frame you are examin
   "Throw to a tag which is prompted for."
   (error-handler-must-be-running)
   (format t "Throw a value to a tag.~%")
-  (setq tag (read-object ':eval-read "Form to evaluate to get the tag: ")
-	val (read-object ':eval-read "~&Form to evaluate to get the value to throw: "))
+  (setq tag (read-object :eval-read "Form to evaluate to get the tag: ")
+	val (read-object :eval-read "~&Form to evaluate to get the value to throw: "))
   (leaving-error-handler)
   (setf (rp-trap-on-exit (sg-regular-pdl sg) innermost-visible-frame) 0)
   (sg-throw sg tag val)
   nil)
 
+;; Meta-R
 (defun com-reinvoke-new-args (sg ignore &rest ignore)
   "Reinvoke the current function with possibly altered arguments."
   (cond ((null error-handler-running)
@@ -1278,22 +1423,20 @@ it cannot be reinvoked since it was never invoked."))
 	       ((unless rest-flag (eq i max-args)))
 	     (multiple-value-bind (value flag)
 		 (prompt-and-read
-		   (let ((keyword
-			   (if ( i args-wanted)
-			       ':eval-read-or-end ':eval-read)))
+		   (let ((keyword (if ( i args-wanted) :eval-read-or-end :eval-read)))
 		     (if (< i nargs)
-			 (list keyword ':default (nth i argument-list))
-		       keyword))
+			 (list keyword :default (nth i argument-list))
+		         keyword))
 		   (if (< i nargs)
 		       (if ( i args-wanted)
-			   "~&Arg ~D~A, or ~\lozenged-char\ not to change it, or ~C: "
-			 "~&Arg ~D~A, or ~\lozenged-char\ not to change it: ")
+			   "~&Arg ~D~A, or ~\lozenged-character\ not to change it, or ~C: "
+			   "~&Arg ~D~A, or ~\lozenged-character\ not to change it: ")
 		     (if ( i args-wanted)
 			 "~&Arg ~D~A, or ~*~C: "
-		       "~&Arg ~D~A: "))
+		         "~&Arg ~D~A: "))
 		   i
 		   (format:output nil (display-arg-name " (~A)" function i))
-		   #/space #/end)
+		   #/space #/end)
 	       (if (eq flag ':end) (return))
 	       (if (eq flag ':default)
 		   (prin1 value))
@@ -1324,7 +1467,7 @@ it cannot be reinvoked since it was never invoked."))
 	(t (multiple-value-bind (nil number-loc-or-nil) (sg-frame-value-list sg current-frame)
 	     (cond ((null number-loc-or-nil)
 		    (format t "Return a value from the function ~S.~%" fn)
-		    (setq value (read-object ':eval-read "Form to evaluate and return: "))
+		    (setq value (read-object :eval-read "Form to evaluate and return: "))
 		    (leaving-error-handler)
 		    (setf (rp-trap-on-exit (sg-regular-pdl sg) innermost-visible-frame) 0)
 		    (sg-unwind-to-frame sg current-frame t value))
@@ -1337,10 +1480,10 @@ it cannot be reinvoked since it was never invoked."))
 		      (do ((i 0 (1+ i)))
 			  ((eq i number-loc-or-nil))
 			(multiple-value-bind (value flag)
-			    (read-object ':eval-read-or-end "~&Value ~D~A, or ~C: "
+			    (read-object :eval-read-or-end "~&Value ~D~A, or ~C: "
 					 i (format:output nil
 					     (display-value-name " (~A)" fn i))
-					 #/end)
+					 #/end)
 			  (if flag (return))
 			  (push value accum)))
 		      (sg-unwind-to-frame-and-reinvoke sg current-frame
@@ -1373,22 +1516,20 @@ their values are not known, to re-evaluate with."))
 		(free-second-level-error-handler-sg %current-stack-group))
 	   (stack-group-resume sg nil)))))
 
-;; Control-C. Resume.
-(defun com-proceed (error-sg error-object &rest ignore &aux proceed-types)
+;; Resume.
+(defun com-proceed (error-sg error-object &rest ignore &aux proceed)
   "Proceeds from this error if possible."
   (declare (special error-object))
   (if (not error-handler-running)
-      (*throw 'exit t))
-  (setq proceed-types (append (send error-object ':user-proceed-types
-				    (sg-condition-proceed-types error-sg error-object))
-			      special-commands))
-  (if (not proceed-types)
+      (throw 'exit t))
+  (setq proceed (car (or (send error-object :user-proceed-types
+			       (sg-condition-proceed-types error-sg error-object))
+			 *special-commands*)))
+  (if (null proceed)
       (format t "There is no way to proceed from this error.~%")
-    (if (consp (car proceed-types))
+    (if (consp proceed)
 	(format t "You cannot proceed; you can only restart various command loops.~%")
-      (send error-object ':proceed-asking-user (car proceed-types)
-	    'proceed-error-sg
-	    'read-object)))
+      (send error-object :proceed-asking-user proceed 'proceed-error-sg 'read-object)))
   nil)
 
 ;; Handles things like Super-A, and also things like Meta-C.
@@ -1397,181 +1538,38 @@ their values are not known, to re-evaluate with."))
   "Use a user-specified proceed option for this error."
   (declare (special error-object))
   (error-handler-must-be-running)
-  (setq proceed-types (append (send error-object ':user-proceed-types
+  (setq proceed-types (append (send error-object :user-proceed-types
 				    (sg-condition-proceed-types error-sg error-object))
-			      special-commands))
-  (cond ((rassq eh-command-char *proceed-type-special-keys*)
-	 (setq proceed-type (car (rassq eh-command-char *proceed-type-special-keys*)))
+			      *special-commands*))
+;character lossage
+  (cond ((rassq (char-int *command-char*) *proceed-type-special-keys*)
+	 (setq proceed-type (car (rassq (char-int *command-char*)
+					*proceed-type-special-keys*)))
 	 (unless (memq proceed-type proceed-types)
 	   (format t "Proceed type ~S is not available." proceed-type)
 	   (setq proceed-type nil)))
-	((> (length proceed-types) (- eh-command-char #/s-A) -1)
-	 (setq proceed-type (nth (- eh-command-char #/s-A) proceed-types)))
+	((> (length proceed-types) (- (char-int *command-char*) (char-int #/s-A)) -1)
+	 (setq proceed-type (nth (- (char-int *command-char*) (char-int #/s-A))
+				 proceed-types)))
 	(t
 	 (format t "There are not ~D different ways to proceed."
-		 (- eh-command-char #/s-A))))
+		 (- (char-int *command-char*) (char-int #/s-A)))))
   (if proceed-type
-      (send error-object ':proceed-asking-user proceed-type
+      (send error-object :proceed-asking-user proceed-type
 	    'proceed-error-sg
 	    'read-object))
   nil)
 
 (defun com-special-command (error-sg error-object &rest ignore)
-  (let ((special-command-type (car (rassq eh-command-char *special-command-special-keys*))))
-    (send error-object ':special-command special-command-type)))
+;character lossage
+  (let ((special-command-type (car (rassq (char-int *command-char*)
+					  *special-command-special-keys*))))
+    (send error-object :special-command special-command-type)))
 
 (defun error-handler-must-be-running ()
   (unless error-handler-running
     (format t "The process didn't get an error; this command may not be used.~%")
-    (*throw 'quit nil)))
-
-;;;; Stepping commands.
-
-;; C-X: Control the trap-on-exit bits of frames.
-(defun com-toggle-frame-trap-on-exit (sg ignore &optional ignore)
-  "Toggles whether we trap on exit from this frame."
-  (let ((trap-p (not (trap-on-exit-p sg current-frame))))
-    (set-trap-on-exit sg current-frame trap-p)
-    (terpri)
-    (princ (if (trap-on-exit-p sg current-frame)
-	       "Break"
-	     "Do not break"))
-    (princ " on exit from this frame.")))
-
-(defun set-trap-on-exit (sg frame trap-p)
-  "Set or clear trap on exit from FRAME in SG.  TRAP-P = T means set, else clear."
-  (let ((rp (sg-regular-pdl sg)))
-    (if (eq (rp-function-word rp frame) #'*catch)
-	(setq trap-p nil))
-    (setf (rp-trap-on-exit rp frame) (if trap-p 1 0)))
-  trap-p)
-
-(defun trap-on-exit-p (sg frame)
-  "T if FRAME in SG is set to trap on being exited."
-  (not (zerop (rp-trap-on-exit (sg-regular-pdl sg) frame))))
-
-;; Meta-X
-(defun com-set-all-frames-trap-on-exit (sg ignore &optional ignore)
-  "Makes all outer frames trap on exit."
-  (do ((frame current-frame (sg-next-active sg frame)))
-      ((null frame))
-    (set-trap-on-exit sg frame t))
-  (format t "~%Break on exit from this frame and all outer active frames."))
-
-;; Control-Meta-X
-(defun com-clear-all-frames-trap-on-exit (sg ignore &optional ignore)
-  "Clears the trap-on-exit flag for all outer frames."
-  (do ((frame current-frame (sg-next-open sg frame)))
-      ((null frame))
-    (set-trap-on-exit sg frame nil))
-  (format t "~%Do not break on exit from this frame and all outer frames."))
-
-;; Control-D: Proceed, and trap next function call.
-(defun com-proceed-trap-on-call (sg error-object &optional ignore)
-  "Proceeds from this error (if that is possible) and traps on the next function call."
-  (setf (sg-flags-trap-on-call sg) 1)
-  (format t "Trap on next function call. ")
-  (com-proceed sg error-object))
-
-;; Meta-D: Toggle whether to trap on next function call.
-(defun com-toggle-trap-on-call (sg ignore &optional ignore)
-  "Toggle whether to trap on next function call."
-  (setf (sg-flags-trap-on-call sg) (logxor 1 (sg-flags-trap-on-call sg)))
-  (terpri)
-  (princ (if (zerop (sg-flags-trap-on-call sg))
-	     "Do not break"
-	     "Break"))
-  (princ " on next function call."))
-
-(setf (documentation 'com-number 'function)
-      "Used to give a numeric argument to debugger commands.")
-	   
-;;;; Breakon
-(defvar breakon-functions nil
-  "List of all function-specs that have BREAKONs.")
-
-(defun breakon (&optional function-spec (condition t))
-  "Break on entry to FUNCTION-SPEC, if CONDITION evaluates non-NIL.
-If called repeatedly for one function-spec with different conditions,
-a break will happen if any of the conditions evaluates non-NIL.
-
-With no args, returns a list of function specs that have had
-break-on-entry requested with BREAKON."
-  (if (null function-spec)
-      breakon-functions
-    (setq function-spec (dwimify-arg-package function-spec 'function-spec))
-    (breakon-init function-spec)
-    (setq condition (si:rename-within-new-definition-maybe function-spec condition))
-    (let* ((spec1 (si:unencapsulate-function-spec function-spec 'breakon)))
-      (uncompile spec1 t)
-      (let* ((def (fdefinition spec1))
-	     (default-cons-area background-cons-area)
-	     ;; Find our BREAKON-THIS-TIME.
-	     ;; def looks like:
-	     ;;   (named-lambda (foo debugging-info) arglist
-	     ;;	    (si:encapsulation-let ((arglist (si:encapsulation-list* arglist)))
-	     ;;	       (declare (special arglist))
-	     ;;        (breakon-this-time conditions unencapsulated-function arglist)))
-	     (defn-data (car (si:encapsulation-body def)))
-	     (slot-loc (cadr defn-data)))	;Within that, find ptr to list of conditions.
-	(or (member condition (cdr slot-loc)) (push condition (cdr slot-loc)))))
-    (if compile-encapsulations-flag
-	(compile-encapsulations function-spec 'breakon))
-    function-spec))
-
-(defun unbreakon (&optional function-spec (condition t))
-  "Remove break on entry to FUNCTION-SPEC, or all functions if no arg.
-If CONDITION is specified, we remove only that condition for breaking;
-if other conditions have been specified with BREAKON on this function,
-the other conditions remain in effect."
-  (and function-spec
-       (setq function-spec (dwimify-arg-package function-spec 'function-spec)))
-  (let* ((spec1 (and function-spec (si:unencapsulate-function-spec function-spec 'breakon))))
-    (cond ((null function-spec)
-	   (mapc 'unbreakon breakon-functions))
-	  ((eq condition t)
-	   (fdefine spec1 (fdefinition (si:unencapsulate-function-spec spec1 '(breakon))))
-	   (setq breakon-functions (delete function-spec breakon-functions))
-	   function-spec)
-	  ((neq spec1 (si:unencapsulate-function-spec spec1 '(breakon)))
-	   (uncompile spec1 t)
-	   (let* ((def (fdefinition spec1))
-		  ;; Find our BREAKON-NEXT-TIME.
-		  ;; def looks like:
-		  ;;   (named-lambda (foo debugging-info) arglist
-		  ;;	    (si:encapsulation-let ((arglist (si:encapsulation-list* arglist)))
-		  ;;	       (declare (special arglist))
-		  ;;        (breakon-this-time conditions unencapsulated-function arglist)))
-		  (defn-data (car (si:encapsulation-body def)))
-		  (slot-loc (cadr defn-data)))	;Within that, find ptr to list of conditions.
-	     (setf (cdr slot-loc)
-		   (delete condition (cdr slot-loc)))
-	     (cond ((null (cdr slot-loc))
-		    (fdefine spec1
-			     (fdefinition (si:unencapsulate-function-spec spec1 '(breakon))))
-		    (setq breakon-functions (delete function-spec breakon-functions)))
-		   (compile-encapsulations-flag
-		    (compile-encapsulations function-spec 'breakon))))
-	   function-spec))))
-
-;;; Make a specifed function into an broken-on function
-;;; (with no conditions yet) if it isn't one already.
-(defun breakon-init (function-spec)
-  (let ((default-cons-area background-cons-area)
-	(spec1 (si:unencapsulate-function-spec function-spec 'breakon)))
-    (when (eq spec1 (si:unencapsulate-function-spec spec1 '(breakon)))
-      (si:encapsulate spec1 function-spec 'breakon
-		      ;; Must cons the (OR) afresh -- it gets RPLAC'd.
-		      `(breakon-this-time ,(list 'or)
-					  ,si:encapsulated-function
-					  arglist))
-      (push function-spec breakon-functions))))
-
-(defun breakon-this-time (break-condition function args)
-  (and break-condition (setf (ldb %%m-flags-trap-on-call %mode-flags) 1))
-  ;; The next call ought to be the function the user is trying to call.
-  ;; That will be so only if this function is compiled.
-  (apply function args))
+    (throw 'quit nil)))
 
 ;;;; Initialization
 (defvar command-dispatch-table :unbound
@@ -1595,64 +1593,178 @@ First index is the bucky bits of the character, second index is the character co
 (makunbound 'command-dispatch-table)
 
 ;; The initial dispatch table.
-(defconst command-dispatch-list '(
-       (#/? com-help)
-       (#/help com-help)
-       (#/line com-down-stack)
-       (#/form com-clear-and-show)
-       (#/return com-up-stack)
-       (#/resume com-proceed)
-       (#/abort com-abort)
-       (#/rubout com-flush-numeric-arg)
+(defconst command-dispatch-list
+	  '((#/? com-help)
+	    (#/help com-help)
+	    (#/line com-down-stack)
+	    (#/form com-clear-and-show)
+	    (#/return com-up-stack)
+	    (#/resume com-proceed)
+	    (#/abort com-abort)
+	    (#/rubout com-rubout)
+	    
+	    (#/c-- com-number)
+	    (#/c-0 com-number 10.)		;control-digits
+	    (#/c-A com-arglist)
+	    (#/c-B com-short-backtrace)
+	    (#/c-C com-proceed)
+	    (#/c-D com-proceed-trap-on-call)
+	    (#/c-E com-edit-frame-function)
+	    (#/c-I com-set-macro-single-step)
+	    (#/c-L com-clear-and-show)
+	    (#/c-M com-bug-report)
+	    (#/c-N com-down-stack)
+	    (#/c-P com-up-stack)
+	    (#/c-R com-return-a-value)
+	    (#/c-S com-search)
+	    (#/c-T com-throw)
+	    (#/c-X com-toggle-frame-trap-on-exit)
+	    (#/c-Z com-top-level-throw)
+	    
+	    (#/m-- com-number)
+	    (#/m-0 com-number 10.)		;meta-digits
+	    (#/m-< com-top-stack)
+	    (#/m-> com-bottom-stack)
+	    (#/m-B full-backtrace)
+	    (#/m-D com-toggle-trap-on-call)
+;>>
+	    (#/m-I com-print-instance-variable)
+	    (#/m-L com-clear-and-show-all)
+	    (#/m-N com-down-stack-all)
+	    (#/m-P com-up-stack-all)
+	    (#/m-R com-reinvoke-new-args)
+	    (#/m-S com-print-variable-frame-value)
+	    (#/m-T com-show-stack-temporaries)
+	    (#/m-X com-set-all-frames-trap-on-exit)
+	    
+	    (#/c-m-- com-number)
+	    (#/c-m-0 com-number 10.)		;control-meta-digits
+	    (#/c-m-A com-get-arg)
+	    (#/c-m-B full-backtrace-uninteresting)
+;>>
+	    (#/c-m-C com-print-open-catch-frames)
+;>>
+	    (#/c-m-D com-describe-*)
+;>>
+	    (#/c-m-E com-describe-lexical-environment)
+	    (#/c-m-F com-get-function)
+	    (#/c-m-H com-print-frame-handlers)
+	    (#/c-m-L com-get-local)
+	    (#/c-m-N com-down-stack-uninteresting)
+	    (#/c-m-P com-up-stack-uninteresting)
+	    (#/c-m-Q com-describe-proceed-types)
+	    (#/c-m-R com-return-reinvocation)
+	    (#/c-m-S com-print-frame-bindings)
+	    (#/c-m-T com-get-stack-temporary)
+	    (#/c-m-U com-up-to-interesting)
+	    (#/c-m-V com-get-value)
+	    (#/c-m-W com-window-error-handler)
+	    (#/c-m-X com-clear-all-frames-trap-on-exit)
+	    
+;>>
+	    (#/c-sh-s com-set-breakpoint)
+;>>
+	    (#/c-sh-c com-clear-breakpoint)
+;>>
+	    (#/m-sh-c com-clear-all-breakpoints)
+;>>
+	    (#/c-sh-l com-list-breakpoints)
+;>>
+	    (#/m-sh-s com-macro-single-step)
 
-       (#/c-0 com-number 10.)		;control-digits
-       (#/c-A com-arglist)
-       (#/c-B com-short-backtrace)
-       (#/c-C com-proceed)
-       (#/c-D com-proceed-trap-on-call)
-       (#/c-E com-edit-frame-function)
-       (#/c-F com-show-foothold)
-       (#/c-L com-clear-and-show)
-       (#/c-M com-bug-report)
-       (#/c-N com-down-stack)
-       (#/c-P com-up-stack)
-       (#/c-R com-return-a-value)
-       (#/c-S com-search)
-       (#/c-T com-throw)
-       (#/c-X com-toggle-frame-trap-on-exit)
-       (#/c-Z com-top-level-throw)
+	    (#/s-A com-proceed-specified-type 26.)
 
-       (#/m-0 com-number 10.)		;meta-digits
-       (#/m-< com-top-stack)
-       (#/m-> com-bottom-stack)
-       (#/m-B full-backtrace)
-       (#/m-D com-toggle-trap-on-call)
-       (#/m-L com-clear-and-show-all)
-       (#/m-N com-down-stack-all)
-       (#/m-P com-up-stack-all)
-       (#/m-R com-reinvoke-new-args)
-       (#/m-S com-print-variable-frame-value)
-;      (#/m-T com-show-frame-temporaries)
-       (#/m-Y com-list-frame-temporaries)
-       (#/m-X com-set-all-frames-trap-on-exit)
+	    (#/c-quote com-eval-in-error-handler)
+	    (#/c-m-delta com-describe-alot)
 
-       (#/c-m-0 com-number 10.)		;control-meta-digits
-       (#/c-m-A com-get-arg)
-       (#/c-m-B full-backtrace-uninteresting)
-       (#/c-m-F com-get-function)
-       (#/c-m-H com-print-frame-handlers)
-       (#/c-m-L com-get-local)
-       (#/c-m-N com-down-stack-uninteresting)
-       (#/c-m-P com-up-stack-uninteresting)
-       (#/c-m-Q com-describe-proceed-types)
-       (#/c-m-R com-return-reinvocation)
-       (#/c-m-S com-print-frame-bindings)
-       (#/c-m-U com-up-to-interesting)
-       (#/c-m-V com-get-value)
-       (#/c-m-W com-window-error-handler)
-       (#/c-m-X com-clear-all-frames-trap-on-exit)
+	    )
+  "List of elements (character command-symbol) from which COMMAND-DISPATCH-TABLE is initialized.")
 
-       (#/s-A com-proceed-specified-type 26.)
-       )
-  "List of elements (character command-symbol) from which EH:COMMAND-DISPATCH-TABLE is initialized.")
+;;; BREAKON moved to EHBPT
+;;; setting/clearing/toggling trap on thisframe/allframes exit/call commands moved to EHBPT
+
+;;;; for debugging the debugger
+;; by pace.
+
+(defun com-eval-in-error-handler (&rest ignore)
+  "Perform an evaluation in the context of the error handler, rather than withing the
+erring stack-group's context.
+You don't need to use this unless you're debugging the debugger."
+  (multiple-value-bind (sexp flag)
+      (with-input-editing (*standard-input*  '((:full-rubout :full-rubout)
+					       (:activation = #/end)
+					       (:prompt " Eval in EH stack group: ")))
+	(si:read-for-top-level))
+    (unless (eq flag ':full-rubout)
+      (setq +++ ++ ++ + + -)
+      (let ((values (multiple-value-list (si:eval-special-ok (setq - sexp)))))
+	(push values *values*)
+	(setq ////// //// //// // // values)
+	(setq *** ** ** * * (car values))
+	(setq // values * (car //))
+	(dolist (value //)
+	  (terpri)
+	  (print-carefully () (funcall (or prin1 #'prin1) value)))))))
+
+(defun com-describe-alot (sg ignore &optional ignore)
+  "Print masses of crud only of interest to people who are breaking
+/(ooops! /"maintaining/", that is) the system"
+  (let ((rp (sg-regular-pdl sg))
+	(ap current-frame))
+    (cond ((not (typep (rp-function-word rp ap) 'compiled-function))
+	   (format t "current frame is not for a compiled function")
+	   (return-from com-describe-alot nil)))
+
+    (format t "~&")
+
+    (format t "~[~;ATTENTION ~]" (rp-attention rp ap))
+    (format t "~[~;SELF-MAP ~]" (ldb %%lp-cls-self-map-provided (rp-call-word rp ap)))
+    (format t "~[~;TRAP-ON-EXIT ~]" (rp-trap-on-exit rp ap))
+    (format t "~[~;ADI-PRESENT ~]" (rp-adi-present rp ap))
+    (format t "~[D-IGNORE~;D-PDL~;D-RETURN~;D-LAST~:;D-MICRO-RETURN~:*~s~] "
+	    (rp-destination rp ap))
+    (format t "Delta to open ~s Delta to active ~s "
+	    (rp-delta-to-open-block rp ap)
+	    (rp-delta-to-active-block rp ap))
+    (fresh-line)
+    (format t "~[~;MICRO-STACK-SAVED ~]" (rp-micro-stack-saved rp ap))
+    (format t "~[~;BINDING-BLOCK-PUSHED ~]" (rp-binding-block-pushed rp ap))
+    (format t "EXIT-PC ~s " (rp-exit-pc rp ap))
+    (fresh-line)
+    (format t "~[~;EXPLICIT-REST-ARG ~]" (ldb %%lp-ens-lctyp (rp-entry-word rp ap)))
+    (format t "~[~;UNSAFE-REST-ARG ~]" (ldb %%lp-ens-unsafe-rest-arg (rp-entry-word rp ap)))
+    (format t "~[~;ENVIRONMENT-POINTER-POINTS-HERE ~]"
+	    (ldb %%lp-ens-environment-pointer-points-here (rp-entry-word rp ap)))
+    (format t "~[~;UNSAFE-REST-ARG-1 ~]"
+	    (ldb %%lp-ens-unsafe-rest-arg-1 (rp-entry-word rp ap)))
+    (format t "~&args supplied ~o " (rp-number-args-supplied rp ap))
+    (format t "~&local block origin ~o " (rp-local-block-origin rp ap))
+    (format t "~&Function: ~o" (rp-function-word rp current-frame))
+
+    (let ((lex-env (car (sg-eval-in-frame sg 'si:lexical-environment ap t))))
+      (if (null lex-env)
+	  (format t "~&Null lexical environment")
+	(format t "~&Lexical environment: ~s" lex-env)
+	(when lex-env
+	  (do ((env-list lex-env (cdr env-list)))
+	      ((null env-list))
+	    (format t "~&Next step:  ")
+	    (do ((env env-list (%p-pointer env)))
+		(( (%p-data-type env) dtp-external-value-cell-pointer)
+		 (format t "~&    #<~S ~S ~O ~S>"
+			 (nth (%p-cdr-code env) q-cdr-codes)
+			 (nth (%p-data-type env) q-data-types)
+			 (%p-pointer env)
+			 (%p-contents-offset env 0))
+		 (cond ((= (%area-number (%p-pointer env)) linear-pdl-area)
+			(let ((index (virtual-address-to-pdl-index sg (%p-pointer env)))
+			      frame)
+			  (if (not (null index))
+			      (setq frame (sg-frame-for-pdl-index sg index)))
+			  (cond ((null frame)
+				 (format t " Can't find frame"))
+				(t
+				 (format t "~& Closure in frame with function ~s"
+					 (rp-function-word rp frame))))))))
+	      (format t "#<EVCP ~O> -> " (%p-pointer env)))))))))
 
