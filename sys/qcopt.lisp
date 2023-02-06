@@ -1102,9 +1102,9 @@ of a list satisfies the test. Eg (EQ . MEMQ)")
             (setq tag3 (gensym))
             (setq tag1 (gensym))
 	    (let ((p1value 'predicate))
-	      (setq endtest (compiler-optimize endtest nil)))
+	      (setq endtest (compiler-optimize endtest)))
             (cond ((null endtest)
-		   (compiler-optimize endtest t)	;Get any style warnings we were supposed to get,
+		   (compiler-optimize endtest)	;Get any style warnings we were supposed to get,
 					;since ENDTEST won't actually be compiled.
                    (and endvals
 			(warn 'bad-do ':impossible
