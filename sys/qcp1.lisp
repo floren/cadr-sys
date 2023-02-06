@@ -23,7 +23,8 @@
   (SETQ ALL-SPECIAL-SWITCH NIL)
   (SETQ OBSOLETE-FUNCTION-WARNING-SWITCH T)
   (SETQ RUN-IN-MACLISP-SWITCH NIL)
-  (SETQ INHIBIT-STYLE-WARNINGS-SWITCH NIL))
+  (SETQ INHIBIT-STYLE-WARNINGS-SWITCH NIL)
+  (SETQ *CHECK-STYLE-P* T))
 
 ;;; Compile a function which already has an interpreted definition,
 ;;; or define it to a newly supplied definition's compilation.
@@ -847,7 +848,7 @@ We create this:
 
 (DEFUN P1 (FORM &OPTIONAL DONT-OPTIMIZE &AUX TM)
   (UNLESS DONT-OPTIMIZE
-    (SETQ FORM (COMPILER-OPTIMIZE FORM T)))
+    (SETQ FORM (COMPILER-OPTIMIZE FORM)))
   (COND
     ((ATOM FORM)
      (COND ((AND (CONSTANTP FORM)
@@ -964,13 +965,14 @@ We create this:
 ;;; (at the top level).  Also apply style-checkers to the supplied input
 ;;; but not to generated output.  This function is also in charge of checking for
 ;;; too few or too many arguments so that this happens before optimizers are applied.
-(DEFUN COMPILER-OPTIMIZE (FORM CHECK-STYLE
+(DEFUN COMPILER-OPTIMIZE (FORM
 			  &AUX (MACRO-CONS-AREA
 				 (IF (EQ QC-TF-OUTPUT-MODE 'COMPILE-TO-CORE)
 				     BACKGROUND-CONS-AREA
 				     DEFAULT-CONS-AREA))
 			       (LOCAL-MACRO-P NIL)
-			       (OPTIMIZATIONS-BEGUN-FLAG NIL))
+			       (OPTIMIZATIONS-BEGUN-FLAG NIL)
+			       (*CHECK-STYLE-P* *CHECK-STYLE-P*))
   (IF (ALREADY-OPTIMIZED-P FORM)
       FORM
     (DO ((TM) (FN))
@@ -991,7 +993,7 @@ We create this:
 	(setq local-macro-p nil))
       (UNLESS OPTIMIZATIONS-BEGUN-FLAG
 	;; Do style checking
-	(AND CHECK-STYLE (NOT INHIBIT-STYLE-WARNINGS-SWITCH) (NOT LOCAL-MACRO-P)
+	(AND *CHECK-STYLE-P* (NOT INHIBIT-STYLE-WARNINGS-SWITCH) (NOT LOCAL-MACRO-P)
 	     (COND ((ATOM FN)
 		    (AND (SYMBOLP FN)
 			 (SETQ TM (GET FN 'STYLE-CHECKER))
@@ -1012,7 +1014,7 @@ We create this:
 			      (SPECIAL-FORM-P FN)
 			      (MACRO-FUNCTION FN)))
 		     (SETQ FORM (CONS (CAR FORM)
-				      (MAPCAR #'(LAMBDA (X) (COMPILER-OPTIMIZE X CHECK-STYLE))
+				      (MAPCAR #'(LAMBDA (X) (COMPILER-OPTIMIZE X))
 					      (CDR FORM)))))
 		 (DOLIST (OPT (GET FN 'OPTIMIZERS))
 		   (UNLESS (EQ FORM (SETQ FORM (FUNCALL OPT FORM)))
@@ -1035,7 +1037,7 @@ We create this:
 	  ;; So if we get here, there was an error inside it.
 	  (RETURN (SETQ FORM `(ERROR-MACRO-EXPANDING ',FORM))))
       ;; Only do style checking the first time around
-      (SETQ CHECK-STYLE NIL))
+      (SETQ *CHECK-STYLE-P* NIL))
     ;; Result is FORM
     (FLAG-ALREADY-OPTIMIZED FORM)))
 
@@ -1222,7 +1224,7 @@ was not compiled due to an error in macro expansion." FORM))
 		 (MEMQ 'FEF-QT-DONTCARE TOKEN-LIST))
 	     (RPLACA ARGS-LEFT
 		     (IF (AND (MEMQ 'FEF-FUNCTIONAL-ARG TOKEN-LIST)
-			      (NOT (ATOM (SETQ TM (COMPILER-OPTIMIZE (CAR ARGS-LEFT) T))))
+			      (NOT (ATOM (SETQ TM (COMPILER-OPTIMIZE (CAR ARGS-LEFT)))))
 			      (EQ (CAR TM) 'QUOTE))	;Look for '(LAMBDA...)
 			 (P1FUNCTION TM)
 		       (P1 (CAR ARGS-LEFT)))))
@@ -1902,7 +1904,7 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
       (COND ((EQUAL (CAR BODY) '((SETQ)))
 	     (POP BODY))
 	    ((OR (ATOM (CAR BODY))
-		 (ATOM (SETQ TEM (COMPILER-OPTIMIZE (CAR BODY) NIL)))
+		 (ATOM (SETQ TEM (COMPILER-OPTIMIZE (CAR BODY))))
 		 (NOT (EQ (CAR TEM) 'SETQ))
 		 (NOT (MEMQ (CADR TEM) VLIST))	;we're binding it
 		 (NOT (CONSTANTP (CADDR TEM)))	;initializing to constant
@@ -2595,7 +2597,7 @@ It still works now, but fix it quickly before it stops working." SYMBOL)
   (DO ((FORMS-LEFT (SETQ FORMS (COPY-LIST FORMS)) (CDR FORMS-LEFT)))
       ((NULL FORMS-LEFT) `(PROGN . ,FORMS))
     (SETF (CAR FORMS-LEFT)
-	  (P1V (COMPILER-OPTIMIZE (CAR FORMS-LEFT) T) (IF (CDR FORMS) NIL P1VALUE) T))))
+	  (P1V (COMPILER-OPTIMIZE (CAR FORMS-LEFT)) (IF (CDR FORMS) NIL P1VALUE) T))))
 
 ;;; Execute body with SELF's mapping table set up.
 (DEFUN (:PROPERTY WITH-SELF-ACCESSIBLE P1) (FORM)
