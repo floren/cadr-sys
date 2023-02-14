@@ -1952,6 +1952,12 @@ break off and compile separately functions which appear in the cdr
 position of an alist element"
   x)     
 
+(defun interpreter-environment-closure-p (closure &aux (bindings (closure-bindings closure)))
+  "T if CLOSURE is a closure over the interpreter environment variables"
+  (or (getf bindings (locf (symbol-value '*interpreter-variable-environment*)))
+      (getf bindings (locf (symbol-value '*interpreter-function-environment*)))
+      (getf bindings (locf (symbol-value '*interpreter-frame-environment*)))))
+
 ;;; Make sure that none of ENV lives in a stack.
 ;;; Copy any parts that do, forwarding the old parts to the new ones,
 ;;; and returning a pointer to the new one in case the first link was copied.
