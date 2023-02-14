@@ -380,6 +380,7 @@ then the value is a type specifier describing OBJECT."
 ;; used by non-complex-number real rational integer float short-float single-float
 (defun canonicalize-real-type-specifier (record-dependencies dependencies typespec
 					  &optional (low '*) (high '*))
+  (declare (ignore record-dependencies))
   (flet ((check (x)
 	   (or (non-complex-number-p x)
 	       (eq x '*)
@@ -1925,7 +1926,7 @@ Any real number can be coerced to any floating point number type."
 (define-system-type bignum
   (predicate bigp)
   (expander ()
-	    (or (integer * (#.most-negative-fixnum)) (integer (#.most-positive-fixnum) *))))
+	    '(or (integer * (#.most-negative-fixnum)) (integer (#.most-positive-fixnum) *))))
 
 (define-system-type fixnum
   (predicate (object &optional (low '*) (high '*))
