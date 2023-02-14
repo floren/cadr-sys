@@ -222,7 +222,7 @@ Pathnames, editor buffers, host objects, and many other hairy things
       (ARRAY
        (LET (TEM)
 	 (UNLESS (IF (SETQ TEM (NAMED-STRUCTURE-P OBJECT))
-		     (MEMQ :PRINT-SELF (NAMED-STRUCTURE-INVOKE :WHICH-OPERARATIONS OBJECT))
+		     (MEMQ :PRINT-SELF (NAMED-STRUCTURE-INVOKE :WHICH-OPERATIONS OBJECT))
 		   (NULL *PRINT-ARRAY*))
 	   (DOTIMES (I (ARRAY-LENGTH OBJECT))
 	     (PRINT-RECORD-OCCURRENCES (AR-1-FORCE OBJECT I)))))))))
@@ -231,7 +231,7 @@ Pathnames, editor buffers, host objects, and many other hairy things
 ;;; This arg is only used to MEMQ for :PRINT or :STRING-OUT,
 ;;; so eliminate all other elements to make that faster.
 (DEFUN WHICH-OPERATIONS-FOR-PRINT (STREAM &AUX TEM)
-  (SETQ TEM (SEND STREAM :WHICH-OPERARATIONS))
+  (SETQ TEM (SEND STREAM :WHICH-OPERATIONS))
   (IF (MEMQ ':PRINT TEM)
       (IF (MEMQ ':STRING-OUT TEM)
 	  '(:PRINT :STRING-OUT)
@@ -303,7 +303,7 @@ Pathnames, editor buffers, host objects, and many other hairy things
 	    (INSTANCE
 	      (SEND EXP :PRINT-SELF STREAM I-PRINDEPTH *PRINT-ESCAPE*))
 	    (ENTITY
-	     (IF (MEMQ :PRINT-SELF (SEND EXP :WHICH-OPERARATIONS))
+	     (IF (MEMQ :PRINT-SELF (SEND EXP :WHICH-OPERATIONS))
 		 (SEND EXP :PRINT-SELF STREAM I-PRINDEPTH *PRINT-ESCAPE*) 
 	       (PRINT-RANDOM-OBJECT EXP STREAM FASTP I-PRINDEPTH WHICH-OPERATIONS)))
 	    (NAMED-STRUCTURE
@@ -484,6 +484,22 @@ Pathnames, editor buffers, host objects, and many other hairy things
 	    (unless (equal val init)
 	      (push kwd l) (push val l))))
 	(print-list (nreverse l) i-prindepth stream which-operations)))))
+
+(defun print-closure (closure stream fastp)
+  (let ((bindings (closure-bindings closure)))
+    (multiple-value-bind (function-name tem)
+	(function-name (closure-function closure))
+      (printing-random-object (closure stream :type :fastp fastp)
+	(when tem
+	  (print-object function-name 0 stream fastp)
+	  (send stream :tyo #/space))
+	(cond ((null bindings)
+	       (send stream :tyo #/0))
+	      ((null (cdr bindings))
+	       (print-raw-string "(Lexical environment)" stream fastp))
+	      ((interpreter-environment-closure-p closure)
+	       (print-raw-string "(Interpreter)" stream fastp))
+	      (t (print-fixnum (truncate (length bindings) 2) stream)))))))
 
 (defun print-character (char stream fastp
 			 &aux (*print-base* 10.) (*print-radix* nil) (*nopoint t))
