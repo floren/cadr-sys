@@ -1,4 +1,4 @@
-;;; -*- Mode:LISP; Package:SI; Base:8; Cold-load: T -*-
+;;; -*- Mode:LISP; Package:SI; Cold-Load:T; Base:8; Readtable:ZL -*-
 ;	** (c) Copyright 1980 Massachusetts Institute of Technology **
 
 
@@ -9,7 +9,7 @@ is replaced by /"#/".")
 (DEFVAR PRINLEVEL :UNBOUND
   "If non-NIL, maximum depth for printing list structure.
 Any structure nested more deeply that this amount
-is replaced by /"**/".")
+is replaced by /"#/".")
 (FORWARD-VALUE-CELL 'PRINLEVEL '*PRINT-LEVEL*)
 
 (DEFVAR *PRINT-LENGTH* NIL
@@ -61,7 +61,8 @@ Value is :UPCASE, :DOWNCASE or :CAPITALIZE.")
 
 (DEFVAR PRIN1 NIL
   "If non-NIL, specifies a function to be used for printing the values returned by
-read-eval-print loops. GRIND-TOP-LEVEL is a useful thing to SETQ this to.")
+read-eval-print loops. GRIND-TOP-LEVEL is a useful thing to which to SETQ this.")
+
 
 (DEFMACRO PRINT-CIRCLE (&BODY BODY)
   `(IF (NOT *PRINT-CIRCLE*)
@@ -75,7 +76,7 @@ read-eval-print loops. GRIND-TOP-LEVEL is a useful thing to SETQ this to.")
 	      (PRINT-RECORD-OCCURRENCES OBJECT)
 	      . ,BODY)
 	  (WHEN PRINT-HASH-TABLE
-	    (SETQ REUSABLE-PRINT-HASH-TABLE PRINT-HASH-TABLE))))))
+	    (RETURN-PRINT-HASH-TABLE PRINT-HASH-TABLE))))))
 
 (DEFVAR PRINT-HASH-TABLE :UNBOUND
   "Hash table that records objects printed when *PRINT-CIRCLE*, for detecting shared structure.
@@ -83,14 +84,18 @@ Key is the object printed, value is its label number.")
 
 (DEFVAR REUSABLE-PRINT-HASH-TABLE NIL)
 
-(DEFMACRO GET-PRINT-HASH-TABLE ()
-  '(OR
-     (DO (OLD)
-	 ((%STORE-CONDITIONAL (LOCF REUSABLE-PRINT-HASH-TABLE)
-			      (SETQ OLD REUSABLE-PRINT-HASH-TABLE)
-			      NIL)
-	  OLD))
-     (MAKE-HASH-TABLE)))
+;;>> keep these as functions rather than macros in case we try to be a little cleverer
+;;>> about throwing away duplicate ht's
+(DEFUN GET-PRINT-HASH-TABLE ()
+  (OR (DO (OLD)
+	  ((%STORE-CONDITIONAL (LOCF REUSABLE-PRINT-HASH-TABLE)
+			       (SETQ OLD REUSABLE-PRINT-HASH-TABLE)
+			       NIL)
+	   OLD))
+      (MAKE-HASH-TABLE)))
+
+(DEFUN RETURN-PRINT-HASH-TABLE (HT)
+  (SETQ REUSABLE-PRINT-HASH-TABLE HT))
 
 (DEFVAR PRINT-LABEL-NUMBER :UNBOUND)
 
@@ -104,18 +109,19 @@ some object whose printed representation cannot be read back in.")
 ;;; comes from (PTTBL-OPEN-PAREN *READTABLE*).
 ;;; See the file RDDEFS for the definitions and the default contents of these slots.
 
-;;; Main entries.
+;;;; Main entries.
+
 ;;; These are the external entrypoints which are in the usual documentation.
-;;; They are compatible with Maclisp.
+;;; They are vaguely compatible with Maclisp.
 
 (DEFUN PRINT (OBJECT &OPTIONAL STREAM)
   "Print OBJECT on STREAM with quoting if needed, with a Return before and a Space after."
   (SETQ STREAM (DECODE-PRINT-ARG STREAM))
-  (SEND STREAM ':TYO (PTTBL-NEWLINE *READTABLE*))
+  (SEND STREAM :TYO (PTTBL-NEWLINE *READTABLE*))
   (LET ((*PRINT-ESCAPE* T))
     (PRINT-CIRCLE
       (PRINT-OBJECT OBJECT 0 STREAM)))
-  (SEND STREAM ':TYO (PTTBL-SPACE *READTABLE*))
+  (SEND STREAM :TYO (PTTBL-SPACE *READTABLE*))
   OBJECT)
 
 (DEFUN PRIN1 (OBJECT &OPTIONAL STREAM)
@@ -128,7 +134,8 @@ some object whose printed representation cannot be read back in.")
 (DEFUN PPRINT (OBJECT &OPTIONAL STREAM)
   "Print OBJECT on STREAM, with quoting and with extra whitespace to make it look pretty.
 Returns zero values."
-  (LET ((*PRINT-ESCAPE* T))
+  (LET ((*PRINT-ESCAPE* T)
+	(*PRINT-PRETTY* T))
     (GRIND-TOP-LEVEL OBJECT NIL (DECODE-PRINT-ARG STREAM)))
   (VALUES))
 
@@ -156,7 +163,7 @@ For any flags not specified by keyword arguments, the current special binding is
   (LET ((*PRINT-ESCAPE* T))
     (PRINT-CIRCLE
       (PRINT-OBJECT OBJECT 0 STREAM)))
-  (SEND STREAM ':TYO (PTTBL-SPACE *READTABLE*))
+  (SEND STREAM :TYO (PTTBL-SPACE *READTABLE*))
   OBJECT)
 
 (DEFUN PRINC (OBJECT &OPTIONAL STREAM)
@@ -173,7 +180,7 @@ Pathnames, editor buffers, host objects, and many other hairy things
   "Like WRITE but conses up a string to contain the output from printing OBJECT."
   (DECLARE (ARGLIST OBJECT &KEY ESCAPE RADIX BASE CIRCLE PRETTY LEVEL LENGTH CASE
 		    		GENSYM ARRAY))
-  (FORMAT:OUTPUT NIL (APPLY 'WRITE ARGS)))
+  (FORMAT:OUTPUT NIL (APPLY #'WRITE ARGS)))
 
 (DEFUN PRIN1-TO-STRING (OBJECT)
   "Like PRIN1 but conses up a string to contain the output from printing OBJECT."
@@ -186,19 +193,19 @@ Pathnames, editor buffers, host objects, and many other hairy things
 ;;;; Subroutines
 
 ;;; Prevent lossage before the definitions of rationalp and complexp are loaded.
-(UNLESS (FBOUNDP 'RATIONALP)
-  (FSET 'RATIONALP 'FIXNUMP))
+(OR (FBOUNDP 'RATIONALP)
+    (FSET 'RATIONALP 'FIXNUMP))
 
-(UNLESS (FBOUNDP 'COMPLEXP)
-  (FSET 'COMPLEXP '(LAMBDA (IGNORE) NIL)))
+(OR (FBOUNDP 'COMPLEXP)
+    (FSET 'COMPLEXP '(LAMBDA (IGNORE) NIL)))
 
 (DEFUN PRINT-RECORD-OCCURRENCES (OBJECT)
   (WHEN (AND (%POINTERP OBJECT)
 	     (OR (NOT (SYMBOLP OBJECT))
 		 (NOT (SYMBOL-PACKAGE OBJECT)))
-	     (NOT (SEND PRINT-HASH-TABLE ':MODIFY-HASH OBJECT #'(LAMBDA (OBJECT VALUE FOUND-P)
-								  OBJECT VALUE
-								  FOUND-P))))
+	     (NOT (SEND PRINT-HASH-TABLE :MODIFY-HASH OBJECT #'(LAMBDA (OBJECT VALUE FOUND-P)
+								 OBJECT VALUE
+								 FOUND-P))))
     (TYPECASE OBJECT
       (LIST
 	(DO ((TAIL OBJECT (CDR TAIL))
@@ -206,7 +213,7 @@ Pathnames, editor buffers, host objects, and many other hairy things
 	    ((ATOM TAIL)
 	     (WHEN TAIL (PRINT-RECORD-OCCURRENCES TAIL)))
 	  (UNLESS FIRST
-	    (IF (SEND PRINT-HASH-TABLE ':MODIFY-HASH TAIL
+	    (IF (SEND PRINT-HASH-TABLE :MODIFY-HASH TAIL
 		      #'(LAMBDA (OBJECT VALUE FOUND-P)
 			  OBJECT VALUE
 			  FOUND-P))
@@ -215,7 +222,7 @@ Pathnames, editor buffers, host objects, and many other hairy things
       (ARRAY
        (LET (TEM)
 	 (UNLESS (IF (SETQ TEM (NAMED-STRUCTURE-P OBJECT))
-		     (MEMQ ':PRINT-SELF (NAMED-STRUCTURE-INVOKE ':WHICH-OPERATIONS OBJECT))
+		     (MEMQ :PRINT-SELF (NAMED-STRUCTURE-INVOKE :WHICH-OPERARATIONS OBJECT))
 		   (NULL *PRINT-ARRAY*))
 	   (DOTIMES (I (ARRAY-LENGTH OBJECT))
 	     (PRINT-RECORD-OCCURRENCES (AR-1-FORCE OBJECT I)))))))))
@@ -224,12 +231,14 @@ Pathnames, editor buffers, host objects, and many other hairy things
 ;;; This arg is only used to MEMQ for :PRINT or :STRING-OUT,
 ;;; so eliminate all other elements to make that faster.
 (DEFUN WHICH-OPERATIONS-FOR-PRINT (STREAM &AUX TEM)
-  (SETQ TEM (SEND STREAM ':WHICH-OPERATIONS))
+  (SETQ TEM (SEND STREAM :WHICH-OPERARATIONS))
   (IF (MEMQ ':PRINT TEM)
       (IF (MEMQ ':STRING-OUT TEM)
-	  '(:PRINT :STRING-OUT) '(:PRINT))
-    (IF (MEMQ ':STRING-OUT TEM)
-	'(:STRING-OUT) '())))
+	  '(:PRINT :STRING-OUT)
+	  '(:PRINT))
+      (IF (MEMQ :STRING-OUT TEM)
+	  '(:STRING-OUT)
+	  '())))
 
 ;;; Main routine, to print any lisp object.
 ;;; The WHICH-OPERATIONS argument is provided as an efficiency hack.  It also used
@@ -238,7 +247,7 @@ Pathnames, editor buffers, host objects, and many other hairy things
 (DEFUN PRINT-OBJECT (EXP I-PRINDEPTH STREAM
 		     &OPTIONAL
 		     (WHICH-OPERATIONS (WHICH-OPERATIONS-FOR-PRINT STREAM))
-		     &AUX NSS (FASTP (MEMQ ':STRING-OUT WHICH-OPERATIONS)))
+		     &AUX NSS (FASTP (MEMQ :STRING-OUT WHICH-OPERATIONS)))
   (CATCH-CONTINUATION-IF T 'PRINT-OBJECT
       #'(LAMBDA () (FORMAT STREAM "...error printing ")
 		(PRINTING-RANDOM-OBJECT (EXP STREAM :TYPE :FASTP FASTP))
@@ -246,8 +255,8 @@ Pathnames, editor buffers, host objects, and many other hairy things
       NIL
     (CONDITION-RESUME '((ERROR) :ABORT-PRINTING T ("Give up trying to print this object.")
 			CATCH-ERROR-RESTART-THROW PRINT-OBJECT)
-      (OR (AND (MEMQ ':PRINT WHICH-OPERATIONS)	;Allow stream to intercept print operation
-	       (SEND STREAM ':PRINT EXP I-PRINDEPTH *PRINT-ESCAPE*))
+      (OR (AND (MEMQ :PRINT WHICH-OPERATIONS)	;Allow stream to intercept print operation
+	       (SEND STREAM :PRINT EXP I-PRINDEPTH *PRINT-ESCAPE*))
 	  (AND *PRINT-CIRCLE*
 	       (%POINTERP EXP)
 	       (OR (NOT (SYMBOLP EXP))
@@ -258,24 +267,24 @@ Pathnames, editor buffers, host objects, and many other hairy things
 	       ;; T - occurs more than once, but no occurrences printed yet.
 	       ;;  Allocate a label this time and print #label= as prefix.
 	       ;; A number - that is the label.  Print only #label#.
-	       (*CATCH 'LABEL-PRINTED
-		 (SEND PRINT-HASH-TABLE ':MODIFY-HASH EXP
+	       (CATCH 'LABEL-PRINTED
+		 (SEND PRINT-HASH-TABLE :MODIFY-HASH EXP
 		       #'(LAMBDA (KEY VALUE KEY-FOUND-P STREAM)
 			   KEY KEY-FOUND-P
 			   (COND ((NULL VALUE) NIL)
 				 ((EQ VALUE T)
 				  (LET ((LABEL (INCF PRINT-LABEL-NUMBER))
 					(*PRINT-BASE* 10.) (*PRINT-RADIX* NIL) (*NOPOINT T))
-				    (SEND STREAM ':TYO #/#)
+				    (SEND STREAM :TYO #/#)
 				    (PRINT-FIXNUM LABEL STREAM)
-				    (SEND STREAM ':TYO #/=)
+				    (SEND STREAM :TYO #/=)
 				    LABEL))
 				 (T
 				  (LET ((*PRINT-BASE* 10.) (*PRINT-RADIX* NIL) (*NOPOINT T))
-				    (SEND STREAM ':TYO #/#)
+				    (SEND STREAM :TYO #/#)
 				    (PRINT-FIXNUM VALUE STREAM)
-				    (SEND STREAM ':TYO #/#)
-				    (*THROW 'LABEL-PRINTED T)))))
+				    (SEND STREAM :TYO #/#)
+				    (THROW 'LABEL-PRINTED T)))))
 		       STREAM)
 		 NIL))
 	  (TYPECASE EXP
@@ -292,18 +301,18 @@ Pathnames, editor buffers, host objects, and many other hairy things
 		 (PRINT-QUOTED-STRING EXP STREAM FASTP)
 	       (PRINT-RANDOM-OBJECT EXP STREAM FASTP I-PRINDEPTH WHICH-OPERATIONS)))
 	    (INSTANCE
-	      (SEND EXP ':PRINT-SELF STREAM I-PRINDEPTH *PRINT-ESCAPE*))
+	      (SEND EXP :PRINT-SELF STREAM I-PRINDEPTH *PRINT-ESCAPE*))
 	    (ENTITY
-	     (IF (MEMQ ':PRINT-SELF (SEND EXP ':WHICH-OPERATIONS))
-		 (SEND EXP ':PRINT-SELF STREAM I-PRINDEPTH *PRINT-ESCAPE*) 
+	     (IF (MEMQ :PRINT-SELF (SEND EXP :WHICH-OPERARATIONS))
+		 (SEND EXP :PRINT-SELF STREAM I-PRINDEPTH *PRINT-ESCAPE*) 
 	       (PRINT-RANDOM-OBJECT EXP STREAM FASTP I-PRINDEPTH WHICH-OPERATIONS)))
 	    (NAMED-STRUCTURE
 	     (IGNORE-ERRORS
 	       (SETQ NSS (NAMED-STRUCTURE-P EXP)))
 	     (COND ((AND (SYMBOLP NSS)
 			 (GET NSS 'NAMED-STRUCTURE-INVOKE)
-			 (MEMQ ':PRINT-SELF (NAMED-STRUCTURE-INVOKE EXP ':WHICH-OPERATIONS)))
-		    (NAMED-STRUCTURE-INVOKE ':PRINT-SELF EXP STREAM I-PRINDEPTH *PRINT-ESCAPE*))
+			 (MEMQ :PRINT-SELF (NAMED-STRUCTURE-INVOKE EXP :WHICH-OPERATIONS)))
+		    (NAMED-STRUCTURE-INVOKE :PRINT-SELF EXP STREAM I-PRINDEPTH *PRINT-ESCAPE*))
 		   (T				;Named structure that doesn't print itself
 		    (PRINT-NAMED-STRUCTURE NSS EXP I-PRINDEPTH STREAM WHICH-OPERATIONS))))
 	    (ARRAY
@@ -322,14 +331,16 @@ Pathnames, editor buffers, host objects, and many other hairy things
 	     (PRINT-CHARACTER EXP STREAM FASTP))
 	    (NUMBER
 	     (PRINT-RAW-STRING (CAR (PTTBL-RANDOM *READTABLE*)) STREAM FASTP)
-	     (PRINT-RAW-STRING (GET-PNAME (DATA-TYPE EXP))
+	     (PRINT-RAW-STRING (SYMBOL-NAME (DATA-TYPE EXP))
 			       STREAM
 			       FASTP)
-	     (SEND STREAM ':TYO (PTTBL-SPACE *READTABLE*))
+	     (SEND STREAM :TYO (PTTBL-SPACE *READTABLE*))
 	     (LET ((*PRINT-BASE* 8) (*PRINT-RADIX* NIL))
 	       (PRINT-FIXNUM (%POINTER EXP) STREAM))
 	     (PRINT-RAW-STRING (CDR (PTTBL-RANDOM *READTABLE*)) STREAM FASTP))
-	    (T  ;Some random type we don't know about
+	    (CLOSURE (PRINT-CLOSURE EXP STREAM FASTP))
+	    (T
+	     ;; Some random type we don't know about
 	     (PRINT-RANDOM-OBJECT EXP STREAM FASTP I-PRINDEPTH WHICH-OPERATIONS))))))
    EXP)
 
@@ -340,31 +351,31 @@ Pathnames, editor buffers, host objects, and many other hairy things
 		      FASTP)
     (TYPECASE EXP
       ((OR COMPILED-FUNCTION MICROCODE-FUNCTION STACK-GROUP)
-       (SEND STREAM ':TYO (PTTBL-SPACE *READTABLE*))
+       (SEND STREAM :TYO (PTTBL-SPACE *READTABLE*))
        (PRINT-OBJECT (FUNCTION-NAME EXP)
 		     I-PRINDEPTH STREAM WHICH-OPERATIONS)))))
 
 ;;; Print a list, hacking *print-length* and *print-level*.
 (DEFUN PRINT-LIST (EXP I-PRINDEPTH STREAM WHICH-OPERATIONS)
-  (SEND STREAM ':TYO (PTTBL-OPEN-PAREN *READTABLE*))
+  (SEND STREAM :TYO (PTTBL-OPEN-PAREN *READTABLE*))
   (DO ((I-PRINLENGTH 1 (1+ I-PRINLENGTH))
        (FIRST T NIL))
       ((OR (ATOM EXP)
-	   (AND *PRINT-CIRCLE* (NOT FIRST) (SEND PRINT-HASH-TABLE ':GET-HASH EXP)))
+	   (AND *PRINT-CIRCLE* (NOT FIRST) (SEND PRINT-HASH-TABLE :GET-HASH EXP)))
        (COND ((NOT (NULL EXP))
 	      (PRINT-RAW-STRING (PTTBL-CONS-DOT *READTABLE*) STREAM
-				(MEMQ ':STRING-OUT WHICH-OPERATIONS))
+				(MEMQ :STRING-OUT WHICH-OPERATIONS))
 	      (PRINT-OBJECT EXP (1+ I-PRINDEPTH) STREAM WHICH-OPERATIONS)))
-       (SEND STREAM ':TYO (PTTBL-CLOSE-PAREN *READTABLE*)))
-    (OR FIRST (SEND STREAM ':TYO (PTTBL-SPACE *READTABLE*)))
+       (SEND STREAM :TYO (PTTBL-CLOSE-PAREN *READTABLE*)))
+    (OR FIRST (SEND STREAM :TYO (PTTBL-SPACE *READTABLE*)))
     (PRINT-OBJECT (CAR EXP) (1+ I-PRINDEPTH) STREAM WHICH-OPERATIONS)
     (SETQ EXP (CDR EXP))
     (AND *PRINT-LENGTH* ( I-PRINLENGTH *PRINT-LENGTH*)	;One frob gets printed before test.
 	 (NOT (ATOM EXP))			;Don't do it uselessly
-	 (PROGN (SEND STREAM ':TYO (PTTBL-SPACE *READTABLE*))
+	 (PROGN (SEND STREAM :TYO (PTTBL-SPACE *READTABLE*))
 		(PRINT-RAW-STRING (PTTBL-PRINLENGTH *READTABLE*) STREAM
-				  (MEMQ ':STRING-OUT WHICH-OPERATIONS))
-		(SEND STREAM ':TYO (PTTBL-CLOSE-PAREN *READTABLE*))
+				  (MEMQ :STRING-OUT WHICH-OPERATIONS))
+		(SEND STREAM :TYO (PTTBL-CLOSE-PAREN *READTABLE*))
 		(RETURN NIL)))))
 
 (DEFUN PRINT-ARRAY (EXP STREAM FASTP I-PRINDEPTH
@@ -378,38 +389,38 @@ Pathnames, editor buffers, host objects, and many other hairy things
 	    (GRIND-TOP-LEVEL EXP NIL STREAM NIL 'DISPLACED NIL)
 	  (IF (= RANK 1)
 	      (PRINT-VECTOR EXP I-PRINDEPTH STREAM WHICH-OPERATIONS)
-	    (PRINT-MULTIDIMENSIONAL-ARRAY EXP I-PRINDEPTH STREAM WHICH-OPERATIONS))))
+	      (PRINT-MULTIDIMENSIONAL-ARRAY EXP I-PRINDEPTH STREAM WHICH-OPERATIONS))))
     (PRINTING-RANDOM-OBJECT (EXP STREAM :FASTP FASTP)
-      (PRINT-RAW-STRING (GET-PNAME (ARRAY-TYPE EXP)) STREAM FASTP)
+      (PRINT-RAW-STRING (SYMBOL-NAME (ARRAY-TYPE EXP)) STREAM FASTP)
       (DOTIMES (I RANK)
-	(SEND STREAM ':TYO #/-)
+	(SEND STREAM :TYO #/-)
 	(PRINT-FIXNUM (ARRAY-DIMENSION EXP I) STREAM)))))
 
 (DEFUN PRINT-VECTOR (EXP I-PRINDEPTH STREAM WHICH-OPERATIONS)
-  (SEND STREAM ':STRING-OUT (CAR (PTTBL-VECTOR *READTABLE*)))
+  (SEND STREAM :STRING-OUT (CAR (PTTBL-VECTOR *READTABLE*)))
   (DO ((I-PRINLENGTH 0 (1+ I-PRINLENGTH))
        (LENGTH (LENGTH EXP))
        (FIRST T NIL))
       ((= I-PRINLENGTH LENGTH)
-       (SEND STREAM ':STRING-OUT (CDR (PTTBL-VECTOR *READTABLE*))))
-    (OR FIRST (SEND STREAM ':TYO (PTTBL-SPACE *READTABLE*)))
+       (SEND STREAM :STRING-OUT (CDR (PTTBL-VECTOR *READTABLE*))))
+    (OR FIRST (SEND STREAM :TYO (PTTBL-SPACE *READTABLE*)))
     (PRINT-OBJECT (AREF EXP I-PRINLENGTH) (1+ I-PRINDEPTH) STREAM WHICH-OPERATIONS)
     (AND *PRINT-LENGTH* ( I-PRINLENGTH *PRINT-LENGTH*)	;One frob gets printed before test.
-	 (PROGN (SEND STREAM ':TYO (PTTBL-SPACE *READTABLE*))
+	 (PROGN (SEND STREAM :TYO (PTTBL-SPACE *READTABLE*))
 		(PRINT-RAW-STRING (PTTBL-PRINLENGTH *READTABLE*) STREAM
-				  (MEMQ ':STRING-OUT WHICH-OPERATIONS))
-		(SEND STREAM ':TYO (PTTBL-CLOSE-PAREN *READTABLE*))
+				  (MEMQ :STRING-OUT WHICH-OPERATIONS))
+		(SEND STREAM :TYO (PTTBL-CLOSE-PAREN *READTABLE*))
 		(RETURN NIL)))))
 
 (DEFUN PRINT-BIT-VECTOR (EXP STREAM)
-  (SEND STREAM ':STRING-OUT (CAR (PTTBL-BIT-VECTOR *READTABLE*)))
+  (SEND STREAM :STRING-OUT (CAR (PTTBL-BIT-VECTOR *READTABLE*)))
   (DOTIMES (I (LENGTH EXP))
-    (SEND STREAM ':TYO (+ #/0 (AREF EXP I))))
-  (SEND STREAM ':STRING-OUT (CAR (LAST (PTTBL-BIT-VECTOR *READTABLE*)))))
+    (SEND STREAM :TYO (+ #/0 (AREF EXP I))))
+  (SEND STREAM :STRING-OUT (CAR (LAST (PTTBL-BIT-VECTOR *READTABLE*)))))
 
 (DEFUN PRINT-MULTIDIMENSIONAL-ARRAY (EXP I-PRINDEPTH STREAM WHICH-OPERATIONS)
   (DOLIST (ELT (PTTBL-ARRAY *READTABLE*))
-    (COND ((STRINGP ELT) (SEND STREAM ':STRING-OUT ELT))
+    (COND ((STRINGP ELT) (SEND STREAM :STRING-OUT ELT))
 	  ((EQ ELT ':RANK)
 	   (LET ((*PRINT-BASE* 10.) (*PRINT-RADIX* NIL) (*NOPOINT T))
 	     (PRINT-FIXNUM (ARRAY-RANK EXP) STREAM)))
@@ -419,7 +430,7 @@ Pathnames, editor buffers, host objects, and many other hairy things
 (DEFVAR ARRAY-CONTENTS-ARRAY NIL)
 (DEFUN PRINT-ARRAY-CONTENTS (ARRAY DIMENSION INDEX-SO-FAR I-PRINDEPTH STREAM W-O &AUX TEM)
   (IF (AND *PRINT-LEVEL* ( I-PRINDEPTH *PRINT-LEVEL*))
-      (SEND STREAM ':STRING-OUT (PTTBL-PRINLEVEL *READTABLE*))
+      (SEND STREAM :STRING-OUT (PTTBL-PRINLEVEL *READTABLE*))
     (IF (ZEROP (ARRAY-RANK ARRAY))
 	(PRINT-OBJECT (AREF ARRAY) I-PRINDEPTH STREAM W-O)
       (LET ((INDEX (* INDEX-SO-FAR (ARRAY-DIMENSION ARRAY DIMENSION)))
@@ -432,91 +443,98 @@ Pathnames, editor buffers, host objects, and many other hairy things
 						       NIL)
 				   TEM)
 			      (SI:CHANGE-INDIRECT-ARRAY TEM MODE LENGTH ARRAY INDEX)
-			    (MAKE-ARRAY LENGTH ':TYPE MODE ':DISPLACED-TO ARRAY
-					':DISPLACED-INDEX-OFFSET INDEX))))
+			    (MAKE-ARRAY LENGTH :TYPE MODE :DISPLACED-TO ARRAY
+							  :DISPLACED-INDEX-OFFSET INDEX))))
 	      (IF (EQ MODE 'ART-1B) (PRINT-BIT-VECTOR KLUDGE STREAM)
-		(PRINT-QUOTED-STRING KLUDGE STREAM (MEMQ ':STRING-OUT W-O)))
+		(PRINT-QUOTED-STRING KLUDGE STREAM (MEMQ :STRING-OUT W-O)))
 	      (SETQ ARRAY-CONTENTS-ARRAY KLUDGE))	;massachusetts
-	  (SEND STREAM ':TYO (PTTBL-OPEN-PAREN *READTABLE*))
+	  (SEND STREAM :TYO (PTTBL-OPEN-PAREN *READTABLE*))
 	  (DOTIMES (I (ARRAY-DIMENSION ARRAY DIMENSION))
-	    (OR (ZEROP I) (SEND STREAM ':TYO (PTTBL-SPACE *READTABLE*)))
+	    (OR (ZEROP I) (SEND STREAM :TYO (PTTBL-SPACE *READTABLE*)))
 	    (COND ((AND *PRINT-LENGTH* (= I *PRINT-LENGTH*))
-		   (SEND STREAM ':STRING-OUT (PTTBL-PRINLENGTH *READTABLE*))
+		   (SEND STREAM :STRING-OUT (PTTBL-PRINLENGTH *READTABLE*))
 		   (RETURN))
 		  ((= (1+ DIMENSION) (ARRAY-RANK ARRAY))
 		   (PRINT-OBJECT (AR-1-FORCE ARRAY (+ INDEX I))
 				 (1+ I-PRINDEPTH) STREAM W-O))
 		  ((AND *PRINT-LEVEL*
 			( (1+ I-PRINDEPTH) *PRINT-LEVEL*))
-		   (SEND STREAM ':STRING-OUT (PTTBL-PRINLEVEL *READTABLE*)))
+		   (SEND STREAM :STRING-OUT (PTTBL-PRINLEVEL *READTABLE*)))
 		  (T
 		   (PRINT-ARRAY-CONTENTS ARRAY (1+ DIMENSION)
 					       (+ INDEX I)
 					       (1+ I-PRINDEPTH)
 					 STREAM W-O))))
-	  (SEND STREAM ':TYO (PTTBL-CLOSE-PAREN *READTABLE*)))))))
+	  (SEND STREAM :TYO (PTTBL-CLOSE-PAREN *READTABLE*)))))))
 
-(DEFUN PRINT-NAMED-STRUCTURE (NSS EXP I-PRINDEPTH STREAM WHICH-OPERATIONS)
-  (LET ((DESCRIPTION (GET NSS 'DEFSTRUCT-DESCRIPTION)))
-    (IF (NOT DESCRIPTION)
-	(PRINTING-RANDOM-OBJECT (EXP STREAM :TYPEP))
-      (SEND STREAM ':STRING-OUT "#S")		;should use printtable
-      (LET ((SLOT-ALIST (SI:DEFSTRUCT-DESCRIPTION-SLOT-ALIST))
-	    (L (LIST NSS)))
-	(DOLIST (S SLOT-ALIST)
-	  (LET* ((KWD (INTERN (GET-PNAME (CAR S)) PKG-KEYWORD-PACKAGE))
-		 (FUN (SI:DEFSTRUCT-SLOT-DESCRIPTION-REF-MACRO-NAME (CDR S)))
-		 (INIT (SI:DEFSTRUCT-SLOT-DESCRIPTION-INIT-CODE (CDR S)))
-		 (VAL (EVAL `(,FUN ,EXP))))	;watch out for macros!
-	    (UNLESS (EQUAL VAL INIT)
-	      (PUSH KWD L) (PUSH VAL L))))
-	(PRINT-LIST (NREVERSE L) I-PRINDEPTH STREAM WHICH-OPERATIONS)))))
+;;; conses!!
+(defun print-named-structure (nss exp i-prindepth stream which-operations)
+  (let ((description (get nss 'defstruct-description)))
+    (if (not description)
+	(printing-random-object (exp stream :type))
+      (send stream :string-out "#S")		;use printtable??
+      (let ((slot-alist (si:defstruct-description-slot-alist))
+	    (l (list nss)))
+	;;>> ** CONS **
+	(dolist (s slot-alist)
+	  (let* ((kwd (intern (symbol-name (car s)) pkg-keyword-package))
+		 (fun (si:defstruct-slot-description-ref-macro-name (cdr s)))
+		 (init (si:defstruct-slot-description-init-code (cdr s)))
+		 (val (eval `(,fun ,exp))))	;Ugh!! watch out for macros!
+	    (unless (equal val init)
+	      (push kwd l) (push val l))))
+	(print-list (nreverse l) i-prindepth stream which-operations)))))
 
-(DEFUN PRINT-CHARACTER (CHAR STREAM FASTP
-			 &AUX (*PRINT-BASE* 10.) (*PRINT-RADIX* NIL) (*NOPOINT T))
+(defun print-character (char stream fastp
+			 &aux (*print-base* 10.) (*print-radix* nil) (*nopoint t))
 
-  FASTP
-  (IF (NOT *PRINT-ESCAPE*)
-      (SEND STREAM ':TYO (CHAR-INT CHAR))
-    (SEND STREAM ':STRING-OUT (CAR (PTTBL-CHARACTER *READTABLE*)))
-    (IF (NOT (ZEROP (CHAR-FONT CHAR)))
-	(PRIN1 (CHAR-FONT CHAR) STREAM))
-    (SEND STREAM ':STRING-OUT (CDR (PTTBL-CHARACTER *READTABLE*)))
-    (LET ((BITS (CHAR-BITS CHAR))
-	  (CODE (CHAR-CODE CHAR)))
-      (SEND STREAM ':STRING-OUT
-	    (NTH BITS
-		 '("" "c-" "m-" "c-m-"
-		   "s-" "c-s-" "m-s-" "c-m-s-"
-		   "h-" "c-h-" "m-h-" "c-m-h-"
-		   "s-h-" "c-s-h-" "m-s-h-" "c-m-s-h-")))
-      (COND ((TV:CHAR-MOUSE-P CHAR)
-	     (SEND STREAM :STRING-OUT "Mouse-")
-	     (SEND STREAM :STRING-OUT (NTH (LDB %%KBD-MOUSE-BUTTON CHAR)
-					   '("Left-" "Middle-" "Right-")))
-	     (PRIN1 (1+ (LDB %%KBD-MOUSE-N-CLICKS CHAR)) STREAM))
-	    (T
-	     (LET ((CHNAME (FORMAT:OCHAR-GET-CHARACTER-NAME CODE)))
-	       (IF CHNAME
-		   (SEND STREAM :STRING-OUT CHNAME)
-		 (AND ( BITS 0)
-		      (CHARACTER-NEEDS-QUOTING-P CODE)
-		      (SEND STREAM ':TYO (PTTBL-SLASH *READTABLE*)))
-		 (SEND STREAM ':TYO CODE))))))))
+  (declare (ignore fastp))
+  (when *print-escape*
+    (send stream :string-out (car (pttbl-character *readtable*)))
+    (if (not (zerop (char-font char)))
+	(prin1 (char-font char) stream))
+    (send stream :string-out (cdr (pttbl-character *readtable*))))
+  ;;>> ignore printing font of character when *print-escape* is nil for now...
+  (let ((bits (char-bits char))
+	(code (char-code char)))
+    (send stream :string-out
+	  (nth bits
+	       '("" "c-" "m-" "c-m-"
+		 "s-" "c-s-" "m-s-" "c-m-s-"
+		 "h-" "c-h-" "m-h-" "c-m-h-"
+		 "s-h-" "c-s-h-" "m-s-h-" "c-m-s-h-")))
+    (cond ((tv:char-mouse-p char)
+	   (send stream :string-out "Mouse-")
+	   (send stream :string-out (nth (ldb %%kbd-mouse-button char)
+					 '("Left-" "Middle-" "Right-")))
+	   (prin1 (1+ (ldb %%kbd-mouse-n-clicks char)) stream))
+	  (t
+	   (let (chname)
+	     (if (or *print-escape*
+		     ( bits 0))
+		 (setq chname (format:ochar-get-character-name code)))
+	     (if chname
+		 (send stream :string-out chname)
+	       (and *print-escape*
+		    ( bits 0)
+		    (character-needs-quoting-p code)
+		    (send stream :tyo (pttbl-slash *readtable*)))
+	       (send stream :tyo code)))))))
 
 ;;; Print a fixnum, possibly with negation, decimal point, etc.
 (DEFUN PRINT-FIXNUM (X STREAM &AUX TEM)
   (AND *PRINT-RADIX* (NUMBERP *PRINT-BASE*) (NEQ *PRINT-BASE* 10.)
-       (SELECTQ *PRINT-BASE*
-	 (2 (SEND STREAM ':STRING-OUT "#b"))
-	 (8 (SEND STREAM ':STRING-OUT "#o"))
-	 (16. (SEND STREAM ':STRING-OUT "#x"))
-	 (T (SEND STREAM ':TYO #/#)
+       (CASE *PRINT-BASE*
+	 (2 (SEND STREAM :STRING-OUT "#b"))
+	 (8 (SEND STREAM :STRING-OUT "#o"))
+	 (16. (SEND STREAM :STRING-OUT "#x"))
+	 (T (SEND STREAM :TYO #/#)
 	    (LET ((*PRINT-BASE* 10.) (*PRINT-RADIX* NIL) (*NOPOINT T) (TEM *READ-BASE*))
 	      (PRINT-FIXNUM TEM STREAM))
-	    (SEND STREAM ':TYO #/r))))
-  (COND ((MINUSP X) (SEND STREAM ':TYO (PTTBL-MINUS-SIGN *READTABLE*)))
-	(T (SETQ X (MINUS X))))
+	    (SEND STREAM :TYO #/r))))
+  (IF (MINUSP X)
+      (SEND STREAM :TYO (PTTBL-MINUS-SIGN *READTABLE*))
+      (SETQ X (- X)))
   (COND ((AND (NUMBERP *PRINT-BASE*)
 	      (< 1 *PRINT-BASE* 37.))
 	 (PRINT-FIXNUM-1 X *PRINT-BASE* STREAM))
@@ -524,22 +542,61 @@ Pathnames, editor buffers, host objects, and many other hairy things
 	      (SETQ TEM (GET *PRINT-BASE* 'PRINC-FUNCTION)))
 	 (FUNCALL TEM X STREAM))
 	(T
-	 (FERROR NIL "A BASE of ~S is meaningless." *PRINT-BASE*)))
+	 (FERROR NIL "A *PRINT-BASE* of ~S is meaningless. It has been reset to 10."
+		 (PROG1 *PRINT-BASE* (SETQ *PRINT-BASE* 10.)))))
   (WHEN (AND (OR *PRINT-RADIX* (NOT *NOPOINT))
 	     (EQ *PRINT-BASE* 10.))
-    (SEND STREAM ':TYO (PTTBL-DECIMAL-POINT *READTABLE*)))
+    (SEND STREAM :TYO (PTTBL-DECIMAL-POINT *READTABLE*)))
   X)
 
 (DEFCONST PRINT-FIXNUM-DIGITS "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
   "Characters used as digits when printing fixnums (if *PRINT-BASE* is big enough).")
-;;;Print the digits of the fixnum.  NUM is MINUS the fixnum to be printed!
+;;; Print the digits of the fixnum.  NUM is MINUS the fixnum to be printed!
 (DEFUN PRINT-FIXNUM-1 (NUM RADIX STREAM &AUX TEM)
   (SETQ TEM (TRUNCATE NUM RADIX))
   (OR (ZEROP TEM)
       (PRINT-FIXNUM-1 TEM RADIX STREAM))
-  (SEND STREAM ':TYO (AREF PRINT-FIXNUM-DIGITS (- (\ NUM RADIX)))))
+  (SEND STREAM :TYO (CHAR PRINT-FIXNUM-DIGITS (- (\ NUM RADIX)))))
+
 
-;;; Printing flonums. 
+(DEFUN PRINT-BIGNUM (BIGNUM STREAM FASTP &AUX TEM)
+  FASTP	;ignored, don't care if the stream can string-out fast
+  (WHEN (MINUSP BIGNUM)
+    (SEND STREAM :TYO (PTTBL-MINUS-SIGN *READTABLE*)))
+  (COND ((AND (FIXNUMP *PRINT-BASE*)
+	      (< 1 *PRINT-BASE* 36.))
+	 (PRINT-BIGNUM-1 BIGNUM *PRINT-BASE* STREAM))
+	((AND (SYMBOLP *PRINT-BASE*)
+	      (SETQ TEM (GET *PRINT-BASE* 'PRINC-FUNCTION)))
+	 (FUNCALL TEM (- BIGNUM) STREAM))
+	(T
+	 (FERROR NIL "A BASE of ~S is meaningless" *PRINT-BASE*)))
+  (WHEN (AND (EQ *PRINT-BASE* 10.) (NOT *NOPOINT))
+    (SEND STREAM :TYO (PTTBL-DECIMAL-POINT *READTABLE*)))
+  BIGNUM)
+
+;;; Print the digits of a bignum
+(DEFUN PRINT-BIGNUM-1 (NUM RADIX STREAM &AUX LENGTH MAX-RADIX DIGITS-PER-Q)
+  (SETQ DIGITS-PER-Q (FLOOR %%Q-POINTER (HAULONG RADIX))
+	MAX-RADIX (^ RADIX DIGITS-PER-Q)
+	NUM (SI:BIGNUM-TO-ARRAY NUM MAX-RADIX)
+	LENGTH (ARRAY-LENGTH NUM))
+  (DO ((INDEX (1- LENGTH) (1- INDEX))
+       (NDIGITS -1 DIGITS-PER-Q))
+      ((MINUSP INDEX))
+    (PRINT-BIGNUM-PIECE (AREF NUM INDEX) RADIX STREAM NDIGITS))
+  (RETURN-ARRAY NUM))
+
+(DEFUN PRINT-BIGNUM-PIECE (PIECE RADIX STREAM NDIGITS)
+       (WHEN (OR (> NDIGITS 1) ( PIECE RADIX))
+	 (PRINT-BIGNUM-PIECE (TRUNCATE PIECE RADIX) RADIX STREAM (1- NDIGITS)))
+       (SEND STREAM :TYO (AREF PRINT-FIXNUM-DIGITS (\ PIECE RADIX))))
+
+;;;; Printing flonums. 
+
+;>> this needs a lot of work -- we are losing bits here!
+;>>  (of course, this may be just the lousy floating-point machine representation and ucode)
+
 ;;; Note how the same code works for small flonums without consing and
 ;;; for big flonums with a certain amount of flonum and bignum consing.
 ;;; This code probably loses accuracy for large exponents.  Needs investigation.
@@ -549,29 +606,29 @@ Pathnames, editor buffers, host objects, and many other hairy things
 		     &AUX EXPT)
   FASTP		;ignored, don't care if the stream can string-out fast
   (COND ((ZEROP X)
-	 (SEND STREAM ':STRING-OUT "0.0")
+	 (SEND STREAM :STRING-OUT "0.0")
 	 (IF (NEQ (NULL SMALL)
 		  (NEQ *READ-DEFAULT-FLOAT-FORMAT* 'SHORT-FLOAT))
-	     (SEND STREAM ':STRING-OUT
+	     (SEND STREAM :STRING-OUT
 		   (IF SMALL "s0" "f0"))))
 	(T (IF (PLUSP X)
 	       (SETQ X (- X))
-	     (SEND STREAM ':TYO (PTTBL-MINUS-SIGN *READTABLE*)))
+	     (SEND STREAM :TYO (PTTBL-MINUS-SIGN *READTABLE*)))
 	   ;; X is now negative
 	   (COND ((OR (> X -1.0s-3) ( X -1.0s7) FORCE-E-FORMAT)
 		  ;; Must go to E format.
-		  (MULTIPLE-VALUE (X EXPT) (SCALE-FLONUM X))
+		  (MULTIPLE-VALUE-SETQ (X EXPT) (SCALE-FLONUM X))
 		  ;; X is now positive
 		  (LET ((PLACE-MOVED (PRINT-FLONUM-INTERNAL X SMALL STREAM MAX-DIGITS
 							    T)))
 		    (WHEN PLACE-MOVED (INCF EXPT)))
-		  (SEND STREAM ':TYO
+		  (SEND STREAM :TYO
 			(IF (NEQ (NULL SMALL)
 				 (NEQ *READ-DEFAULT-FLOAT-FORMAT* 'SHORT-FLOAT))
 			    (IF SMALL #/s #/f)
 			  #/e))
 		  (IF (MINUSP EXPT)
-		      (SEND STREAM ':TYO (PTTBL-MINUS-SIGN *READTABLE*))
+		      (SEND STREAM :TYO (PTTBL-MINUS-SIGN *READTABLE*))
 		    (SETQ EXPT (- EXPT)))
 		  (PRINT-FIXNUM-1 EXPT 10. STREAM))
 		 (T
@@ -579,7 +636,7 @@ Pathnames, editor buffers, host objects, and many other hairy things
 		  (PRINT-FLONUM-INTERNAL (- X) SMALL STREAM MAX-DIGITS)
 		  (IF (NEQ (NULL SMALL)
 			   (NEQ *READ-DEFAULT-FLOAT-FORMAT* 'SHORT-FLOAT))
-		      (SEND STREAM ':STRING-OUT
+		      (SEND STREAM :STRING-OUT
 			    (IF SMALL "s0" "f0"))))))))
 
 ;;; Scale a positive flonum so that it is  1.0 and < 10.0
@@ -592,33 +649,17 @@ Pathnames, editor buffers, host objects, and many other hairy things
 ;;; the result is consistently too low when expt is large and negtive.
 
 ;;; Note: X is -ve on entry, +ve on exit
-(defun scale-flonum (x &aux (short (typep X 'short-float)) tem expt)
-  (setq expt (truncate (float-exponent x) (log 10s0 2s0)))
+(defun scale-flonum (x &aux (short (typep X 'short-float)) tem expt wastoobig)
+  (setq expt (truncate (// (float-exponent x) (log 10s0 2s0))))
   (tagbody
       again
 	 (if (minusp expt)
 	     (setq tem (* x (aref powers-of-10f0-table (- expt))))
-	     (setq tem (// x (aref powers-of-10f0-table expt))))
-	 (cond (( tem -10s0) (incf expt) (go again))
-	       ((> tem -1s0)  (decf expt) (go again))
+	   (setq tem (// x (aref powers-of-10f0-table expt))))
+	 (cond ((and ( tem -10s0) (not wastoobig)) (incf expt) (go again))
+	       ((> tem -1s0)  (decf expt) (setq wastoobig t) (go again))
 	       (t (return-from scale-flonum (values (- (if short (float tem 0s0) tem))
-						     expt))))))	      
-
-;  (WHEN (OR (< X 1s-15) (> X 1s15))	;Far off, first guess the exponent via logarithms
-;    (SETQ EXPT (TRUNCATE (LOG X) (LOG 10.0s0)))
-;    (SETQ X (IF (MINUSP EXPT) (* X (^ 10. (- EXPT))) (// X (^ 10. EXPT)))))
-;  (DO ((DIV 10. (* 10. DIV))	;Divide by powers of 10. to make it less than 10.
-;       (Y X (// X DIV)))
-;      ((< Y 10.)
-;       (AND SMALLP (SETQ Y (SMALL-FLOAT Y)))
-;       (SETQ X Y))
-;    (INCF EXPT))
-;  (DO ((MPY 10. (* 10. MPY))	;Multiply by powers of 10. to make it not less than 1.
-;       (Y X (* X MPY)))
-;      (( Y 1)
-;       (AND SMALLP (SETQ Y (SMALL-FLOAT Y)))
-;       (RETURN Y EXPT))
-;    (DECF EXPT)))
+						    expt))))))
 
 ;;; Print the mantissa.
 ;;; X is a positive non-zero flonum, SMALL is T if it's a small-flonum.
@@ -643,7 +684,7 @@ Pathnames, editor buffers, host objects, and many other hairy things
 	(IF (= (AREF BUFER (1- (LENGTH BUFER))) #/0)
 	    (DECF (FILL-POINTER BUFER)))
 	(SETQ PLACE-MOVED T))
-      (SEND STREAM ':STRING-OUT BUFER)
+      (SEND STREAM :STRING-OUT BUFER)
       (RETURN-ARRAY (PROG1 BUFER (SETQ BUFER NIL)))
       PLACE-MOVED)))
 
@@ -662,7 +703,7 @@ DROP-LEADING-ZERO means print .123 rather than 0.123 ."
 	K M R Q U S DECIMAL-PLACE
 	;; BUFFER is needed when MAX-DIGITS is supplied because the rounding
 	;; can generate a carry that has to propagate back through the digits.
-	(BUFFER (MAKE-STRING 100 ':FILL-POINTER 0)))
+	(BUFFER (MAKE-STRING 100 :FILL-POINTER 0)))
     (OR MAX-DIGITS (SETQ MAX-DIGITS 1000.))	;Cause no effect.
     ;; Get integer part
     (SETQ R (ASH MANTISSA EXPONENT))
@@ -761,39 +802,6 @@ DROP-LEADING-ZERO means print .123 rather than 0.123 ."
     (VALUES BUFFER DECIMAL-PLACE)))
 
 
-(DEFUN PRINT-BIGNUM (BIGNUM STREAM FASTP &AUX TEM)
-  FASTP	;ignored, don't care if the stream can string-out fast
-  (WHEN (MINUSP BIGNUM)
-    (SEND STREAM ':TYO (PTTBL-MINUS-SIGN *READTABLE*)))
-  (COND ((AND (FIXNUMP *PRINT-BASE*)
-	      (< 1 *PRINT-BASE* 36.))
-	 (PRINT-BIGNUM-1 BIGNUM *PRINT-BASE* STREAM))
-	((AND (SYMBOLP *PRINT-BASE*)
-	      (SETQ TEM (GET *PRINT-BASE* 'PRINC-FUNCTION)))
-	 (FUNCALL TEM (- BIGNUM) STREAM))
-	(T
-	 (FERROR NIL "A BASE of ~S is meaningless" *PRINT-BASE*)))
-  (WHEN (AND (EQ *PRINT-BASE* 10.) (NOT *NOPOINT))
-    (SEND STREAM ':TYO (PTTBL-DECIMAL-POINT *READTABLE*)))
-  BIGNUM)
-
-;;; Print the digits of a bignum
-(DEFUN PRINT-BIGNUM-1 (NUM RADIX STREAM &AUX LENGTH MAX-RADIX DIGITS-PER-Q)
-  (SETQ DIGITS-PER-Q (FLOOR %%Q-POINTER (HAULONG RADIX))
-	MAX-RADIX (^ RADIX DIGITS-PER-Q)
-	NUM (SI:BIGNUM-TO-ARRAY NUM MAX-RADIX)
-	LENGTH (ARRAY-LENGTH NUM))
-  (DO ((INDEX (1- LENGTH) (1- INDEX))
-       (NDIGITS -1 DIGITS-PER-Q))
-      ((MINUSP INDEX))
-    (PRINT-BIGNUM-PIECE (AREF NUM INDEX) RADIX STREAM NDIGITS))
-  (RETURN-ARRAY NUM))
-
-(DEFUN PRINT-BIGNUM-PIECE (PIECE RADIX STREAM NDIGITS)
-       (WHEN (OR (> NDIGITS 1) ( PIECE RADIX))
-	 (PRINT-BIGNUM-PIECE (TRUNCATE PIECE RADIX) RADIX STREAM (1- NDIGITS)))
-       (SEND STREAM ':TYO (AREF PRINT-FIXNUM-DIGITS (\ PIECE RADIX))))
-
 (defun character-needs-quoting-p (char &optional (rdtbl *readtable*))
   "Returns T if CHAR needs to be quoted to be read in as a symbol using readtable RDTBL."
   (let ((state (rdtbl-starting-state rdtbl))
@@ -827,175 +835,176 @@ DROP-LEADING-ZERO means print .123 rather than 0.123 ."
 ;;;so that if read in the right thing will happen.
 (DEFUN PRINT-PNAME-STRING (SYMBOL STREAM FASTP &OPTIONAL NO-PACKAGE-PREFIXES
 			   &AUX STRING LEN FSMWINS MUST// TEM)
-    (DECLARE (SPECIAL XP-STREAM XP-FASTP XR-EXTENDED-IBASE-P))
-    ;; Print a package prefix if appropriate.
-    (WHEN (AND *PRINT-ESCAPE* (NOT NO-PACKAGE-PREFIXES)
-	       (SYMBOLP SYMBOL))
-      (IF (NULL (SYMBOL-PACKAGE SYMBOL))
-	  (AND *PRINT-GENSYM*
-	       (SEND STREAM ':STRING-OUT
-		     (PTTBL-UNINTERNED-SYMBOL-PREFIX *READTABLE*)))
-	(MULTIPLE-VALUE-BIND (PKG-OR-STRING INTERNAL-FLAG)
-	    (SI:PKG-PRINTING-PREFIX SYMBOL *PACKAGE*)
-	  (MULTIPLE-VALUE (PKG-OR-STRING INTERNAL-FLAG SYMBOL)
-	    (LET* ((TEM1 (CAR (RASSQ SYMBOL (RDTBL-SYMBOL-SUBSTITUTIONS *READTABLE*))))
-		   (TEM2 (UNLESS TEM1
-			   (CDR (ASSQ SYMBOL (RDTBL-SYMBOL-SUBSTITUTIONS *READTABLE*)))))
-		   POS IF)
-	      (COND ((AND TEM1 (MEMBER (MULTIPLE-VALUE (POS IF)
-					 (SI:PKG-PRINTING-PREFIX TEM1 *PACKAGE*))
-				       '(NIL "")))
-		     (VALUES POS IF TEM1))
-		    (TEM2 (MULTIPLE-VALUE (NIL IF POS)
-			    (INTERN TEM2 *PACKAGE*))
-			  (VALUES POS (EQ IF ':INTERNAL) TEM2))
-		    (T (VALUES PKG-OR-STRING INTERNAL-FLAG SYMBOL)))))
-	  (WHEN PKG-OR-STRING
-	    (UNLESS (EQUAL PKG-OR-STRING "")
-	      (PRINT-PNAME-STRING (IF (STRINGP PKG-OR-STRING) PKG-OR-STRING
-				    (PACKAGE-PREFIX-PRINT-NAME PKG-OR-STRING))
-				  STREAM FASTP))
-	    (SEND STREAM ':STRING-OUT
-		  (IF (AND (NOT (STRINGP PKG-OR-STRING))
-			   *PACKAGE*
-			   (ASSOC (PACKAGE-PREFIX-PRINT-NAME PKG-OR-STRING)
-				  (DONT-OPTIMIZE (SI:PKG-REFNAME-ALIST PACKAGE))))
-		      ;; Use #: to inhibit an interfering local nickname.
-		      "#:"
-		    (IF INTERNAL-FLAG
-			(PTTBL-PACKAGE-INTERNAL-PREFIX *READTABLE*)
-		      (PTTBL-PACKAGE-PREFIX *READTABLE*))))))))
-    (SETQ STRING (STRING SYMBOL))
-    (IF (NOT *PRINT-ESCAPE*)
-	(SELECTQ *PRINT-CASE*
-	  (:DOWNCASE (DOTIMES (I (LENGTH STRING))
-		       (SEND STREAM ':TYO (CHAR-DOWNCASE (AREF STRING I)))))
-	  (:CAPITALIZE (DO ((LENGTH (LENGTH STRING)) CHAR PREV-LETTER
-			    (I 0 (1+ I)))
-			   ((= I LENGTH))
-			 (SETQ CHAR (AREF STRING I))
-			 (COND (( #/A CHAR #/Z)
-				(SEND STREAM ':TYO (IF PREV-LETTER (CHAR-DOWNCASE CHAR) CHAR))
-				(SETQ PREV-LETTER T))
-			       (( #/a CHAR #/z)
-				(SEND STREAM ':TYO (IF PREV-LETTER CHAR (CHAR-UPCASE CHAR)))
-				(SETQ PREV-LETTER T))
-				  (( #/0 CHAR #/9)
-				   (SEND STREAM ':TYO CHAR)
-				   (SETQ PREV-LETTER T))
-				  (T (SEND STREAM ':TYO CHAR)
-				     (SETQ PREV-LETTER NIL)))))
-	  (T (PRINT-RAW-STRING STRING STREAM FASTP))) 
-     (SETQ FSMWINS
-	    (AND (PLUSP (SETQ LEN (LENGTH STRING)))
-		 (DO ((I 0 (1+ I))
-		      (STATE (RDTBL-STARTING-STATE *READTABLE*))
-		      (FSM (RDTBL-FSM *READTABLE*))
-		      (CHAR)
-		      (ESCAPE-CODE (RDTBL-ESCAPE-CODE *READTABLE*))
-		      (MULTIPLE-ESCAPE-CODE (RDTBL-MULTIPLE-ESCAPE-CODE *READTABLE*))
-		      (CHARACTER-CODE-ESCAPE-CODE (RDTBL-CHARACTER-CODE-ESCAPE-CODE *READTABLE*)))
-		     ((= I LEN)
-		      (COND ((NOT (NUMBERP STATE))
-			     (DOLIST (L (RDTBL-MAKE-SYMBOL *READTABLE*))
-			       (AND (EQ (CAR STATE) (CAR L))
-				    (EQ (CDR STATE) (CDR L))
-				    (RETURN T))))
-			    ((NOT (NUMBERP (SETQ STATE
-						 (AREF FSM
-						       STATE
-						       (RDTBL-BREAK-CODE *READTABLE*)))))
-			     (DOLIST (L (RDTBL-MAKE-SYMBOL-BUT-LAST *READTABLE*))
-			       (AND (EQ (CAR STATE) (CAR L))
-				    (EQ (CDR STATE) (CDR L))
-				    (RETURN T))))
-			    (T NIL)))
-		   (SETQ CHAR (AREF STRING I))
-		   (COND ((OR (NOT (NUMBERP STATE))	;FSM ran out OR
-			      (NOT			;Translated char? then fsm loses
-				(= CHAR (RDTBL-TRANS *READTABLE* CHAR))))
-			  (OR MUST//				   ;Must we slash?
-			      (DO ((I I (1+ I))) ((= I LEN))
-				(LET ((CODE (RDTBL-CODE *READTABLE* (AREF STRING I))))
-				    (WHEN (OR (= CODE ESCAPE-CODE)
-					      (= CODE MULTIPLE-ESCAPE-CODE)
-					      (= CODE CHARACTER-CODE-ESCAPE-CODE))
-				      (SETQ MUST// T)
-				      (RETURN NIL)))))
-			  (RETURN NIL)))
-		   (SETQ STATE
-			 (AREF FSM
-			       STATE
-			       (COND ((LET ((CODE (RDTBL-CODE *READTABLE* (AREF STRING I))))
-					(OR (= CODE ESCAPE-CODE)
-					    (= CODE MULTIPLE-ESCAPE-CODE)
-					    (= CODE CHARACTER-CODE-ESCAPE-CODE)))
-				      (SETQ MUST// T)
-				      (RDTBL-SLASH-CODE *READTABLE*))
-				     ((AND (NUMBERP *PRINT-BASE*) (> *PRINT-BASE* 10.)
-					   ( #/A CHAR (+ *PRINT-BASE* #/A -11.)))
-				      (CDR (GETF (RDTBL-PLIST *READTABLE*) 'EXTENDED-DIGIT)))
-				     (T
-				      (RDTBL-CODE *READTABLE* CHAR))))))))
-      (UNLESS FSMWINS (SEND STREAM ':TYO (PTTBL-OPEN-QUOTE-SYMBOL *READTABLE*)))
-      (COND ((OR MUST//
-		 (AND FSMWINS (NEQ *PRINT-CASE* ':UPCASE)))
-	     (DO ((I 0 (1+ I))
-		  (ESCAPE-CODE (RDTBL-ESCAPE-CODE *READTABLE*))
-		  (MULTIPLE-ESCAPE-CODE (RDTBL-MULTIPLE-ESCAPE-CODE *READTABLE*))
-		  (CHARACTER-CODE-ESCAPE-CODE (RDTBL-CHARACTER-CODE-ESCAPE-CODE *READTABLE*))
-		  (PREV-CHAR 0)
-		  CODE)
-		 ((= I LEN))
-	       (SETQ TEM (AREF STRING I))
-	       (SETQ CODE (RDTBL-CODE *READTABLE* TEM))
-	       (COND ((OR (= CODE ESCAPE-CODE)
-			  (= CODE MULTIPLE-ESCAPE-CODE)
-			  (= CODE CHARACTER-CODE-ESCAPE-CODE))
-		      (SEND STREAM ':TYO (PTTBL-SLASH *READTABLE*))
-		      (SEND STREAM ':TYO TEM))
-		     ((OR (EQ *PRINT-CASE* ':DOWNCASE)
-			  (AND (EQ *PRINT-CASE* ':CAPITALIZE)
-			       (ALPHANUMERICP PREV-CHAR)))
-		      (SEND STREAM ':TYO (CHAR-DOWNCASE TEM)))
-		     (T
-		      (SEND STREAM ':TYO TEM)))
-	       (SETQ PREV-CHAR TEM)))
-	    (T (PRINT-RAW-STRING STRING STREAM FASTP)))
-      (UNLESS FSMWINS (SEND STREAM ':TYO (PTTBL-CLOSE-QUOTE-SYMBOL *READTABLE*)))
-      ))
+  (DECLARE (SPECIAL XP-STREAM XP-FASTP XR-EXTENDED-IBASE-P))
+  ;; Print a package prefix if appropriate.
+  (WHEN (AND *PRINT-ESCAPE* (NOT NO-PACKAGE-PREFIXES)
+	     (SYMBOLP SYMBOL))
+    (COND ((NULL (SYMBOL-PACKAGE SYMBOL))
+	   (AND *PRINT-GENSYM*
+		(SEND STREAM :STRING-OUT
+		      (PTTBL-UNINTERNED-SYMBOL-PREFIX *READTABLE*))))
+	  (T
+	   (MULTIPLE-VALUE-BIND (PKG-OR-STRING INTERNAL-FLAG)
+	       (SI:PKG-PRINTING-PREFIX SYMBOL *PACKAGE*)
+	     (MULTIPLE-VALUE-SETQ (PKG-OR-STRING INTERNAL-FLAG SYMBOL)
+	       (LET* ((TEM1 (CAR (RASSQ SYMBOL (RDTBL-SYMBOL-SUBSTITUTIONS *READTABLE*))))
+		      (TEM2 (UNLESS TEM1
+			      (CDR (ASSQ SYMBOL (RDTBL-SYMBOL-SUBSTITUTIONS *READTABLE*)))))
+		      POS IF)
+		 (COND ((AND TEM1 (MEMBER-EQUAL (MULTIPLE-VALUE-SETQ (POS IF)
+						  (SI:PKG-PRINTING-PREFIX TEM1 *PACKAGE*))
+						'(NIL "")))
+			(VALUES POS IF TEM1))
+		       (TEM2 (MULTIPLE-VALUE-SETQ (NIL IF POS)
+			       (INTERN TEM2 *PACKAGE*))
+			     (VALUES POS (EQ IF ':INTERNAL) TEM2))
+		       (T (VALUES PKG-OR-STRING INTERNAL-FLAG SYMBOL)))))
+	     (WHEN PKG-OR-STRING
+	       (UNLESS (EQUAL PKG-OR-STRING "")
+		 (PRINT-PNAME-STRING (IF (STRINGP PKG-OR-STRING) PKG-OR-STRING
+				       (PACKAGE-PREFIX-PRINT-NAME PKG-OR-STRING))
+				     STREAM FASTP))
+	       (SEND STREAM :STRING-OUT
+		     (IF (AND (NOT (STRINGP PKG-OR-STRING))
+			      *PACKAGE*
+			      (ASSOC-EQUAL (PACKAGE-PREFIX-PRINT-NAME PKG-OR-STRING)
+					   (DONT-OPTIMIZE (SI:PKG-REFNAME-ALIST PACKAGE))))
+			 ;; Use #: to inhibit an interfering local nickname.
+			 "#:"
+		       (IF INTERNAL-FLAG
+			   (PTTBL-PACKAGE-INTERNAL-PREFIX *READTABLE*)
+			   (PTTBL-PACKAGE-PREFIX *READTABLE*)))))))))
+  (SETQ STRING (STRING SYMBOL))
+  (IF (NOT *PRINT-ESCAPE*)
+      (CASE *PRINT-CASE*
+	(:DOWNCASE (DOTIMES (I (LENGTH STRING))
+		     (SEND STREAM :TYO (CHAR-DOWNCASE (CHAR STRING I)))))
+	(:CAPITALIZE (DO ((LENGTH (LENGTH STRING)) CHAR PREV-LETTER
+			  (I 0 (1+ I)))
+			 ((= I LENGTH))
+		       (SETQ CHAR (AREF STRING I))
+		       (COND ((UPPER-CASE-P CHAR)
+			      (SEND STREAM :TYO (IF PREV-LETTER (CHAR-DOWNCASE CHAR) CHAR))
+			      (SETQ PREV-LETTER T))
+			     ((LOWER-CASE-P CHAR)
+			      (SEND STREAM :TYO (IF PREV-LETTER CHAR (CHAR-UPCASE CHAR)))
+			      (SETQ PREV-LETTER T))
+			     (( #/0 CHAR #/9)
+			      (SEND STREAM :TYO CHAR)
+			      (SETQ PREV-LETTER T))
+			     (T (SEND STREAM :TYO CHAR)
+				(SETQ PREV-LETTER NIL)))))
+	(T (PRINT-RAW-STRING STRING STREAM FASTP))) 
+    (SETQ FSMWINS
+	  (AND (PLUSP (SETQ LEN (LENGTH STRING)))
+	       (DO ((I 0 (1+ I))
+		    (STATE (RDTBL-STARTING-STATE *READTABLE*))
+		    (FSM (RDTBL-FSM *READTABLE*))
+		    (CHAR)
+		    (ESCAPE-CODE (RDTBL-ESCAPE-CODE *READTABLE*))
+		    (MULTIPLE-ESCAPE-CODE (RDTBL-MULTIPLE-ESCAPE-CODE *READTABLE*))
+		    (CHARACTER-CODE-ESCAPE-CODE (RDTBL-CHARACTER-CODE-ESCAPE-CODE *READTABLE*)))
+		   ((= I LEN)
+		    (COND ((NOT (NUMBERP STATE))
+			   (DOLIST (L (RDTBL-MAKE-SYMBOL *READTABLE*))
+			     (AND (EQ (CAR STATE) (CAR L))
+				  (EQ (CDR STATE) (CDR L))
+				  (RETURN T))))
+			  ((NOT (NUMBERP (SETQ STATE
+					       (AREF FSM
+						     STATE
+						     (RDTBL-BREAK-CODE *READTABLE*)))))
+			   (DOLIST (L (RDTBL-MAKE-SYMBOL-BUT-LAST *READTABLE*))
+			     (AND (EQ (CAR STATE) (CAR L))
+				  (EQ (CDR STATE) (CDR L))
+				  (RETURN T))))
+			  (T NIL)))
+		 (SETQ CHAR (AREF STRING I))
+		 (COND ((OR (NOT (NUMBERP STATE))	;FSM ran out OR
+			    (NOT			;Translated char? then fsm loses
+			      (= CHAR (RDTBL-TRANS *READTABLE* CHAR))))
+			(OR MUST//			;Must we slash?
+			    (DO ((I I (1+ I))) ((= I LEN))
+			      (LET ((CODE (RDTBL-CODE *READTABLE* (AREF STRING I))))
+				(WHEN (OR (= CODE ESCAPE-CODE)
+					  (= CODE MULTIPLE-ESCAPE-CODE)
+					  (= CODE CHARACTER-CODE-ESCAPE-CODE))
+				  (SETQ MUST// T)
+				  (RETURN NIL)))))
+			(RETURN NIL)))
+		 (SETQ STATE
+		       (AREF FSM
+			     STATE
+			     (COND ((LET ((CODE (RDTBL-CODE *READTABLE* (AREF STRING I))))
+				      (OR (= CODE ESCAPE-CODE)
+					  (= CODE MULTIPLE-ESCAPE-CODE)
+					  (= CODE CHARACTER-CODE-ESCAPE-CODE)))
+				    (SETQ MUST// T)
+				    (RDTBL-SLASH-CODE *READTABLE*))
+				   ((AND (NUMBERP *PRINT-BASE*) (> *PRINT-BASE* 10.)
+					 ( #/A CHAR (+ *PRINT-BASE* #/A -11.)))
+				    (CDR (GETF (RDTBL-PLIST *READTABLE*) 'EXTENDED-DIGIT)))
+				   (T
+				    (RDTBL-CODE *READTABLE* CHAR))))))))
+    (UNLESS FSMWINS (SEND STREAM :TYO (PTTBL-OPEN-QUOTE-SYMBOL *READTABLE*)))
+    (COND ((OR MUST//
+	       (AND FSMWINS (NEQ *PRINT-CASE* ':UPCASE)))
+	   (DO ((I 0 (1+ I))
+		(ESCAPE-CODE (RDTBL-ESCAPE-CODE *READTABLE*))
+		(MULTIPLE-ESCAPE-CODE (RDTBL-MULTIPLE-ESCAPE-CODE *READTABLE*))
+		(CHARACTER-CODE-ESCAPE-CODE (RDTBL-CHARACTER-CODE-ESCAPE-CODE *READTABLE*))
+		(PREV-CHAR 0)
+		CODE)
+	       ((= I LEN))
+	     (SETQ TEM (AREF STRING I))
+	     (SETQ CODE (RDTBL-CODE *READTABLE* TEM))
+	     (COND ((OR (= CODE ESCAPE-CODE)
+			(= CODE MULTIPLE-ESCAPE-CODE)
+			(= CODE CHARACTER-CODE-ESCAPE-CODE))
+		    (SEND STREAM :TYO (PTTBL-SLASH *READTABLE*))
+		    (SEND STREAM :TYO TEM))
+		   ((OR (EQ *PRINT-CASE* ':DOWNCASE)
+			(AND (EQ *PRINT-CASE* ':CAPITALIZE)
+			     (ALPHANUMERICP PREV-CHAR)))
+		    (SEND STREAM :TYO (CHAR-DOWNCASE TEM)))
+		   (T
+		    (SEND STREAM :TYO TEM)))
+	     (SETQ PREV-CHAR TEM)))
+	  (T (PRINT-RAW-STRING STRING STREAM FASTP)))
+    (UNLESS FSMWINS (SEND STREAM :TYO (PTTBL-CLOSE-QUOTE-SYMBOL *READTABLE*)))
+    ))
 
 ;;; Print a string, and if slashification is on, slashify it appropriately.
 (DEFUN PRINT-QUOTED-STRING (STRING STREAM FASTP &AUX LENGTH CHAR)
   (COND ((NOT *PRINT-ESCAPE*)
 	 (PRINT-RAW-STRING STRING STREAM FASTP))
 	(T
-	 (SEND STREAM ':TYO (PTTBL-OPEN-QUOTE-STRING *READTABLE*))
+	 (SEND STREAM :TYO (PTTBL-OPEN-QUOTE-STRING *READTABLE*))
 	 (SETQ LENGTH (ARRAY-ACTIVE-LENGTH STRING))
 	 (COND ((AND (EQ (ARRAY-TYPE STRING) 'ART-STRING)
 		     (DOTIMES (I LENGTH T)
-		       (AND (< (SETQ CHAR (AREF STRING I)) 220)
-			    (NOT (ZEROP (LOGAND 16 (RDTBL-BITS *READTABLE* CHAR))))
+		       (AND (< (SETQ CHAR (AREF STRING I)) #o220)
+			    (NOT (ZEROP (LOGAND #o16 (RDTBL-BITS *READTABLE* CHAR))))
 			    (RETURN NIL))))
 		;; There are no double quotes, and so no slashifying.
-		(SEND STREAM ':STRING-OUT STRING))
+		(SEND STREAM :STRING-OUT STRING))
 	       (T
 		(DOTIMES (I LENGTH)
-		  (SETQ CHAR (LDB %%CH-CHAR (AREF STRING I)))
-		  (COND ((AND (< CHAR 220)
-			      (NOT (ZEROP (LOGAND 16 (RDTBL-BITS *READTABLE* CHAR)))))
-			 (SEND STREAM ':TYO (PTTBL-SLASH *READTABLE*))))
-		    (SEND STREAM ':TYO CHAR))))
-	 (SEND STREAM ':TYO (PTTBL-CLOSE-QUOTE-STRING *READTABLE*))
+		  (SETQ CHAR (CHAR-CODE (CHAR STRING I)))
+		  (COND ((AND (< CHAR #o220)
+			      (NOT (ZEROP (LOGAND #o16 (RDTBL-BITS *READTABLE* CHAR)))))
+			 (SEND STREAM :TYO (PTTBL-SLASH *READTABLE*))))
+		    (SEND STREAM :TYO CHAR))))
+	 (SEND STREAM :TYO (PTTBL-CLOSE-QUOTE-STRING *READTABLE*))
 	 )))
 
 ;;; Print the string, with no slashification at all.
 (DEFUN PRINT-RAW-STRING (STRING STREAM FASTP)
   (COND ((AND FASTP (EQ (ARRAY-TYPE STRING) 'ART-STRING))
-	 (SEND STREAM ':STRING-OUT STRING))
+	 (SEND STREAM :STRING-OUT STRING))
 	(T
 	 (DOTIMES (I (LENGTH STRING))
-	   (SEND STREAM ':TYO (CHAR-CODE (AREF STRING I)))))))
+	   (SEND STREAM :TYO (CHAR-CODE (AREF STRING I)))))))
 
 (DEFPROP PRINT-NOT-READABLE T :ERROR-REPORTER)
 
