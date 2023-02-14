@@ -87,7 +87,7 @@
 (defmethod (ed-buffer-pathname :OPEN)  ed-pathname-open)
 
 (defmacro open-error (message &rest rest)	; expects value of :ERROR keyword in ERROR
-  (check-arg-type message :STRING)
+  (check-arg-type message STRING)
   `(if error
        (ferror nil ,message ,@rest)
      ,(if rest
