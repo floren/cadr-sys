@@ -1118,7 +1118,7 @@ This conses, alas."
 	   (if (eq thisvarloc (locf (symbol-value 'nil)))
 	       ;; allow (multiple-value-bind (foo nil bar) ...)
 	       nil
-	     (when (interpreter-varibale-special-in-frame-p thisvarloc ,vars-env)
+	     (when (interpreter-variable-special-in-frame-p thisvarloc ,vars-env)
 	       (%bind thisvarloc
 		      (cadr vals-left))
 	       (%p-store-data-type (locf (cadr vals-left))
@@ -1963,7 +1963,7 @@ as in LET*, whereas PROG binds them in parallel, like LET."
     (check-type progname symbol)
     (prog ()
 	  (return
-	    (i'f (eq *interpreter-function-environment* t)
+	    (if (eq *interpreter-function-environment* t)
 		(enter-block (if (eq progname t) t nil)
 		  (enter-block progname
 		    (zl-serial-binding-list (varlist)
