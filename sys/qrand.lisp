@@ -175,46 +175,51 @@ object's address to compute a hash code.  This only happens for
 objects which cannot be EQUAL unless they are EQ.
 If RANDOM-OBJECT-ACTION is NIL, the hash code of an object does not
 change even if it is printed out and read into a different system version."
-  (COND ((SYMBOLP X) (%SXHASH-STRING (SYMBOL-NAME X) #o337))
-	((STRINGP X) (%SXHASH-STRING X #o337))	;Ignores case!
-	((OR (INTEGERP X) (CHARACTERP X))
-	 (IF (MINUSP X) (LOGXOR (LDB 23. X) 1) (LDB 23. X)))
-	((CONSP X)		;Rotate car by 11. and cdr by 7, but do it efficiently
-	 (DO ((ROT 4) (HASH 0) Y (X X))
-	     ((ATOM X)
-	      (OR (NULL X)
-		  (SETQ HASH (LOGXOR (ROT-24-BIT (SXHASH X RANDOM-OBJECT-ACTION)
-						 (- ROT 4))
-				     HASH)))
-	      (LOGAND #o37777777 (IF (LDB-TEST (BYTE 1 23.) HASH) (LOGXOR HASH 1) HASH)))
-	   (SETQ Y (CAR X) X (CDR X))
-	   (OR (< (SETQ ROT (+ ROT 7)) 24.) (SETQ ROT (- ROT 24.)))
-	   (SETQ HASH (LOGXOR (ROT-24-BIT
-				(COND ((SYMBOLP Y) (%SXHASH-STRING (SYMBOL-NAME Y) #o337))
-				      ((STRINGP Y) (%SXHASH-STRING Y #o337))
-				      ((OR (INTEGERP X) (CHARACTERP X))
-				       (LDB 24. Y))
-				      (T (SXHASH Y RANDOM-OBJECT-ACTION)))
-				ROT)
-			      HASH))))
-	((FLONUMP X) (LOGXOR (%P-LDB-OFFSET #o0027 X 1)
-			     (%P-LDB-OFFSET #o2701 X 1)
-			     (%P-LDB #o0022 X)))
-	((AND (TYPEP X 'INSTANCE)
-	      (SEND X :SEND-IF-HANDLES :SXHASH RANDOM-OBJECT-ACTION)))
-	((AND (TYPEP X 'NAMED-STRUCTURE)
-	      (MEMQ :SXHASH (NAMED-STRUCTURE-INVOKE :WHICH-OPERATIONS X)))
-	      (NAMED-STRUCTURE-INVOKE :SXHASH X RANDOM-OBJECT-ACTION))
-	((OR RANDOM-OBJECT-ACTION
-	     (SMALL-FLOATP X))
-	 (SETQ X (%POINTER X))
-	 (LET ((Y (LOGXOR (LDB (- %%Q-POINTER 24.) X)
-			  (LSH X (- 24. %%Q-POINTER)))))
-	 (LOGAND #o37777777
-		 (IF (MINUSP X) (LOGXOR Y 1) Y))))
-	((ARRAYP X)
-	 (ARRAY-ACTIVE-LENGTH X))
-	(T 0)))					;0 for things that can't be read
+  (MACROLET ((ROT-24-BIT (VALUE BITS)
+	       (ONCE-ONLY (VALUE BITS)
+		 `(DPB ,VALUE (BYTE (- 24. ,BITS) ,BITS)
+		       (LSH ,VALUE (- ,BITS 24.))))))
+    (COND ((SYMBOLP X) (%SXHASH-STRING (SYMBOL-NAME X) #o337))
+	  ((STRINGP X) (%SXHASH-STRING X #o337))	;Ignores case!
+	  ((OR (INTEGERP X) (CHARACTERP X))
+	   (IF (MINUSP X) (LOGXOR (LDB 23. X) 1) (LDB 23. X)))
+	  ((CONSP X)		;Rotate car by 11. and cdr by 7, but do it efficiently
+	   (DO ((ROT 4) (HASH 0) Y (X X))
+	       ((ATOM X)
+		(OR (NULL X)
+		    (SETQ HASH (LOGXOR (ROT-24-BIT (SXHASH X RANDOM-OBJECT-ACTION)
+						   (IF (< ROT 4) (+ ROT #o20) (- ROT 4)))
+				       HASH)))
+		(LOGAND #o37777777 (IF (LDB-TEST (BYTE 1 23.) HASH) (LOGXOR HASH 1) HASH)))
+	     (SETQ Y (CAR X) X (CDR X))
+	     (UNLESS (< (SETQ ROT (+ ROT 7)) 24.)
+	       (SETQ ROT (- ROT 24.)))
+	     (SETQ HASH (LOGXOR (ROT-24-BIT
+				  (COND ((SYMBOLP Y) (%SXHASH-STRING (SYMBOL-NAME Y) #o337))
+					((STRINGP Y) (%SXHASH-STRING Y #o337))
+					((OR (INTEGERP X) (CHARACTERP X))
+					 (LDB 24. Y))
+					(T (SXHASH Y RANDOM-OBJECT-ACTION)))
+				  ROT)
+				HASH))))
+	  ((FLONUMP X) (LOGXOR (%P-LDB-OFFSET #o0027 X 1)
+			       (%P-LDB-OFFSET #o2701 X 1)
+			       (%P-LDB #o0022 X)))
+	  ((AND (TYPEP X 'INSTANCE)
+		(SEND X :SEND-IF-HANDLES :SXHASH RANDOM-OBJECT-ACTION)))
+	  ((AND (TYPEP X 'NAMED-STRUCTURE)
+		(MEMQ :SXHASH (NAMED-STRUCTURE-INVOKE :WHICH-OPERATIONS X)))
+	   (NAMED-STRUCTURE-INVOKE :SXHASH X RANDOM-OBJECT-ACTION))
+	  ((OR RANDOM-OBJECT-ACTION
+	       (SMALL-FLOATP X))
+	   (SETQ X (%POINTER X))
+	   (LET ((Y (LOGXOR (LDB (- %%Q-POINTER 24.) X)
+			    (LSH X (- 24. %%Q-POINTER)))))
+	     (LOGAND #o37777777
+		     (IF (MINUSP X) (LOGXOR Y 1) Y))))
+	  ((ARRAYP X)
+	   (ARRAY-ACTIVE-LENGTH X))
+	  (T 0))))					;0 for things that can't be read
 
 (DEFUN GET-MACRO-ARG-DESC-POINTER (FEF-POINTER &AUX ORIGIN)
   "Return a pointer to the argument descriptor list of a compiled function.
