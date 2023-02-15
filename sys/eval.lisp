@@ -320,6 +320,10 @@ This includes keyword symbols, and lists starting with QUOTE."
     (DECLARATION define-declaration)
     (DOCUMENTATION ignore)
 
+    (arglist ignore)
+    (values ignore)
+    (zwei:indentation ignore)
+
 ;   ;; mucklisp turds
 ;   (*EXPR ignore)
 ;   (*FEXPR ignore)
