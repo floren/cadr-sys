@@ -52,7 +52,7 @@ These names (moved into the keyword package) become messages
 that can be sent to the condition object to get the corresponding values.
 In addition, the values of the ARGS may be used in the INIT-OPTIONS,
 which are additional arguments to pass to MAKE-INSTANCE."
-  (declare arglist signal-name flavor args &optional documentation &body init-options)
+  (declare (arglist signal-name flavor args &optional documentation &body init-options))
   (let ((flavor (if (consp flavor) (car flavor) flavor))
 	(documentation (if (stringp (car init-options)) (pop init-options)))
 	(condition-names
