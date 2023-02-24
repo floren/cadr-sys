@@ -2641,7 +2641,8 @@ If the expander calls MACROEXPAND itself, it can pass this as a rest arg.")
 (DEFUN MACROEXPAND-1 (MACRO-CALL &OPTIONAL ENVIRONMENT
 		      &AUX (LOCAL-MACROS (CAR ENVIRONMENT)))
   "Expand MACRO-CALL once and return the result.
-Macro calls, uses of SUBSTs and uses of CURRY-BEFORE and CURRY-AFTER are all expanded.
+Macro calls, uses of SUBSTs, uses of CURRY-BEFORE and CURRY-AFTER,
+and uses of functions for which OPEN-CODE-P is true, are all expanded.
 The second value is T if there was something to expand.
 If SYS:RECORD-MACROS-EXPANDED is non-NIL,
 all macro names are pushed on SYS:MACROS-EXPANDED.
@@ -2658,7 +2659,7 @@ is used to invoke the expander function."
 		  (VALUES `(,(CADAR MACRO-CALL) ,@(CDDAR MACRO-CALL) . ,(CDR MACRO-CALL))
 			  T))
 		 ((MEMQ (CAAR MACRO-CALL) '(SUBST CLI:SUBST NAMED-SUBST))
-		  (VALUES (FUNCALL *MACROEXPAND-HOOK* 'SUBST-EXPAND-1 MACRO-CALL)
+		  (VALUES (FUNCALL *MACROEXPAND-HOOK* 'SUBST-EXPAND-1 MACRO-CALL ENVIRONMENT)
 			  T))
 		 (T MACRO-CALL)))
 	  ((NOT (SYMBOLP (CAR MACRO-CALL)))
@@ -2688,8 +2689,7 @@ is used to invoke the expander function."
 			(AND RECORD-MACROS-EXPANDED
 			     (NOT (MEMQ (CAR MACRO-CALL) MACROS-EXPANDED))
 			     (PUSH (CAR MACRO-CALL) MACROS-EXPANDED))
-			(VALUES (FUNCALL *MACROEXPAND-HOOK*
-					 'SUBST-EXPAND-1 MACRO-CALL)
+			(VALUES (FUNCALL *MACROEXPAND-HOOK* 'SUBST-EXPAND-1 MACRO-CALL ENVIRONMENT)
 				T))
 		    MACRO-CALL))
 		 ((ATOM TM) MACRO-CALL)
@@ -2707,7 +2707,7 @@ is used to invoke the expander function."
 		  (AND RECORD-MACROS-EXPANDED
 		       (NOT (MEMQ (CAR MACRO-CALL) MACROS-EXPANDED))
 		       (PUSH (CAR MACRO-CALL) MACROS-EXPANDED))
-		  (VALUES (FUNCALL *MACROEXPAND-HOOK* 'SUBST-EXPAND-1 MACRO-CALL)
+		  (VALUES (FUNCALL *MACROEXPAND-HOOK* 'SUBST-EXPAND-1 MACRO-CALL ENVIRONMENT)
 			  T))
 		 (T MACRO-CALL)))
 	  (T MACRO-CALL))))
@@ -2758,7 +2758,7 @@ a local declaration.  If it is encapsulated, unencapsulate it."
   (COND ((AND DEF (SYMBOLP DEF)) (DECLARED-DEFINITION DEF))
 	(T DEF)))
 
-(DEFUN SUBST-EXPAND-1 (FORM)
+(DEFUN SUBST-EXPAND-1 (FORM ENVIRONMENT)
   (LET ((SUBST (CAR FORM))
 	SIMPLE-SUBSTITUTION-OK)
     (DO-FOREVER
@@ -2770,14 +2770,14 @@ a local declaration.  If it is encapsulated, unencapsulate it."
 		     (NOT (ASSQ ':NO-SIMPLE-SUBSTITUTION DI)))
 	       (SETQ SUBST (CADR (ASSQ 'INTERPRETED-DEFINITION DI)))))
 	    (T (RETURN))))
-    (SUBST-EXPAND SUBST FORM SIMPLE-SUBSTITUTION-OK)))
+    (SUBST-EXPAND SUBST FORM ENVIRONMENT SIMPLE-SUBSTITUTION-OK)))
     
 ;;; Expand a call to a SUBST function.  SUBST is the function definition to use.
 ;;; FORM is the whole form.
 ;;; Match the SUBST args with the expressions in the form
 ;;; and then substitute the expressions for the args in the body of the function with SUBLIS.
 
-(DEFUN SUBST-EXPAND (SUBST FORM &OPTIONAL SIMPLE-SUBSTITUTION-OK)
+(DEFUN SUBST-EXPAND (SUBST FORM ENVIRONMENT SIMPLE-SUBSTITUTION-OK)
   (LET (ALIST OPTIONAL-FLAG REST-ALREADY-FLAG LAMBDA-LIST BODY FN-NAME)
     ;; Extract the lambda-list, body, and function name from the definition.
     (COND ((EQ (CAR SUBST) 'NAMED-SUBST)
@@ -2787,7 +2787,7 @@ a local declaration.  If it is encapsulated, unencapsulate it."
 	  (T (SETQ LAMBDA-LIST (CADR SUBST) BODY (CDDR SUBST)
 		   FN-NAME (CAR FORM))))
     ;; Discard documentation string or declarations from front of body.
-    (SETQ BODY (EXTRACT-DECLARATIONS BODY NIL T))
+    (SETQ BODY (EXTRACT-DECLARATIONS BODY NIL T ENVIRONMENT))
     ;; Provide an implicit PROGN for the body.
     (IF (CDR BODY)
 	(SETQ BODY `(PROGN . ,BODY))
@@ -2820,7 +2820,7 @@ a local declaration.  If it is encapsulated, unencapsulate it."
 	     (COND ((NULL LAMBDA-LIST)
 		    (RETURN (IF SIMPLE-SUBSTITUTION-OK
 				(SUBLIS ALIST BODY)
-			      (SUBLIS-EVAL-ONCE (NREVERSE ALIST) BODY))))
+			      (SUBLIS-EVAL-ONCE (NREVERSE ALIST) BODY nil nil ENVIRONMENT))))
 		   ((NOT OPTIONAL-FLAG)
 		    (RETURN (CERROR T NIL 'INVALID-FORM
 				    "Too few arguments for ~S."
