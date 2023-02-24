@@ -1,4 +1,4 @@
-; -*- Mode:LISP; Package:COLD; Base:8; Lowercase:T; Readtable:T -*-
+; -*- Mode:LISP; Package:(COLD size 1000 use global); Base:8; Lowercase:T; Readtable:T -*-
 ;	** (c) Copyright 1980 Massachusetts Institute of Technology **
 
 ;Loader of QFASL files into cold-loads
@@ -47,7 +47,7 @@
   (cond ((atom (setq x (aref fasl-table x)))
 	 (ferror nil "not a q - q-arft"))
 	((cadr x))
-	(t (rplaca (cdr x) (make-q-list 'sym:init-list-area (car x)))
+	(t (rplaca (cdr x) (make-q-list 'sym::init-list-area (car x)))
 	   (cadr x))))
 
 ;Get an M object
@@ -71,7 +71,7 @@
   (with-open-file (qfasl-binary-file filespec
 				     :direction :input :characters nil :byte-size 16.)
     (initialize-file-plist filespec)
-    (setq fdefine-file-pathname (store-string 'sym:p-n-string
+    (setq fdefine-file-pathname (store-string 'sym::p-n-string
 					      (send (send filespec ':generic-pathname)
 						    ':string-for-printing)))
     (or (and (= (qfasl-nibble) #o143150)
@@ -86,13 +86,13 @@
 ;to that file's property list.  The argument is a list in this world.
 (defun record-definitions (definitions)
   (vstore-contents (1+ file-property-list)
-		   (vlist* 'sym:property-list-area
-			   (qintern 'sym:definitions)
+		   (vlist* 'sym::property-list-area
+			   (qintern 'sym::definitions)
 			   ;;(list (cons package definitions))
-			   (vlist 'sym:property-list-area
-				  (vlist* 'sym:property-list-area
+			   (vlist 'sym::property-list-area
+				  (vlist* 'sym::property-list-area
 					  qnil
-					  (make-q-list 'sym:property-list-area definitions)))
+					  (make-q-list 'sym::property-list-area definitions)))
 			   (vread (1+ file-property-list)))))
 
 ;Initialize an element of *cold-loaded-file-property-lists* for this file.
@@ -101,30 +101,30 @@
 (defun initialize-file-plist (pathname)
   (cond ((not (boundp 'cold-loaded-file-property-lists))
 	 (setq cold-loaded-file-property-lists
-	       (qintern 'sym:*cold-loaded-file-property-lists*))
+	       (qintern 'sym::*cold-loaded-file-property-lists*))
 	 (vwrite (+ cold-loaded-file-property-lists 1) qnil)))
-  (setq file-property-list (vlist* 'sym:property-list-area
-				   (store-string 'sym:p-n-string (string pathname))
+  (setq file-property-list (vlist* 'sym::property-list-area
+				   (store-string 'sym::p-n-string (string pathname))
 				   qnil))
   (vstore-contents (+ cold-loaded-file-property-lists 1)
-		   (vlist* 'sym:property-list-area
+		   (vlist* 'sym::property-list-area
 			   file-property-list
 			   (vread (+ cold-loaded-file-property-lists 1)))))
 
 ;This remembers where the file that we are building comes from
 (defun set-file-loaded-id (stream &aux qid)
-  (setq qid  (vlist* 'sym:property-list-area
-		     (store-string 'sym:p-n-string
+  (setq qid  (vlist* 'sym::property-list-area
+		     (store-string 'sym::p-n-string
 				   (string (send stream ':truename)))
-		     (store-string 'sym:p-n-string
+		     (store-string 'sym::p-n-string
 				   (time:print-universal-time (send stream ':creation-date)
 							      nil))))
   ;; ((nil fileversionid "coldloaded"))
-  (let ((id-prop (vlist 'sym:property-list-area
-			(vlist 'sym:property-list-area
-			       qnil qid (store-string 'sym:p-n-string "COLDLOADED")))))
-    (let ((plist (vlist* 'sym:property-list-area
-			 (qintern 'sym:file-id-package-alist)
+  (let ((id-prop (vlist 'sym::property-list-area
+			(vlist 'sym::property-list-area
+			       qnil qid (store-string 'sym::p-n-string "COLDLOADED")))))
+    (let ((plist (vlist* 'sym::property-list-area
+			 (qintern 'sym::file-id-package-alist)
 			 id-prop
 			 (vread (1+ file-property-list)))))
       ;; plist = (file-id-package-alist ((nil fileversionid)))
@@ -137,10 +137,10 @@
 
 ;This function processes one "whack" (independent section) of a fasl file.
 (defun qfasl-whack ()
-  (let ((fasl-table-fill-pointer sym:fasl-table-working-offset)
+  (let ((fasl-table-fill-pointer sym::fasl-table-working-offset)
 	(fasl-return-flag nil))
     (or (boundp 'fasl-table)
-	(setq fasl-table (make-array sym:length-of-fasl-table)))
+	(setq fasl-table (make-array sym::length-of-fasl-table)))
     (fillarray fasl-table '(nil))
     (initialize-qfasl-table)
     (do () (fasl-return-flag)
@@ -149,20 +149,20 @@
 
 ;Initialize FASL-TABLE prefix
 (defun initialize-qfasl-table ()
-  (aset '(sym:nr-sym nil) fasl-table sym:fasl-symbol-head-area)
-  (aset '(sym:p-n-string nil) fasl-table sym:fasl-symbol-string-area)
-  (aset '(sym:control-tables nil) fasl-table sym:fasl-array-area) ;I GUESS
-  (aset '(sym:macro-compiled-program nil) fasl-table sym:fasl-frame-area)
-  (aset '(sym:init-list-area nil) fasl-table sym:fasl-list-area) ;Not FASL-CONSTANTS-AREA!!
-  (aset '(sym:fasl-temp-area nil) fasl-table sym:fasl-temp-list-area))
+  (aset '(sym::nr-sym nil) fasl-table sym::fasl-symbol-head-area)
+  (aset '(sym::p-n-string nil) fasl-table sym::fasl-symbol-string-area)
+  (aset '(sym::control-tables nil) fasl-table sym::fasl-array-area) ;I GUESS
+  (aset '(sym::macro-compiled-program nil) fasl-table sym::fasl-frame-area)
+  (aset '(sym::init-list-area nil) fasl-table sym::fasl-list-area) ;Not FASL-CONSTANTS-AREA!!
+  (aset '(sym::fasl-temp-area nil) fasl-table sym::fasl-temp-list-area))
 
 (defun initialize-fasl-environment ()
   (setq fef-debugging-info-alist nil)
-  (setq fasl-group-dispatch-size (length sym:fasl-ops))
+  (setq fasl-group-dispatch-size (length sym::fasl-ops))
   (setq q-fasl-group-dispatch (make-array fasl-group-dispatch-size))
   (setq m-fasl-group-dispatch (make-array fasl-group-dispatch-size))
   (do ((i 0 (1+ i))
-       (l sym:fasl-ops (cdr l))
+       (l sym::fasl-ops (cdr l))
        (package (pkg-find-package "COLD"))
        (m-op) (q-op))
       ((= i fasl-group-dispatch-size))
@@ -176,13 +176,13 @@
 (defun qfasl-group (m-p &aux fasl-group-flag fasl-group-bits
 			     fasl-group-type fasl-group-length)
   (setq fasl-group-bits (qfasl-nibble))
-  (or (bit-test sym:%fasl-group-check fasl-group-bits)
+  (or (bit-test sym::%fasl-group-check fasl-group-bits)
       (ferror nil "fasl-group-nibble-without-check-bit"))
-  (setq fasl-group-flag (bit-test sym:%fasl-group-flag fasl-group-bits)
-	fasl-group-length (ldb sym:%%fasl-group-length fasl-group-bits))
+  (setq fasl-group-flag (bit-test sym::%fasl-group-flag fasl-group-bits)
+	fasl-group-length (ldb sym::%%fasl-group-length fasl-group-bits))
   (and (= fasl-group-length #o377)
        (setq fasl-group-length (qfasl-nibble)))
-  (setq fasl-group-type (logand sym:%fasl-group-type fasl-group-bits))
+  (setq fasl-group-type (logand sym::%fasl-group-type fasl-group-bits))
   (or (< fasl-group-type fasl-group-dispatch-size)
       (ferror nil "~O erroneous fasl group type" fasl-group-type))
   (funcall (aref (if m-p m-fasl-group-dispatch q-fasl-group-dispatch) fasl-group-type)))
@@ -212,7 +212,7 @@
 ;result of QFASL-GROUP).
 ;This one enters an M object and a Q
 (defun m-q-enter-fasl-table (m q)
-  (cond ((not (< fasl-table-fill-pointer sym:length-of-fasl-table))
+  (cond ((not (< fasl-table-fill-pointer sym::length-of-fasl-table))
 	 (ferror nil "fasl table overflow"))
 	(t
 	 (m-q-asft m q fasl-table-fill-pointer)
@@ -221,7 +221,7 @@
 
 ;This one enters an M value
 (defun m-enter-fasl-table (v)
-  (cond ((not (< fasl-table-fill-pointer sym:length-of-fasl-table))
+  (cond ((not (< fasl-table-fill-pointer sym::length-of-fasl-table))
 	 (ferror nil "fasl table overflow"))
 	(t
 	 (m-asft v fasl-table-fill-pointer)
@@ -229,8 +229,8 @@
 		(setq fasl-table-fill-pointer (1+ fasl-table-fill-pointer))))))
 
 (defun m-q-store-evaled-value (m q)
-  (m-q-asft m q sym:fasl-evaled-value)
-  sym:fasl-evaled-value)
+  (m-q-asft m q sym::fasl-evaled-value)
+  sym::fasl-evaled-value)
 
 
 ;;;; --M-FASL ops
@@ -257,7 +257,7 @@
 	      (ferror nil "Package path ~S has more than one prefix, I can't handle this"
 			  path))
 	     ((memq (car path)	;don't get faked out into splitting one symbol into two.
-		    '(sym:si sym:system-internals sym:system sym:sys sym:global))
+		    '(sym::si sym::system-internals sym::system sym::sys sym::global))
 	      (m-enter-fasl-table (cadr path)))
 	     (t
 	      (setq sym (intern (format nil "~{~A~^:~}" path) sym-package))
@@ -295,6 +295,8 @@
        (m-enter-fasl-table ans))
     (setq ans (dpb (qfasl-next-nibble) (+ (lsh pos 6) 20) ans))))
 
+;;; NEW FLOAT OP!! not yet written. See sys; qfasl
+
 (defun m-fasl-op-float ()
   (q-fasl-op-float))
 
@@ -303,8 +305,8 @@
     (SETQ ANS (FLOAT 0))
     (%P-DPB-OFFSET (QFASL-NEXT-NIBBLE) #o1013 ANS 0)
     (SETQ TMP (QFASL-NEXT-NIBBLE))
-    (%P-DPB-OFFSET (LDB 1010 TMP) #o0010 ANS 0)
-    (%P-DPB-OFFSET (%LOGDPB TMP #o2010 (QFASL-NEXT-NIBBLE)) 0030 ANS 1)
+    (%P-DPB-OFFSET (LDB #o1010 TMP) #o0010 ANS 0)
+    (%P-DPB-OFFSET (%LOGDPB TMP #o2010 (QFASL-NEXT-NIBBLE)) #o0030 ANS 1)
     (RETURN (M-ENTER-FASL-TABLE ANS))))
 
 
@@ -334,7 +336,7 @@
 
 (defun q-fasl-op-string ()
   (let ((str (m-fasl-pname)))
-    (m-q-enter-fasl-table str (store-string 'sym:p-n-string str))))
+    (m-q-enter-fasl-table str (store-string 'sym::p-n-string str))))
 
 (defun q-fasl-op-package-symbol ()
   (let ((x (m-fasl-op-package-symbol)))
@@ -346,7 +348,7 @@
     (m-q-enter-fasl-table (if fasl-group-flag (make-symbol sym)
 			      (setq sym (intern sym sym-package)))
 			  (if fasl-group-flag ;uninterned
-			      (store-symbol-vector sym 'sym:nr-sym)
+			      (store-symbol-vector sym 'sym::nr-sym)
 			      (qintern sym)))))
 
 (defun q-fasl-op-fixed ()
@@ -371,7 +373,7 @@
     (let ((num (%make-pointer dtp-small-flonum as-fixnum)))
       (m-q-enter-fasl-table num (make-small-flonum num)))))
 
-(defun q-fasl-op-float-float nil
+(defun q-fasl-op-float-float ()
   (let ((x (m-fasl-op-float-float)))
     (q-arft x)
     x))
@@ -394,24 +396,24 @@
   (let ((area cold-list-area)
 	(list-length (qfasl-next-nibble))
 	lst c-code maclisp-list fasl-idx)
-    (or (memq area sym:list-structured-areas)
+    (or (memq area sym::list-structured-areas)
 	(ferror nil "q-fasl-op-list in non-list-structured area"))
     (setq lst (allocate-block area list-length))
     (do ((adr lst (1+ adr))
 	 (len list-length (1- len)))
 	((zerop len))
-      (setq c-code (cond ((and fasl-group-flag (= len 2)) sym:cdr-normal)
-			 ((and fasl-group-flag (= len 1)) sym:cdr-error)
-			 ((= len 1) sym:cdr-nil)
-			 (t sym:cdr-next)))
+      (setq c-code (cond ((and fasl-group-flag (= len 2)) sym::cdr-normal)
+			 ((and fasl-group-flag (= len 1)) sym::cdr-error)
+			 ((= len 1) sym::cdr-nil)
+			 (t sym::cdr-next)))
       (setq fasl-idx (qfasl-group nil))
       (vwrite-cdr adr c-code (q-arft fasl-idx))
       (setq maclisp-list (nconc maclisp-list
 				(if (and fasl-group-flag (= len 1)) (m-arft fasl-idx)
 				    (ncons (m-arft fasl-idx))))))
     (if (null component-flag)
-	(m-q-enter-fasl-table maclisp-list (vmake-pointer sym:dtp-list lst))
-	(m-q-store-evaled-value maclisp-list (vmake-pointer sym:dtp-list lst)))))
+	(m-q-enter-fasl-table maclisp-list (vmake-pointer sym::dtp-list lst))
+	(m-q-store-evaled-value maclisp-list (vmake-pointer sym::dtp-list lst)))))
 
 ;;;; Array stuff
 
@@ -436,11 +438,11 @@
 	(index-offset (m-fasl-next-value)) ;if non-nil, will it work?
 	(named-structure nil)
 	(array nil) (data-length nil) (adr nil))
-     (setq area 'sym:control-tables) ;kludge, may not be needed any more
+     (setq area 'sym::control-tables) ;kludge, may not be needed any more
      (cond (flag
 	    (setq named-structure (m-fasl-next-value))))
      (and (not (atom leader))
-	  (setq leader (mapcar (function (lambda (x) (make-q-list 'sym:init-list-area x)))
+	  (setq leader (mapcar (function (lambda (x) (make-q-list 'sym::init-list-area x)))
 			       leader)))
      (setq last-array-dims (if (numberp dims) (list dims) dims))
      (setq last-array-type type-sym)
@@ -453,11 +455,11 @@
 					 leader
 					 named-structure))
      (setq data-length (cadr array)
-	   array (vmake-pointer sym:dtp-array-pointer (car array)))
+	   array (vmake-pointer sym::dtp-array-pointer (car array)))
      ;now store the data area
      (and displaced-p (ferror nil "displaced array not handled"))
      (setq adr (allocate-block area data-length))
-     (cond ((cdr (assq type-sym sym:array-bits-per-element)) ;numeric
+     (cond ((cdr (assq type-sym sym::array-bits-per-element)) ;numeric
 	    (dotimes (i data-length)
 	      (vwrite (+ adr i) 0)))
 	   (t
@@ -476,20 +478,20 @@
   (prog (array num hack ptr header long-flag ndims)
      (setq hack (qfasl-group nil))
      (setq array (q-arft hack))
-     (or (= (vdata-type array) sym:dtp-array-pointer)
+     (or (= (vdata-type array) sym::dtp-array-pointer)
 	 (ferror nil "fasl-op-initialize-array of non-array"))
      (setq num (m-fasl-next-value))	;number of values to initialize with
      ;; Take header apart to find address of data
      (setq ptr (logand q-pointer-mask array))
      (setq header (vread ptr))
-     (setq long-flag (bit-test sym:array-long-length-flag header)
-	   ndims (logand (truncate header sym:array-dim-mult) 7))
-     (and (bit-test sym:array-displaced-bit header)
+     (setq long-flag (bit-test sym::array-long-length-flag header)
+	   ndims (logand (truncate header sym::array-dim-mult) 7))
+     (and (bit-test sym::array-displaced-bit header)
 	  (ferror nil "attempt to initialize displaced array, give it up"))
      (unless ( 1 (length last-array-dims) 2)
        (ferror nil "Only 1 and 2-dimensional arrays can be loaded."))
      (setq ptr (+ ptr (if long-flag 1 0) ndims))	;To data
-     (if (eq array-index-order sym:new-array-index-order)
+     (if (eq array-index-order sym::new-array-index-order)
 	 ;; Order of data matches order in world being created, so it's easy.
 	 (dotimes (n num)				;Initialize specified num of vals
 	   (vwrite ptr (q-fasl-next-value))
@@ -510,24 +512,24 @@
   (prog (array num hack ptr header long-flag ndims)
      (setq hack (qfasl-group nil))
      (setq array (q-arft hack))
-     (or (= (vdata-type array) sym:dtp-array-pointer)
+     (or (= (vdata-type array) sym::dtp-array-pointer)
 	 (ferror nil "fasl-op-initialize-array of non-array"))
      (setq num (m-fasl-next-value))	;number of values to initialize with
      ;; Take header apart to find address of data
      (setq ptr (logand q-pointer-mask array))
      (setq header (vread ptr))
-     (setq long-flag (bit-test sym:array-long-length-flag header)
-	   ndims (logand (truncate header sym:array-dim-mult) 7))
-     (and (bit-test sym:array-displaced-bit header)
+     (setq long-flag (bit-test sym::array-long-length-flag header)
+	   ndims (logand (truncate header sym::array-dim-mult) 7))
+     (and (bit-test sym::array-displaced-bit header)
 	  (ferror nil "attempt to initialize displaced array, give it up"))
      (setq ptr (+ ptr (if long-flag 1 0) ndims))	;To data
      (unless (or (= (length last-array-dims) 1)
 		 (and (= (length last-array-dims) 2)
-		      (eq last-array-type 'sym:art-16b)))
+		      (eq last-array-type 'sym::art-16b)))
        (ferror nil "Only 1-dimensional, or 2-dimensional art-16b, numeric arrays can be loaded."))
 
      (if (or (= (length last-array-dims) 1)
-	     (eq array-index-order sym:new-array-index-order))
+	     (eq array-index-order sym::new-array-index-order))
 	 ;; Order of data matches order in world being created, so it's easy.
 	 (progn
 	   (dotimes (n (truncate num 2))	;Initialize specified num of vals
@@ -554,9 +556,9 @@
 ;(defun q-fasl-op-eval ()
 ;  (let ((exp (m-arft (qfasl-next-nibble))))
 ;    (cond ((and (not (atom exp))
-;		(eq (car exp) 'sym:record-source-file-name)
+;		(eq (car exp) 'sym::record-source-file-name)
 ;		(not (atom (cadr exp)))
-;		(eq (caadr exp) 'sym:quote)
+;		(eq (caadr exp) 'sym::quote)
 ;		(symbolp (cadadr exp)))
 ;	   (store-source-file-name-property (qintern (cadadr exp))))
 ;	  (t ;; If this is a defvar or defconst, store the value now
@@ -565,14 +567,14 @@
 ;	     ;; while storing the value now prevents lossage
 ;	     ;; if the value is used while performing the initialization.
 ;	     (and (not (atom exp))
-;		  (memq (car exp) '(sym:defvar-1 sym:defconst-1))
+;		  (memq (car exp) '(sym::defvar-1 sym::defconst-1))
 ;		  (cddr exp)   ;Only if a value is specified!
-;		  (or (memq (caddr exp) '(sym:t sym:nil))
+;		  (or (memq (caddr exp) '(sym::t sym::nil))
 ;		      (stringp (caddr exp)) (numberp (caddr exp))
 ;		      (quotep (caddr exp)))
 ;		  (progn 
 ;		    (vstore-contents (1+ (qintern (cadr exp)))
-;				     (make-q-list 'sym:init-list-area
+;				     (make-q-list 'sym::init-list-area
 ;						  (if (quotep (caddr exp))
 ;						      (cadr (caddr exp))
 ;						    (caddr exp))))))
@@ -582,7 +584,7 @@
 ;			  'value-only-available-in-the-future))
 
 (defun quotep (exp)
-  (and (eq (car-safe exp) 'sym:quote)))
+  (and (eq (car-safe exp) 'sym::quote)))
 
 (defun q-fasl-op-move ()
   (let ((from (qfasl-next-nibble))
@@ -603,10 +605,10 @@
 	(fname)
 	(tem)
 	(offset 0)
-	(area 'sym:macro-compiled-program))	;(m-arft sym:fasl-frame-area)
+	(area 'sym::macro-compiled-program))	;(m-arft sym::fasl-frame-area)
      (setq fasl-group-length (qfasl-next-nibble))	;amount of stuff that follows
-     (setq fef (vmake-pointer sym:dtp-fef-pointer	;Store header
-			      (storeq area (vmake-pointer sym:dtp-header
+     (setq fef (vmake-pointer sym::dtp-fef-pointer	;Store header
+			      (storeq area (vmake-pointer sym::dtp-header
 							  (m-fasl-next-value)))))
      (qfasl-next-nibble)			;skip modifier nibble for header q
      (do ((i 1 (1+ i))) (( i q-count))		;fill in boxed qs
@@ -615,15 +617,15 @@
        (or (zerop (setq offset (logand #o17 tem)))	;add offset if necessary
 	   (setq obj (+ obj offset)))
        (and (bit-test 420 tem)			;try not to get shafted totally
-	    (or (= (vdata-type obj) sym:dtp-symbol)
+	    (or (= (vdata-type obj) sym::dtp-symbol)
 		(ferror nil "about to get shafted totally - q-fasl-op-frame")))
        (and (bit-test 20 tem)			;make into external value cell pointer
-	    (setq obj (vmake-pointer sym:dtp-external-value-cell-pointer obj)))
+	    (setq obj (vmake-pointer sym::dtp-external-value-cell-pointer obj)))
        (and (bit-test 400 tem)			;make into locative
-	    (setq obj (vmake-pointer sym:dtp-locative obj)))
-       (setq obj (dpb (lsh tem -6) sym:%%q-cdr-code obj))
+	    (setq obj (vmake-pointer sym::dtp-locative obj)))
+       (setq obj (dpb (lsh tem -6) sym::%%q-cdr-code obj))
        (storeq area obj)
-       (if (= i sym:%fefhi-fctn-name) (setq fname m-obj)))
+       (if (= i sym::%fefhi-fctn-name) (setq fname m-obj)))
      (push (cons fname m-obj) fef-debugging-info-alist)
      (begin-store-halfwords area unboxed-count)	;now store the unboxed qs
      (do ((n 0 (1+ n))
@@ -643,19 +645,19 @@
 
 (defun q-fasl-op-function-end () 0)
 
-(defprop sym:/:internal (keyword internal) package-path)
-(defprop sym:/:property (keyword property) package-path)
-(defprop sym:/:internal-fef-offsets (keyword internal-fef-offsets) package-path)
-(defprop sym:/:source-file-name (keyword source-file-name) package-path)
+(defprop sym::/:internal (keyword internal) package-path)
+(defprop sym::/:property (keyword property) package-path)
+(defprop sym::/:internal-fef-offsets (keyword internal-fef-offsets) package-path)
+(defprop sym::/:source-file-name (keyword source-file-name) package-path)
 
 (defun q-fasl-storein-symbol-cell (n put-source-file-name-property)
   (prog (newp adr data sym nib)
      (setq nib (qfasl-next-nibble))
      (setq sym (m-fasl-next-value))
      (and put-source-file-name-property
-	  (or (atom sym) (neq (car sym) 'sym:/:internal))
+	  (or (atom sym) (neq (car sym) 'sym::/:internal))
 	  (store-source-file-name-property sym (if (= n 1) 'defvar 'defun)))
-     (and (cond ((= nib sym:fasl-evaled-value)
+     (and (cond ((= nib sym::fasl-evaled-value)
 		 ;; From fasl-op-eval
 		 (or (setq data last-fasl-eval)
 		     (ferror nil "~S invalid storein-symbol" sym))
@@ -672,42 +674,42 @@
 			       (ferror nil
 			       "Result of evaluation must be stored in value or function cell"
 				       )))
-			   (sym:quote ,sym) ,(car data)))
+			   (sym::quote ,sym) ,(car data)))
 		 (return 0))			;Skip the rest of this function
 		(t (ferror nil "Must be a sym evaled-value"))))
      (cond ((atom sym)
 	    (setq sym (qintern sym))
 	    (vstore-contents (+ sym n) data))
-	   ((eq (car sym) 'sym:/:internal)
+	   ((eq (car sym) 'sym::/:internal)
 	    (or (= n 2) (ferror nil "~S only allowed for function cell" sym))
 	    (let* ((parent (cadr sym))
 		   (index (caddr sym))
-		   (table (cdr (assq 'sym:/:internal-fef-offsets
+		   (table (cdr (assq 'sym::/:internal-fef-offsets
 				     (cdr (assoc parent fef-debugging-info-alist)))))
 		   (fef (qfdefinition parent)))
 	      (or table (ferror nil "Cannot locate internal-fef-offsets for ~S" sym))
-	      (or (= (ldb sym:%%q-data-type fef) sym:dtp-fef-pointer)
+	      (or (= (ldb sym::%%q-data-type fef) sym::dtp-fef-pointer)
 		  (ferror nil "~S not fef as function definition of ~S" fef parent))
 	      (vstore-contents (+ fef (nth index table)) data)))
 	   ;; E.g. (DEFUN (FOO PROP) (X Y) BODY)
 	   ;; - thinks it's storing function cell but really PUTPROP
-	   ((not (and (= n 2) (eq (car sym) 'sym:/:property)))
+	   ((not (and (= n 2) (eq (car sym) 'sym::/:property)))
 	    (ferror nil "~S not a symbol or property spec" sym))
 	   (t (setq adr (qintern (cadr sym)))
-	      (setq newp (vmake-pointer sym:dtp-list
-					(store-cdr-q 'sym:property-list-area sym:cdr-next
+	      (setq newp (vmake-pointer sym::dtp-list
+					(store-cdr-q 'sym::property-list-area sym::cdr-next
 						     (qintern (caddr sym)))))
-	      (store-cdr-q 'sym:property-list-area sym:cdr-normal data)
-	      (store-cdr-q 'sym:property-list-area sym:cdr-error (vread (+ adr 3)))
+	      (store-cdr-q 'sym::property-list-area sym::cdr-normal data)
+	      (store-cdr-q 'sym::property-list-area sym::cdr-error (vread (+ adr 3)))
 	      (vstore-contents (+ adr 3) newp)))
      (return 0)))
 
 (defun qfdefinition (sym)
   (cond ((symbolp sym) (vread (+ (qintern sym) 2)))
-	((eq (car sym) 'sym:/:internal)
+	((eq (car sym) 'sym::/:internal)
 	 (let* ((parent (cadr sym))
 		(index (caddr sym))
-		(table (cdr (assq 'sym:/:internal-fef-offsets
+		(table (cdr (assq 'sym::/:internal-fef-offsets
 				  (cdr (assoc parent fef-debugging-info-alist)))))
 		(fef (qfdefinition parent)))
 	   (or table (ferror nil "Cannot locate internal-fef-offsets for ~S" sym))
@@ -722,46 +724,46 @@
   (if (atom sym)
       (let* ((sym (qintern sym))
 	     (old-prop-location (vget-location-or-nil (+ sym 3)
-						      (qintern 'sym:/:source-file-name))))
+						      (qintern 'sym::/:source-file-name))))
 	(if (= old-prop-location qnil)
 	    ;; No existing :source-file-name property.  Create one.
 	    (let ((lst (if (eq type 'defun)
 			   fdefine-file-pathname
-			 (vlist 'sym:property-list-area
-				(vlist 'sym:property-list-area (qintern type)
+			 (vlist 'sym::property-list-area
+				(vlist 'sym::property-list-area (qintern type)
 				       fdefine-file-pathname)))))
 	      (vstore-contents (+ sym 3)
-			       (vlist* 'sym:property-list-area
-				       (qintern 'sym:/:source-file-name)
+			       (vlist* 'sym::property-list-area
+				       (qintern 'sym::/:source-file-name)
 				       lst
 				       (vcontents (+ sym 3)))))
 	  ;; Existing property.  If it is not a list, just a pathname,
 	  ;; convert it to a list.
-	  (unless (= (vdata-type (vcontents old-prop-location)) sym:dtp-list)
+	  (unless (= (vdata-type (vcontents old-prop-location)) sym::dtp-list)
 	    (vstore-contents old-prop-location
-			     (vlist 'sym:property-list-area
-				    (vlist 'sym:property-list-area
+			     (vlist 'sym::property-list-area
+				    (vlist 'sym::property-list-area
 					   (qintern 'defun)
 					   (vcontents old-prop-location)))))
 	  ;; Then add a new element to the property value.
 	  (vstore-contents old-prop-location
-			   (vlist* 'sym:property-list-area
-				   (vlist 'sym:property-list-area (qintern type)
+			   (vlist* 'sym::property-list-area
+				   (vlist 'sym::property-list-area (qintern type)
 					  fdefine-file-pathname)
 				   (vcontents old-prop-location)))))
     (cond ((not (boundp 'cold-loaded-function-property-lists))
 	   (setq cold-loaded-function-property-lists
-		 (qintern 'sym:cold-load-function-property-lists))
+		 (qintern 'sym::cold-load-function-property-lists))
 	   (vwrite (+ cold-loaded-function-property-lists 1) qnil)))
-    (let ((elem (vmake-pointer sym:dtp-list
-			       (store-cdr-q 'sym:property-list-area sym:cdr-next
-					    (make-q-list 'sym:property-list-area sym)))))
-      (store-cdr-q 'sym:property-list-area sym:cdr-next (qintern 'sym:/:source-file-name))
-      (store-cdr-q 'sym:property-list-area sym:cdr-nil fdefine-file-pathname)
-      (let ((newp (vmake-pointer sym:dtp-list
-				 (store-cdr-q 'sym:property-list-area sym:cdr-normal
+    (let ((elem (vmake-pointer sym::dtp-list
+			       (store-cdr-q 'sym::property-list-area sym::cdr-next
+					    (make-q-list 'sym::property-list-area sym)))))
+      (store-cdr-q 'sym::property-list-area sym::cdr-next (qintern 'sym::/:source-file-name))
+      (store-cdr-q 'sym::property-list-area sym::cdr-nil fdefine-file-pathname)
+      (let ((newp (vmake-pointer sym::dtp-list
+				 (store-cdr-q 'sym::property-list-area sym::cdr-normal
 					      elem))))
-	(store-cdr-q 'sym:property-list-area sym:cdr-error
+	(store-cdr-q 'sym::property-list-area sym::cdr-error
 		     (vread (+ cold-loaded-function-property-lists 1)))
 	(vstore-contents (+ cold-loaded-function-property-lists 1) newp)))))
 
@@ -785,7 +787,7 @@
 
 (defun q-fasl-fetch-symbol-cell (n)
   (let ((val (vcontents (+ (q-fasl-next-value) n))))
-    (if (= (vdata-type val) sym:dtp-null)
+    (if (= (vdata-type val) sym::dtp-null)
 	(ferror nil "fetch of unbound symbol cell"))
     (m-q-enter-fasl-table "symbol component" val)))
 
@@ -826,8 +828,8 @@
 (defun q-fasl-op-eval1 (&aux form pathname)
   (setq form (m-fasl-next-value))
   (select-match form
-    (`(,sym . ,ignore) (memq sym '(sym:fs/:make-pathname-internal
-				   sym:fs/:make-fasload-pathname))
+    (`(,sym . ,ignore) (memq sym '(sym::fs/:make-pathname-internal
+				   sym::fs/:make-fasload-pathname))
      (or (setq pathname (do ((flist (cdr form) (cdr flist))
 			     (plist nil)
 			     (elem))
@@ -836,13 +838,13 @@
 				    (setq plist (nreverse plist))))
 			  (setq elem (car flist))
 			  (or (and (consp elem)
-				   (eq (car elem) 'sym:quote))
+				   (eq (car elem) 'sym::quote))
 			      (return nil))
 			  (setq elem (cadr elem))
 			  ;; Fix up host
 			  (cond ((and (null plist) (stringp elem))
 				 (setq elem (fs:get-pathname-host elem)))
-				((memq elem '(sym:unspecific sym:/:unspecific))
+				((memq elem '(sym::unspecific sym::/:unspecific))
 				 (setq elem ':unspecific))
 				((or (null elem) (stringp elem) (numberp elem)))
 				((consp elem)
@@ -853,31 +855,31 @@
 			  (push elem plist)))
 	 (ferror nil "This pathname is too complicated for me ~S" form))
      (setq pathname (send pathname ':string-for-printing))
-     (m-q-enter-fasl-table pathname (store-string 'sym:p-n-string pathname)))
-    (`(sym:record-source-file-name
-	(sym:quote ,object) (sym:quote ,type)) t
+     (m-q-enter-fasl-table pathname (store-string 'sym::p-n-string pathname)))
+    (`(sym::record-source-file-name
+	(sym::quote ,object) (sym::quote ,type)) t
      (store-source-file-name-property object type)
      (m-q-enter-fasl-table nil qnil))
     ;; I have a suspicion the next two clauses do nothing
     ;; because the compiler does not express DEFF in this way.
-    (`(sym:deff ,function (sym:quote ,defsym)) (symbolp function)
+    (`(sym::deff ,function (sym::quote ,defsym)) (symbolp function)
      (store-source-file-name-property function 'defun)
      (push form evals-to-be-sent-over)
      (vstore-contents (+ (qintern function) 2)
-		      (make-q-list 'sym:init-list-area defsym)))
-    (`(sym:deff ,function (sym:function ,defsym))
+		      (make-q-list 'sym::init-list-area defsym)))
+    (`(sym::deff ,function (sym::function ,defsym))
        (and (symbolp function) (symbolp defsym))
      (store-source-file-name-property function 'defun)
      (push form evals-to-be-sent-over)
-     (unless (= (ldb sym:%%q-data-type (vcontents (+ (qintern defsym) 2)))
-		sym:dtp-null)
+     (unless (= (ldb sym::%%q-data-type (vcontents (+ (qintern defsym) 2)))
+		sym::dtp-null)
        (vstore-contents (+ (qintern function) 2) (vcontents (+ (qintern defsym) 2)))))
-    (`(sym:forward-value-cell (sym:quote ,alias-sym) (sym:quote ,defsym))
+    (`(sym::forward-value-cell (sym::quote ,alias-sym) (sym::quote ,defsym))
        (and (symbolp alias-sym) (symbolp defsym))
      (push form evals-to-be-sent-over)
      (vstore-contents (+ (qintern alias-sym) 1)
-		      (dpb sym:dtp-one-q-forward
-			   sym:%%q-data-type
+		      (dpb sym::dtp-one-q-forward
+			   sym::%%q-data-type
 			   (+ (qintern defsym) 1))))
     (t
      ;; If this is a defvar or defconst, store the value now
@@ -886,13 +888,13 @@
      ;; while storing the value now prevents lossage
      ;; if the value is used while performing the initialization.
      (cond ((and (not (atom form))
-		 (memq (car form) '(sym:defvar-1 sym:defconst-1)))
+		 (memq (car form) '(sym::defvar-1 sym::defconst-1)))
 	    (and (cddr form)			;Only if a value is specified!
-		 (or (memq (caddr form) '(sym:t sym:nil))
+		 (or (memq (caddr form) '(sym::t sym::nil))
 		     (stringp (caddr form)) (numberp (caddr form))
 		     (quotep (caddr form)))
 		 (vstore-contents (1+ (qintern (cadr form)))
-				  (make-q-list 'sym:init-list-area
+				  (make-q-list 'sym::init-list-area
 					       (if (quotep (caddr form))
 						   (cadr (caddr form))
 						   (caddr form)))))
