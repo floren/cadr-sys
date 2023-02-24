@@ -2291,7 +2291,6 @@ Encloses a lambda-expression in the current environment"
 ;;; in the same environment.
 
 (defun apply-lambda (fctn a-value-list &optional environment &aux tem)
-  (binding-interpreter-environment (environment)
     (block top
       (tagbody
        tail-recurse
@@ -2632,7 +2631,7 @@ Encloses a lambda-expression in the current environment"
 			     (:fewer-arguments
 			      (apply fctn (append a-value-list args)))
 			     (:return-value args)
-			     (:new-argument-list (apply fctn args))))))))
+			     (:new-argument-list (apply fctn args)))))))
 
 ;;;; DECODE-KEYWORD-ARGLIST
 
