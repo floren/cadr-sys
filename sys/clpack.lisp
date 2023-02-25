@@ -1685,8 +1685,7 @@ and by random processes that don't bind *PACKAGE*."
      :auto-export-p t)
     ("SYSTEM" :nicknames ("SYS") :size 1500. :auto-export-p t)
     ;; nickname of "CL" is temporary until the real cl package is defined.
-    ("LISP" :use () :nicknames ("CL") :size 900. :auto-export-p t ;; :read-lock t
-     )
+    ("LISP" :use () :nicknames ("CL") :size 900. :auto-export-p t :properties (read-lock t))
     ("CADR" :size 7000. :use ("GLOBAL" "SYS") :nicknames ("CC"))
     ("CHAOS" :size 1200. :use ("GLOBAL" "SYS")
 	     :shadow ("OPEN" "STATUS" "CLOSE" "LISTEN" "FINISH"))
