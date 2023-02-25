@@ -2427,9 +2427,10 @@ This version does some invisible pointer following."
 		  ((AND (CONSP M) (EQ (CAR M) 'RESUME-FOOTHOLD))
 		   (SG-RESTORE-STATE SG 1)
 		   (SETF (SG-CURRENT-STATE SG) SG-STATE-RESUMABLE)
-		   ;; (COND ((GETF (SG-PLIST SG) 'SINGLE-MACRO-DISPATCH)
-		   ;; 	  (SETF (GETF (SG-PLIST SG) 'SINGLE-MACRO-DISPATCH) NIL)
-		   ;; 	  (SETF (SG-INST-DISP SG) 2)))
+;;;---!!! >>ERROR; No way known to do LOCF on SG-PLIST.
+;;;---!!!		   (COND ((GETF (SG-PLIST SG) 'SINGLE-MACRO-DISPATCH)
+;;;---!!!			  (SETF (GETF (SG-PLIST SG) 'SINGLE-MACRO-DISPATCH) NIL)
+;;;---!!!			  (SETF (SG-INST-DISP SG) 2)))
 		   (STACK-GROUP-RESUME SG NIL))
 		  ((NULL M)
 		   ;; Microcode error.
