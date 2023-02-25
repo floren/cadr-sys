@@ -229,8 +229,8 @@ created by a defflavor, and macros automatically created by a defstruct."
 	       (LOOP FOR X IN COLD-LOAD-FUNCTION-PROPERTY-LISTS
 		     WHEN (AND (EQUAL (CAR X) FUNCTION-SPEC)
 			       (EQ (CADR X) ARG1))
-		       (SETQ COLD-LOAD-FUNCTION-SPEC-PROPERTY-LISTS
-			     (DELQ X COLD-LOAD-FUNCTION-SPEC-PROPERTY-LISTS))
+		       (SETQ COLD-LOAD-FUNCTION-PROPERTY-LISTS
+			     (DELQ X COLD-LOAD-FUNCTION-PROPERTY-LISTS))
 		       (RETURN (CDDR X)))))     
     (PUSH-PROPERTY
      (WITH-STACK-LIST (KEY FUNCTION-SPEC ARG2)
@@ -402,7 +402,7 @@ For symbols, this is just GET, but it works on any function spec."
   "Get the PROPERTY property of FUNCTION-SPEC.
 For symbols, this is just GET, but it works on any function spec."
   (IF (SYMBOLP FUNCTION-SPEC)
-      (REMPROP FUNCTION-SPEC PROPERTY DEFAULT)
+      (REMPROP FUNCTION-SPEC PROPERTY)
     ;; Look for a handler for this type of function spec.
     (LET ((HFUN (IF (NULL FUNCTION-SPEC-HASH-TABLE)
 		    ;; While loading files with MINI during system build,
