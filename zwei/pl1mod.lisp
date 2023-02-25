@@ -31,7 +31,7 @@
 ;; Leaves BP after the comment, returns BP.
 (DEFUN PL1-SKIP-COMMENT (BP)
   (MOVE-BP BP (FORWARD-CHAR BP 2))
-  (LET ((X (ZWEI-SEARCH BP "*//")))
+  (LET ((X (SEARCH BP "*//")))
     (COND ((NULL X) (BARF "Unbalenced comment."))
 	  (T (MOVE-BP BP X)))))
 
@@ -63,7 +63,7 @@
      RETRY
 	(SETQ SAVE-BP (COPY-BP BP))
 	(MOVE-BP BP (FORWARD-CHAR BP))
-	(LET ((X (ZWEI-SEARCH BP "/"")))
+	(LET ((X (SEARCH BP "/"")))
 	  (COND ((NULL X) (BARF "Unbalenced string"))
 		(T (MOVE-BP BP X))))
 	(AND (CHAR-EQUAL (BP-CHAR BP) #/")
@@ -86,7 +86,7 @@
 ;; Leaves BP before the comment, returns BP.
 (DEFUN PL1-SKIP-COMMENT-BACKWARD (BP)
   (MOVE-BP BP (FORWARD-CHAR BP -2))
-  (LET ((X (ZWEI-SEARCH BP "//*" T)))
+  (LET ((X (SEARCH BP "//*" T)))
     (COND ((NULL X) (BARF "Unbalenced comment."))
 	  (T (MOVE-BP BP X)))))
 
@@ -118,7 +118,7 @@
      RETRY
 	(SETQ SAVE-BP (COPY-BP BP))
 	(MOVE-BP BP (FORWARD-CHAR BP -1))
-	(LET ((X (ZWEI-SEARCH BP "/"" T)))
+	(LET ((X (SEARCH BP "/"" T)))
 	  (COND ((NULL X) (BARF "Unbalenced string"))
 		(T (MOVE-BP BP X))))
 	(AND (= (BP-CHAR-BEFORE BP) #/")
