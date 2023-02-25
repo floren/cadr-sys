@@ -187,8 +187,8 @@ This is a good way to find out more than the printed representation says."
 	  (SG-SPECIAL-PDL-LIMIT SG))
   (COND ((SETQ TEM (SG-RECOVERY-HISTORY SG))
 	 (FORMAT T "~%Recovery history ~S" TEM)))
-  (COND ((SETQ TEM (SG-UCODE SG))
-	 (FORMAT T "~%SG-UCODE ~S" TEM))))
+  (COND ((SETQ TEM (SG-PLIST SG))
+	 (FORMAT T "~%SG-PLIST ~S" TEM))))
 
 (DEFUN PRINT-ERROR-MODE (&OPTIONAL (EM %MODE-FLAGS) (STREAM *STANDARD-OUTPUT*))
   "Prints the current error mode."
