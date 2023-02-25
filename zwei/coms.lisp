@@ -770,7 +770,7 @@ BREAKS non-NIL means only consider replacing occurrences surrounded by delimiter
   (AND (DO ((I 0 (1+ I))
 	    (LEN (STRING-LENGTH *QUERY-FROM*)))
 	   (( I LEN))
-	 (AND (UPPER-CASE-P (AREF *QUERY-FROM* I))
+	 (AND (CHAR-UPPERCASE-P (AREF *QUERY-FROM* I))
 	      (RETURN T)))
        (SETQ *CASE-REPLACE* NIL))
   (QUERY-REPLACE-INTERNAL START-BP END-BP *QUERY-FROM* *QUERY-TO* 'QUERY-REPLACE-SEARCH BREAKS))
