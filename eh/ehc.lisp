@@ -290,9 +290,10 @@ Deactivates the debugger window if one was in use."
   (leaving-error-handler)
   (without-interrupts
     (free-second-level-error-handler-sg %current-stack-group)
-;;;    (cond ((getf (sg-plist sg) 'single-macro-dispatch)
-;;;	   (setf (getf (sg-plist sg) 'single-macro-dispatch) nil)
-;;;	   (setf (sg-inst-disp sg) 2)))
+;;;---!!! >>ERROR; No way known to do LOCF on SG-PLIST.
+;;;---!!!    (cond ((getf (sg-plist sg) 'single-macro-dispatch)
+;;;---!!!	   (setf (getf (sg-plist sg) 'single-macro-dispatch) nil)
+;;;---!!!	   (setf (sg-inst-disp sg) 2)))
     (stack-group-resume sg val)))
 
 ;;;; Backtrace commands.
@@ -1717,7 +1718,9 @@ You don't need to use this unless you're debugging the debugger."
 
     (format t "~&")
 
-;;;    (format t "~[~;ATTENTION ~]" (rp-attention rp ap))
+;;;---!!! SYS:SYS;SGDEFS introduced RP-ATTENTION at some point (renamed from
+;;;---!!! 	RP-DOWNWARD-CLOSURE-PUSHED?).
+;;;---!!!    (format t "~[~;ATTENTION ~]" (rp-attention rp ap))
     (format t "~[~;SELF-MAP ~]" (ldb %%lp-cls-self-map-provided (rp-call-word rp ap)))
     (format t "~[~;TRAP-ON-EXIT ~]" (rp-trap-on-exit rp ap))
     (format t "~[~;ADI-PRESENT ~]" (rp-adi-present rp ap))
