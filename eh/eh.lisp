@@ -370,13 +370,15 @@ so it knows who to call back."
   (ASSURE-FREE-SPACE)
   (SETQ RESULT (STACK-GROUP-RESUME SG NIL))
   (LET ((INNER-TRAP-ON-CALL (SG-FLAGS-TRAP-ON-CALL SG))
-	;; (INNER-PLIST (SG-PLIST SG))
+;;;---!!! >>ERROR; No way known to do LOCF on SG-PLIST.
+;;;---!!!	(INNER-PLIST (SG-PLIST SG))
 	)
     (SG-RESTORE-STATE SG)
     ;; If the guy set trap-on-call before returning, leave it on.
     (IF (NOT (ZEROP INNER-TRAP-ON-CALL))
 	(SETF (SG-FLAGS-TRAP-ON-CALL SG) 1))
-    ;; (SETF (SG-PLIST SG) INNER-PLIST)
+;;;---!!! >>ERROR; No way known to do LOCF on SG-PLIST.
+;;;---!!!    (SETF (SG-PLIST SG) INNER-PLIST)
     )
   (WHEN (AND ERROR-HANDLER-RUNNING ERROR-HANDLER-REPRINT-ERROR)
     (UNLESS (EQ CURRENT-STACK-GROUP LAST-SECOND-LEVEL-ERROR-HANDLER-SG)
