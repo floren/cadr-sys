@@ -537,7 +537,7 @@ This is for parallel binding such as is found in PROG and LET."
     (with-stack-list* (*cw-function-environment*
 			(loop for elt in (and (consp (cadr exp)) (cadr exp))
 			      nconc (list* (locf (symbol-function (car elt)))
-					   `(macro . ,(si:expand-defmacro elt))
+					   `(macro . ,(si:expand-defmacro elt nil))
 					   nil))	;for cdr-next for nconc
 			*cw-function-environment*)
       (let ((body (cw-clause (cddr exp))))
