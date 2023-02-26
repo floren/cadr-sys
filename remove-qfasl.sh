@@ -12,7 +12,6 @@ find . -iname '*.qfasl~' -exec rm -v {} \;
 
 fossil revert demo/tvbgar.qfasl
 fossil revert demo/wormch.qfasl
-fossil revert zmail/narrow.qfasl
 fossil revert fonts/
 
 fossil revert sys/ucinit.qfasl
