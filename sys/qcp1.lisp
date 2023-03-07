@@ -46,7 +46,6 @@ If NAME is NIL, LAMBDA-EXP is compiled and the result is just returned."
 		  (SETQ TEM (FDEFINITION (SI:UNENCAPSULATE-FUNCTION-SPEC NAME)))
 		  (cond ((consp tem)
 			 (SETQ LAMBDA-EXP TEM))
-			((closurep tem)
 			((SETQ TEM (ASSQ 'INTERPRETED-DEFINITION
 					 (DEBUGGING-INFO TEM)))
 			 (SETQ LAMBDA-EXP (CADR TEM)))))
