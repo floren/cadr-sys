@@ -1246,7 +1246,7 @@ or /"CC/" which refers to the machine being debugged by this one."
 
 (DEFUN DISK-INIT ()
 ;;;---!!! Hack to get around a weird bug when doing QLD.  Make sure
-;;;---!!!    these match the disk!
+;;;---!!!   these match the disk!
   (SETQ PAGE-OFFSET #o2414)
   (SETQ VIRTUAL-MEMORY-SIZE #o76776000)
   (SETQ DISK-PACK-NAME "QLD"))
