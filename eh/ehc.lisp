@@ -1719,7 +1719,7 @@ You don't need to use this unless you're debugging the debugger."
     (format t "~&")
 
 ;;;---!!! SYS:SYS;SGDEFS introduced RP-ATTENTION at some point (renamed from
-;;;---!!! 	RP-DOWNWARD-CLOSURE-PUSHED?).
+;;;---!!!   RP-DOWNWARD-CLOSURE-PUSHED?).
 ;;;---!!!    (format t "~[~;ATTENTION ~]" (rp-attention rp ap))
     (format t "~[~;SELF-MAP ~]" (ldb %%lp-cls-self-map-provided (rp-call-word rp ap)))
     (format t "~[~;TRAP-ON-EXIT ~]" (rp-trap-on-exit rp ap))
