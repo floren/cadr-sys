@@ -1,5 +1,12 @@
 ;;; -*- Mode:LISP; Package:SYSTEM-INTERNALS; Readtable:ZL; Base:10; Cold-Load:T -*-
 
+;;;---!!! While loading SYS2; DEFSEL QFASL during SI:QLD, barfs
+;;;---!!!   somewhere around:
+;;;---!!!	INTERNAL-FUNCTION-SPEC-HANDLER (2 arguments, local block origin 5) continue-pc #o165, d-return [#xE0095120]
+;;;---!!!	  FDEFINEDP
+;;;---!!!	  (INTERNAL DEFSELECT-MAKE-WHICH-OPERATIONS 0)
+
+#|
 ;;;; Function spec and source file name stuff
 
 ;;; this stff used to be in various places in qrand and qmisc
@@ -680,3 +687,4 @@ and its cdr is a list of generic pathnames that made that type of definition."
 	   (FUNCTION-SPEC-PUTPROP FUNCTION-SPEC PROPERTY :SOURCE-FILE-NAME)
 	   PROPERTY)
 	  (T PROPERTY))))
+|#
