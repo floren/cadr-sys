@@ -397,7 +397,6 @@
     (WRITE-ERROR-TABLE (SEND OUTPUT-GENERIC-PATHNAME
 			     :NEW-CANONICAL-TYPE :CADR-MICROCODE-ERROR-TABLE))))
 
-
 ;obsolete now.  see write-various-outputs-system
 (DEFUN WRITE-VARIOUS-OUTPUTS (INPUT-FILE)
   ;; Binary for the main microcode lives on another directory.
@@ -419,6 +418,7 @@
     (WRITE-ERROR-TABLE (SEND CONSLP-OUTPUT-PATHNAME :NEW-PATHNAME
 			     :CANONICAL-TYPE :CADR-MICROCODE-ERROR-TABLE
 			     :VERSION VERSION-NUMBER))))
+
 ;somewhat fake interface to make-system.  Main advantage is it allows UCADR file to be split.
 ;sample DEFSYSTEM looks like:
 ;(COMMENT 
