@@ -79,7 +79,7 @@
 		 "SYS: SYS; LTOP"
 		 "SYS: SYS2; MACARR"	;mucklisp array functions. bletch
 		 "SYS: SYS2; MAKSYS"
-		 "SYS: IO; MINI"
+		 "SYS: COLD; MINI"
 ;		 "SYS: IO; ETHER-MINI"	;New ethernet.  putting both flavors of mini in
 					; won't hurt too much since its work is already
 					; done by the time the wrong one would get loaded.
@@ -110,6 +110,7 @@
 		 "SYS: SYS2; UNFASL"
 		 "SYS: IO; UNIBUS"
 		 "SYS: SYS2; CLMAC"	;alternate macro definitions for some zl special forms
+		 "SYS: SYS2; ANALYZE"
 		 ))
   (:MODULE RDTBL ("SYS: IO; RDTBL" "SYS: IO; CRDTBL"))
   (:MODULE EXPORT ("SYS: COLD; EXPORT"))
@@ -175,7 +176,9 @@
   (:MODULE FONTW "PRESS-FONTS; FONTS WIDTHS >")
   (:COMPILE-LOAD RFONTW)
   (:COMPILE-LOAD PRESS)
-  (:LOAD-FONTS-WIDTHS FONTW (:FASLOAD RFONTW)))
+;;;---!!! How is PRESS-FONTS; FONTS WIDTHS generated?
+;;;---!!!  (:LOAD-FONTS-WIDTHS FONTW (:FASLOAD RFONTW))
+  )
 
 (DEFSYSTEM FORMAT
   (:PACKAGE FORMAT)
@@ -472,7 +475,7 @@
 	    "SYS: SYS; TYPES QFASL >"
 	    "SYS: SYS; LTOP QFASL >"
 	    "SYS: SYS; QFASL QFASL >"
-	    "SYS: IO; MINI QFASL >"
+	    "SYS: COLD; MINI QFASL >"
 	    "SYS: SYS; QFCTNS QFASL >"
 	    "SYS: SYS2; STRING QFASL >"
 	    "SYS: SYS2; CHARACTER QFASL >"
@@ -553,12 +556,13 @@
 	    ("SYS: NETWORK; CHAOS; QFILE QFASL >" "FS")))
 
 (DEFCONST ETHERNET-FILE-ALIST
-	  '(("SYS: IO; SIMPLE-ETHER QFASL >" "ETHERNET")
-	    ("SYS: IO; ADDR-RES QFASL >" "ETHERNET")))
+	  '(("SYS: NETWORK; SIMPLE-ETHER QFASL >" "ETHERNET")
+	    ("SYS: NETWORK; ADDR-RES QFASL >" "ETHERNET")))
 
 (DEFCONST SITE-FILE-ALIST
 	  '(("SYS: SITE; SITE QFASL >" "SI")))
 
 (DEFCONST HOST-TABLE-FILE-ALIST
 	  '(("SYS: SITE; HSTTBL QFASL >" "CHAOS")
-	    ("SYS: SITE; LMLOCS QFASL >" "SI")))
+	    ("SYS: SITE; LMLOCS QFASL >" "SI")
+	    ("SYS: SITE; SYS TRANSLATIONS >" "FS")))
