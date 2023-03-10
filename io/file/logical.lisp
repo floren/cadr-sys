@@ -243,6 +243,7 @@ Otherwise, ACTUAL-PATHNAME is returned."
 (DEFMETHOD (LOGICAL-HOST :SYSTEM-TYPE) ()
   :LOGICAL)
 
+;;;---!!! Is (LOGICAL-HOST :HOST) still used anywhere?
 ;;; old name
 (defmethod (logical-host :host) () physical-host)
 
