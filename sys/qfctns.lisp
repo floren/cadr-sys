@@ -2027,7 +2027,7 @@ The printing is done without quoting characters, like PRINC."
 
 (DEFUN ARRAY-PUSH-EXTEND (ARRAY DATA &OPTIONAL EXTENSION &AUX (INHIBIT-SCHEDULING-FLAG T))
   "Same as (VECTOR-PUSH DATA VECTOR EXTENSION)"
-  (COND ((ARRAY-PUSH ARRAY DATA))
+  (COND ((VECTOR-PUSH DATA ARRAY))
 	(T (ADJUST-ARRAY-SIZE ARRAY (+ (ARRAY-LENGTH ARRAY)
 				       ;; If amount to extend by not specified,
 				       ;; try to guess a reasonable amount
@@ -2035,14 +2035,14 @@ The printing is done without quoting characters, like PRINC."
 					     ((< (%STRUCTURE-TOTAL-SIZE ARRAY) PAGE-SIZE)
 					      (MAX (ARRAY-LENGTH ARRAY) #o100))
 					     (T (TRUNCATE (ARRAY-LENGTH ARRAY) 4)))))
-	   (ARRAY-PUSH ARRAY DATA))))
+	   (VECTOR-PUSH DATA ARRAY))))
 
 (DEFUN VECTOR-PUSH-EXTEND (DATA VECTOR &OPTIONAL EXTENSION
 			   &AUX (INHIBIT-SCHEDULING-FLAG T))
   "Add the new element DATA to the end of VECTOR, making VECTOR larger if needed.
 EXTENSION says how many elements to add; the default is a fraction
 of the existing size.  VECTOR must have a fill pointer."
-  (COND ((ARRAY-PUSH VECTOR DATA))
+  (COND ((VECTOR-PUSH DATA VECTOR))
 	(T (ADJUST-ARRAY-SIZE VECTOR (+ (ARRAY-LENGTH VECTOR)
 					;; If amount to extend by not specified,
 					;; try to guess a reasonable amount
@@ -2050,7 +2050,7 @@ of the existing size.  VECTOR must have a fill pointer."
 					      ((< (%STRUCTURE-TOTAL-SIZE VECTOR) PAGE-SIZE)
 					       (MAX (ARRAY-LENGTH VECTOR) #o100))
 					      (T (TRUNCATE (ARRAY-LENGTH VECTOR) 4)))))
-	   (ARRAY-PUSH VECTOR DATA))))
+	   (VECTOR-PUSH DATA VECTOR))))
 
 ;;Now microcoded
 ;(DEFUN ARRAY-IN-BOUNDS-P (ARRAY &REST POINT)
@@ -2641,8 +2641,7 @@ If the expander calls MACROEXPAND itself, it can pass this as a rest arg.")
 (DEFUN MACROEXPAND-1 (MACRO-CALL &OPTIONAL ENVIRONMENT
 		      &AUX (LOCAL-MACROS (CAR ENVIRONMENT)))
   "Expand MACRO-CALL once and return the result.
-Macro calls, uses of SUBSTs, uses of CURRY-BEFORE and CURRY-AFTER,
-and uses of functions for which OPEN-CODE-P is true, are all expanded.
+Macro calls, uses of SUBSTs and uses of CURRY-BEFORE and CURRY-AFTER are all expanded.
 The second value is T if there was something to expand.
 If SYS:RECORD-MACROS-EXPANDED is non-NIL,
 all macro names are pushed on SYS:MACROS-EXPANDED.
@@ -2689,7 +2688,8 @@ is used to invoke the expander function."
 			(AND RECORD-MACROS-EXPANDED
 			     (NOT (MEMQ (CAR MACRO-CALL) MACROS-EXPANDED))
 			     (PUSH (CAR MACRO-CALL) MACROS-EXPANDED))
-			(VALUES (FUNCALL *MACROEXPAND-HOOK* 'SUBST-EXPAND-1 MACRO-CALL ENVIRONMENT)
+			(VALUES (FUNCALL *MACROEXPAND-HOOK*
+					 'SUBST-EXPAND-1 MACRO-CALL ENVIRONMENT)
 				T))
 		    MACRO-CALL))
 		 ((ATOM TM) MACRO-CALL)
