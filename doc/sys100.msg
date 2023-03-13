@@ -27,10 +27,10 @@ Contents of the rest of this file:
 
 3Restrain social decay -- help get programmers sharing again.*
 
-The Lisp Machine operating system, and related files can be
-redistributed and/or modify under the terms of the GNU Affero General
-Public License as published by the Free Software Foundation, either
-version 3 of the License, or (at your option) any later version.
+The Lisp Machine system is now redistributed and/or modifed under the
+terms of the GNU Affero General Public License as published by the
+Free Software Foundation, either version 3 of the License, or (at your
+option) any later version.
 
 4Incompatible Changes* 
 
