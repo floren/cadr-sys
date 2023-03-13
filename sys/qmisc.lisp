@@ -1095,6 +1095,218 @@ for finding the site files, in case the system does not know that host yet."
        (= (SECOND LOCAL-FLOOR-LOCATION) FLOOR)))
 |#
 
+;;;; Stuff for function specs
+
+;;;---!!! The following functions and variables (everything up to next
+;;;---!!!   page break) should be moved to SYS: SYS; FSPEC LISP, but due
+;;;---!!!   to isseus (see FSPEC LISP) hasn't been done just yet.
+;;;---!!! 
+;;;---!!!	FUNCTION-SPEC-LESSP 
+;;;---!!!	FUNDEFINE 
+;;;---!!!	FDEFINITION-LOCATION 
+;;;---!!!	FUNCTION-PARENT 
+;;;---!!!	LOCATION-FUNCTION-SPEC-HANDLER 
+;;;---!!!	STANDARDIZE-FUNCTION-SPEC 
+;;;---!!!	NON-PATHNAME-REDEFINED-FILES NIL
+;;;---!!!	QUERY-ABOUT-REDEFINITION 
+;;;---!!!	UNDEFUN 
+;;;---!!!	GET-SOURCE-FILE-NAME 
+;;;---!!!	GET-ALL-SOURCE-FILE-NAMES 
+
+;;; These are here because they must be loaded after the package system is operational
+;;; (or maybe only because they aren't needed in the cold load?)
+
+;;; This is useful for sorting function specs
+(DEFUN FUNCTION-SPEC-LESSP (FS1 FS2)
+  "Compares two function specs, approximately alphabetically."
+  (STRING-LESSP (IF (SYMBOLP FS1) FS1 (SECOND FS1))
+		(IF (SYMBOLP FS2) FS2 (SECOND FS2))))
+
+(DEFUN FUNDEFINE (FUNCTION-SPEC)
+  "Makes FUNCTION-SPEC not have a function definition."
+  ;; First, validate the function spec and determine its type
+  (SETQ FUNCTION-SPEC (DWIMIFY-ARG-PACKAGE FUNCTION-SPEC 'FUNCTION-SPEC))
+  (IF (SYMBOLP FUNCTION-SPEC) (FMAKUNBOUND FUNCTION-SPEC)
+      (FUNCALL (GET (CAR FUNCTION-SPEC) 'FUNCTION-SPEC-HANDLER) 'FUNDEFINE FUNCTION-SPEC)))
+
+(DEFUN FDEFINITION-LOCATION (FUNCTION-SPEC &AUX HANDLER)
+  "Returns a locative pointer to the cell containing FUNCTION-SPEC's definition."
+  ;; First, validate the function spec and determine its type
+  (COND ((SYMBOLP FUNCTION-SPEC) (LOCF (SYMBOL-FUNCTION FUNCTION-SPEC)))
+	((AND (CONSP FUNCTION-SPEC)
+	      (SETQ HANDLER (GET (CAR FUNCTION-SPEC) 'FUNCTION-SPEC-HANDLER)))
+	 (FUNCALL HANDLER 'FDEFINITION-LOCATION FUNCTION-SPEC))
+	(T (FERROR 'SYS:INVALID-FUNCTION-SPEC
+		   "The function spec ~S is invalid." FUNCTION-SPEC))))
+
+(DEFUN FUNCTION-PARENT (FUNCTION-SPEC &AUX DEF TEM)
+  (DECLARE (VALUES NAME TYPE))
+  "Returns NIL or the name of another definition which has the same source code.
+The second value is the type of that definition (which can be NIL).
+This is used for things like internal functions, methods automatically
+created by a defflavor, and macros automatically created by a defstruct."
+  (COND ((AND (FDEFINEDP FUNCTION-SPEC)
+	      (SETQ TEM (CDR (ASSQ 'FUNCTION-PARENT
+				   (DEBUGGING-INFO (SETQ DEF (FDEFINITION FUNCTION-SPEC))))))
+	      ;; Don't get confused by circular function-parent pointers.
+	      (NOT (EQUAL TEM FUNCTION-SPEC)))
+	 (VALUES (CAR TEM) (CADR TEM)))
+	((AND (CONSP DEF) (EQ (CAR DEF) 'MACRO) (SYMBOLP (CDR DEF))  ;for DEFSTRUCT
+	      (SETQ DEF (GET (CDR DEF) 'MACROEXPANDER-FUNCTION-PARENT)))
+	 (FUNCALL DEF FUNCTION-SPEC))
+	((CONSP FUNCTION-SPEC)
+	 (FUNCALL (GET (CAR FUNCTION-SPEC) 'FUNCTION-SPEC-HANDLER)
+		  #'FUNCTION-PARENT FUNCTION-SPEC))))
+
+;;; (:LOCATION locative-or-list-pointer) refers to the CDR of the pointer.
+;;; This is for pointing at an arbitrary place which there is no special
+;;; way to describe.
+(DEFPROP :LOCATION LOCATION-FUNCTION-SPEC-HANDLER FUNCTION-SPEC-HANDLER)
+(DEFUN LOCATION-FUNCTION-SPEC-HANDLER (FUNCTION FUNCTION-SPEC &OPTIONAL ARG1 ARG2)
+  (LET ((LOC (SECOND FUNCTION-SPEC)))
+    (IF (NOT (AND (= (LENGTH FUNCTION-SPEC) 2)
+		  (OR (= (%DATA-TYPE LOC) DTP-LOCATIVE)
+		      (= (%DATA-TYPE LOC) DTP-LIST))))
+	(UNLESS (EQ FUNCTION 'VALIDATE-FUNCTION-SPEC)
+	  (FERROR 'SYS:INVALID-FUNCTION-SPEC
+		  "The function spec ~S is invalid." FUNCTION-SPEC))
+      (CASE FUNCTION
+	(VALIDATE-FUNCTION-SPEC T)
+	(FDEFINE (RPLACD LOC ARG1))
+	(FDEFINITION (CDR LOC))
+	(FDEFINEDP (AND ( (%P-DATA-TYPE LOC) DTP-NULL) (NOT (NULL (CDR LOC)))))
+	(FDEFINITION-LOCATION LOC)
+	;; FUNDEFINE could store DTP-NULL, which would only be right sometimes
+	(OTHERWISE (FUNCTION-SPEC-DEFAULT-HANDLER FUNCTION FUNCTION-SPEC ARG1 ARG2))))))
+
+;;; Convert old Maclisp-style property function specs
+(DEFUN STANDARDIZE-FUNCTION-SPEC (FUNCTION-SPEC &OPTIONAL (ERRORP T))
+  (AND (CONSP FUNCTION-SPEC)
+       (= (LENGTH FUNCTION-SPEC) 2)
+       (SYMBOLP (CAR FUNCTION-SPEC))
+       (NOT (GET (CAR FUNCTION-SPEC) 'FUNCTION-SPEC-HANDLER))
+       (SETQ FUNCTION-SPEC (CONS :PROPERTY FUNCTION-SPEC)))
+  (OR (NOT ERRORP)
+      (VALIDATE-FUNCTION-SPEC FUNCTION-SPEC)
+      (FERROR NIL "~S is not a valid function spec." FUNCTION-SPEC))
+  FUNCTION-SPEC)
+
+(DEFPROP DEFUN "Function" DEFINITION-TYPE-NAME)
+(DEFPROP DEFVAR "Variable" DEFINITION-TYPE-NAME)
+
+(DEFVAR NON-PATHNAME-REDEFINED-FILES NIL
+  "Files whose functions it is ok to redefine from the keyboard.")
+
+;;; Query about any irregularities about redefining the given function symbol now.
+;;; Return T to tell caller to go ahead and redefine the symbol
+;;; (no problems or user says ok), NIL to leave it unchanged.
+(DEFUN QUERY-ABOUT-REDEFINITION (FUNCTION-SPEC NEW-PATHNAME TYPE OLD-PATHNAME)
+  ;; Detect any cross-file redefinition worth complaining about.
+  (IF (OR (EQ (IF (STRINGP OLD-PATHNAME)
+		  OLD-PATHNAME
+		(AND OLD-PATHNAME (SEND OLD-PATHNAME :TRANSLATED-PATHNAME)))
+	      (IF (STRINGP NEW-PATHNAME)
+		  NEW-PATHNAME
+		(AND NEW-PATHNAME (SEND NEW-PATHNAME :TRANSLATED-PATHNAME))))
+	  (MEMQ OLD-PATHNAME
+		(IF NEW-PATHNAME
+		    (SEND NEW-PATHNAME :GET :REDEFINES-FILES)
+		  NON-PATHNAME-REDEFINED-FILES)))
+      T
+    ;; This redefinition deserves a warning or query.
+    ;; If it is within a file operation with warnings,
+    ;; record a warning.
+    (WHEN (AND (VARIABLE-BOUNDP FILE-WARNINGS-DATUM) FILE-WARNINGS-DATUM)
+      (RECORD-AND-PRINT-WARNING 'REDEFINITION :PROBABLE-ERROR NIL
+	(IF NEW-PATHNAME
+	    "~A ~S being redefined by file ~A.
+ It was previously defined by file ~A."
+	  "~A ~S being redefined;~* it was previously defined by file ~A.")
+	(OR (GET TYPE 'DEFINITION-TYPE-NAME) TYPE) FUNCTION-SPEC
+	NEW-PATHNAME OLD-PATHNAME))
+    (LET (CONDITION CHOICE)
+      (SETQ CONDITION
+	    (MAKE-CONDITION 'SYS:REDEFINITION
+	      (IF NEW-PATHNAME
+		  "~A ~S being redefined by file ~A.
+It was previously defined by file ~A."
+		"~A ~S being redefined;~* it was previously defined by file ~A.")
+	      (OR (GET TYPE 'DEFINITION-TYPE-NAME) TYPE)
+	      FUNCTION-SPEC
+	      NEW-PATHNAME OLD-PATHNAME))
+      (SETQ CHOICE (SIGNAL CONDITION))
+      (UNLESS CHOICE
+	(UNLESS (AND INHIBIT-FDEFINE-WARNINGS
+		     (NEQ INHIBIT-FDEFINE-WARNINGS :JUST-WARN))
+	  (FORMAT *QUERY-IO* "~&~A" CONDITION))
+	(IF INHIBIT-FDEFINE-WARNINGS
+	    (SETQ CHOICE T)
+	  (SETQ CHOICE
+		(FQUERY '(:CHOICES (((ERROR "Error.") #/E)
+				    ((PROCEED "Proceed.") #/P)
+				    . #.FORMAT:Y-OR-N-P-CHOICES)
+				   :HELP-FUNCTION
+				   (LAMBDA (STREAM &REST IGNORE)
+				     (PRINC "
+  Type Y to proceed to redefine the function, N to not redefine it, E to go into the
+  error handler, or P to proceed and not ask in the future (for this pair of files): "
+					    STREAM))
+				   :CLEAR-INPUT T
+				   :FRESH-LINE NIL)
+			" OK? "))))
+      (CASE CHOICE
+	((T :NO-ACTION) T)
+	((NIL :INHIBIT-DEFINITION) NIL)
+	(ERROR
+	 (ERROR CONDITION)
+	 T)
+	(PROCEED
+	 (IF NEW-PATHNAME
+	     (PUSH OLD-PATHNAME (GET NEW-PATHNAME :REDEFINES-FILES))
+	   (PUSH OLD-PATHNAME NON-PATHNAME-REDEFINED-FILES))
+	 T)))))
+
+(DEFUN UNDEFUN (FUNCTION-SPEC &AUX TEM)
+  "Restores the saved previous function definition of a function spec."
+  (SETQ FUNCTION-SPEC (DWIMIFY-ARG-PACKAGE FUNCTION-SPEC 'FUNCTION-SPEC))
+  (SETQ TEM (FUNCTION-SPEC-GET FUNCTION-SPEC :PREVIOUS-DEFINITION))
+  (COND (TEM
+	 (FSET-CAREFULLY FUNCTION-SPEC TEM T))
+	((Y-OR-N-P (FORMAT NIL "~S has no previous definition.  Undefine it? "
+			   FUNCTION-SPEC))
+	 (FUNDEFINE FUNCTION-SPEC))))
+
+;;; Some source file stuff that does not need to be in QRAND
+(DEFUN GET-SOURCE-FILE-NAME (FUNCTION-SPEC &OPTIONAL TYPE)
+  "Returns pathname of source file for definition of type TYPE of FUNCTION-SPEC.
+If TYPE is NIL, the most recent definition is used, regardless of type.
+FUNCTION-SPEC really is a function spec only if TYPE is DEFUN;
+for example, if TYPE is DEFVAR, FUNCTION-SPEC is a variable name."
+  (DECLARE (VALUES PATHNAME TYPE))
+  (LET ((PROPERTY (FUNCTION-SPEC-GET FUNCTION-SPEC :SOURCE-FILE-NAME)))
+    (COND ((NULL PROPERTY) NIL)
+	  ((ATOM PROPERTY)
+	   (AND (MEMQ TYPE '(DEFUN NIL))
+		(VALUES PROPERTY 'DEFUN)))
+	  (T
+	   (LET ((LIST (IF TYPE (ASSQ TYPE PROPERTY) (CAR PROPERTY))))
+	     (LOOP FOR FILE IN (CDR LIST)
+		   WHEN (NOT (SEND FILE :GET :PATCH-FILE))
+		   RETURN (VALUES FILE (CAR LIST))))))))
+
+(DEFUN GET-ALL-SOURCE-FILE-NAMES (FUNCTION-SPEC)
+  "Return list describing source files for all definitions of FUNCTION-SPEC.
+Each element of the list has a type of definition as its car,
+and its cdr is a list of generic pathnames that made that type of definition."
+  (LET ((PROPERTY (FUNCTION-SPEC-GET FUNCTION-SPEC :SOURCE-FILE-NAME)))
+    (COND ((NULL PROPERTY) NIL)
+	  ((ATOM PROPERTY)
+	   (SETQ PROPERTY `((DEFUN ,PROPERTY)))
+	   ;; May as well save this consing.
+	   (FUNCTION-SPEC-PUTPROP FUNCTION-SPEC PROPERTY :SOURCE-FILE-NAME)
+	   PROPERTY)
+	  (T PROPERTY))))
+
 (DEFUN DOCUMENTATION (SYMBOL &OPTIONAL (DOC-TYPE 'FUNCTION))
   "Try to return the documentation string for SYMBOL, else return NIL.
 Standard values of DOC-TYPE are: FUNCTION, VARIABLE, TYPE, STRUCTURE and SETF,
