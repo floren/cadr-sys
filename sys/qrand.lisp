@@ -300,8 +300,10 @@ This list describes how to bind the arguments and how to initialize them."
 	       (ART-FLOAT . 0f0)
 	       (ART-FPS-FLOAT . 0f0)
 	       (ART-FAT-STRING . #/ )
+;;;---!!! MAKE-COLD doesn't support complex types.
 ;;;---!!!	       (ART-COMPLEX-FLOAT . 0f0+0f0i)
 	       (ART-COMPLEX . 0)
+;;;---!!! MAKE-COLD doesn't support complex types.
 ;;;---!!!	       (ART-COMPLEX-FPS-FLOAT 0f0+0f0i)
 	       ))))
 
