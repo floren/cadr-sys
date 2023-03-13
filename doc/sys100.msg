@@ -25,12 +25,12 @@ Contents of the rest of this file:
 
 4License Change*
 
-3Restrain social decay -- help get programmers sharing again.*
+      3Restrain social decay -- help get programmers sharing again.*
 
-The Lisp Machine system is now redistributed and/or modifed under the
-terms of the GNU Affero General Public License as published by the
-Free Software Foundation, either version 3 of the License, or (at your
-option) any later version.
+Everything is now redistributed and/or modifed under the terms of the
+GNU Affero General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any
+later version.
 
 4Incompatible Changes* 
 
@@ -50,7 +50,7 @@ the Lisp Machine (i.e., not truncated).
 ] 4CADRLP prompts for version number when assembling microcode*
 
 If CADRLP cannot figure out what the next microcode version number
-will be it will prompt the user for one.  THis occurs on file systems
+will be it will prompt the user for one.  This occurs on file systems
 that do not support version numbers (e.g. Unix).
 
 4Editor Changes* 
@@ -59,6 +59,7 @@ that do not support version numbers (e.g. Unix).
 
 ] 4MIT-OZ is not really OZ*
 
->> MINI hard codes to OZ; OZ changed to pretend to be Unix.
+>> MINI hard codes to OZ.
+>> OZ changed to pretend to be Unix.
 
 4Site option Changes* 
