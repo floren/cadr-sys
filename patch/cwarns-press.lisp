@@ -1,9 +1,11 @@
 
-;System PRESS made by LISPM at 1/31/23 20:34:43  -*-Mode: Lisp; Package: User; Base: 10.-*-
+;System PRESS made by LISPM at 3/12/23 21:19:27  -*-Mode: Lisp; Package: User; Base: 10.-*-
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: IO1; RFONTW LISP >"
-  '((:COMPILE NIL)))
+  '((:COMPILE NIL
+     (PRESS:BCPL-STRING NIL NIL
+      (COMPILER::OBSOLETE :OBSOLETE NIL "~S ~A." IF-FOR-LISPM "is an obsolete function; use the #+LISPM reader macro")))))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS

@@ -1,23 +1,25 @@
 
-;System FILE-SYSTEM made by LISPM at 1/31/23 18:16:55  -*-Mode: Lisp; Package: User; Base: 10.-*-
+;System FILE-SYSTEM made by LISPM at 3/12/23 19:03:09  -*-Mode: Lisp; Package: User; Base: 10.-*-
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
-  '#FS::LOGICAL-PATHNAME "SYS: IO; ACCESS LISP >"
+  '#FS::LOGICAL-PATHNAME "SYS: IO; FILE; ACCESS LISP >"
+  '((:COMPILE NIL
+     (FS::INIT-DORMANT-HOST-GC-PROCESS NIL NIL
+      (COMPILER::OBSOLETE :OBSOLETE NIL "~S ~A." PROCESS-PRESET "is an obsolete function; Use the :PRESET message")))))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: IO; FILE; PATHNM LISP >"
   '((:COMPILE NIL)))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
-  '#FS::LOGICAL-PATHNAME "SYS: IO; PATHNM LISP >"
+  '#FS::LOGICAL-PATHNAME "SYS: IO; FILE; PATHST LISP >"
   '((:COMPILE NIL)))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
-  '#FS::LOGICAL-PATHNAME "SYS: IO; PATHST LISP >"
-  '((:COMPILE NIL)))
-
-;-*-Mode: Lisp; Package: User; Base: 10. -*-
-(SI:RELOAD-FILE-WARNINGS
-  '#FS::LOGICAL-PATHNAME "SYS: IO; LOGICAL LISP >"
+  '#FS::LOGICAL-PATHNAME "SYS: IO; FILE; LOGICAL LISP >"
   '((:COMPILE NIL)))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
@@ -32,7 +34,7 @@
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
-  '#FS::LOGICAL-PATHNAME "SYS: IO; OPEN LISP >"
+  '#FS::LOGICAL-PATHNAME "SYS: IO; FILE; OPEN LISP >"
   '((:COMPILE NIL
      (FS:REMOTE-CONNECT NIL NIL
       (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." FS::ACCESS))
@@ -41,12 +43,12 @@
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
-  '#FS::LOGICAL-PATHNAME "SYS: IO; BALDIR LISP >"
+  '#FS::LOGICAL-PATHNAME "SYS: IO; FILE; BALDIR LISP >"
   '((:COMPILE NIL)))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
-  '#FS::LOGICAL-PATHNAME "SYS: IO; QFILE LISP >"
+  '#FS::LOGICAL-PATHNAME "SYS: NETWORK; CHAOS; QFILE LISP >"
   '((:COMPILE NIL
      (FS::COMPLETE-CHAOS NIL NIL
       (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." STRING))

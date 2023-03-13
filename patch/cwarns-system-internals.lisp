@@ -1,5 +1,5 @@
 
-;System SYSTEM-INTERNALS made by LISPM at 1/31/23 17:02:25  -*-Mode: Lisp; Package: User; Base: 10.-*-
+;System SYSTEM-INTERNALS made by LISPM at 3/12/23 17:49:26  -*-Mode: Lisp; Package: User; Base: 10.-*-
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: SYS2; PRODEF LISP >"
@@ -41,6 +41,23 @@
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: SYS; CLPACK LISP >"
+  '((:COMPILE NIL
+     (SI::PKG-INITIALIZE NIL NIL
+      (COMPILER::FREE-VARIABLE :MISSING-DECLARATION NIL "The variable ~S is used free; assumed special." SI::INITIAL-LISP-SYMBOLS)))))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: COLD; GLOBAL LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: COLD; SYSTEM LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: COLD; LISP LISP >"
   '((:COMPILE NIL)))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
@@ -53,6 +70,11 @@
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: SYS2; DEFSEL LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: SYS2; DESCRIBE LISP >"
   '((:COMPILE NIL)))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
@@ -95,7 +117,9 @@
       (COMPILER::FREE-VARIABLE :MISSING-DECLARATION NIL "The variable ~S is used free; assumed special." SI::TEM))
      (LETF* NIL NIL
       (COMPILER::VARIABLE-NOT-SYMBOL :IMPOSSIBLE NIL "~S appears in a list of variables to be bound." (SI::TEM (QUOTE LOCF) (CAAR SI::VARS-LEFT)))
-      (COMPILER::FREE-VARIABLE :MISSING-DECLARATION NIL "The variable ~S is used free; assumed special." SI::TEM)))))
+      (COMPILER::FREE-VARIABLE :MISSING-DECLARATION NIL "The variable ~S is used free; assumed special." SI::TEM))
+     (SYSTEM:APPLY-LAMBDA NIL NIL
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." SI::ENVIRONMENT)))))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
@@ -104,17 +128,19 @@
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
-  '#FS::LOGICAL-PATHNAME "SYS: SYS2; GC LISP >"
+  '#FS::LOGICAL-PATHNAME "SYS: SYS; FSPEC LISP >"
   '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: SYS2; GC LISP >"
+  '((:COMPILE NIL
+     (GC-ON NIL NIL
+      (COMPILER::OBSOLETE :OBSOLETE NIL "~S ~A." PROCESS-PRESET "is an obsolete function; Use the :PRESET message")))))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: SYS; GENRIC LISP >"
-  '((:COMPILE NIL)))
-
-;-*-Mode: Lisp; Package: User; Base: 10. -*-
-(SI:RELOAD-FILE-WARNINGS
-  '#FS::LOGICAL-PATHNAME "SYS: COLD; GLOBAL LISP >"
   '((:COMPILE NIL)))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
@@ -165,9 +191,7 @@
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: SYS2; LOOP LISP >"
-  '((:COMPILE NIL
-     (SI::LOOP-GENTEMP NIL NIL
-      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." SI::PREF)))))
+  '((:COMPILE NIL)))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
@@ -175,9 +199,14 @@
   '((:COMPILE NIL
      (LISP-REINITIALIZE NIL NIL
       (COMPILER:UNDEFINED-FUNCTION-USED :PROBABLE-ERROR NIL "The undefined function ~S was called" CADR::CLEAR-UNIBUS-MAP)
+      (COMPILER:UNDEFINED-FUNCTION-USED :PROBABLE-ERROR NIL "The undefined function ~S was called" UNBREAKON)
       (COMPILER::FREE-VARIABLE :MISSING-DECLARATION NIL "The variable ~S is used free; assumed special." SI::RG-QUAD-SLOT)
-      (COMPILER::FREE-VARIABLE :MISSING-DECLARATION NIL "The variable ~S is used free; assumed special." SI::SDU-QUAD-SLOT)
-      (COMPILER::FREE-VARIABLE :MISSING-DECLARATION NIL "The variable ~S is used free; assumed special." SI::*RSET)))))
+      (COMPILER::FREE-VARIABLE :MISSING-DECLARATION NIL "The variable ~S is used free; assumed special." SI::SDU-QUAD-SLOT)))))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: SYS2; MACARR LISP >"
+  '((:COMPILE NIL)))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
@@ -186,7 +215,7 @@
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
-  '#FS::LOGICAL-PATHNAME "SYS: IO; MINI LISP >"
+  '#FS::LOGICAL-PATHNAME "SYS: COLD; MINI LISP >"
   '((:COMPILE NIL)))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
@@ -217,7 +246,10 @@
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: SYS2; PATCH LISP >"
-  '((:COMPILE NIL)))
+  '((:COMPILE NIL
+     (LOAD-PATCHES NIL NIL
+      (COMPILER::OBSOLETE :OBSOLETE NIL "~S ~A." PROCESS-RESET "is an obsolete function; Use the :RESET message")
+      (COMPILER::OBSOLETE :OBSOLETE NIL "~S ~A." PROCESS-RESET "is an obsolete function; Use the :RESET message")))))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
@@ -227,22 +259,12 @@
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: IO; PRINT LISP >"
-  '((:COMPILE NIL
-     (SI::SCALE-FLONUM NIL NIL
-      (COMPILER::FREE-VARIABLE :MISSING-DECLARATION NIL "The variable ~S is used free; assumed special." SI::POWERS-OF-10F0-TABLE)))))
+  '((:COMPILE NIL)))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: SYS2; PROCES LISP >"
-  '((:COMPILE NIL
-     (SI::MAKE-ACTIVE-PROCESSES NIL NIL
-      (COMPILER::OBSOLETE :OBSOLETE NIL "~S is an obsolete calling seqence.
-   use (~S ~S~@[ ~*~S ~2:*~S~]) instead." (MAKE-LIST PERMANENT-STORAGE-AREA SI::LEN) MAKE-LIST SI::LEN PERMANENT-STORAGE-AREA :AREA)
-      (COMPILER::OBSOLETE :OBSOLETE NIL "~S is an obsolete calling seqence.
-   use (~S ~S~@[ ~*~S ~2:*~S~]) instead." (MAKE-LIST PERMANENT-STORAGE-AREA SI::ACTIVE-PROCESSES-ELEMENT-SIZE) MAKE-LIST SI::ACTIVE-PROCESSES-ELEMENT-SIZE PERMANENT-STORAGE-AREA :AREA))
-     (SI::PROCESS-ACTIVE-ENTRY NIL NIL
-      (COMPILER::OBSOLETE :OBSOLETE NIL "~S is an obsolete calling seqence.
-   use (~S ~S~@[ ~*~S ~2:*~S~]) instead." (MAKE-LIST PERMANENT-STORAGE-AREA SI::ACTIVE-PROCESSES-ELEMENT-SIZE) MAKE-LIST SI::ACTIVE-PROCESSES-ELEMENT-SIZE PERMANENT-STORAGE-AREA :AREA)))))
+  '((:COMPILE NIL)))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
@@ -252,7 +274,9 @@
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: SYS; QFASL LISP >"
-  '((:COMPILE NIL)))
+  '((:COMPILE NIL
+     (SI:RECORD-FILE-DEFINITIONS NIL NIL
+      (COMPILER::OBSOLETE :OBSOLETE NIL "~S ~A." PROCESS-RESET "is an obsolete function; Use the :RESET message")))))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
@@ -262,9 +286,7 @@
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: SYS; QMISC LISP >"
-  '((:COMPILE NIL
-     (SI::DESCRIBE-STACK-GROUP NIL NIL
-      (COMPILER:UNDEFINED-FUNCTION-USED :PROBABLE-ERROR NIL "The undefined function ~S was called" SYSTEM:SG-UCODE)))))
+  '((:COMPILE NIL)))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
@@ -294,7 +316,11 @@
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: IO; READ LISP >"
-  '((:COMPILE NIL)))
+  '((:COMPILE NIL
+     (SI::XR-XRTYI NIL NIL
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." SI::FOUND-MULTI-ESCAPES))
+     (SI::XR-#=-MACRO NIL NIL
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." SI::LABEL-BINDING)))))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
@@ -345,11 +371,6 @@
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
-  '#FS::LOGICAL-PATHNAME "SYS: COLD; SYSTEM LISP >"
-  '((:COMPILE NIL)))
-
-;-*-Mode: Lisp; Package: User; Base: 10. -*-
-(SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: SYS2; UNFASL LISP >"
   '((:COMPILE NIL)))
 
@@ -360,12 +381,12 @@
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
-  '#FS::LOGICAL-PATHNAME "SYS: SYS2; ANALYZE LISP >"
+  '#FS::LOGICAL-PATHNAME "SYS: SYS2; CLMAC LISP >"
   '((:COMPILE NIL)))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
-  '#FS::LOGICAL-PATHNAME "SYS: SYS2; CLMAC LISP >"
+  '#FS::LOGICAL-PATHNAME "SYS: SYS2; ANALYZE LISP >"
   '((:COMPILE NIL)))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-

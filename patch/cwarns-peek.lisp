@@ -1,15 +1,22 @@
 
-;System PEEK made by LISPM at 1/31/23 19:21:36  -*-Mode: Lisp; Package: User; Base: 10.-*-
+;System PEEK made by LISPM at 3/12/23 20:05:05  -*-Mode: Lisp; Package: User; Base: 10.-*-
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: WINDOW; PEEK LISP >"
   '((:COMPILE NIL
      (TV::PEEK-WHOSTATE NIL NIL
-      (COMPILER::OBSOLETE :OBSOLETE NIL "~S ~A." PROCESS-WHOSTATE "is an obsolete function; this function is now SI:PROCESS-WAIT-WHOSTATE")))))
+      (COMPILER::OBSOLETE :OBSOLETE NIL "~S ~A." PROCESS-WHOSTATE "is an obsolete function; this function is now SI:PROCESS-WAIT-WHOSTATE"))
+     ((:METHOD SI:FILE-DATA-STREAM-MIXIN :PEEK-FILE-SYSTEM) NIL NIL
+      (COMPILER::SELF-USED-IN-INTERNAL-LAMBDA :UNIMPLEMENTED NIL "~S is being referenced by a lexically closed-over function.
+This will not, of course, work outside of the dynamic scope of ~S.~:[
+This problem will be fixed when Mly's brain hurts a little less.~]" SELF SELF NIL)
+      (COMPILER::SELF-USED-IN-INTERNAL-LAMBDA :UNIMPLEMENTED NIL "~S is being referenced by a lexically closed-over function.
+This will not, of course, work outside of the dynamic scope of ~S.~:[
+This problem will be fixed when Mly's brain hurts a little less.~]" SELF SELF NIL)))))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
-  '#FS::LOGICAL-PATHNAME "SYS: WINDOW; PEEKCH LISP >"
+  '#FS::LOGICAL-PATHNAME "SYS: NETWORK; CHAOS; PEEKCH LISP >"
   '((:COMPILE NIL)))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-

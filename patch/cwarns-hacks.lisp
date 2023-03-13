@@ -1,5 +1,5 @@
 
-;System HACKS made by LISPM at 1/31/23 20:37:32  -*-Mode: Lisp; Package: User; Base: 10.-*-
+;System HACKS made by LISPM at 3/12/23 21:22:16  -*-Mode: Lisp; Package: User; Base: 10.-*-
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: DEMO; HAKDEF LISP >"
@@ -13,7 +13,9 @@
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: DEMO; ALARM LISP >"
-  '((:COMPILE NIL)))
+  '((:COMPILE NIL
+     (HACKS::ACTIVATE-ALARM-PROCESS NIL NIL
+      (COMPILER::OBSOLETE :OBSOLETE NIL "~S ~A." PROCESS-PRESET "is an obsolete function; Use the :PRESET message")))))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
@@ -121,4 +123,9 @@
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: DEMO; WORM-TRAILS LISP >"
-  '((:COMPILE NIL)))
+  '((:COMPILE NIL
+     ((:METHOD HACKS::WORMY-FLAVOR :COMBINED :DEEXPOSE) NIL NIL
+      (COMPILER::INSTANCE-VARIABLE-USED-IN-INTERNAL-LAMBDA :UNIMPLEMENTED NIL "The ~:[~;special ~]instance variable ~S of flavor ~S
+is being referenced by a lexically closed-over function.
+This will not work outside of the dynamic scope of ~S.~:[
+This problem will be fixed when Mly's brain hurts a little less.~]" NIL TV:SCREEN-ARRAY HACKS::WORMY-FLAVOR SELF NIL)))))

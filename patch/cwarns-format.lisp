@@ -1,13 +1,8 @@
 
-;System FORMAT made by LISPM at 1/31/23 17:54:05  -*-Mode: Lisp; Package: User; Base: 10.-*-
+;System FORMAT made by LISPM at 3/12/23 18:40:54  -*-Mode: Lisp; Package: User; Base: 10.-*-
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: IO; FORMAT LISP >"
-  '((:COMPILE NIL)))
-
-;-*-Mode: Lisp; Package: User; Base: 10. -*-
-(SI:RELOAD-FILE-WARNINGS
-  '#FS::LOGICAL-PATHNAME "SYS: IO; FORMAT-MACRO LISP >"
   '((:COMPILE NIL)))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-

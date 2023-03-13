@@ -1,8 +1,8 @@
 
-;System CHAOS made by LISPM at 1/31/23 17:57:07  -*-Mode: Lisp; Package: User; Base: 10.-*-
+;System CHAOS made by LISPM at 3/12/23 18:43:26  -*-Mode: Lisp; Package: User; Base: 10.-*-
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
-  '#FS::LOGICAL-PATHNAME "SYS: IO; CHSNCP LISP >"
+  '#FS::LOGICAL-PATHNAME "SYS: NETWORK; CHAOS; CHSNCP LISP >"
   '((:COMPILE NIL
      (CHAOS::SETUP-MY-ADDRESS NIL NIL
       (COMPILER:UNDEFINED-FUNCTION-USED :PROBABLE-ERROR NIL "The undefined function ~S was called" SI::FIND-PROCESSOR-CONFIGURATION-STRUCTURE)
@@ -22,21 +22,21 @@
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
-  '#FS::LOGICAL-PATHNAME "SYS: IO; CHUSE LISP >"
+  '#FS::LOGICAL-PATHNAME "SYS: NETWORK; CHAOS; CHUSE LISP >"
   '((:COMPILE NIL)))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
-  '#FS::LOGICAL-PATHNAME "SYS: IO; CHSAUX LISP >"
+  '#FS::LOGICAL-PATHNAME "SYS: NETWORK; CHAOS; CHSAUX LISP >"
   '((:COMPILE NIL
      (CHAOS:POLL-HOSTS NIL NIL
       (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." CHAOS::PKT))
      (CHAOS::USER-ACTIVITY-STRING NIL NIL
-      (SI::BAD-TYPE :IMPLAUSIBLE NIL "The type ~S does not seem to be defined" ZWEI::ZMAIL-FRAME)))))
+      (COMPILER::BAD-TYPE-SPECIFICATION :IMPLAUSIBLE NIL "Error expanding type specification ~S for ~S:~%   ~A" (QUOTE ZWEI::ZMAIL-FRAME) TYPEP #FERROR :PROPERTY-LIST (:TYPE-SPECIFIER ZWEI::ZMAIL-FRAME) :CONDITION-NAMES (FERROR ERROR CONDITION SI::INVALID-TYPE-SPECIFIER) :FORMAT-STRING "~S is not a known type specifier" :FORMAT-ARGS (ZWEI::ZMAIL-FRAME))))))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
-  '#FS::LOGICAL-PATHNAME "SYS: IO1; CHATST LISP >"
+  '#FS::LOGICAL-PATHNAME "SYS: NETWORK; CHAOS; CHATST LISP >"
   '((:COMPILE NIL
      (CHAOS::%U-WRITE NIL NIL
       (COMPILER:UNDEFINED-FUNCTION-USED :PROBABLE-ERROR NIL "The undefined function ~S was called" CADR:DBG-WRITE))
@@ -45,7 +45,7 @@
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
-  '#FS::LOGICAL-PATHNAME "SYS: IO1; EFTP LISP >"
+  '#FS::LOGICAL-PATHNAME "SYS: NETWORK; CHAOS; EFTP LISP >"
   '((:COMPILE NIL)))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-

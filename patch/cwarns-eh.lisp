@@ -1,5 +1,5 @@
 
-;System EH made by LISPM at 1/31/23 20:22:44  -*-Mode: Lisp; Package: User; Base: 10.-*-
+;System EH made by LISPM at 3/12/23 21:07:37  -*-Mode: Lisp; Package: User; Base: 10.-*-
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: EH; EH LISP >"
@@ -18,9 +18,25 @@
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: EH; EHC LISP >"
-  '((:COMPILE NIL)))
+  '((:COMPILE NIL
+     (EH::COM-PRINT-OPEN-CATCH-FRAMES NIL NIL
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." EH::SG))
+     (EH::COM-PRINT-LEXICAL-ENVIRONMENT NIL NIL
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." EH::SG)))))
 
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: EH; EHW LISP >"
+  '((:COMPILE NIL
+     ((:METHOD EH::ERROR-HANDLER-TEXT-SCROLL-PANE :COMBINED :DEEXPOSE) NIL NIL
+      (COMPILER::INSTANCE-VARIABLE-USED-IN-INTERNAL-LAMBDA :UNIMPLEMENTED NIL "The ~:[~;special ~]instance variable ~S of flavor ~S
+is being referenced by a lexically closed-over function.
+This will not work outside of the dynamic scope of ~S.~:[
+This problem will be fixed when Mly's brain hurts a little less.~]" NIL TV:SCREEN-ARRAY EH::ERROR-HANDLER-TEXT-SCROLL-PANE SELF NIL))
+     (EH::COMW-PROCEED NIL NIL
+      (COMPILER::FREE-VARIABLE :MISSING-DECLARATION NIL "The variable ~S is used free; assumed special." EH::SPECIAL-COMMANDS)))))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: EH; EHBPT LISP >"
   '((:COMPILE NIL)))
