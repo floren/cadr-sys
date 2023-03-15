@@ -3,15 +3,17 @@
 System 100 is now released.  It uses microcode version 323.  It will
 not run with earlier microcode versions.
 
-There are no major incompatibilities between Systems 99 and 100, they
-should for the most part be identical.  Files compiled in System 99
-4will* run in System 100.
-
-System 100 is the content of TID/671 -- possibly the last back up of
-the Lisp Machine for the CADR, restored to a working state.
+System 100 is the restored content of TID 671, a backup of OZ from the
+MIT ToTS (Tapes of Tech Square) project, that contained a full backup
+of the Lisp Machine operating system -- possibly the last back up and
+version of the Lisp Machine for the CADR.
 
 You should also read the file 1SYS: DOC; SYS99 MSG*, which
 describe improvements that where made in System 99.
+
+There are no major incompatibilities between Systems 99 and 100, they
+should for the most part be identical.  Files compiled in System 99
+4will* run in System 100.
 
 Contents of the rest of this file:
 
@@ -33,10 +35,6 @@ Foundation, either version 3 of the License, or (at your option) any
 later version.
 
 4Incompatible Changes* 
-
-] 4Disk kludges*
-
->> Hard coded disk size?
 
 ] 4Kludges relating to Unix file names has been removed*
 
