@@ -6,5 +6,15 @@
 
 (:RELEASED
  ((0 "CADR Loaded" "RMS" NIL)
-  ;;---!!! This list has been cleared. -- AMS, 2022-08-31
+  (1 "some ua fixes:
+ Probably better to do a (make-system 'ua :compile) than rely on
+ this patch to fix everything." "Mly" NIL)
+  (2 "Load MEMD ULOAD.
+Also arrange for code to load it if needed and not loaded." "RAMESH" NIL)
+  (3 "Ucode image ENTRY-POINTS-ARRAY length increased to 2000 (octal) to reflect
+increase in length of MICROCODE-SYMBOL-AREA.
+READ-SYM-FILE rewritten to fix bit decay of old DO loops and make code
+comprehensible by mortals.
+UA-DO-DEFMIC fixed in various ways including replacement of usage of STORE
+on areas." "MUSE" NIL)
   ))
