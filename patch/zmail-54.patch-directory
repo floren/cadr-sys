@@ -6,5 +6,9 @@
 
 (:EXPERIMENTAL
  ((0 "ZMail Loaded" "RMS" NIL)
-  ;;---!!! This list has been cleared. -- AMS, 2022-09-19
+  (1 "typo broke buffer select menu
+~X screw in mode line" "Mly" NIL)
+  (2 "Allow superseding of previous babyl files" "Mly" NIL)
+  (3 "Bug in parsing Unix mail files." "RMS" NIL)
+  (4 "Kill the last of the /" at /"'s" "mly" NIL)
   ))
