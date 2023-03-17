@@ -34,10 +34,7 @@
 		)
   "Don't analyze the values of these symbols.")
 
-(defconst analyze-area (make-area :name 'debug-inf-area :representation :structure
-				  :region-size #o100000))
-
-(set-swap-recommendations-of-area analyze-area 6)
+(defvar analyze-area)
 
 (defun analyze-system (system)
   (mapc #'analyze-file-and-record (system-source-files system)))
@@ -114,7 +111,11 @@ The format of the value is:
 / (used-object-2 ...)
 / ...)
 TYPE should be one of :FUNCTION, :VALUE, :CONSTANT or :FLAVOR to only find usages
-of that particular type, or NIL, meaning to find usages of any type." 
+of that particular type, or NIL, meaning to find usages of any type."
+  (unless (variable-boundp analyze-area)
+    (setq analyze-area (make-area :name 'debug-inf-area :representation :structure
+				  :region-size #o100000))
+    (set-swap-recommendations-of-area analyze-area 6))
   (dolist (obj objects)
     (setq objects (add-symbols-optimized-into obj objects)))
   (let ((table (mapcar #'ncons objects)))
