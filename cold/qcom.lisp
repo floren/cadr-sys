@@ -1096,6 +1096,15 @@ GLOBAL:(UNLESS (= *READ-BASE* 8) (BREAK "*READ-BASE* not 8."))
   ;;when the interval timer interrupts.
   %UNIBUS-TIMED-OUTPUT-CSR-ADDRESS
   %UNIBUS-TIMED-OUTPUT-CSR-BITS
+;;;---!! These are Lambda specific and not used on the CADR.
+  %timestamped-output-count-1	;See comments in ucode in UC-PARAMETERS.
+  %timestamped-output-count-2
+
+  %count-illop-debug		;Number of times got to ILLOP-DEBUG.  These are ignored unless
+				; debug-halts enabled in A-PROCESSOR-SWITCHES.
+  %COUNT-MICRO-FAULTS		;Number page-faults in pagable-microcode system.  
+  %initial-watchdog				;number of 1/50's of a second the
+						;lambda must appear dead before sdu blinks screen
   ))
 
 ;;; M-MEM LOCNS ARE ASSIGNED PIECEMEAL..
