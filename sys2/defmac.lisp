@@ -67,20 +67,19 @@ the new function."
     (LET* ((ARGS-DATA (DEFMACRO-&MUMBLE-CHEVEUX ARGLIST '(CDR *MACROARG*) 0))
 	   (MIN-ARGS (CAR ARGS-DATA))
 	   (OPT-ARGS (CADR ARGS-DATA)))
-      `(,TYPE ,(STANDARDIZE-FUNCTION-SPEC (CAR X))
-	. ,(LAMBDA-EXP-ARGS-AND-BODY
-	     (EXPAND-DEFMACRO X ENV
-			      `((ARGLIST . ,(LOOP FOR TAIL ON (CADR X)
-						  WHEN (AND (ATOM TAIL) TAIL)
-						    RETURN (CADR X)
-						    UNTIL (EQ (CAR TAIL) '&AUX)
-						    ;; user doesn't want to see these
-						    WHEN (MEMQ (CAR TAIL)
-							       '(&ENVIRONMENT &WHOLE))
-						      DO (SETQ TAIL (CDR TAIL))
-						      ELSE COLLECT (CAR TAIL)))
-				,@(IF DEFMACRO-&BODY-FLAG
-				      `((ZWEI:INDENTATION ,(+ MIN-ARGS OPT-ARGS) 1))))))))))
+     `(LOCAL-DECLARE ((ARGLIST
+		       . ,(LOOP FOR TAIL ON (CADR X)
+				WHEN (AND (ATOM TAIL) TAIL) RETURN (CADR X)
+				UNTIL (EQ (CAR TAIL) '&AUX)
+				;; user doesn't want to see &environment...
+				WHEN (MEMQ (CAR TAIL) '(&ENVIRONMENT &WHOLE))
+				  DO (SETQ TAIL (CDR TAIL))
+				  ELSE COLLECT (CAR TAIL))))
+       ,@(AND DEFMACRO-&BODY-FLAG
+	      `((EVAL-WHEN (EVAL COMPILE LOAD)
+		  (DEFMACRO-SET-INDENTATION-FOR-ZWEI ',(CAR X) ',(+ MIN-ARGS OPT-ARGS)))))
+       (,TYPE ,(STANDARDIZE-FUNCTION-SPEC (CAR X))
+	. ,(LAMBDA-EXP-ARGS-AND-BODY (EXPAND-DEFMACRO X ENV)))))))
 
 ;;; X is the cdr of the DEFMACRO form.
 ;;; Return a LAMBDA expression for the expander function.
