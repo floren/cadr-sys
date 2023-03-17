@@ -1268,7 +1268,7 @@ and this default is not used.")
 		     "EOF on ~S in the middle of a string."
 		     STREAM STRING)
 	     (RETURN ""))
-	    ((AND (= (LDB (CHAR-CODE REAL-CH)) MATCH)
+	    ((AND (= (CHAR-CODE REAL-CH) MATCH)
 		  (NOT (= NUM TEM)))
 	     (ADJUST-ARRAY-SIZE STRING I)
 	     (RETURN STRING))
@@ -1719,25 +1719,36 @@ FILE-ATTRIBUTE-BINDINGS makes a binding for this from the Cold-load attribute.")
     (*READ-SUPPRESS*
      (VALUES))
     ((NOT LABEL)
-     (CERROR :NO-ACTION NIL 'SYS:READ-ERROR-1 "No argument (label number) to #= given."))
-    (T
-     (LET ((XR-LABEL-BINDINGS XR-LABEL-BINDINGS))
-       (IF (NOT (WITHOUT-INTERRUPTS
-		  (SETQ LABEL-BINDING (ASSQ LABEL XR-LABEL-BINDINGS))
-		  (UNLESS LABEL-BINDING
-		    (PUSH (SETQ LABEL-BINDING (LIST LABEL 0 NIL)) XR-LABEL-BINDINGS))))
-	   ;; The label is already defined, but we can't tell what it is yet.
-	   (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1
-		   "Label ~S already defined in this expression." LABEL)
-	 (SETF (CDDR LABEL-BINDING) (LOCF (CAR LABEL-BINDING)))
-	 (SETQ THING (INTERNAL-READ STREAM T NIL T))
-	 (LOOP DO
-	       (IF (ZEROP (CADR LABEL-BINDING)) (RETURN-FROM XR-#=-MACRO THING))
-	       (SETQ THING (NSUBST-EQ-SAFE 
-
-	 (NSUBST-EQ-SAFE THING (CDR LABEL-BINDING) THING)	; Substitute for `self'
-
-       THING))))
+     (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1 "No argument (label number) to #= given."))
+    ((ASSQ LABEL XR-LABEL-BINDINGS)
+     ; The label is already defined, but we can't tell what it is yet.
+     (CERROR ':NO-ACTION NIL 'SYS:READ-ERROR-1
+	     "Label ~S already defined in this expression." LABEL))
+    (T ; Go for it and BIND
+     (PUSH (LIST LABEL (NCONS NIL))		; Allocate a slot
+	   XR-LABEL-BINDINGS)
+     (LET ((LABEL-BINDING (ASSQ LABEL XR-LABEL-BINDINGS)))
+       (IF (NULL LABEL-BINDING)
+	   (FERROR 'SYS:READ-ERROR-1 "Internal error in #= after reading in label's value.")
+	 ;; The preceding line should never happen.  By writing into the slot
+	 ;; will RPLACD, we also cause other places that referred to the label
+	 ;; to get the value, too.
+	 (SETF (CONTENTS (CDR LABEL-BINDING)) (SETQ THING (INTERNAL-READ STREAM T NIL T)))
+	 ;; If THING has no bindings in it, we can make the binding of THING itself instead of
+	 ;; a locative
+	 (IF (NOT (CONSP THING))
+	     ;; Replace locative with object
+	     (SETF (CDR LABEL-BINDING) (CONTENTS (CDR LABEL-BINDING)))
+	   ;; If there are no bindings as locatives in it
+	   ;; Now we examine the list
+	   (NSUBST-EQ-SAFE THING (CDR LABEL-BINDING) THING)	; Substitute for `self'
+           (SETF (CDR LABEL-BINDING) (CONTENTS (CDR LABEL-BINDING)))
+	   ;; Catch the CDR - why does this happen ?
+	   (LET ((LAST-CONS (NTHCDR (1- (LENGTH THING)) THING)))
+	     (IF (LOCATIVEP (CDR LAST-CONS))
+		 (SETF (CDR LAST-CONS) (CONTENTS (CDR LAST-CONS))))))
+	 ; Replace locative with object
+	 THING)))))
 
 
 (DEFUN XR-##-MACRO (STREAM IGNORE &OPTIONAL (LABEL XR-SHARP-ARGUMENT))
@@ -1831,10 +1842,10 @@ FILE-ATTRIBUTE-BINDINGS makes a binding for this from the Cold-load attribute.")
 		       ((= 1+PREV-HYPHEN-POS (1- HYPHEN-POS))
 			(LET ((TEM (ASSQ (CHAR-UPCASE (CHAR-CODE (CHAR STRING
 								       1+PREV-HYPHEN-POS)))
-					 '((#/C . %%KBD-CONTROL)
-					   (#/M . %%KBD-META)
-					   (#/H . %%KBD-HYPER)
-					   (#/S . %%KBD-SUPER)))))
+					 '((#/C . %%KBD-CONTROL)
+					   (#/M . %%KBD-META)
+					   (#/H . %%KBD-HYPER)
+					   (#/S . %%KBD-SUPER)))))
 			  (IF (NULL TEM)
 			      (RETURN NIL)
 			    (SETQ CHAR (%LOGDPB 1 (SYMBOL-VALUE (CDR TEM)) CHAR)))))
