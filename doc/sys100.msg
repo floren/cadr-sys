@@ -11,14 +11,18 @@ version of the Lisp Machine for the CADR.
 You should also read the file 1SYS: DOC; SYS99 MSG*, which
 describe improvements that where made in System 99.
 
-There are no major incompatibilities between Systems 99 and 100, they
-should for the most part be identical.  Files compiled in System 99
-4will* run in System 100.  All systems have had their version
+There are no major incompatibilities between Systems 99.32 and 100,
+they should for the most part be identical.  Files compiled in System
+99 4will* run in System 100.  All systems have had their version
 incremented by one.
+
+The Lisp Machine Manual, Sixth Edition (June 1984) pairs with System
+100.
 
 Contents of the rest of this file:
 
-4   License Change* 
+4   License Change*
+4   Summary of Changes Against TID/671* 
 4   Incompatible Changes* 
 4   Known Bugs* 
 4   User Interface Changes* 
@@ -33,6 +37,10 @@ Everything is now redistributed and/or modifed under the terms of the
 GNU Affero General Public License as published by the Free Software
 Foundation, either version 3 of the License, or (at your option) any
 later version.
+
+4Summary of Changes Against TID/671* 
+
+] 4QCOM stuff ....*
 
 4Incompatible Changes* 
 
