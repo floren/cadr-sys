@@ -13,15 +13,15 @@ describe improvements that where made in System 99.
 
 There are no major incompatibilities between Systems 99 and 100, they
 should for the most part be identical.  Files compiled in System 99
-4will* run in System 100.
+4will* run in System 100.  All systems have had their version
+incremented by one.
 
 Contents of the rest of this file:
 
 4   License Change* 
 4   Incompatible Changes* 
-4   Window System Changes* 
+4   Known Bugs* 
 4   User Interface Changes* 
-4   Editor Changes* 
 4   Network Changes* 
 
 
@@ -41,7 +41,12 @@ later version.
 This also means that the canonical file type on Unix is the same as on
 the Lisp Machine (i.e., not truncated).
 
-4Window System Changes* 
+4Known Bugs* 
+
+] 4Blinker not working properly*
+
+The blinker that shows where the point is does not work, this will be
+addressed in a patch at some later date.
 
 4User Interface Changes* 
 
@@ -51,13 +56,15 @@ If CADRLP cannot figure out what the next microcode version number
 will be it will prompt the user for one.  This occurs on file systems
 that do not support version numbers (e.g. Unix).
 
-4Editor Changes* 
-
 4Network Changes* 
 
-] 4MIT-OZ is not really OZ*
+] 4OZ is not really MIT-OZ*
 
->> MINI hard codes to OZ.
->> OZ changed to pretend to be Unix.
+MIT-OZ is identifies now a Unix machine (instead of TOPS-20), and has
+a new Chaosnet address.  MINI hard codes the MINI server to OZ on the
+same subnet.  If doing QLD against something else set
+MINI-DESTINATION-ADDRESS and MINI-ROUTING-ADDRESS accordingly before
+calling SI:QLD.
 
-4Site option Changes* 
+The host table, SITE; HOSTS TEXT has been trimmed to only list MIT-OZ
+and MIT-LISPM-1.
