@@ -6,5 +6,16 @@
 
 (:EXPERIMENTAL
  ((0 "MagTape Loaded" "RPK" NIL)
-  ;;---!!! This list has been cleared. -- AMS, 2022-09-19
+  (1 "Make sure :BYTE-SIZE and :DIRECTORY are correct.
+:TRANSFORM argument for FS:RESTORE-MAGTAPE." "LMFile" NIL)
+  (2 "Make correct flavor of stream (character, binary) on output." "LMFile" NIL)
+  (3 ":ONLY-LATEST arg to COPY-DIRECTORY uses :NEWEST :VERSION" "LMFile" NIL)
+  (4 "RESTORE-MAGTAPE
+ Queries formatted more nicely.
+ If the :TRANSFORM function returns (), the file is skipped.
+ If :QUERYing, allow P (proceed) as a response." "LMFile" NIL)
+  (5 "Define (for FS:RESTORE-MAGTAPE) the :ASK-AND-DEFAULT transform that queries for a
+a translation from one directory to another each time it encounters a new directory
+on tape.  The translations are stored as an alist in *ASK-PER-DIRECTORY-DEFAULTS*." "LMFile" NIL)
+  (6 ":COPY-SUBDIRECTORIES and :FILTER for FS:COPY-DIRECTORY" "LMFile" NIL)
   ))
