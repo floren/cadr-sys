@@ -3,7 +3,7 @@
 System 100 is now released.  It uses microcode version 323.  It will
 not run with earlier microcode versions.
 
-System 100 is the restored content of TID 671, a backup of OZ from the
+System 100 is the restored content of TID/671, a backup of OZ from the
 MIT ToTS (Tapes of Tech Square) project, that contained a full backup
 of the Lisp Machine operating system -- possibly the last back up and
 version of the Lisp Machine for the CADR.
@@ -14,7 +14,7 @@ describe improvements that where made in System 99.
 There are no major incompatibilities between Systems 99.32 and 100,
 they should for the most part be identical.  Files compiled in System
 99 4will* run in System 100.  All systems have had their version
-incremented by one.
+incremented by one to avoid confusion.
 
 The Lisp Machine Manual, Sixth Edition (June 1984) pairs with System
 100.
@@ -33,14 +33,26 @@ Contents of the rest of this file:
 
       3Restrain social decay -- help get programmers sharing again.*
 
-Everything is now redistributed and/or modifed under the terms of the
+Everything is now redistributed and/or modified under the terms of the
 GNU Affero General Public License as published by the Free Software
 Foundation, either version 3 of the License, or (at your option) any
 later version.
 
 4Summary of Changes Against TID/671* 
 
-] 4QCOM stuff ....*
+The majority of changes between System 100.0 and System 99.32
+(TID/671) are typos -- missing parenthesis, misspellings, and other
+minor lossage.
+
+Bringing System 100.0 (which should be equal to System 99.32) has been
+troublesome since one needs a similar enough load band to get things
+into working order.
+
+This was only possible when we got System 98 working well enough that
+it could bootstrap it self, which in turn allowed for something close
+enough to System 99.0 to do the same.  The difference between System
+99.0 and System 99.32 (TID/671) is almost 7 years of development with
+many incompatible changes, out right broken changes, and typos.
 
 4Incompatible Changes* 
 
