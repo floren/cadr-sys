@@ -1,5 +1,5 @@
 
-;System ZWEI made by LISPM at 3/12/23 20:12:34  -*-Mode: Lisp; Package: User; Base: 10.-*-
+;System ZWEI made by AMS at 3/20/23 10:00:20  -*-Mode: Lisp; Package: User; Base: 10.-*-
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: ZWEI; DEFS LISP >"

@@ -1,5 +1,5 @@
 
-;System PEEK made by LISPM at 3/12/23 20:05:05  -*-Mode: Lisp; Package: User; Base: 10.-*-
+;System PEEK made by AMS at 3/20/23 09:51:01  -*-Mode: Lisp; Package: User; Base: 10.-*-
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: WINDOW; PEEK LISP >"

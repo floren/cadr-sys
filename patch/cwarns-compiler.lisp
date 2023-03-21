@@ -1,5 +1,5 @@
 
-;System COMPILER made by LISPM at 3/12/23 18:50:00  -*-Mode: Lisp; Package: User; Base: 10.-*-
+;System COMPILER made by AMS at 3/20/23 08:23:47  -*-Mode: Lisp; Package: User; Base: 10.-*-
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: SYS; MADEFS LISP >"

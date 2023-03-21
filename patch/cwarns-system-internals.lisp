@@ -1,5 +1,5 @@
 
-;System SYSTEM-INTERNALS made by LISPM at 3/12/23 17:49:26  -*-Mode: Lisp; Package: User; Base: 10.-*-
+;System SYSTEM-INTERNALS made by AMS at 3/20/23 07:09:20  -*-Mode: Lisp; Package: User; Base: 10.-*-
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: SYS2; PRODEF LISP >"
@@ -317,8 +317,6 @@
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: IO; READ LISP >"
   '((:COMPILE NIL
-     (SI::XR-XRTYI NIL NIL
-      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." SI::FOUND-MULTI-ESCAPES))
      (SI::XR-#=-MACRO NIL NIL
       (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." SI::LABEL-BINDING)))))
 

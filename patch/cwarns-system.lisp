@@ -1,5 +1,5 @@
 
-;System System made by LISPM at 10/21/22 15:07:23  -*-Mode: Lisp; Package: User; Base: 10.-*-
+;System System made by AMS at 10/21/22 15:07:23  -*-Mode: Lisp; Package: User; Base: 10.-*-
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS:LOGICAL-PATHNAME "SYS: DEMO; ALARM LISP >"

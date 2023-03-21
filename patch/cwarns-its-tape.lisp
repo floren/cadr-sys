@@ -1,5 +1,5 @@
 
-;System ITS-Tape made by LISPM at 2/01/23 04:25:58  -*-Mode: Lisp; Package: User; Base: 10.-*-
+;System ITS-Tape made by AMS at 2/01/23 04:25:58  -*-Mode: Lisp; Package: User; Base: 10.-*-
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: TAPE; PDP10 LISP >"
