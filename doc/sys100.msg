@@ -9,7 +9,7 @@ of the Lisp Machine operating system -- possibly the last back up and
 version of the Lisp Machine for the CADR.
 
 You should also read the file 1SYS: DOC; SYS99 MSG*, which
-describe improvements that where made in System 99.
+describe the improvements that where made in System 99.
 
 There are no major incompatibilities between Systems 99.32 and 100,
 they should for the most part be identical.  Files compiled in System
@@ -33,20 +33,19 @@ Contents of the rest of this file:
 
       3Restrain social decay -- help get programmers sharing again.*
 
-Everything is now redistributed and/or modified under the terms of the
-GNU Affero General Public License as published by the Free Software
-Foundation, either version 3 of the License, or (at your option) any
-later version.
+Everything is now licensed under the terms of the GNU Affero General
+Public License as published by the Free Software Foundation, either
+version 3 of the License, or (at your option) any later version.
 
 4Summary of Changes Against TID/671* 
 
 The majority of changes between System 100.0 and System 99.32
 (TID/671) are typos -- missing parenthesis, misspellings, and other
-minor lossage.
+minor lossage.  Some changes though are critical, and quite broken.
 
-Bringing System 100.0 (which should be equal to System 99.32) has been
-troublesome since one needs a similar enough load band to get things
-into working order.
+Bringing System 100.0 (which should be equal to System 99.32) was
+troublesome since one needs a similar enough system to get things into
+working order.
 
 This was only possible when we got System 98 working well enough that
 it could bootstrap it self, which in turn allowed for something close
@@ -66,7 +65,7 @@ the Lisp Machine (i.e., not truncated).
 ] 4Blinker not working properly*
 
 The blinker that shows where the point is does not work, this will be
-addressed in a patch at some later date.
+addressed soon as a System patch.
 
 4User Interface Changes* 
 
