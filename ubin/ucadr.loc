@@ -1,8 +1,0 @@
-; -*- Mode:LISP; Base:8; Readtable:ZL -*-
-
-
-LOCATIONS-USED 
-(A-MEM 1176) 
-(M-MEM 40) 
-(I-MEM 30240) 
-(D-MEM 3615) 
