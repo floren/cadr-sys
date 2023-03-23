@@ -1,5 +1,5 @@
 
-;System ZMail made by AMS at 3/21/23 02:07:07  -*-Mode: Lisp; Package: User; Base: 10.-*-
+;System ZMail made by AMS at 3/22/23 11:49:31  -*-Mode: Lisp; Package: User; Base: 10.-*-
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: ZMAIL; DEFS LISP >"

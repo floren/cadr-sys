@@ -1,5 +1,5 @@
 
-;System OUTER-SYSTEM made by AMS at 3/20/23 11:47:07  -*-Mode: Lisp; Package: User; Base: 10.-*-
+;System OUTER-SYSTEM made by AMS at 3/22/23 09:45:56  -*-Mode: Lisp; Package: User; Base: 10.-*-
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: IO1; XGP LISP >"

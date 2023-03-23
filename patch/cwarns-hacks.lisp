@@ -1,5 +1,5 @@
 
-;System HACKS made by AMS at 3/20/23 11:25:41  -*-Mode: Lisp; Package: User; Base: 10.-*-
+;System HACKS made by AMS at 3/22/23 09:12:59  -*-Mode: Lisp; Package: User; Base: 10.-*-
 ;-*-Mode: Lisp; Package: User; Base: 10. -*-
 (SI:RELOAD-FILE-WARNINGS
   '#FS::LOGICAL-PATHNAME "SYS: DEMO; HAKDEF LISP >"
