@@ -1,0 +1,10 @@
+;;; -*- Mode: Lisp; Package: User; Base: 10.; Patch-File: T -*-
+;;; Patch directory for LMFILE-Remote version 23
+;;; Written 12/29/82 23:30:01 by rms,
+;;; while running on Lisp Machine Eighteen from band 3
+;;; with Remote-File 22.0, LMFILE-Remote 23.1, Experimental MIT-Specific 16.0, System 91.22, ZMail 48.4, microcode 204, !.
+
+(RELEASED
+ ((0 "LMFILE-Remote Loaded" "RMS")
+  (1 "Make FC work with new error system." "RMS")
+  ))

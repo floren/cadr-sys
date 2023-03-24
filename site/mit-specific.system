@@ -1,0 +1,12 @@
+;;; -*- Mode:Lisp;Package:USER;Fonts:CPTFONT;Base:10-*-
+
+(DEFSYSTEM MIT-SPECIFIC
+  (:NAME "MIT-Specific")
+  (:SHORT-NAME "MIT")
+  (:PATHNAME-DEFAULT "SYS: SITE;")
+  (:PATCHABLE)
+  (:INITIAL-STATUS :RELEASED)
+  (:NOT-IN-DISK-LABEL)
+  (:MODULE XGP "SYS: IO1; XGP")
+  (:MODULE LOCAL-CHAOS "MITSPECIFIC" "NETU")         ;; Random net utilities
+  (:COMPILE-LOAD (XGP LOCAL-CHAOS)))

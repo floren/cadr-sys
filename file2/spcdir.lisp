@@ -1,0 +1,873 @@
+;;; -*-Mode: Lisp; Package: FILE-SYSTEM; Base: 8; Lowercase:T -*-
+
+;NAME-AND-VERSION-DIR-NODEs.
+
+;This kind of directory indexes each file by a name, which is a string,
+;and a version number.
+;One kind of flavor-specific pathstep is defined: a list (:NAME name).
+;This differs from just a string in that a string is presumed unparsed,
+;which means that any quote characters are still present in it,
+;whereas in the string for the name in a list (:NAME name),
+;quote characters have been removed.
+
+;This kind of directory stores its directory-list as
+;an alist of (name-as-string unused . list-of-versions)
+;where list-of-versions is an alist of (version-number . list-of-entries)
+;in order of decreasing version number.
+;and list-of-entries is a list of dir-entries,
+;at most one of which can be non-deleted.
+
+;Given a pathstep specified by the user,
+;get an error if it is not syntactically valid.
+;Return a valid the element as corrected by the user.
+;We don't care about whether such a subnode exists,
+;just whether the pathstep looks ok.
+(defmethod (name-and-version-dir-node validate-pathstep) (pathstep &aux name version)
+ (prog ()
+  (cond ((stringp pathstep)
+	 (setq pathstep (parse-name-and-version pathstep ':version))))
+  ;; Validate the overall structure.
+  (do () ((valid-pathstep-formatp pathstep))
+    (setq pathstep (cerror ':new-value nil 'invalid-pathname-syntax
+			   "Bad pathstep: ~S." pathstep)))
+  (and (consp pathstep)
+       (selectq (car pathstep)
+	 (:property (return `(:property ,(cadr pathstep)
+					,(validate-version (caddr pathstep)))))
+	 (:subnode-property
+	  (return `(:subnode-property
+		     (:name ,(extract-pathstep-name
+			       (funcall-self 'validate-pathstep (cadr pathstep))))
+		     ,(caddr pathstep)
+		     ,(validate-version (cadddr pathstep)))))
+	 ;; Since the structure is a valid one, extract
+	 ;; what ought to be the name-string and version.
+	 (:version
+	  (setq version (validate-version (caddr pathstep))))))
+  (setq name (extract-pathstep-name pathstep))
+  ;; Now validate the name
+  (do () ((and (stringp name) (< (string-length name) dir-max-name-length)))
+    (setq name (cerror ':new-value nil 'invalid-pathname-syntax
+		       (cond ((stringp name) "Subnode name ~S too long")
+			     (t "Bad subnode name: ~S"))
+		       name)))
+  ;; Return a valid pathstep constructed from valid name and valid version.
+  (return `(:version (:name ,name) ,version))))
+
+(defun validate-version (version)
+  ;; Validate the version.
+  (do () ((or (fixp version)
+	      (memq version '(nil :> :< :!))))
+    (setq version
+	  (cerror ':new-value nil 'invalid-pathname-syntax
+		  "Bad file version spec: ~A." version)))
+  version)
+
+(defun extract-pathstep-name (pathstep)
+  (cond ((stringp pathstep) (remove-quote-chars pathstep))
+	((eq (car pathstep) ':subnode-property)
+	 (string-append (extract-pathstep-name (cadr pathstep))
+			" "
+			(remove-quote-chars (caddr pathstep))))
+	((eq (car pathstep) ':version)
+	 (extract-pathstep-name (cadr pathstep)))
+	((eq (car pathstep) ':multiple-names)
+	 (let (accum)
+	   (dolist (str (cdr pathstep))
+	     (setq accum (string-append (or accum "") (if accum " " "")
+					(remove-quote-chars str))))
+	   accum))
+	(t (cadr pathstep))))
+
+(defun valid-name-formatp (pathstep?)
+  (or (stringp pathstep?)
+      (and (consp pathstep?)
+	   (eq (car pathstep?) ':name)
+	   (consp (cdr pathstep?))
+	   (null (cddr pathstep?)))
+      (and (consp pathstep?)
+	   (eq (car pathstep?) ':multiple-names))))
+
+(defun valid-version-formatp (pathstep)
+  (and (consp pathstep)
+       (eq (car pathstep) ':version)
+       (consp (cdr pathstep))
+       (consp (cddr pathstep))
+       (valid-name-formatp (cadr pathstep))))
+
+(defun valid-pathstep-formatp (pathstep)
+  (or (valid-name-formatp pathstep)
+      (valid-version-formatp pathstep)
+      (valid-property-pathstep-p pathstep)
+      (and (valid-subnode-property-pathstep-p pathstep)
+	   (valid-pathstep-formatp (cadr pathstep)))))
+
+;Turn the full-pathstep of a subnode of ours
+;into a standard-pathstep.
+;The second arg, if T, says omit the version number
+;if this pathstep is for the most recent version.
+(defmethod (name-and-version-dir-node full-pathstep-to-standard)
+	   (full-pathstep &optional version-not-required
+	    &aux name entry (default-cons-area node-caller-area))
+  (setq name (with-output-to-string (standard-output)
+	       (princ-with-quoting (cadadr full-pathstep) nil '(#/|))))
+  (if (and version-not-required
+	   (setq entry (funcall-self 'find-entry
+				     `(:version ,(cadr full-pathstep) nil)))
+	   (equal full-pathstep
+		  (dir-entry-full-pathstep entry)))
+      name
+      `(:version ,name ,(caddr full-pathstep))))
+
+;Inherit the case-pattern of a name from an old entry
+;so that we can make new versions keep the same case pattern as the old ones.
+(defmethod (name-and-version-dir-node inherit-entry-name) (pathstep old-entry)
+  (cond (old-entry
+	 `(:version ,(cadr (dir-entry-full-pathstep old-entry)) ,(caddr pathstep)))
+	(t pathstep)))
+
+(defmethod (name-and-version-dir-node inherit-entry-name-and-version) (pathstep old-entry)
+  (cond (old-entry
+	 (dir-entry-full-pathstep old-entry))
+	(t pathstep)))
+
+;Given a user-specified pathstep,
+;find the dir entry for it (or nil if there is none).
+;Return the entry, and the full-pathstep
+;to add to our own full pathlist to get the subnode's full pathlist.
+;NEW-VERSION says that a version of > or NIL should
+;not be found.
+(defmethod (name-and-version-dir-node find-entry)
+           (pathstep &optional accept-deleted-nodes new-version)
+  (declare (return-list dir-entry pathstep))
+  (let (name version name-entry version-entry)
+    (setf `(:version (:name ,name) ,version) pathstep)
+    (setq name-entry (ass 'string-equal name directory-list))
+    ;; If name-entry is non-nil, we have found the specified name.
+    (and (memq version '(nil :>))
+	 (setq version (if new-version 'no-such-version 0)))
+    (and name-entry
+	 (setq version-entry
+	       (cond ((and (numberp version) (plusp version))
+		      (assq version (cddr name-entry)))
+		     ((numberp version)
+		      (let ((max-version
+			      (cond (accept-deleted-nodes (caaddr name-entry))
+				    ;; If we don't want deleted nodes,
+				    ;; find largest version number which has a non-deleted one
+				    ;; Max-version is NIL if all are deleted.
+				    (t (prog foo ()
+					     (dolist (v (cddr name-entry))
+					       (dolist (e (cdr v))
+						 (or (dir-entry-deleted e)
+						     (return-from foo (car v))))))))))
+			(and max-version
+			     (assq (+ version max-version) (cddr name-entry)))))
+		     ((eq version ':<)
+		      (cond (accept-deleted-nodes (car (last name-entry)))
+			    (t
+			     (prog foo ()
+				   (dolist (v (reverse (cddr name-entry)))
+				     (dolist (e (cdr v))
+				       (or (dir-entry-deleted e)
+					   (return-from foo v))))))))
+		     ((eq version ':!)
+		      (prog foo ()
+			(dolist (v (cddr name-entry))
+			  (dolist (e (cdr v))
+			    (and (or accept-deleted-nodes (not (dir-entry-deleted e)))
+				 (memq ':installed (dir-entry-flags e))
+				 (return-from foo v)))))))))
+    ;; Found specified version - remember version number,
+    ;; and look for an entry that is not "deleted".
+    (and version-entry
+	 (cond (accept-deleted-nodes (cadr version-entry))
+	       (t (dolist (tem1 (cdr version-entry))
+		    (or (dir-entry-deleted tem1)
+			(return tem1))))))))
+
+;Move an entry to a new position in the directory.
+;Only the names have an arbitrary position;
+;versions are always in descending numeric order
+;and the order of entries for one version is not significant.
+;The pathstep-to-go-before is a pathstep for
+;finding an entry; the one we are moving goes before that one.
+;If that one is not found, the one we are moving goes to the end.
+(defmethod (name-and-version-dir-node reposition-entry)
+	   (entry pathstep-to-go-before)
+  entry
+  (cond ((eq (car pathstep-to-go-before) ':subnode-property)
+	 (setq pathstep-to-go-before
+	       `(:version (:name ,(string-append (cadadr pathstep-to-go-before)
+						 " "
+						 (remove-quote-chars
+						   (caddr pathstep-to-go-before))))
+			  ,(cadddr pathstep-to-go-before))))
+	((eq (car pathstep-to-go-before) ':property)
+	 (cerror ':new-value nil 'invalid-pathname-syntax
+		 ":PROPERTY pathstep invalid for this use.")))
+  (setq directory-changed t)
+  (let ((old-name (cadadr (dir-entry-full-pathstep entry)))
+	(before-name (cadadr pathstep-to-go-before)))
+    (let ((name-entry (assq old-name directory-list)))
+      (setq directory-list (delq name-entry directory-list 1))
+      (let ((replace-name-tail (nleft 1 (locf directory-list)
+				      (memq (assq before-name directory-list)
+					    directory-list))))
+	(push name-entry (cdr replace-name-tail))))))
+
+;Iterator operations which map a user-specified function over the directory's entries.
+
+;Apply function to args for each entry in our directory.
+;The first arg given to the function is the entry.
+;Then come the elements of ARGS.
+(defmethod (name-and-version-dir-node loop-over-directory)
+	   (function &rest args)
+  (dolist (name-entry directory-list)
+    (dolist (version-entry (cddr name-entry))
+      (dolist (entry (cdr version-entry))
+	(lexpr-funcall function entry args)))))
+
+(defmethod (name-and-version-dir-node :directory-entries) (viewspec depth)
+  viewspec depth
+  (loop for name-entry in directory-list
+	append (loop named foo
+		     for version-entry in (cddr name-entry)
+		     do (loop for entry in (cdr version-entry)
+			      do (if (not (dir-entry-deleted entry))
+				     (return-from foo (list entry)))))))
+
+;This is semi-obsolete.
+;Apply function to args for each entry in our directory
+;that matches the specified pathstep-pattern.
+;The first arg given to the function is the entry.
+;Then come the elements of ARGS.
+(defmethod (name-and-version-dir-node loop-over-matching-entries)
+	   (pattern accept-deleted-nodes function &rest args)
+  (dolist (name-entry directory-list)
+    (dolist (version-entry (cddr name-entry))
+      (dolist (entry (cdr version-entry))
+	(and (pathlist-match pattern entry name-entry nil
+			     version-entry accept-deleted-nodes)
+	     (lexpr-funcall function entry args))))))
+
+(defun pathlist-match (pattern entry name-entry max-version
+		       version-entry accept-deleted-nodes)
+  name-entry version-entry
+  (and (or accept-deleted-nodes
+	   (not (dir-entry-deleted entry)))
+       (or (null pattern)
+	   (let* ((pattern (car pattern))
+		  ;; This is the name we are deciding whether matches.
+		  (name (cadr (cadr (dir-entry-full-pathstep entry))))
+		  (patname pattern)
+		  patprop
+		  patlen patver)
+	     (cond ((atom pattern))
+		   ((eq (car pattern) ':subnode-property)
+		    (setq patname (cadr pattern)
+			  patprop (caddr pattern)
+			  patver (cadddr pattern)))
+		   ((eq (car pattern) ':version)
+		    (setq patname (cadr pattern) patver (caddr pattern)))
+		   ;; Don't have anything reasonable to do for :property yet,
+		   ;; so just don't bomb out.
+		   (t (setq patname nil patver nil)))
+	     (setq patlen (string-length patname))
+	     (and (cond ((memq patver '(nil :< :*)) t)
+			((and (numberp patver) (plusp patver))
+			 (= patver (caddr (dir-entry-full-pathstep entry))))
+			((eq patver ':!)
+			 (memq ':installed (dir-entry-flags entry)))
+			((eq patver ':>)
+			 (= max-version
+			    (caddr (dir-entry-full-pathstep entry))))
+			((numberp patver)
+			 (or (null max-version)
+			     (= (+ max-version patver)
+				(caddr (dir-entry-full-pathstep entry))))))
+		  (or (null patprop)
+		      (equal patprop "*")
+		      (and (> (string-length name)
+			      (+ (string-length patprop)
+				 patlen))
+			   (string-equal patprop name
+					 0 (- (string-length name) (string-length patprop)))
+			   (= (aref name (- (string-length name) (string-length patprop) 1))
+			      #\space)))
+		  (or (null patname)
+		      (string-equal patname "*")
+		      (string-equal patname "**")
+		      (string-equal patname name
+				    0 0 patlen patlen)))))))
+
+;Call FUNCTION with ARGS (plus some other args)
+;on each entry in this dir that matches PATHLIST.
+;NAME-PATHLIST-PREFIX is the pathlist of this node,
+;starting from the node at which the recursion originated.
+;It is appended to and passed along as appropriate to the subnode
+;FUNCTION is being called for.
+
+;The args received by FUNCTION are the entry, the update name-pathlist,
+;the remainder of the pattern (sans the first step, just matched)
+;ACCEPT-DELETED-NODES, and the specific arguments in ARGS.
+
+;You can call with DONT-LOCK, in which case the directory list
+;is copied at one instant and the copy is then used.
+(defmethod (name-and-version-dir-node dir-iterate)
+       (pathlist accept-deleted-nodes name-pathlist-prefix
+	function &rest args &aux (dirlist directory-list))
+  (or node-lock (without-interrupts (setq dirlist (copytree directory-list))))
+  (and (or (equal pathlist '("**"))
+	   (equal pathlist '((:subnode-property "**" "*" :*))))
+       (setq pathlist t))
+  (dolist (name-entry dirlist)
+    (let ((max-version
+	    (cond (accept-deleted-nodes (caaddr name-entry))
+		  ;; If we don't want deleted nodes,
+		  ;; find largest version number which has a non-deleted one
+		  ;; Max-version is NIL if all are deleted.
+		  (t (prog foo ()
+			   (dolist (v (cddr name-entry))
+			     (dolist (e (cdr v))
+			       (or (dir-entry-deleted e)
+				   (return-from foo (car v))))))))))
+      (dolist (version-entry (reverse (cddr name-entry)))
+	(dolist (entry (cdr version-entry))
+	  (and (pathlist-match (if (eq pathlist t) '("**") (list (car pathlist)))
+			       entry name-entry max-version
+			       version-entry accept-deleted-nodes)
+	       (let ((pathrest (if (eq pathlist t) t (cdr pathlist)))
+		     (name-pathlist (append name-pathlist-prefix
+					    (list (funcall-self
+						    'full-pathstep-to-standard
+						    (dir-entry-full-pathstep entry))))))
+		 (lexpr-funcall function entry name-pathlist pathrest
+				accept-deleted-nodes max-version args))))))))
+
+;Make a directory list just like ours, containing hard links to our own subnodes.
+(defmethod (name-and-version-dir-node make-hard-link-list) (descriptor)
+  (prog1
+    (loop for name-entry in directory-list
+	  collect
+	  (list* (car name-entry) (cadr name-entry)
+		 (loop for version-entry in (cddr name-entry)
+		       collect
+		       (cons (car version-entry)
+			     (loop for entry in (cdr version-entry)
+				   collect (create-hard-link-entry
+					     entry descriptor))))))
+    (funcall-self ':finish-contents)))
+
+(defun create-hard-link-entry (entry descriptor)
+ (declare-flavor-instance-variables (dir-node)
+  (let ((new-entry (create-dir-entry 'hard-link-node
+				     (dir-entry-byte-size entry)
+				     nil
+				     '(:file-linked-to nil))))
+    (setf (dir-entry-full-pathstep new-entry) (dir-entry-full-pathstep entry))
+    (setf (dir-entry-creation-date new-entry) (dir-entry-creation-date entry))
+    (setf (dir-entry-reference-date new-entry) (dir-entry-reference-date entry))
+    (setf (dir-entry-flags new-entry) (dir-entry-flags entry))
+    (setf (dir-entry-deleted new-entry) (dir-entry-deleted entry))
+    (setf (dir-entry-length new-entry) (dir-entry-length entry))
+    (setf (dir-entry-plist new-entry) (dir-entry-plist entry))
+    (cond ((memq ':pack-number (dir-entry-pointer-info entry))
+	   (setf (dir-entry-pointer-info new-entry)
+		 (copylist (dir-entry-pointer-info entry)))
+	   (funcall-self 'subnode-add-in-link entry descriptor)
+	   (remprop (locf (dir-entry-pointer-info new-entry))
+		    ':in-link-dirs))
+	  (t
+	   (setf (dir-entry-pointer-info new-entry)
+		 (dir-entry-pointer-info entry))
+	   (setf (dir-entry-subnode-flavor new-entry)
+		 (dir-entry-subnode-flavor entry))))
+    new-entry)))
+
+
+
+;Insertion and deletion of entries.
+
+;Delete the specified entry from the directory structure of this node.
+;The subnode might be being deleted or renamed.
+;FOR-INSERTION-IN-DIR says that this is deleting an entry
+;in order to insert it in that dir; it is accompanied by info
+;about where it will be inserted.  The purpose is so that we will
+;not delete the higher levels of structure that the entry was contained in
+;if those levels will be needed for the insertion.
+(defmethod (name-and-version-dir-node delete-entry) (entry
+						      &optional for-insertion-in-dir
+						      insertion-name-entry
+						      insertion-version-entry
+						      &rest ignore)
+  (setq directory-changed t)
+  (dolist (name directory-list)
+    (dolist (version (cddr name))
+      (setf (cdr version)
+	    (delq entry (cdr version) 1))
+      (or (and (eq for-insertion-in-dir node-closure)
+	       (eq version insertion-version-entry))
+	  (cdr version)
+	  (setf (cddr name) (delq version (cddr name) 1))))
+    (or (and (eq for-insertion-in-dir node-closure)
+	     (eq name insertion-name-entry))
+	(cddr name)
+	(setq directory-list (delq name directory-list 1)))))
+
+(defmethod (name-and-version-dir-node replace-entry) (my-entry other-entry)
+ (prog replace-entry ()
+  (dolist (name directory-list)
+    (dolist (version (cddr name))
+      (and (memq my-entry (cdr version))
+	   (return-from replace-entry
+			(setf (cdr version)
+			      (cons other-entry
+				    (delq my-entry (cdr version) 1)))))))))
+
+
+;When one entry is undeleted, delete any others with same name and version.
+;Pay no attention to delete protection.
+(defmethod (name-and-version-dir-node :before undelete-subnode) (entry)
+  (dolist (name directory-list)
+    (dolist (version (cddr name))
+      (and (memq entry (cdr version))
+	   (dolist (e (cdr version))
+	     (or (eq e entry)
+		 (funcall-self 'delete-subnode e t)))))))
+
+;Insert an entry into the directory structure of this node,
+;given name and version specified by pathstep.
+;DELETE-FROM-DIRECTORY, if not nil, is another node
+;to delete this entry from.  The deletion is done
+;after all error checks but before the insertion itself.
+;So it works if that directory is the same as this one.
+;Callers assume that if this operation gets an error it has not done anything.
+(defmethod (name-and-version-dir-node insert-entry)
+	   (entry pathstep &optional no-protection delete-from-directory)
+  (let (name version name-entry version-entry most-recent-version)
+    (cond ((eq (car pathstep) ':subnode-property)
+	   (setq pathstep
+		 `(:version (:name ,(string-append (cadadr pathstep)
+						   " "
+						   (remove-quote-chars
+						     (caddr pathstep))))
+			    ,(cadddr pathstep))))
+	  ((eq (car pathstep) ':property)
+	   (cerror ':new-value nil 'invalid-pathname-syntax
+		   ":PROPERTY pathstep invalid for this use.")))
+    (setf `(:version (:name ,name) ,version) pathstep)
+    (setq name-entry (ass 'string-equal name directory-list))
+    ;; We have found the name.
+    ;; Now find or create the version.
+    (setq most-recent-version (or (caaddr name-entry) 0))
+    (setq version-entry
+	  (cond ((and (numberp version) (plusp version))
+		 (assq version (cddr name-entry)))
+		((numberp version)
+		 (assq (setq version (+ version most-recent-version)) (cddr name-entry)))
+		((memq version '(nil :! :>))
+		 (setq version (1+ most-recent-version))
+		 nil)
+		((eq version ':<)
+		 (car (last name-entry)))))
+    ;; Note: if no name-entry exists already,
+    ;; then version-entry is now nil, most-recent-version is now 0,
+    ;; and a version of > or nil has been converted to 1.
+
+    ;; Now check that we will not be deleting anything delete-protected.
+    (if (and version-entry (not no-protection))
+	(dolist (e (cdr version-entry))
+	  (and (not (dir-entry-deleted e))
+	       (neq e entry)
+	       (or (memq ':delete-protect (dir-entry-flags e))
+		   (memq ':supersede-protect (dir-entry-flags e)))
+	       (cerror ':new-value nil
+		       'dont-delete-flag-set
+		       "Old file is delete-protected for ~A."
+		       (pathlist-into-pathname
+			 (append (send self ':standard-pathlist)
+				 (list (dir-entry-full-pathstep entry))))))))
+    ;; Now check that we will not be superseding anything supersede-protected.
+    ;; This check is made when we are creating a new version.
+    (if (and (eq version (1+ most-recent-version)) (not no-protection))
+	(dolist (e (cdaddr name-entry))
+	  (and (not (dir-entry-deleted e))
+	       (memq ':supersede-protect (dir-entry-flags e))
+	       (cerror ':new-value nil
+		       'file-already-exists
+		       "Old file is supersede-protected for ~A."
+		       (pathlist-into-pathname
+			 (append (send self ':standard-pathlist)
+				 (list (dir-entry-full-pathstep entry))))))))
+    ;; Now we have determined that the operation is permissible
+    ;; and an error is no longer possible.
+    ;; So delete the entry from its previous position, if necessary.
+    (and delete-from-directory
+	 (funcall delete-from-directory 'delete-entry entry
+		  node-closure
+		  name-entry
+		  version-entry))
+    ;; Now create the name-entry if it doesn't exist already.
+    (or name-entry
+	(setq directory-list
+	      (append directory-list
+		      (list (setq name-entry (list* name nil nil))))))
+
+    ;; Now either version-entry points at the list of entries for
+    ;; the specified version, or version is now the number
+    ;; of the version to create, and create it now.
+    (or version-entry
+	(setf (cddr name-entry)
+	      (sortcar (cons (setq version-entry (cons version nil))
+			     (cddr name-entry))
+		       'greaterp)))
+    ;; Mark all other entries for this name & version as deleted
+    ;; if the new one being inserted is not.
+    (or (dir-entry-deleted entry)
+	(dolist (e (cdr version-entry))
+	  (or (eq e entry) (setf (dir-entry-deleted e) t))))
+    ;; Insert this entry on the list.
+    (setf (cdr version-entry) (cons entry (delq entry (cdr version-entry))))
+    (setf (dir-entry-full-pathstep entry)
+	  `(:version (:name ,name) ,(car version-entry)))))
+
+;This handles an :open-subnode of (:property propname) given to our subnode.
+(defmethod (name-and-version-dir-node open-subnode-property-node)
+	   (reason entry property-pathstep
+		   &rest options
+		   &key &optional inherit-property-nodes
+		   &allow-other-keys)
+  (do () ((valid-property-pathstep-p property-pathstep))
+    (setq property-pathstep (cerror ':new-value nil 'invalid-pathname-syntax
+				    "Bad pathstep: ~S." property-pathstep)))
+  (or (lexpr-funcall-self ':open-subnode reason
+			  `(:version (:name ,(string-append (cadadr
+							      (dir-entry-full-pathstep entry))
+							    " "
+							    (remove-quote-chars
+							      (cadr property-pathstep))))
+				     ,(caddr property-pathstep))
+			  options)
+      (and inherit-property-nodes
+	   (lexpr-funcall supernode 'open-subnode-property-node
+			  reason supernode-info property-pathstep options))))
+
+;Similar for :create-subnode done on our subnode.
+(defmethod (name-and-version-dir-node create-subnode-property-node)
+	   (reason entry property-pathstep &rest options)
+  (do () ((valid-property-pathstep-p property-pathstep))
+    (setq property-pathstep (cerror ':new-value nil 'invalid-pathname-syntax
+				    "Bad pathstep: ~S." property-pathstep)))
+  (lexpr-funcall-self ':create-subnode reason
+		      `(:version (:name ,(string-append (cadadr
+							  (dir-entry-full-pathstep entry))
+							" "
+							(remove-quote-chars
+							  (cadr property-pathstep))))
+				 ,(caddr property-pathstep))
+		      options))
+
+;This is what handles :open-subnode of (:subnode-property pathstep propname)
+;given to the dir itself.  The pathstep is already validated
+;and looks like (:subnode-property (:name <name>) <propname> <versionspec>).
+(defmethod (name-and-version-dir-node open-subnode-property-pathstep)
+	   (reason pathstep
+		   &rest options
+		   &key &optional inherit-property-nodes
+		   &allow-other-keys)
+  (or (lexpr-funcall-self ':open-subnode reason
+			  `(:version (:name ,(string-append (cadadr pathstep)
+							    " "
+							    (remove-quote-chars
+							      (caddr pathstep))))
+				     ,(cadddr pathstep))
+			  options)
+      (and inherit-property-nodes
+	   (lexpr-funcall supernode 'open-subnode-property-node
+			  reason supernode-info
+			  `(:property . ,(cddr pathstep)) options))))
+
+;Similar for :create-subnode on (:subnode-property pathstep propname)
+;given to the dir itself.
+(defmethod (name-and-version-dir-node create-subnode-property-pathstep)
+	   (reason pathstep &rest options)
+  (lexpr-funcall-self ':create-subnode reason
+		      `(:version (:name ,(string-append (cadadr pathstep)
+							" "
+							(remove-quote-chars
+							  (caddr pathstep))))
+				 ,(cadddr pathstep))
+		      options))
+
+;;Generating directory listings for ITS
+
+
+;The :ITS-DIRECTORY-STREAM operation returns a stream
+;which supports only the operations SERVER needs
+;and feeds out the text of the directory listing.
+
+;Here are its closure variables. 
+
+;List of (entry name version) for each file to print a line for.
+;As files are handled, we take them off this list.
+(defvar its-dirlst)
+
+;ART-8B array for use as I/O buffer
+(defvar its-dirbuf)
+
+;NIL if there is stuff left in the buffer;
+;FIRST initially meaning fill buffer with first two lines of dir listing
+;T if buffer must be refilled from files still in ITS-DIRLST
+(defvar its-dir-reload)
+
+;Position for fetching from ITS-DIRBUF
+(defvar its-dirpos)
+
+;A constant string, which is CRLF.
+(defconst its-crlf (string-append 15 12))
+
+;The name of the directory, as a string.
+(defvar its-dirname)
+
+(defmethod (name-and-version-dir-node :its-directory-stream) ()
+  (let ((its-dirlst nil)
+	(its-dir-reload 'first)
+	(its-dirpos 0)
+	(its-dirname (pathlist-to-string (funcall-self ':standard-pathlist) t))
+	(its-dirbuf (get-fc-cs-bfr)))
+    (funcall-self 'loop-over-directory
+		  #'(lambda (entry)
+		      (push (list entry
+				  (cadadr (dir-entry-full-pathstep entry))
+				  (caddr (dir-entry-full-pathstep entry)))
+			    its-dirlst)))
+    (setq its-dirlst
+	  (sort its-dirlst
+		#'(lambda (l1 l2)
+		    (or (string-lessp (cadr l1) (cadr l2))
+			(and (string-equal (cadr l1) (cadr l2))
+			     (< (caddr l1) (caddr l2)))))))
+    (closure '(its-dirlst its-dirbuf its-dir-reload
+	       its-dirpos its-dirname)
+	     'dir-node-its-directory-stream)))
+
+(defun dir-node-its-directory-stream (operation &rest args)
+  (selectq operation
+    (:string-in
+     (let* ((string (cadr args))
+	    (start (or (caddr args) 0))
+	    (end (or (cadddr args) (array-length string))))
+       (do () (( start end))
+	 (multiple-value-bind (buf beg count)
+	     (dir-node-its-directory-stream ':get-input-buffer)
+	   (or buf (return nil))
+	   (let ((xfer (min count (- end start))))
+	     (copy-array-portion buf beg (+ beg xfer)
+				 string start (+ start xfer))
+	     (setq start (+ start xfer))
+	     (dir-node-its-directory-stream ':advance-input-buffer
+					    (+ xfer beg)))))
+       (values start ( start end))))
+    (:get-input-buffer
+     (cond ((eq its-dir-reload 'first)
+	    (setf (array-leader its-dirbuf 0) 0)
+	    (let ((string
+		    (with-output-to-string (standard-output)
+		      (princ "FC   ")
+		      (princ its-dirname)
+		      (princ its-crlf)
+		      (princ "FREE BLOCKS")
+		      (dolist (pack pack-list)
+			(format t "  ~A-~D=~D"
+				(pack-volume-name pack)
+				(pack-number-within-volume pack)
+				(fix (* (+ (pack-number-of-free-blocks pack)
+					   (pack-number-of-available-blocks pack))
+					(// (small-float (pack-pages-per-block pack))
+					    4)))))
+		      (princ its-crlf))))
+	      (copy-array-contents string its-dirbuf)
+	      (setf (fill-pointer its-dirbuf) (length string)))
+	    (setq its-dirpos 0))
+	   (its-dir-reload
+	    (setf (array-leader its-dirbuf 0) 0)
+	    (do ()
+		((or (null its-dirlst)
+		     (< (- (array-length its-dirbuf)
+			   (array-active-length its-dirbuf))
+			100.)))
+	      (let ((format:format-string its-dirbuf)
+		    (standard-output 'format:format-string-stream))
+		(let* ((e (caar its-dirlst))
+		       (name (cadar its-dirlst))
+		       (vers (caddar its-dirlst))
+		       name2 link-to idx)
+		  (setq idx (string-search #/  name))
+		  (if idx
+		      (setq name2 (convert-equiv-to-space (substring name (1+ idx)))
+			    name (substring name 0 idx))
+		      (setq name2 (format nil "~d" vers)))
+		  (setq name (convert-equiv-to-space name))
+		  (cond ((and ( (string-length name) 6) ( (string-length name2) 6))
+			 (if (dir-entry-deleted e)
+			     (tyo #/*)
+			     (tyo #/ ))
+			 (cond ((setq link-to (get (locf (dir-entry-plist e)) ':link-to))
+				(princ " L   ")
+				(format t "~6a ~6a ~a" name name2 link-to))
+			       (t
+				(format t " ~d   " (or (get (locf (dir-entry-pointer-info e))
+							     ':pack-number)
+							0))
+				(format t "~6a ~6a " name name2)
+				(format t "~d  "
+					(if (dir-entry-length e)
+					    (ceiling (dir-entry-length e)
+						     (* 2000
+							(truncate 32.
+								  (dir-entry-byte-size e))))
+					    1))
+				(time:print-universal-time
+				  (or (dir-entry-creation-date e) 0))
+				(multiple-value-bind (nil nil nil day month year)
+						     (time:decode-universal-time
+						      (or (dir-entry-reference-date e) 0))
+				  (format t
+					  '( " (" (d) "//" (d 2 60) "//" (d 2 60) ")")
+					  month    day           year))))
+			 (princ its-crlf)))))
+	      (pop its-dirlst))
+	    (setq its-dirpos 0)))
+     (setq its-dir-reload nil)
+     (and (not (zerop (array-active-length its-dirbuf)))
+	  (values its-dirbuf its-dirpos
+		  (- (array-active-length its-dirbuf) its-dirpos))))
+    (:advance-input-buffer
+     (if (null (car args))
+	 (setq its-dir-reload t)
+       (setq its-dirpos (car args))  ;**ADD ERROR CHECKING --RG**
+       (if (= its-dirpos (array-active-length its-dirbuf))
+	   (setq its-dir-reload t))))
+    (:close (free-fc-cs-bfr its-dirbuf))
+    (:pdp10-format t)))
+
+;Replace each ^W character in string with a space.
+;Copy string if it needs to be changed.
+(defun convert-equiv-to-space (string)
+  (do (i (first t nil))
+      ((null (setq i (string-search #/ string))))
+    (and first (setq string (string-append string)))
+    (setf (aref string i) #/ ))
+  string)
+
+;alphabetical-dir-mixin makes :standard-directory-list
+;come out in alphabetical order.
+
+(defwrapper (alphabetical-dir-mixin dir-iterate) (ignore body)
+  `(let ()
+     (bind (locf directory-list)
+	   (sortcar (copylist directory-list) 'string-lessp))
+     ,body))
+
+(defwrapper (alphabetical-dir-mixin :directory-entries) ((&rest ignore ) body)
+  `(let ()
+     (bind (locf directory-list)
+	   (sortcar (copylist directory-list) 'string-lessp))
+     ,body))
+
+;alphabetical-dir-node does that and also by default makes
+;nodes unsupersedable.
+(defwrapper (alphabetical-dir-node default-pointer-info)
+	    ((ignore &rest ignore) . body)
+  `(multiple-value-bind (ptr-info new-flavor flags)
+       (progn . ,body)
+     (values ptr-info new-flavor (list* ':delete-protect ':supersede-protect flags))))
+
+;The ROOT node.
+
+;Root-supernode is a type of node which is used as the supernode of the root.
+;It basically refuses to do anything.
+;(defflavor root-supernode () (node)
+;  (:default-handler (lambda (&rest ignore) nil)))
+
+;Make it be its own supernode so that nothing bad happens
+;if the user grabs it and asks it for ITS supernode.
+(defmethod (root-supernode :supernode) ()
+  node-closure)
+
+(defmethod (root-supernode first-block-number) ()
+  0)
+
+(defmethod (root-supernode :standard-pathlist) () ())
+
+(defmethod (root-supernode :print-self) (stream &rest ignore)
+  (si:printing-random-object (self stream :typep)))
+
+;Root-mixin makes a node expect to have no supernode.
+;Actually, it still does have a supernode, of type root-supernode.
+;(defflavor root-mixin () ()
+;  (:included-flavors dir-node))
+
+(defmethod (root-mixin :force-close) ()
+  (funcall-self 'really-close))
+
+(defmethod (root-mixin :before init-node) (ignore ignore)
+  (setq supernode (funcall (make-instance 'root-supernode) 'init-node nil nil)))
+
+(defmethod (root-mixin superior-p) (ignore)
+  ())
+
+(defmethod (root-mixin :rename) (&rest ignore)
+  ())
+
+(defmethod (root-mixin :delete) ()
+  ())
+
+(defmethod (root-mixin :undelete) ()
+  ())
+
+(defmethod (root-mixin :set-byte-size) (ignore)
+  ())
+
+(defmethod (root-mixin :standard-pathlist) ()
+  ())
+
+(defmethod (root-mixin :putprop) (&rest ignore)
+  ())
+
+(defmethod (root-mixin :get) (&rest ignore)
+  ())
+
+(defmethod (root-mixin :open-property-node) (&rest ignore)
+  ())
+
+(defmethod (root-mixin :create-property-node) (&rest ignore)
+  ())
+
+;This is the flavor actually used for the root node.
+
+(defflavor root-node () (root-mixin alphabetical-dir-node))
+
+;Create an node-object in core for the root node, given its pack.
+;If there is none, we offer to create one.
+(defun open-root-node (pack)
+  (or (not (zerop (pack-root-first-block pack)))
+      (yes-or-no-p "Create a root directory on pack ~S? " pack)
+      (ferror nil "No root directory on pack ~S" pack))
+  (let (node)
+    (setq node (make-instance 'root-node
+			      ':reasons-why-open (list 'ROOT)
+			      ':supernode-info ()
+			      ':byte-size 8
+			      ':length-in-bytes 0))
+    (multiple-value-bind (new-node new-pointer-info)
+	(funcall node 'init-node
+		 (list ':volume-name (pack-volume-name pack)
+		       ':pack-number (pack-number-within-volume pack)
+		       ':first-block-number (pack-root-first-block pack))
+		 nil)
+      (and (zerop (pack-root-first-block pack))
+	   (set-root-first-block pack
+				 (cadr (memq ':first-block-number new-pointer-info))))
+      new-node)))

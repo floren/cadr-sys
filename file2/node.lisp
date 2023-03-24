@@ -1,0 +1,985 @@
+;;; -*- Mode:LISP; Package:FILE-SYSTEM; Base:8; Lowercase:T -*-
+
+;Here are operations common to all sorts of nodes.
+
+;This is the root of all flavors of nodes.
+;(defflavor node
+;  (supernode supernode-info
+;   byte-size length-in-bytes
+;   (reasons-why-open nil)) ()
+;  :initable-instance-variables
+;  :gettable-instance-variables)
+
+(defmethod (node :print-self) (stream &rest ignore)
+  (si:printing-random-object (self stream)
+    (princ (pathlist-to-string (funcall-self ':standard-pathlist) t) stream)))
+
+(defmethod (node area) () default-cons-area)
+
+(defmethod (node :self) () self)
+
+(defmethod (node :flavor) ()
+  (typep self))
+
+(defmethod (node :directory-p) () nil)
+
+(defmethod (node really-delete) ()
+  (file-area-close-node node-area node-closure)
+  (setq supernode-info nil))
+
+(defmethod (node file-node-p) ()
+  nil)
+
+(defmethod (node :any-reasons-p) ()
+  (not (null reasons-why-open)))
+
+
+(defmethod (node :directory-entries) (&rest ignore) nil)
+(defmethod (node :standard-directory-list) (&optional ignore) nil)
+(defmethod (node :directory-list-stream) (&optional ignore) nil)
+(defmethod (node :any-subnodes-p) () nil)
+(defmethod (node :any-subnode-matches-p) (ignore &optional ignore) nil)
+(defmethod (node :any-subnodes-have-reasons-p) () reasons-why-open)
+(defmethod (node :expunge) (&optional exempt-recently-deleted-files recursive)
+  exempt-recently-deleted-files recursive
+  0)
+(defmethod (node expunge-all) ()
+  0)
+(defmethod (node validate-pathstep) (&rest ignore)
+  (ferror 'wrong-kind-of-file
+	  "Not a directory; can't have subnodes."
+	  (pathlist-into-pathname (send self ':standard-pathlist))))
+
+(defmethod (node :length-in-bytes) (&optional (byte-size-1 byte-size))
+  (convert-length length-in-bytes byte-size byte-size-1))
+
+(defun convert-length (from-length from-byte-size to-byte-size)
+  (if (= from-byte-size to-byte-size)
+      from-length
+      (+ (* (truncate 32. to-byte-size) (truncate from-length (truncate 32. from-byte-size)))
+	 (ceiling (* from-byte-size (\ from-length (truncate 32. from-byte-size)))
+		  to-byte-size))))
+
+;Ignore I/O operations for nodes that don't define them.
+
+(defmethod (node :fetch-byte) (&rest ignore)
+  nil)
+
+(defmethod (node :store-byte) (&rest ignore)
+  nil)
+
+(defmethod (node :locate-byte-in-array) (ignore)
+  nil)
+
+(defmethod (node :qfaslp) ()
+  (let (b0 b1)
+    (setq b0 (funcall-self ':fetch-byte 0 20))
+    (setq b1 (funcall-self ':fetch-byte 1 20))
+    (and b1
+	 (= b0 143150)
+	 (= b1 71660))))
+
+;Give a node a new reason for being open.
+;If the reason is not a symbol or number,
+;it should be able to handle the :force-close operation
+;which will be sent to it
+;if it is necessary to close the node even though it is being used.
+;Returns NIL if the node is already closed when we lock it.
+;Otherwise, returns the node.
+;It is safe to send this operation to a node at any time.
+;You do not need to have the supernode locked, or have any other reasons yet.
+;But if you don't, you may get NIL back, meaning it closed before you got there.
+(defmethod (node :add-reason) (reason &aux loss-flag)
+  (cond ((or supernode-info reasons-why-open)
+	 ;; Include reasons-why-open above to be T for the root-node.
+	 (without-interrupts
+	   (setq loss-flag (memq reason reasons-why-open))
+	   (or loss-flag (push reason reasons-why-open)))
+	 node-closure)))
+
+(defmethod (node :remove-reason-and-install) (reason)
+  (funcall-self ':undelete)
+  (funcall-self ':remove-reason reason))
+
+;Take a way a reason for a node to be open.
+;Close the node if there are no reasons left.
+;However, we ask the supernode to check for us whether that is so;
+;that is to interlock against some other process asking the supernode
+;to open this node.
+(defmethod (node :remove-reason) (reason &aux loss-flag)
+  (without-interrupts
+    (setq loss-flag (not (memq reason reasons-why-open)))
+    (or loss-flag
+	(setq reasons-why-open (delq reason reasons-why-open))))
+  (or reasons-why-open
+      (funcall supernode 'close-subnode-if-no-reasons node-closure)))
+
+(defmethod (node :close-if-no-reasons) ()
+  (or reasons-why-open
+      (funcall supernode 'close-subnode-if-no-reasons node-closure)))
+
+;This comes back from the supernode, so that we can check
+;for any reasons with the supernode locked.
+(defmethod (node close-if-no-reasons-internal) ()
+  (or reasons-why-open
+      (funcall-self 'forcibly-close)))
+
+;Close this node for certain.
+;Actually, we must do it by asking the supernode to do it.
+(defmethod (node forcibly-close) ()
+  (cond (supernode
+	 (funcall supernode 'close-subnode supernode-info length-in-bytes))))
+
+;This operation comes down from the supernode,
+;as part of its processing of forcibly-close.
+(defmethod (node really-close) ()
+  (setq supernode-info nil)
+  (file-area-close-node node-area node-closure)
+  (dolist (rsn reasons-why-open)
+    (or (symbolp rsn)
+	(numberp rsn)
+	(funcall rsn ':force-close)))
+  (setq reasons-why-open nil))
+
+(defmethod (node :force-close) () ())
+
+(defmethod (node :pointer-info) ()
+  (funcall supernode 'subnode-pointer-info supernode-info))
+
+(defmethod (node :add-in-link) (descriptor)
+  (funcall supernode 'subnode-add-in-link supernode-info descriptor))
+
+(defmethod (node :delete-in-link) (descriptor)
+  (funcall supernode 'subnode-delete-in-link supernode-info descriptor))
+
+;Calling with no args just causes file nodes to fix their superfile pointers.
+(defmethod (node new-supernode) (&optional (new-supernode supernode)
+					   (new-supernode-info supernode-info))
+  (setq supernode new-supernode
+	supernode-info new-supernode-info))
+
+;Init an node object for an node which doesn't have a file.
+(defmethod (node init-node) (ignore &rest ignore
+			     &aux node-node node-area node-closure node-lock)
+  (setq node-area current-file-area node-node self)
+  (setq node-closure (let ((default-cons-area node-area))
+		       (entity '(node-node node-area node-closure node-lock)
+			       'node-encapsulation)))
+  (file-area-open-node node-area node-closure)
+  node-closure)
+
+(defun node-encapsulation (&rest args)
+  (let ((node-caller-area default-cons-area)
+	(default-cons-area node-area)
+	(stream (cadr args)))
+    (cond ((eq (car args) ':print-self)
+	   (si:printing-random-object (node-node stream :no-pointer)
+	     (princ (typep node-node) stream)
+	     (princ "-ENTITY " stream)
+	     (princ (pathlist-to-string (funcall node-node ':standard-pathlist) t) stream)
+	     (princ " " stream)
+	     (prin1 (%pointer node-closure) stream)))
+	  ((eq (car args) 'dont-lock)
+	   (apply node-node (cdr args)))
+	  ((memq (car args) '(:which-operations :describe))
+	   (apply node-node args))
+	  ((eq current-process node-lock)
+	   (apply node-node args))
+	  (t (unwind-protect
+	       (progn (process-lock (locf node-lock))
+		      (apply node-node args))
+	       ;; Allow the handler to unlock prematurely.
+	       ;; If that happens, it may not lock again
+	       ;; except with a recursive operation;
+	       ;; so in any case, it will not be locked by this process now.
+	       (and (eq current-process node-lock)
+		    (process-unlock (locf node-lock))))))))
+
+(defun copy-into-area (default-cons-area object)
+  (cond ((symbolp object) object)
+	((null (%area-number object)) object)
+	((= (%area-number object) default-cons-area) object)
+	((numberp object) (1+ (1- object)))
+	((stringp object) (string-append object))
+	((consp object) (cons (copy-into-area default-cons-area (car object))
+			      (copy-into-area default-cons-area (cdr object))))
+	(t (ferror nil "~S is type that copy-into-area can't handle" object))))
+
+;This gets overridden by DIR-NODE for directories.
+(defmethod (node open-subnode-given-first-block) (&rest ignore)
+  nil)
+
+;Operations that depend on having a supernode.
+
+;Open and return the supernode of this node.
+(defmethod (node :open-supernode) (reason-why-open)
+  (funcall supernode ':add-reason reason-why-open)
+  supernode)
+
+;Mark a node as deleted.  It doesn't really go away until expunged.
+;Returns T if successful, NIL if stopped by delete-protect.
+(defmethod (node :delete) ()
+  (funcall supernode 'delete-subnode supernode-info))
+
+;Take away a deletion mark from a file.
+(defmethod (node :undelete) ()
+  (funcall supernode 'undelete-subnode supernode-info))
+
+;Ask our supernode to rename us, perhaps into a different dir.
+;First thing we do is unlock so that it is safe to open another dir.
+;We then open the other directory, but do not lock it,
+;and then call the rename-internal operation which locks both.
+(defmethod (node :rename) (pathname)
+  (setq node-lock nil)
+  (let (name directory other-dir
+	(temp-reason (gen-temp-reason)))
+    (if (stringp pathname) (setq directory t name pathname)
+	(setq directory (funcall pathname ':directory)
+	      name (funcall pathname ':name-type-and-version)))
+    (unwind-protect
+      (progn (setq other-dir
+		   (if (eq directory t)
+		       supernode
+		     ;; Get the other dir by opening a stream
+		     ;; so that we chase links.
+		     (let ((tem
+			     (open-node-stream (funcall pathname ':directory-pathname-as-file)
+			       (if name directory (butlast directory))
+			       (if name (butlast name) nil)
+			       ':create ':allowed ':flavor ':directory)))
+		       (prog1 (funcall tem ':node)
+			      (funcall tem ':close)))))
+	     (funcall-self 'rename-internal other-dir
+			   (if (eq directory t)
+			       name
+			       (car (last (append directory name))))))
+      (and other-dir (funcall other-dir ':remove-reason temp-reason)))))
+
+(defmethod (node rename-internal) (other-dir new-pathstep)
+  (let (other-lock)
+    (unwind-protect
+      (progn (setq other-lock (gobble-another-lock other-dir))
+	     ;; Don't let process continue
+	     ;; if we would be creating a cycle!!!
+	     (if (funcall other-dir 'superior-p node-closure)
+		 (ferror 'rename-underneath-self
+			 "Renaming node to be its own subnode."
+			 (pathlist-into-pathname (send self ':standard-pathlist))
+			 (pathlist-into-pathname
+			   (append (send other-dir ':standard-pathlist) (list new-pathstep))))
+	       ;; Don't leave the new dir deleted.
+	       (funcall other-dir ':undelete)
+	       (funcall supernode 'rename-subnode
+			supernode-info other-dir new-pathstep)
+	       (setq supernode other-dir)
+	       t))
+      (and other-lock (process-unlock other-lock)))))
+
+;Return T if specified other node
+;equals this node or one of this node's superiors.
+(defmethod (node superior-p) (other-node)
+  (or (eq node-closure other-node)
+      (and supernode (funcall supernode 'superior-p other-node))))
+
+(defmethod (node :reposition-in-dir) (pathstep)
+  (funcall supernode 'reposition-subnode supernode-info pathstep))
+
+;Ask our supernode to change our byte size.
+;It returns to us the new byte size and new length-in-bytes.
+(defmethod (node :set-byte-size) (new-byte-size)
+  (setq new-byte-size (validate-byte-size new-byte-size))
+  (let* ((old-bpw (truncate 32. byte-size))
+	 (new-bpw (truncate 32. new-byte-size))
+	 (words (truncate length-in-bytes old-bpw))
+	 (excess-bits (* byte-size
+			 (- length-in-bytes (* words old-bpw)))))
+    (setq length-in-bytes
+	  (+ (* words new-bpw)
+	     (ceiling excess-bits new-byte-size)))
+    (funcall supernode ':set-subnode-byte-size supernode-info
+	     new-byte-size length-in-bytes)
+    (setq byte-size new-byte-size)))
+
+(defun validate-byte-size (size)
+  (do () ((and (numberp size) (< 0 size 17.)) size)
+    (setq size (cerror
+			t nil 'bad-byte-size
+			"The byte size ~D is impossible" size))))
+
+(defmethod (node :finish) ()
+  (funcall-self ':finish-contents)
+  (funcall supernode 'finish-subnode supernode-info length-in-bytes))
+
+(defmethod (node :finish-contents) () nil)
+
+(defmethod (node :characters) ()
+  (funcall supernode 'subnode-get supernode-info ':characters))
+
+(defmethod (node :standard-pathlist) ()
+  (if (and supernode supernode-info)
+      (funcall supernode 'dont-lock 'subnode-standard-pathlist supernode-info)
+      '("?")))
+
+(defmethod (node :open-pathstep) (reason pathstep &rest options)
+  (cond ((eq pathstep 'root)
+	 (funcall root-node ':add-reason reason)
+	 root-node)
+	((eq pathstep 'supernode)
+	 (let ((node (if (eq node-closure root-node) node-closure supernode)))
+	   (funcall node ':add-reason reason)
+	   node))
+	((and (consp pathstep) (eq (car pathstep) ':property))
+	 (lexpr-funcall-self ':open-property-node reason pathstep options))
+	(t (lexpr-funcall-self ':open-subnode reason pathstep options))))
+
+(defmethod (node :create-pathstep) (reason pathstep &rest options)
+  (if (and (consp pathstep) (eq (car pathstep) ':property))
+      (lexpr-funcall-self ':create-property-node reason pathstep options)
+    (lexpr-funcall-self ':create-subnode reason pathstep options)))
+
+(defmethod (node :open-subnode) (reason pathstep &rest options)
+  reason pathstep options
+  nil)
+
+(defmethod (node :create-subnode) (reason pathstep &rest options)
+  reason pathstep options
+  nil)
+
+;Accessing plists of nodes.
+(defmethod (node :plist) (&optional explicit-properties-only include-truename)
+  (let ((default-cons-area node-caller-area))
+    (funcall supernode 'subnode-plist supernode-info
+	     explicit-properties-only include-truename)))
+
+(defmethod (node :change-properties) (finish-flag &rest properties)
+  (lexpr-funcall supernode 'subnode-change-properties supernode-info
+		 finish-flag properties))
+
+(defmethod (node :get) (propname &optional explicit-properties-only)
+  (let ((default-cons-area node-caller-area))
+    (funcall supernode 'subnode-get supernode-info propname
+	     explicit-properties-only)))
+
+(defmethod (node :open-property-node) (reason pathstep
+					      &rest options)
+  (lexpr-funcall supernode 'open-subnode-property-node
+		 reason supernode-info
+		 pathstep options))
+
+(defmethod (node :create-property-node) (reason pathstep &rest options)
+  (lexpr-funcall supernode 'create-subnode-property-node
+		 reason supernode-info
+		 pathstep options))
+
+(defmethod (node :putprop) (propname value &optional explicit-properties-only)
+  (funcall supernode 'subnode-putprop supernode-info propname value
+	   explicit-properties-only))
+
+(defmethod (node :remprop) (propname)
+  (funcall supernode 'subnode-remprop supernode-info propname))
+
+;Transfer an array of data into or out of a node.
+;These use the primitive operations :locate-byte-in-array and :store-byte
+;as well as :set-length-in-bytes.
+
+;Fill the supplied array of 8-bit bytes completely with data from the node,
+;or perhaps return an internal node buffer.
+;Start from a location specified by pointer and status.
+;Pointer is in fact the number of the 8-bit byte within the file; status is ignored.
+;The value of pointer returned is the pointer to after the data that was gobbled.
+;The array must have a fill pointer, and we use array-push to store in it.
+;We return five values: the new pointer, the new status,
+;the number of stream-sized bytes we have provided,
+;and the internal node rqb's buffer if one is suitable, or nil,
+;and the index to start at in that buffer, or nil.
+;If an internal buffer is returned, we do not fill the supplied array.
+
+;NOTE: we make the assumption that either stream-byte-size divides 32.
+;or pointer is on a word boundary.  It is the stream's responsibility
+;to make sure this is always true.
+(defmethod (node :fill-array-lispm-format) (array old-pointer status stream-byte-size
+						  &optional return-internal-buffer
+						  &aux 8-bit-array index elts-following 16-bit-array)
+  status ;unused
+  (if (and return-internal-buffer (memq stream-byte-size '(10 20))
+	   (progn
+	     (multiple-value (8-bit-array index elts-following 16-bit-array)
+	       (funcall-self ':locate-byte-in-array old-pointer))
+	     (if (= stream-byte-size 8) 8-bit-array 16-bit-array)))
+      (progn
+	(setq elts-following
+	      (min elts-following
+		   (* (truncate stream-byte-size 10)
+		      (- length-in-bytes (convert-length old-pointer 8 stream-byte-size)))))
+	(if (= stream-byte-size 8)
+	    (values (+ old-pointer elts-following)
+		    status
+		    elts-following
+		    8-bit-array
+		    index)
+	    (values (+ old-pointer elts-following)
+		    status
+		    (truncate elts-following 2)
+		    16-bit-array
+		    (truncate index 2))))
+    (let ((size (array-length array))
+	  (pointer old-pointer)
+	  buf (n-following 0) tem)
+      (do (8-bit-index) ((= (array-active-length array) size))
+	(cond ((zerop n-following)
+	       (setf (values buf 8-bit-index n-following)
+		     (funcall-self ':locate-byte-in-array pointer))
+	       (setq n-following
+		     (min (or n-following 0)
+			  (- (convert-length length-in-bytes byte-size 8) pointer)))
+	       (and (or (null buf) (not (plusp n-following)))
+		    (return))))
+	(setq tem (min n-following (- size (array-active-length array))))
+	(copy-array-portion buf 8-bit-index (+ 8-bit-index tem)
+			    array (array-active-length array)
+			    (setf (array-leader array 0) (+ (array-active-length array) tem)))
+	(incf 8-bit-index tem)
+	(incf pointer tem)
+	(decf n-following tem))
+      (values pointer status
+	      ;; If we did not fill an integral number of words,
+	      ;; we must have reached eof.
+	      (if (zerop (\ (array-active-length array) 4))
+		  ;; Count the number of stream-bytes that are in the filled words of the array.
+		  (* (truncate 32. stream-byte-size)
+		     (truncate (array-active-length array) 4))
+		;; If at eof, subtract starting point from end.
+		;; Here we use the assumption that either stream-byte-size is 8 or 16.
+		;; or the old-pointer is on a word boundary.
+		(- (convert-length length-in-bytes byte-size stream-byte-size)
+		   (convert-length old-pointer 8 stream-byte-size)))))))
+
+;Output the contents of the specified array (of 8-bit bytes).
+;Pointer and status say where in the node to store the data.  (Status is ignored)
+;Two values are returned, which are the values to use for pointer and status
+;in the next output call.
+;The size of the node is increased to cover what we have output.
+;num-stream-bytes is the file pointer, in bytes of the size the stream is using,
+;at the end of the data now being output.
+(defmethod (node :output-array-lispm-format)
+	   (array pointer status num-stream-bytes stream-byte-size
+		  &optional num-chars)
+  status ;unused
+  (let ((size (if num-chars num-chars (array-active-length array)))
+	buf (n-following 0)
+	(starting-pointer pointer)
+	(old-length length-in-bytes) tem)
+    (do ((i 0) 8-bit-index)
+	((= i size))
+      (cond ((zerop n-following)
+	     (setf (values buf 8-bit-index n-following)
+		   (funcall-self ':locate-byte-in-array pointer t))
+	     (or buf (return))))
+      (setq tem (min n-following (- size i)))
+      (copy-array-portion array i (+ i tem)
+			  buf 8-bit-index (+ 8-bit-index tem))
+      (incf i tem)
+      (incf 8-bit-index tem)
+      (incf pointer tem)
+      (decf n-following tem))
+    (funcall-self ':bytes-modified starting-pointer pointer)
+    (funcall-self ':set-length-in-bytes
+		  (max old-length (convert-length num-stream-bytes
+						  stream-byte-size byte-size)))
+    (values pointer status)))
+
+;This is the operation for dumping a node to tape.
+;We are passed a dumper function and args for it.
+;Node flavors which should not be dumped do nothing.
+;Node flavors which should be dumped call the dumper function with its args,
+;and also pass along a copier function.
+;The copier function is passed the node and a stream
+;and copies the nodes "contents" to that stream, as 8-bit bytes.
+;It returns the approximate number of 8-bit bytes it used.
+;This particular method uses the actual bytes of the node's data
+;as the contents to be copied to the stream, but directories do differently.
+
+(defmethod (node :tape-dump) (dumper-function &rest args)
+  (lexpr-funcall dumper-function node-closure
+	   #'(lambda (node tape-stream)
+	       (let ((node-stream
+		      (make-instance (if (eq (funcall node ':get ':flavor) ':pdp10)
+					 'fc-pdp10-input-stream
+					 'fc-lispm-input-stream)
+				     ':byte-size 8
+				     ':node node
+				     ':characters nil
+				     ':pathname nil)))
+		 (stream-copy-until-eof node-stream tape-stream)
+		 (funcall node-stream ':read-pointer)))
+	   args))
+
+;Compare the "contents" of this node with what is read from tape-stream.
+;We compare tape-stream with whatever we would write into the tape
+;in the copier function in the :tape-dump method.
+(defmethod (node :tape-compare) (tape-stream comparison-plist &optional mark-as-dumped)
+  (let* ((plist (funcall-self ':plist))
+	 (node-stream
+	   (make-instance (if (eq (funcall-self ':get ':flavor) ':pdp10)
+			      'fc-pdp10-input-stream
+			    'fc-lispm-input-stream)
+			  ':byte-size 8
+			  ':node node-closure
+			  ':characters nil
+			  ':pathname nil)))
+    (remprop (locf plist) ':reference-date)
+    (remprop (locf comparison-plist) ':reference-date)
+    (remprop (locf plist) ':not-backed-up)
+    (remprop (locf comparison-plist) ':not-backed-up)
+    (cond ((and (equal plist comparison-plist)
+		(compare-streams-until-eof node-stream tape-stream))
+	   (cond (mark-as-dumped
+		  (funcall-self ':putprop ':not-backed-up nil)))
+	   t))))
+
+(defun compare-streams-until-eof (stream1 stream2)
+  (declare (return-list match eof1 eof2))
+  (let (buf1 start1 len1 buf2 start2 len2)
+    (do () (())
+      (setf (values buf1 start1 len1)
+	    (funcall stream1 ':get-input-buffer))
+      (setf (values buf2 start2 len2)
+	    (funcall stream2 ':get-input-buffer))
+      ;; Allow for up to 3 nulls of padding at the end of either stream
+      ;; that does not match the other stream.
+      (if (and buf1 (not buf2))
+	  (return (dotimes (i 4)
+		    (let ((ch (funcall stream1 ':tyi)))
+		      (cond ((eq ch nil) (return t))
+			    ((neq ch 0) (return nil)))))))
+      (if (and buf2 (not buf1))
+	  (return (dotimes (i 4)
+		    (let ((ch (funcall stream2 ':tyi)))
+		      (cond ((eq ch nil) (return t))
+			    ((neq ch 0) (return nil)))))))
+      (if (neq (not buf1) (not buf2))
+	  (return nil (not buf1) (not buf2)))
+      (or buf1 (return t t t))
+      (or (%string-equal buf1 start1 buf2 start2
+			 (min len1 len2))
+	  (return nil))
+      (funcall stream1 ':advance-input-buffer (+ start1 (min len1 len2)))
+      (funcall stream2 ':advance-input-buffer (+ start2 (min len1 len2))))))
+
+;Flavor FILE-NODE: operations common to all nodes that live in files.
+
+;(defflavor file-node (file-node-offset node-file)
+;  (node)
+;  :gettable-instance-variables)
+
+(defmethod (file-node file-node-p) ()
+  t)
+
+(defmethod (file-node :always-allow-disk-allocation) () nil)
+
+;Default the pointer info for this type of node.
+;This is done when about to create a node,
+;on a temporary instance which has not been sent INIT-NODE
+;and does not actually represent an open file.
+(defmethod (file-node default-pointer-info) (old-entry &key &optional volume-name pack-number
+						       &allow-other-keys)
+  (let (volume-name-default)
+    ;; Take volume from (1) explicit spec, or (2) old version, or (3) supernode.
+    ;; Take pack number from explicit spec or use pack with most space.
+    (cond (volume-name
+	   (or pack-number (setq pack-number (find-pack-to-write-on volume-name)))
+	   (do () 
+	       ((check-cross-volume-ref (pack-volume-name (funcall supernode ':pack))
+					volume-name pack-number))
+	     (setq volume-name
+		   (cerror ':new-value nil 'bad-cross-volume-ref
+			   "Volume ~A can't point at volume ~A."
+			   (pack-volume-name (funcall supernode ':pack))
+			   (string-upcase volume-name)))))
+	  (old-entry
+	   (setq volume-name (get (locf (dir-entry-pointer-info old-entry)) ':volume-name))))
+    (setq volume-name-default (pack-volume-name (funcall supernode ':pack)))
+    (or volume-name (setq volume-name volume-name-default))
+    (or pack-number
+	(setq pack-number
+	      (find-pack-to-write-on volume-name)))
+    ;; Barf unless we have an existing volume and pack combination.
+    (do ()
+	((find-mounted-pack volume-name pack-number))
+      (let ((tem (cerror ':new-value nil 'pack-not-mounted
+			 "Pack not mounted: volume ~A, pack ~D." volume-name pack-number)))
+	(cond ((stringp tem) (setq volume-name tem))
+	      ((fixp tem) (setq pack-number tem))
+	      ((typep tem 'pack-structure)
+	       (setq volume-name (pack-volume-name tem)
+		     pack-number (pack-number-within-volume tem))))))
+    (cond ((eq volume-name volume-name-default)
+	   (list ':pack-number pack-number))
+	  (t (list ':volume-name volume-name ':pack-number pack-number)))))
+
+;Init an node object for an node which lives in a file of its own.
+;We return two values if we are just now allocating the first block,
+;to inform our supernode of the change.
+(defmethod (file-node init-node) (pointer-info &key &optional no-error-if-not-mounted
+					       for-salvager
+					       &allow-other-keys)
+  (prog init-node ()
+    (let (volume-name pack-number pack first-block-number
+	  node-node node-area node-closure node-lock)
+      (setq volume-name
+	    (or (get (locf pointer-info) ':volume-name)
+		(pack-volume-name (funcall supernode ':pack))))
+      (setq pack-number (get (locf pointer-info) ':pack-number))
+      (setq first-block-number (or (get (locf pointer-info) ':first-block-number) 0))
+      (or (setq pack (find-mounted-pack volume-name pack-number))
+	  (if no-error-if-not-mounted
+	      (return-from init-node nil)
+	    (cerror ':new-value nil 'pack-not-mounted
+		    "Pack not mounted: volume ~A, pack ~D." volume-name pack-number)))
+      (setq node-area current-file-area node-node self)
+      (let ((default-cons-area node-area)
+	    file-status)
+	(cond ((zerop first-block-number)
+	       (file-create pack
+			    (funcall supernode ':first-block-number)
+			    (funcall supernode ':pack)))
+	      (t (setf (values nil file-status)
+		       (file-setup pack first-block-number self nil
+				   (funcall supernode ':first-block-number)
+				   (funcall supernode ':pack)
+				   for-salvager))
+		 ;; If file is so bad we can't read its map,
+		 ;; offer to throw it away.
+		 (and (eq file-status ':lose)
+		      for-salvager
+		      (y-or-n-p "Dike it out? ")
+		      (progn (send supernode 'dike-out-subnode supernode-info)
+			     (*throw 'abandon-subnode nil)))))
+	(with-pack-lock pack
+	  (push node-file (pack-open-files pack)))
+	(setq node-closure
+	      (entity '(node-node node-area node-closure node-lock)
+		      'node-encapsulation)))
+      (file-area-open-node node-area node-closure)
+      (setf (file-top-level-node) node-closure)
+      (setq file-node-offset (file-contents-offset))
+      (cond ((zerop first-block-number)
+	     (funcall self 'init-new-node)
+;Mustn't write out until the dir is up to date
+;	     (file-write-out)
+	     (setq file-node-offset (file-contents-offset))
+	     (return node-closure
+		     (list* ':first-block-number (block-number-of-record 0)
+			    pointer-info)))
+	    (t (return node-closure))))))
+
+(defmethod (file-node init-new-node) () ())
+
+(defmethod (file-node :first-block-number) () (block-number-of-record 0))
+
+(defmethod (file-node :pack) () (file-pack node-file))
+
+;Fix up a file's superfile pointer, when we are given a new supernode
+;(due to renaming to a different directory).
+;Also serves the temporary function of fixing up files
+;which were written with bad superfile pointers before those worked.
+(defmethod (file-node :after new-supernode) (&rest ignore
+					     &aux supernode-pack supernode-fbn)
+  (setq supernode-pack (funcall supernode ':pack))
+  (setq supernode-fbn (funcall supernode ':first-block-number))
+  (or (eq (file-superfile-pointer) supernode-fbn)
+      (setf (file-superfile-pointer) supernode-fbn))
+  (let ((new-superfile-pack-spec
+	 (cond (supernode-pack
+		(dpb (if (string-equal (pack-volume-name (file-pack))
+				       (pack-volume-name supernode-pack))
+			 0 1)
+		     0701
+		     (pack-number-within-volume supernode-pack)))
+	       ;; This alternative happens only for the root node.
+	       (t 0))))
+    (or (eq (file-superfile-pack-spec) new-superfile-pack-spec)
+	(setf (file-superfile-pack-spec) new-superfile-pack-spec)))
+  (write-modified-records 0 1))
+
+(defmethod (file-node :before rename-internal) (other-dir &rest ignore)
+  (or (check-cross-volume-ref
+       (pack-volume-name (funcall other-dir 'dont-lock ':pack))
+       (pack-volume-name (file-pack))
+       (pack-number-within-volume (file-pack)))
+      (ferror 'rename-across-directories
+	      "Renaming across volumes.")))
+
+;Returns list describing blocks to be freed.
+(defmethod (file-node really-close) ()
+  (dolist (rsn reasons-why-open)
+    (or (symbolp rsn)
+	(numberp rsn)
+	(funcall rsn ':force-close)))
+  (cond ((not now-salvaging)
+	 (file-write-out)
+	 (verify-disk-map-complete)))
+  (push-out-of-core 0 (file-n-records node-file) t)
+  (with-pack-lock (file-pack node-file)
+    (setf (pack-open-files (file-pack node-file))
+	  (delq node-file (pack-open-files (file-pack node-file)) 1)))
+  (prog1 (copy-into-area node-caller-area
+			 (file-blocks-to-be-freed node-file))
+	 (file-area-close-node node-area node-closure)
+	 ;; No real damage can occur if someone frobs with this node
+	 ;; if we can no longer access our file.
+	 (setq supernode-info nil)
+	 (setq reasons-why-open nil)
+	 (setq node-file nil file-node-offset nil)))
+
+(defmethod (file-node :finish-contents) ()
+  (file-write-out)
+  (verify-disk-map-complete)
+  (setq file-node-offset (file-contents-offset)))
+
+(defun verify-disk-map-complete (&aux (last-end 0))
+  (dolist (elt (file-disk-map))
+    (or (= (mapelt-start elt) last-end)
+	(ferror nil "Gap in disk map from ~D to ~D" last-end (mapelt-start elt)))
+    (setq last-end (mapelt-end elt)))
+  (or (>= (file-n-records)
+	  last-end
+	  (ceiling (+ (file-contents-offset) (file-contents-length))
+		   (file-record-size)))
+      (ferror nil "Gap at end of disk map from ~D to ~D" last-end (file-n-records))))
+
+;Delete a node.  Return the node's file object, if it has one; otherwise NIL.
+(defmethod (file-node really-delete) ()
+  (file-begin-to-delete)
+  (with-pack-lock (file-pack node-file)
+    (setf (pack-open-files (file-pack node-file))
+	  (delq node-file (pack-open-files (file-pack node-file)) 1)))
+  ;; No real damage can occur if someone frobs with this node-object
+  ;; if we no longer point at a file or at any other nodes!
+  (prog1 node-file
+	 (file-area-close-node node-area node-closure)
+	 (setq node-file nil file-node-offset nil)
+	 (setq supernode-info nil)))
+
+(defmethod (file-node :bytes-modified) (from-byte to-byte)
+  (records-modified (truncate (+ (file-contents-offset) (truncate from-byte 4))
+			      (file-record-size))
+		    (ceiling (+ (file-contents-offset)
+				(ceiling to-byte 4))
+			     (file-record-size))))
+
+;Text nodes.  These live in a file, and contain nothing but text.
+
+;(defflavor text-node ()  (file-node)
+;  :gettable-instance-variables)
+
+(defmethod (text-node :after init-node) (ignore &rest ignore)
+  (setf (file-contents-length)
+	(ceiling length-in-bytes (truncate 32. byte-size))))
+
+;Store a byte in the file at position <pointer>
+;which is a number of bytes of size <byte-size-1>.
+;Return the incremented pointer.
+(defmethod (text-node :store-byte) (pointer byte-value
+					      &optional (byte-size-1 byte-size))
+  (setq byte-size-1 (validate-byte-size byte-size-1))
+  (let (bpw wordnum)
+    (setq bpw (truncate 32. byte-size-1))
+    (setq wordnum (truncate pointer bpw))
+    (cond ((>= pointer 0)
+	   (cond ((>= wordnum (file-contents-length node-file))
+		  (file-set-contents-length (1+ wordnum) t t)))
+	   (file-dpb-word byte-value
+			  (dpb (* (\ pointer bpw) byte-size-1)
+			       0606
+			       byte-size-1)
+			  (+ wordnum file-node-offset))
+	   (setq length-in-bytes
+		 (max length-in-bytes
+		      (convert-length (1+ pointer) byte-size-1 byte-size)))
+	   (and (>= pointer length-in-bytes)
+		(setq length-in-bytes (1+ pointer)))
+	   (1+ pointer)))))
+
+;Cause this node to be at least <pointer> bytes long,
+;in bytes of size <byte-size-1>.
+;Return the resulting length.
+(defmethod (text-node :set-length-in-bytes) (pointer &optional (byte-size-1 byte-size))
+  (setq byte-size-1 (validate-byte-size byte-size-1))
+  (or (minusp pointer)
+      (let ((real-length (convert-length pointer byte-size-1 byte-size))
+	    bpw wordnum)
+	(setq bpw (truncate 32. byte-size))
+	(setq wordnum (truncate (1- real-length) bpw))
+	(file-set-contents-length (1+ wordnum) t t)
+	(setq length-in-bytes real-length))))
+
+(defmethod (text-node :fetch-byte) (pointer &optional (byte-size-1 byte-size))
+  (setq byte-size-1 (validate-byte-size byte-size-1))
+  (let (bpw wordnum)
+    (setq bpw (truncate 32. byte-size-1))
+    (setq wordnum (truncate pointer bpw))
+    (cond ((< -1 wordnum (file-contents-length node-file))
+	   (file-ldb-word (dpb (* (\ pointer bpw) byte-size-1)
+			       0606
+			       byte-size-1)
+			  (+ wordnum file-node-offset))))))
+
+;Return three values which say where to find a byte in the file,
+;and how many following bytes are consecutive with it.
+
+;The first value is an 8-bit array.
+;The second is the index of the element in that array.
+;The third is the number of bytes following in that array.
+;The fourth value is an overlaid 16-bit array, or nil if there is none.
+;This does not imply that the node length includes those bytes!
+(defmethod (text-node :locate-byte-in-array) (pointer &optional writing)
+  (let (wordnum recordnum rqb index following)
+    (setq wordnum (truncate pointer 4))
+    (setq recordnum (truncate wordnum (file-record-size)))
+    ;; Return any RQBs that don't contain the desired word!
+    ;; Assuming the IO is sequential, we will never need them again.
+    ;; This way, it is likely that the RQB used for the previous
+    ;; bunch of words can be used again immediately.
+    (push-out-of-core-all-but-record recordnum writing)
+    ;; If for purposes of output, extend the file at the end if necessary.
+    (and writing (>= wordnum (file-contents-length))
+	 (file-set-contents-length (1+ wordnum) t t))
+    (and writing (record-modified recordnum))
+    (cond ((< -1 wordnum (file-contents-length))
+	   (setf (values rqb index following)
+		 (array-location-of-word (+ wordnum file-node-offset)))
+	   (and rqb
+		(values (rqb-8-bit-buffer rqb)
+			(+ index index (\ pointer 4))
+			(- (* 4 (truncate following 2))
+			   (\ pointer 4))
+			(rqb-buffer rqb)))))))
+
+;A string node is one whose text lives inside a string.
+;It can actually be an array of any appropriate byte size,
+;controlled by the byte size specified.
+
+;(defflavor string-node (text-string text-changed) (node)
+;  :gettable-instance-variables)
+
+(defvar max-string-node-size-in-bits (truncate (* 32. page-size) 2))
+
+(defmethod (string-node default-pointer-info) (old-entry &rest user-pointer-info
+							 &key &optional estimated-size string
+							 &allow-other-keys)
+  old-entry
+  (cond ((and estimated-size (fixp estimated-size)
+	      (> estimated-size 400))
+	 (values user-pointer-info 'text-node))
+	(t (list ':string (or string "")))))
+
+(defmethod (string-node :before init-node) (pointer-info &rest ignore &aux string)
+  (setq string (get (locf pointer-info) 'string))
+  (or (stringp string) (setq string ""))
+  (setq text-string (make-array (string-length string)
+				':type 'art-string
+				':leader-list '(0)))
+  (copy-array-contents string text-string)
+  (setf (array-leader text-string 0)
+	(array-active-length string)))
+
+(defmethod (string-node :finish-contents) ()
+  (funcall-self ':finish))
+
+(defmethod (string-node :finish) ()
+  (if text-changed
+      (funcall supernode 'finish-subnode supernode-info length-in-bytes
+	       (list-in-area node-caller-area ':string
+			     (copy-into-area node-caller-area text-string)))
+    (funcall supernode 'finish-subnode supernode-info length-in-bytes))
+  (setq text-changed nil))
+
+(defmethod (string-node forcibly-close) ()
+  (if text-changed
+      (funcall supernode 'close-subnode supernode-info length-in-bytes
+	       (list-in-area node-caller-area ':string
+			     (copy-into-area node-caller-area text-string)))
+    (funcall supernode 'close-subnode supernode-info length-in-bytes)))
+
+(defmethod (string-node :fetch-byte) (byte-number &optional (byte-size-1 byte-size))
+  (let ((bpw (truncate 32. byte-size-1)))
+    (and (< -1 (truncate byte-number bpw)
+	    (ceiling (array-active-length text-string) 4))
+	 (%p-ldb-offset (dpb (* (\ byte-number bpw) byte-size-1)
+			     0606
+			     byte-size-1)
+			text-string
+			(1+ (truncate byte-number bpw))))))
+
+(defmethod (string-node :store-byte) (byte-number byte-value
+				      &optional (byte-size-1 byte-size))
+  (let ((bpw (truncate 32. byte-size-1)))
+    (cond ((< -1 (truncate byte-number bpw))
+	   (setq length-in-bytes
+		 (max length-in-bytes
+		      (convert-length (1+ byte-number) byte-size-1 byte-size)))
+	   (and (>= (truncate byte-number bpw)
+		    (ceiling (array-length text-string) 4))
+		(adjust-array-size text-string (+ 100 (* 4 (truncate byte-number bpw)))))
+	   (and (>= (truncate byte-number bpw)
+		    (ceiling (array-active-length text-string) 4))
+		(setf (array-leader text-string 0)
+		      (+ 4 (* 4 (truncate byte-number bpw)))))
+	   (%p-dpb-offset byte-value
+			  (dpb (* (\ byte-number bpw) byte-size-1)
+			       0606
+			       byte-size-1)
+			  text-string
+			  (+ (si:array-data-offset text-string)
+			     (truncate byte-number bpw))))))
+  (setq text-changed t))
+
+(defmethod (string-node :set-length-in-bytes) (length &optional (byte-size-1 byte-size))
+  (setq length-in-bytes (convert-length length byte-size-1 byte-size))
+  (let* ((bpw (truncate 32. byte-size))
+	 (length-in-8bit-bytes (* 4 (ceiling length-in-bytes bpw))))
+    (adjust-array-size text-string (+ 100 length-in-8bit-bytes))
+    (setf (array-leader text-string 0) length-in-8bit-bytes))
+  (and (> (* length-in-bytes byte-size) max-string-node-length-in-bits)
+       (change-to-text-node))
+  length-in-bytes)
+
+(defmethod (string-node :bytes-modified) (from-byte to-byte)
+  (or (>= from-byte to-byte) (setq text-changed t)))
+
+(defmethod (string-node :locate-byte-in-array) (pointer &optional write)
+  (and write (>= pointer (array-length text-string))
+       (funcall-self ':store-byte pointer 0 8))
+  (and write (setq text-changed t))
+  (values text-string pointer (- (array-length text-string) pointer)))
+
+;Open the top-level node of a file specified by its first block number and pack object.
+;Returns NIL if there does not seem to be one.
+(defun open-node-given-first-block (reason pack first-block-number
+				    &aux supernode superfile-ptr-list)
+  (cond ((and (eq pack root-pack)
+	      (= first-block-number (funcall root-node ':first-block-number)))
+	 (funcall root-node ':add-reason reason)
+	 root-node)
+	;; Is the node open already?  And on the pack's list?
+	((dolist (file (pack-open-files pack))
+	   (and (file-disk-map file)
+		(= (mapelt-data (car (file-disk-map file)))
+		   first-block-number)
+		;; Return the node only if it stays open
+		;; while we lock it and add a reason to it!
+		(let ((node (funcall (file-top-level-node file)
+				     ':add-reason reason)))
+		  (and node (return node))))))
+	((and (setq superfile-ptr-list
+		    (file-get-superfile-pointer pack first-block-number))
+	      (setq supernode (lexpr-funcall 'open-node-given-first-block
+					     reason
+					     superfile-ptr-list)))
+	 (unwind-protect
+	   (*catch 'open-subnode-given-first-block
+	     (funcall supernode
+		      'open-subnode-given-first-block
+		      reason pack first-block-number))
+	   (funcall supernode ':remove-reason reason)))))

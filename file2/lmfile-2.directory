@@ -1,0 +1,17 @@
+;;; -*- Mode: Lisp; Package: User; Base: 10.; Patch-File: T -*-
+;;; Patch directory for LFS version 2
+;;; Written 9/30/83 02:34:38 by LMFile,
+;;; while running on Lisp Machine Filecomputer from band 4
+;;; with MIT-Specific 19.5, System 94.41, ZMail 50.17, Experimental Local-File 44.3, FILE-Server 6.6, MagTape 14.4, Experimental LFS 2.3, microcode 238, FC.
+
+(EXPERIMENTAL
+ ((0 "LFS Loaded" "LMFILE")
+  (1 "Load SYS: FILE2; EXTRA-FILES LISP (if it exists) when booting
+ server.
+Check to see if SYS host, not the associated machine, is up before
+ loading patches." "LMFile" NIL)
+  (2 "Larger disk labels. - RMS" "LMFile" NIL)
+  (3 "Mail server bugs.  Initialization to load extra files.
+Bug in reporting error of deleting delete-protected file. - RMS." "LMFile" NIL)
+  (4 "Starting directory for dump can specify more than one level of path." "LMFile" NIL)
+  ))

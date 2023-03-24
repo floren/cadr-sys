@@ -1,0 +1,16 @@
+  From left to right:
+
+1 - PROMENABLE.  Indicates that the current instruction is coming
+from the PROM rather than the writable control memory.
+
+2 - IPE.  Indicates that control memory had a parity error 
+at the last clock.
+
+3 - DPE.  Indicates that dispatch memory had a parity error
+at the last clock.
+
+4 - TILT0.  Indicates that the map or main memory had a parity
+error at the last clock.
+
+5 - TILT1.  Indicates that the A-scratchpad, the M-scratchpad,
+the PDL-buffer, or the SPC stack had a parity error at the last clock.
