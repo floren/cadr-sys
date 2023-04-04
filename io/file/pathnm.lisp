@@ -1254,7 +1254,9 @@ In this normal case, we must swap in the first arg but not the second."
 (DEFUN DEFAULT-PATHNAME (&OPTIONAL DEFAULTS HOST DEFAULT-TYPE DEFAULT-VERSION INTERNAL-P
 			 &AUX ELEM PATHNAME HOST-TO-USE CTYPE OTYPE)
   (AND HOST (SETQ HOST (GET-PATHNAME-HOST HOST)))
-  (OR DEFAULTS (SETQ DEFAULTS *DEFAULT-PATHNAME-DEFAULTS*))
+  ;; Defaults '(NIL) '((NIL)) have been seen prior to login.
+  (WHEN (OR (NULL DEFAULTS) (EQUAL DEFAULTS '(NIL)) (EQUAL DEFAULTS '((NIL))))
+    (SETQ DEFAULTS *DEFAULT-PATHNAME-DEFAULTS*))
   (COND ((AND DEFAULTS (ATOM DEFAULTS))
 	 (SETQ PATHNAME (PARSE-PATHNAME DEFAULTS)))
 	(T
@@ -1264,8 +1266,10 @@ In this normal case, we must swap in the first arg but not the second."
 			       (AND (CDR DEFAULT) (RETURN DEFAULT))))))
 	 ;; If none better found, take the one for the login machine
 	 (OR (CDR ELEM)
-	     (SETQ ELEM (OR (ASSQ USER-LOGIN-MACHINE DEFAULTS)
-			    (NCONS USER-LOGIN-MACHINE))))
+	     (SETQ ELEM (OR (AND USER-LOGIN-MACHINE (ASSQ USER-LOGIN-MACHINE DEFAULTS))
+			    (IF (NULL USER-LOGIN-MACHINE)
+				(NCONS SI:ASSOCIATED-MACHINE)
+			      (NCONS USER-LOGIN-MACHINE)))))
 	 ;; If there isn't one already, build a pathname from the host of this one
 	 (SETQ HOST-TO-USE (OR HOST (CAR ELEM) (PATHNAME-HOST (CDR ELEM))))
 	 (COND ((SETQ PATHNAME (CDR ELEM)))
