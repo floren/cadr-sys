@@ -24,7 +24,6 @@ Contents of the rest of this file:
 4   License Change*
 4   Summary of Changes Against TID/671* 
 4   Incompatible Changes* 
-4   Known Bugs* 
 4   User Interface Changes* 
 4   Network Changes* 
 
@@ -59,13 +58,6 @@ many incompatible changes, out right broken changes, and typos.
 
 This also means that the canonical file type on Unix is the same as on
 the Lisp Machine (i.e., not truncated).
-
-4Known Bugs* 
-
-] 4Blinker not working properly*
-
-The blinker that shows where the point is does not work, this will be
-addressed soon as a System patch.
 
 4User Interface Changes* 
 
