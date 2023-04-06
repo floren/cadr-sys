@@ -2366,12 +2366,7 @@ Encloses a lambda-expression in the current environment"
 			       ((atom tail) nil)
 			     (when (setq tem (get-lexical-value-cell
 					       (car tail)
-					       ;; all this to avoid a compiler warning...
-					       (locally
-						 (declare (special .slots.bound.instance.))
-						 (inhibit-style-warnings
-						   (locf (symbol-value
-							   '.slots.bound.instance.))))))
+					       (locf (symbol-value '.slots.bound.instance.))))
 			       (return (eq (contents tem) self))))
 		     ;;??? Here should take care of special instance variables!!!
 		     ;; Probably just omit them, since they were bound when
@@ -2390,10 +2385,7 @@ Encloses a lambda-expression in the current environment"
 			   (setf (car vars-env) tem1)
 			   ;; extend previous frame
 			 (%p-dpb-offset cdr-next %%q-cdr-code thisval -1)))
-		     (locally
-		       (declare (special .slots.bound.instance.))
-		       (inhibit-style-warnings
-			 (%push (locf (symbol-value '.slots.bound.instance.)))))
+		     (%push (locf (symbol-value '.slots.bound.instance.)))
 		     (%push self)
 		     (with-stack-list (tem1 nil)
 		       (%p-dpb-offset cdr-nil %%q-cdr-code tem1 -1))))
