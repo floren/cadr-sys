@@ -666,7 +666,7 @@ can have different number of items."
       (MENU-ITEM-STRING ITEM CURRENT-FONT SELF)
     (SETQ ITEM-BASELINE-ADJUST (- BASELINE (FONT-BASELINE ITEM-FONT)))
     ;; If this item is non-selectable, don't select it.
-    (AND (NOT (ATOM (CDR-SAFE ITEM)))
+    (AND (NOT (ATOM ITEM)) (NOT (ATOM (CDR ITEM)))
 	 (NOT (ATOM (CDDR ITEM)))
 	 (EQ (CADR ITEM) ':NO-SELECT)
 	 (SETQ ITEM NIL))
