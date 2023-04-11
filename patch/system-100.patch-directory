@@ -1,12 +1,14 @@
 ;;; -*- Mode:LISP; Package:USER; Base:10; Readtable:T; Patch-File:T -*-
 ;;; Patch directory for System version 100
-;;; Written 10-Apr-23 02:01:49 by AMS,
-;;; while running on Lisp Machine One from band 8
-;;; with Experimental System 100.2, Hacks by AMS 1.0, Experimental Local-File 54.0, Experimental MagTape 23.0, Experimental FILE-Server 11.0, microcode 323.
+;;; Written 11-Apr-23 05:13:23 by AMS,
+;;; while running on Lisp Machine One from band 7
+;;; with Experimental System 100.3, Experimental Local-File 54.0, Hacks by AMS 1.0, CADR 5.0, microcode 323, AMS.
 
 (:EXPERIMENTAL
  ((0 "System Loaded" "AMS" NIL)
   (1 "Fix FS:DEFAULT-PATHNAME so that it works with ZWEI when user is not logged in." "AMS" NIL)
   (2 "APPLY-LAMBDA: Don't wrap .SLOTS.BOUND.INSTANCE. around LOCALLY." "AMS" NIL)
   (3 "Fix (BASIC-MENU :MOUSE-MOVES) crash." "AMS" NIL)
+  (4 "ADVISE-FIND-SLOT: Fix typo.
+ARRAY-POP: Fix typo." "AMS" NIL)
   ))
