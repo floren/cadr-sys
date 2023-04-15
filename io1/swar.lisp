@@ -474,7 +474,7 @@
   (DO () (())
     (SPACEWAR-GAME)))
 
-(DEFVAR SPACEWAR-PROCESS (PROCESS-CREATE "Spacewar"))
+(DEFVAR SPACEWAR-PROCESS (MAKE-PROCESS "Spacewar"))
 
 ;; Start playing spacewar.
 (DEFUN SPACEWAR ()
