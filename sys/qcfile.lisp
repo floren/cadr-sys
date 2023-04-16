@@ -255,8 +255,8 @@ COMPILING-WHOLE-FILE-P should be T if you are processing all of the file."
 	(FORMAT:PRINT-LIST *ERROR-OUTPUT* "~S" (CDR X))
 	(FRESH-LINE *ERROR-OUTPUT*)))))
 
-(DEFUN COMPILE-FILE (&OPTIONAL INPUT-FILENAME
-		     &KEY OUTPUT-FILENAME
+(DEFUN COMPILE-FILE (&OPTIONAL INPUT-FILE
+		     &KEY OUTPUT-FILE
 		     (SET-DEFAULT-PATHNAME T)
 		     ((:PACKAGE PACKAGE-SPEC)) LOAD)
   "Compile file INPUT-FILE to a QFASL file named OUTPUT-FILE.
@@ -264,7 +264,7 @@ OUTPUT-FILE defaults based on INPUT-FILE, which defaults using the standard defa
 SET-DEFAULT-PATHNAME if NIL means do not set the defaults.
 PACKAGE if non-NIL is the package to compile in.
 LOAD means to load the compiled file."
-  (QC-FILE (OR INPUT-FILENAME "") OUTPUT-FILENAME
+  (QC-FILE (OR INPUT-FILE "") OUTPUT-FILE
 	   LOAD NIL PACKAGE-SPEC NIL
 	   (NOT SET-DEFAULT-PATHNAME)))
 
