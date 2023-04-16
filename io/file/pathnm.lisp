@@ -1644,6 +1644,11 @@ DEFAULTS defaults to *DEFAULT-PATHNAME-DEFAULTS*."
 if the specified pathname does not contain one
 even if the specified pathname does contain a name component.")
 
+(DEFCONST *MERGE-PATHNAME-ALLOW-UNSPECIFIED-TYPE* NIL
+  "This is mainly for DEFSYSTEM to allow modules with distinct
+source/object components to not have object components include the
+LISP type in their pathnames.")
+
 (DEFCONST *NAME-SPECIFIED-DEFAULT-TYPE* :LISP
   "This is the default type component to use in MERGE-PATHNAME-DEFAULTS
 if the specified pathname contains a name but no type.")
@@ -1810,12 +1815,18 @@ to be merged like the name, directory, etc. but has no effect on the version."
 		 (PROGN
 		   (SETF (VALUES NEW-TYPE NEW-OTYPE)
 			 (SEND DEFAULT :CANONICAL-TYPE))
-		   (UNLESS NEW-TYPE
-		     (SETQ NEW-TYPE
-			   (OR (AND (NOT (NULL SECONDARY-DEFAULT))
-				    (PATHNAME-TYPE SECONDARY-DEFAULT))
-			       ;; Never let the type of the resulting pathname be NIL.
-			       DEFAULT-TYPE)))
+                   (IF (AND *MERGE-PATHNAME-ALLOW-UNSPECIFIED-TYPE*
+                            (NULL DEFAULT-TYPE))
+                       (SETQ NEW-TYPE DEFAULT-TYPE)
+		       (UNLESS NEW-TYPE
+    		         (SETQ NEW-TYPE
+                           (IF (AND *MERGE-PATHNAME-ALLOW-UNSPECIFIED-TYPE*
+				    (NULL DEFAULT-TYPE))
+                               DEFAULT-TYPE
+			       (OR (AND (NOT (NULL SECONDARY-DEFAULT))
+				        (PATHNAME-TYPE SECONDARY-DEFAULT))
+			           ;; Never let the type of the resulting pathname be NIL.
+			           DEFAULT-TYPE)))))
 	       )
 	       (SETQ NEW-TYPE DEFAULT-TYPE)))
 	 (IF (NULL (PATHNAME-VERSION PATHNAME))
