@@ -53,6 +53,9 @@
 ;;; *ITS-UNINTERESTING-TYPES* - types that do not deserve the FN2 slot.
 ;;; *ALWAYS-MERGE-TYPE-AND-VERSION* - user option.  If T, gives TENEX style defaulting
 ;;;  of pathnames.  Default is NIL.
+;;; *MERGE-PATHNAME-ALLOW-UNSPECIFIED-TYPE* - user option.  If T,
+;;;  object components can be without a LISP type in DEFSYSTEM.
+;;;  Default is NIL.
 
 ;;; Other system types (pathname syntaxes) must implement at least the following messages:
 ;;;  :STRING-FOR-HOST - returns a string that can be sent to the file computer that
