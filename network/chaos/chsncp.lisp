@@ -250,7 +250,7 @@ and the time at which the record was made.")
 ;;; Don't use this table unless you are sure that the packet is not going to
 ;;; a host on THIS subnet!
 ;;; These tables are filled in by code in INITIALIZE-NCP-ONCE.
-(DEFCONST ROUTING-TABLE-SIZE 96. "the number of subnets in the routing table")
+(DEFCONST ROUTING-TABLE-SIZE 256. "the number of subnets in the routing table")
 (DEFVAR ROUTING-TABLE (MAKE-ARRAY ROUTING-TABLE-SIZE
 				  :TYPE 'ART-16B :AREA PERMANENT-STORAGE-AREA))
 (DEFVAR ROUTING-TABLE-COST (MAKE-ARRAY ROUTING-TABLE-SIZE
