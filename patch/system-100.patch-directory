@@ -1,8 +1,8 @@
 ;;; -*- Mode:LISP; Package:USER; Base:10; Readtable:T; Patch-File:T -*-
 ;;; Patch directory for System version 100
-;;; Written 16-Apr-23 11:22:02 by AMS,
+;;; Written 25-Apr-23 10:05:55 by AMS,
 ;;; while running on Lisp Machine One from band 2
-;;; with Experimental System 100.4, microcode 323.
+;;; with Experimental System 100.5, microcode 323.
 
 (:EXPERIMENTAL
  ((0 "System Loaded" "AMS" NIL)
@@ -14,4 +14,6 @@ ARRAY-POP: Fix typo." "AMS" NIL)
   (5 "FS:*MERGE-PATHNAME-ALLOW-UNSPECIFIED-TYPE*: New variable to control if object components can be without a LISP type in DEFSYSTEM.
 EDIT-DISK-lABEL: Reads the label when invokes, no need to C-r.
 COMPILE-FILE: Arguments now match Common Lisp." "AMS" NIL)
+  (6 "Fix character lossage in ZWEI.
+Increase Chaosnet routing table size to 256. so that we can handle all subnets." "AMS" NIL)
   ))
