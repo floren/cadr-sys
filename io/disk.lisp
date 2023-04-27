@@ -1282,7 +1282,7 @@ This is obsolete -- You probably want PRINT-HERALD"
     (SETQ CURRENT-LOADED-BAND 0))
   (FORMAT STREAM "~&~A System, band ~C of ~A."
 	  (IF (OR (NOT (VARIABLE-BOUNDP SITE-NAME)) (EQ SITE-NAME ':MIT))
-	      "MIT" "LMI")			;>> commercial lossage. fmh.
+	      "MIT" "LM-3")			;>> commercial lossage. fmh.
 	  (LDB #o2010 CURRENT-LOADED-BAND)
 	  DISK-PACK-NAME)
   (AND (BOUNDP 'SYSTEM-ADDITIONAL-INFO)
