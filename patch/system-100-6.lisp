@@ -14,37 +14,29 @@
 (COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "ZWEI")))
   (COMPILER::PATCH-SOURCE-FILE "OZ: //tree//zwei//comtab"
 
-(DEFUN COMMAND-LOOKUP (CHAR COMTAB &OPTIONAL NO-ALIASES NO-INDIRECTION)
-  "Return the command in COMTAB has for character CHAR.
-NO-ALIASES means do not follow aliases (such as #\c-h-A => #\c-sh-A)
- Instead, return a list of the CHAR-BITS and the CHAR-CODE of the character
- for which it is an alias.
-NO-INDIRECTION means only for a command associated with CHAR in COMTAB itself;
- ie the COMTAB-INDIRECT-TO of COMTAB is not followed.
-The second value is the comtab the command was found in.
-This will be COMTAB or a comtab that COMTAB indirects to."
-  (DECLARE (VALUES COMMAND COMTAB))
+;; not patched in 99 -- see 99.12
+(DEFUN COMMAND-STORE (COMMAND CHAR COMTAB &AUX KEYBOARD-ARRAY)
+  "Store COMMAND into COMTAB for character CHAR."
 ;character lossage
   (IF (FIXNUMP CHAR) (SETQ CHAR (INT-CHAR CHAR)))
-  (DO ((CTB COMTAB (COMTAB-INDIRECT-TO CTB))
-       (CH CHAR) KEYBOARD-ARRAY COMMAND)
-      ((NULL CTB) NIL)
-    (SETQ KEYBOARD-ARRAY (COMTAB-KEYBOARD-ARRAY CTB)
-	  COMMAND (COND ((NOT (ARRAYP KEYBOARD-ARRAY))
-			 (CDR (ASSQ CH KEYBOARD-ARRAY)))
-			((TV:CHAR-MOUSE-P CH)
-			 (IF (ARRAYP (COMTAB-MOUSE-ARRAY CTB))
-			     (AREF (COMTAB-MOUSE-ARRAY CTB)
-				   (MIN (LDB %%KBD-MOUSE-N-CLICKS CH) 1)
-				   (LDB %%KBD-MOUSE-BUTTON CH)
-				   (CHAR-BITS CH))))
-			(T
-			 (AREF KEYBOARD-ARRAY (CHAR-CODE CH) (CHAR-BITS CH)))))
-    (COND ((AND (CONSP COMMAND) (NOT NO-ALIASES))
-	   (RETURN (COMMAND-LOOKUP (MAKE-CHAR (CADR COMMAND) (CAR COMMAND))
-				   CTB NO-ALIASES NO-INDIRECTION)))
-	  (COMMAND (RETURN (VALUES COMMAND CTB)))
-	  (NO-INDIRECTION (RETURN NIL)))))
+  (SETQ KEYBOARD-ARRAY (COMTAB-KEYBOARD-ARRAY COMTAB))
+  (COND ((NOT (ARRAYP KEYBOARD-ARRAY))
+	 (LET ((ELEMENT (ASSQ CHAR KEYBOARD-ARRAY)))
+	   (IF ELEMENT
+	       (SETF (CDR ELEMENT) COMMAND)
+	     (PUSH (CONS CHAR COMMAND) (COMTAB-KEYBOARD-ARRAY COMTAB)))))
+	((TV:CHAR-MOUSE-P CHAR)
+	 (SETF (AREF (COMTAB-MOUSE-ARRAY COMTAB)
+		     (MIN (LDB %%KBD-MOUSE-N-CLICKS CHAR) 1)
+		     (LDB %%KBD-MOUSE-BUTTON CHAR)
+		     (CHAR-BITS CHAR))
+	       COMMAND))
+	(T
+	 (SETF (AREF KEYBOARD-ARRAY
+		     (CHAR-CODE CHAR)
+		     (CHAR-BITS CHAR))
+	       COMMAND))))
+
 ))
 
 ; From file OZ: /home/ams/l/sys/network/chaos/chsncp.lisp at 25-Apr-23 10:00:55
