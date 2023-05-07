@@ -171,7 +171,7 @@ IGNORE-STATES is either NIL or a list of states for which nothing is printed if 
 		    ;; Delete not only this connection, but every one to this same host, in
 		    ;; case it has multiple addresses.  One copy of the answer is enough, but
 		    ;; if it fails we would like to see all paths.
-		    (SETQ PUNT 'HOST))
+		    (WHEN HOST (SETQ PUNT 'HOST)))
 		  (CLS-RECEIVED-STATE
 		    (UNWIND-PROTECT
 			(PROGN (SETQ PKT (GET-NEXT-PKT CONN))
