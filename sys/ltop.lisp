@@ -118,7 +118,7 @@ COLD-BOOT is T if this is for a cold boot."
 			;;					     in case ucode grows.
 			:AREA PERMANENT-STORAGE-AREA)))
 
-  (UNLESS (NOT CALLED-BY-USER)
+  (UNLESS CALLED-BY-USER
      (IF (FBOUNDP 'COMPILER::MA-RESET)	;Unload microcompiled defs, because they are gone!
 	 (COMPILER::MA-RESET))		; Hopefully manage to do this before any gets called.
      ;; Set up the TV sync program as soon as possible; until it is set up
