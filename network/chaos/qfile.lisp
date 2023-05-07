@@ -624,7 +624,7 @@ he said /"log in/".  UNAME-HOST should be the host that the user actually logged
 
 (DEFUN COMPLETE-CHAOS (ACCESS PATHNAME STRING OPTIONS
 		       &AUX HOST-UNIT STRING-ORIGIN
-			    DELETED-P WRITE-P NEW-OK PKT STRING FILE-STRING SUCCESS
+			    DELETED-P WRITE-P NEW-OK PKT FILE-STRING SUCCESS
 			    (DEFAULT-CONS-AREA SYS:BACKGROUND-CONS-AREA))
   (DOLIST (KEY OPTIONS)
     (CASE KEY
@@ -706,7 +706,7 @@ he said /"log in/".  UNAME-HOST should be the host that the user actually logged
 
 (DEFUN HOMEDIR-CHAOS (ACCESS &OPTIONAL (USER USER-ID) &AUX (HOST (SEND ACCESS :HOST)))
   (OR (CDR (ASSQ HOST FS:USER-HOMEDIRS))
-      (WHEN (NOT (SI:MEMBER-EQUAL USER-ID '(NIL "")))
+      (WHEN (NOT (SI:MEMBER-EQUAL USER '(NIL "")))
 	;; Try logging in a file connection, in case that works.
 	(SEND ACCESS :GET-HOST-UNIT T)
 	(CDR (ASSQ HOST FS:USER-HOMEDIRS)))
@@ -1458,8 +1458,7 @@ Used on file data connections when there is no stream yet."
        (COND (SUCCESS
 	      ;; If there is a second line coming from the file server,
 	      ;; it is the new truename.
-	      (LET* ((FROM (STRING-SEARCH #/NEWLINE STRING))
-		     TRUENAME-STRING)
+	      (LET* ((FROM (STRING-SEARCH #/NEWLINE STRING)))
 		(WHEN FROM
 		  (send self :putprop (fs:parse-pathname
 					string
