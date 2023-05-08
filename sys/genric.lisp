@@ -34,18 +34,17 @@
        (cli:aref ,sequence (prog1 ,indexvar (incf ,indexvar)))
        (pop ,indexvar)))
 
-;;>> I'm allowed to write kludges like this. You're not.
 (defmacro key-fetch (key sequence indexvar)
-  `(progn (%push (if (fixnump ,indexvar)	;isn't lambda optimization a wonderful thing?
+  `(let ((tem (if (fixnump ,indexvar)
 		     (cli:aref ,sequence ,indexvar)
-		     (car ,indexvar)))
-	  (if ,key (funcall ,key (%pop)) (%pop))))
+		     (car ,indexvar))))
+	  (if ,key (funcall ,key tem) tem)))
 
 (defmacro key-fetch-inc (key sequence indexvar)
-  `(progn (%push (if (fixnump ,indexvar)
+  `(let ((tem (if (fixnump ,indexvar)
 		     (cli:aref ,sequence (prog1 ,indexvar (incf ,indexvar)))
-		     (pop ,indexvar)))
-	  (if ,key (funcall ,key (%pop)) (%pop))))
+		     (pop ,indexvar))))
+	  (if ,key (funcall ,key tem) tem)))
 
 (defmacro seq-store (sequence indexvar value)
   `(if (fixnump ,indexvar)
