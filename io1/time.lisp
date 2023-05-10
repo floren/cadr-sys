@@ -697,9 +697,9 @@ If STREAM is NIL, construct and return a string."
 		      (10. "HST" "BDT" #/K)		;Hawaiian
 		      (11. "BST" NIL #/L)		;Bering
 		      (12. NIL NIL #/M)
-		      (-1 NIL NIL #/N)
-		      (-2 NIL NIL #/O)
-		      (-3 NIL NIL #/P)
+		      (-1 "CET" NIL #/N)
+		      (-2 "EET" "CEST" #/O)
+		      (-3 NIL "EEST" #/P)
 		      (-4 NIL NIL #/Q)
 		      (-5 NIL NIL #/R)
 		      (-6 NIL NIL #/S)
