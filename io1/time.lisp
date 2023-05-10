@@ -188,6 +188,35 @@ A universal-time is the number of seconds since 1-Jan-1900 00:00-GMT (a bignum).
 	 NIL)
 	(T T)))
 
+(DEFUN DAYLIGHT-SAVINGS-TIME-IN-EUROPE-P (SECONDS MINUTES HOURS DAY MONTH YEAR)
+  "T if daylight savings time would be in effect at specified time in EU."
+  ;;Last Sunday in March to Last Sunday in October, applies all over EU since 1996
+  (DECLARE (IGNORE SECONDS MINUTES))
+  (COND ((OR (< MONTH 3)
+             (AND (= MONTH 3)
+                  (LET ((LSM (LAST-SUNDAY-IN-MARCH YEAR)))
+                    (OR (< DAY LSM)
+                        (AND (= DAY LSM) (< HOURS 2))))))
+         NIL)
+        ((OR (> MONTH 10.)
+             (AND (= MONTH 10.)
+                  (LET ((LSO (LAST-SUNDAY-IN-OCTOBER YEAR)))
+                    (OR (> DAY LSO)
+                        (AND (= DAY LSO) (^] HOURS 1))))))
+         NIL)
+        (T T)))
+
+(DEFUN LAST-SUNDAY-IN-MARCH (YEAR)
+  (IF (> YEAR 100.)
+      (SETQ YEAR (- YEAR 1900.)))
+  ;; This copied from GDWOBY routine in ITS
+  (LET ((DOW-BEG-YEAR
+          (LET ((B (CL:REM (+ YEAR 1899.) 400.)))
+            (CL:REM (- (+ (1+ B) (SETQ B (FLOOR B 4))) (FLOOR B 25.)) 7)))
+        (FEB29 (IF (LEAP-YEAR-P YEAR) 1 0)))
+    (LET ((DOW-MARCH-31 (CL:REM (+ DOW-BEG-YEAR 89. FEB29) 7)))
+      (- 31. DOW-MARCH-31))))
+
 (DEFUN LAST-SUNDAY-IN-OCTOBER (YEAR)
   (LET ((LSA (LAST-SUNDAY-IN-APRIL YEAR)))
     ;; Days between April and October = 31+30+31+31+30 = 153  6 mod 7
