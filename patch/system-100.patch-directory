@@ -1,8 +1,8 @@
 ;;; -*- Mode:LISP; Package:USER; Base:10; Readtable:T; Patch-File:T -*-
 ;;; Patch directory for System version 100
-;;; Written 10-May-23 13:27:54 by ams,
+;;; Written 10-May-23 13:35:10 by ams,
 ;;; while running on Lisp Machine One from band 7
-;;; with Experimental System 100.7, Hacks by AMS 1.0, microcode 323, AMS.
+;;; with Experimental System 100.8, Hacks by AMS 1.0, microcode 323, AMS.
 
 (:EXPERIMENTAL
  ((0 "System Loaded" "AMS" NIL)
@@ -18,4 +18,5 @@ COMPILE-FILE: Arguments now match Common Lisp." "AMS" NIL)
 Increase Chaosnet routing table size to 256. so that we can handle all subnets." "AMS" NIL)
   (7 "Fix MLY brain damage." "AMS" NIL)
   (8 "MAKE-SYSTEM: Name CWARNS file with the system name when doing :DEFAULTED-BATCH." "ams" NIL)
+  (9 "m-X Finish Patch: Avoid interleaving Reason: lines, and remember that we are done." "ams" NIL)
   ))
