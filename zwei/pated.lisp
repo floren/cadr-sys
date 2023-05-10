@@ -276,11 +276,11 @@ to mark it released so that LOAD-PATCHES will normally load it." ()
 		       "Description of changes (end with ~C)" #/END)))
     (SETQ DESCRIPTION (STRING-TRIM '(#/NEWLINE) DESCRIPTION))
     (LET ((BP (FORWARD-LINE (INTERVAL-FIRST-BP *PATCH-BUFFER*) 2)))
+      (INSERT-MOVING BP ";;; Reason:")
+      (INSERT-MOVING BP #/NEWLINE)
       (DO ((START 0 (1+ NEXT-LINE))
 	   NEXT-LINE)
 	  (())
-	(INSERT-MOVING BP ";;; Reason:")
-	(INSERT-MOVING BP #/NEWLINE)
 	(SETQ NEXT-LINE (STRING-SEARCH-CHAR #/NEWLINE DESCRIPTION START))
 	(INSERT-MOVING BP ";;;  ")
 	(INSERT-MOVING BP DESCRIPTION START NEXT-LINE)
@@ -299,8 +299,9 @@ to mark it released so that LOAD-PATCHES will normally load it." ()
 	    (T
 	     (FORMAT *QUERY-IO* "~&~:[Patch completed.~;Don't forget to save your files!~]"
 		     (LOOP FOR BUFFER IN *ZMACS-BUFFER-LIST*
-			   THEREIS (BUFFER-NEEDS-SAVING-P BUFFER))
-		 (FORMAT *QUERY-IO* "~&Don't forget to save your files!")))))))
+			   THEREIS (BUFFER-NEEDS-SAVING-P BUFFER)))
+	     (SETQ *PATCH-BUFFER* NIL
+		   *PATCH-SYSTEM* NIL))))))
 
 (DEFCOM COM-RELEASE-PATCH "Mark an already finished patch as /"released/".
 If you finish a patch with Finish Unreleased Patch, it will not
