@@ -202,7 +202,7 @@ A universal-time is the number of seconds since 1-Jan-1900 00:00-GMT (a bignum).
              (AND (= MONTH 10.)
                   (LET ((LSO (LAST-SUNDAY-IN-OCTOBER YEAR)))
                     (OR (> DAY LSO)
-                        (AND (= DAY LSO) (^] HOURS 1))))))
+                        (AND (= DAY LSO) ( HOURS 1))))))
          NIL)
         (T T)))
 
