@@ -1,8 +1,8 @@
 ;;; -*- Mode:LISP; Package:USER; Base:10; Readtable:T; Patch-File:T -*-
 ;;; Patch directory for System version 100
-;;; Written 10-May-23 13:37:11 by ams,
+;;; Written 10-May-23 13:43:49 by ams,
 ;;; while running on Lisp Machine One from band 7
-;;; with Experimental System 100.9, Hacks by AMS 1.0, microcode 323, AMS.
+;;; with Experimental System 100.7, Hacks by AMS 1.0, microcode 323, AMS.
 
 (:EXPERIMENTAL
  ((0 "System Loaded" "AMS" NIL)
@@ -20,4 +20,5 @@ Increase Chaosnet routing table size to 256. so that we can handle all subnets."
   (8 "MAKE-SYSTEM: Name CWARNS file with the system name when doing :DEFAULTED-BATCH." "ams" NIL)
   (9 "m-X Finish Patch: Avoid interleaving Reason: lines, and remember that we are done." "ams" NIL)
   (10 "CHAOS:POLL-HOSTS: Don't hang HOSTAT if prodding unknown hosts." "ams" NIL)
+  (11 "Add support for European timezones, and daylight savings." "ams" NIL)
   ))
