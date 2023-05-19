@@ -84,7 +84,7 @@ but you can redefine BEEP to to different things for different beep types."
      (select-processor
        (:cadr  (ldb (byte 1 2) (%xbus-read (screen-control-address screen))))
        (:lambda (ldb (byte 1 4) (%nubus-read tv:tv-quad-slot 4)))
-       (:none 1))))
+       (t 1))))
 
 (DEFMETHOD (SHEET :DRAW-RECTANGLE) (RECTANGLE-WIDTH RECTANGLE-HEIGHT X Y
 				    &OPTIONAL (ALU CHAR-ALUF))
