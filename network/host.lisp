@@ -285,6 +285,10 @@ Creates and composes a new flavor if necessary."
 ;;; This can be set by the chaosnet or whatever.
 (DEFVAR UNKNOWN-HOST-FUNCTION NIL)
 
+(DEFVAR UNKNOWN-ADDRESS-FUNCTION NIL
+  "If non-NIL, this should be a function that accepts an address and a network type
+and, if possible, defines and returns a host object. Or NIL if it can not.")
+
 (DEFINE-SITE-VARIABLE LOCAL-INTERNET-DOMAINS :LOCAL-INTERNET-DOMAINS
   "List of domains to which our site belongs.
 If a host is specified with one of these domains, we ignore the domain.
@@ -330,11 +334,18 @@ to give it a chance to create a host and add it to the host table."
 	(SETF (HOST-INSTANCE ELEM) INSTANCE)
 	INSTANCE)))
 
-(DEFUN GET-HOST-FROM-ADDRESS (ADDRESS NETWORK)
+(DEFUN GET-HOST-FROM-ADDRESS (ADDRESS NETWORK &OPTIONAL (UNKNOWN-OK T))
   "Return the host object which has the address ADDRESS on NETWORK, or NIL if none."
-  (LOOP FOR ELEM IN SI:HOST-ALIST
-	WHEN (MEMQ ADDRESS (GETF (SI:HOST-ADDRESSES ELEM) NETWORK))
-	RETURN (GET-ALIST-ELEM-HOST ELEM)))
+  (OR
+    (LOOP FOR ELEM IN SI:HOST-ALIST
+          WHEN (MEMQ ADDRESS (GETF (SI:HOST-ADDRESSES ELEM) NETWORK))
+          RETURN (GET-ALIST-ELEM-HOST ELEM))
+    (WHEN (AND UNKNOWN-OK UNKNOWN-ADDRESS-FUNCTION)
+      (LET ((F UNKNOWN-ADDRESS-FUNCTION)
+            (UNKNOWN-ADDRESS-FUNCTION NIL))     ;Avoid recursion
+        (FUNCALL F ADDRESS NETWORK)
+        ;; See if it was succesful
+        (GET-HOST-FROM-ADDRESS ADDRESS NETWORK NIL)))))
 
 (DEFUN MAKE-UNNAMED-HOST (SYSTEM-TYPE ADDRESSES &AUX ELEM)
   (SETQ ELEM (MAKE-HOST-ALIST-ELEM :NAME (FORMAT NIL "UNKNOWN-~A-~O"
