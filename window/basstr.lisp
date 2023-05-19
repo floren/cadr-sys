@@ -579,9 +579,9 @@ and four other names that do not allow LEFT- or RIGHT- :
 	"Selected window deexposed input notify flag (complement, or arg=1 on, 0 off)")
        (#/M KBD-ESC-MORE "Selected window **MORE** enable (complement, or arg=1 on, 0 off)"
 	:KEYBOARD-PROCESS)
-       (#/N KBD-ESC-NOTIFICATIONS "Allow notifications to come out."
+       (#/N KBD-ESC-NOTIFICATIONS '("Allow notifications to come out."
 	"Terminal 1 N  print all notifications (even old ones)"
-	"Terminal 2 N  defer notifications, reset who-line"
+	"Terminal 2 N  defer notifications, reset who-line")
 	:TYPEAHEAD)
        (#/O KBD-OTHER-EXPOSED-WINDOW
 	"Select another exposed window" :TYPEAHEAD)
