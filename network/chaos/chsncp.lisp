@@ -1427,21 +1427,21 @@ PKT should be a /"released/" packet, obtained with GET-PKT or GET-NEXT-PKT."
   (SETQ RECENT-HEADERS-POINTER (\ (1+ RECENT-HEADERS-POINTER) #o200)))
 
 ;;; Discard packets from send-list which have been receipted by other end
-(DEFUN RECEIPT (CONN ACK-LEV)
+(DEFUN RECEIPT (CONN ACK-LEV &OPTIONAL (REC-LEV ACK-LEV))
  (WITHOUT-INTERRUPTS
    (LET ((SENDS (SEND-PKTS CONN))	;(Save array references...)
 	 (NEXT NIL)			;Prevent weird screw.
 	 (LENGTH (SEND-PKTS-LENGTH CONN)))
      (DO ((PKT SENDS NEXT))		;For each PKT not yet ACKed which this ACKs,
-	 ((OR (NULL PKT) (PKTNUM-< ACK-LEV (PKT-NUM PKT))))
+	 ((OR (NULL PKT) (PKTNUM-< REC-LEV (PKT-NUM PKT))))
 ;      (SETQ NEXT (PKT-LINK PKT))
        (SETQ NEXT (SETQ SENDS (PKT-LINK PKT)))  ;Two variables only for "clairity"
        (FREE-PKT PKT)
        (SETQ LENGTH (1- LENGTH)))
      (SETF (SEND-PKTS CONN) SENDS)
      (SETF (SEND-PKTS-LENGTH CONN) LENGTH)
-     (IF (NULL SENDS)
-	 (SETF (SEND-PKTS-LAST CONN) NIL)))))
+     (UNLESS SENDS
+       (SETF (SEND-PKTS-LAST CONN) NIL)))))
 
 ;;; A new ack has come in, so adjust the amount left in the window.  If the window was
 ;;; full, and has now become "un-full", cause an output interrupt
