@@ -553,6 +553,9 @@ If ERROR-P is NIL, a file error in BODY causes us to return an error object."
   :initable-instance-variables
   :gettable-instance-variables)
 
+(defmethod (fc-probe-stream :property-list) ()
+  (funcall node ':plist))
+
 (defmethod (fc-probe-stream :set-notify-on-close) (value)
   value nil)
 
