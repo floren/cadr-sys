@@ -728,7 +728,6 @@
 	     (CONSIDER-UNIT UNIT BAND T))
 	 (FORMAT T "~&LMFile disk error: ~A~&" DISK-ERROR)))))
 
-
 (DEFUN ENABLE-MISC-SERVERS ()
   "Turn on standard services if somehow they are off (such as FINGER, TIME)"
   (setq CHAOS:chaos-servers-enabled t))  ;;should do other things.....
@@ -737,6 +736,9 @@
 ;;called by a user.  If BOOT-ANYWAY is T, will try to boot the file system even if
 ;;it can't access the SYS host.   If IGNORE-PATCHES is T, don't even try to
 ;;load patches (this is most useful when debugging, and there are no new patches."
+
+(DEFVAR *FILE-SERVER-FILE-HOST*  (SI:PARSE-HOST "mit-oz")
+	"THIS SHOULD BE A SITE VARIABLE....")
 
 (DEFUN BRING-UP-SERVER (&OPTIONAL FOR-WARM-BOOT)
   "This starts all of the LispMachine services, especially the FILE servers."
@@ -790,15 +792,23 @@ When it is up again, please call BRING-UP-SERVER."  (si:get-site-option ':sys-ho
 			     (setq *additional-filecomputer-server-files-loaded* t)))))
 	       (T
 		  (FORMAT T "~%Cannot connect to SYS host ~A to load the latest patches.
-When it is up again, please call BRING-UP-SERVER."  (si:get-site-option ':sys-host)))))))
+When it is up again, please call BRING-UP-SERVER."  (si:get-site-option ':sys-host))))
 
-	 
+
+	 ;;Note: at a WARM boot, as opposed to a cold boot,
+	 ;;this does not run, but LMFILE-WARM-BOOT handles everything.
+	 (FORMAT T "~%Booting LMFILE on partition SRVR...")
+	 (FS:CONSIDER-UNIT 2 "SRVR")
+	 (FS:START-FILE-SYSTEM)
+	 (UNLESS (GET 'LMFILE-CHAOS-HOST 'SI:FLAVOR)
+	   (FS:ADD-LFS-HOST "FC"))
+	 (FORMAT T "~%LMFILE booted and running.")))
+
+  (COND (FILE-SYSTEM-RUNNING
+	 (ENABLE-FILE-SERVER)
+	 (ENABLE-MAIL-SERVER)))
+
   ;; Random initializations.
-
-
-(DEFVAR *FILE-SERVER-FILE-HOST*  (SI:PARSE-HOST "mit-oz")
-	"THIS SHOULD BE A SITE VARIABLE....")
-
   ;; Allow typeout to continue past the end of screen without hanging.
   (SETQ TV:MORE-PROCESSING-GLOBAL-ENABLE NIL)
   (SETQ USER-ID "LMFile")
