@@ -48,7 +48,11 @@ Packet: from MC (1440), released, forwarded 17 times
 			     :DOCUMENTATION "Menu of useful things to do to this host.")
 	    :STRING ,(FORMAT NIL "~V@TPacket ~:[to~;from~] ~@[~A ~](~O)"
 			     INDENT TO-US
-			     (SI:GET-HOST-FROM-ADDRESS OTHER-HOST ':CHAOS) OTHER-HOST))
+			     ;; BV: Don't try to get name of address 0
+			     (if (zerop other-host) 
+				 "broadcast"
+			       (SI:GET-HOST-FROM-ADDRESS OTHER-HOST ':CHAOS))
+			     OTHER-HOST))
 	  (AND (NOT TO-US)
 	       `(:FUNCTION ,#'PKT-TIMES-TRANSMITTED (,PKT)
 			   NIL (", transmitted ~D times")))

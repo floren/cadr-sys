@@ -312,6 +312,8 @@ and the time at which the record was made.")
   (SETF (AREF ROUTING-TABLE-COST MY-SUBNET) 10.)
   (SI:SELECT-PROCESSOR
     (:CADR
+      ;; BV: Send broadcast also on Chaos
+      (setf (aref routing-table-type 0) :chaos)
       (SETF (AREF ROUTING-TABLE-TYPE MY-SUBNET) :CHAOS))
     (:LAMBDA
       (SETF (AREF ROUTING-TABLE-TYPE MY-SUBNET) :ETHERNET))))
@@ -453,7 +455,8 @@ Can be NIL if the connection is in a weird state."
   (:PRINT-SELF (CONN STREAM IGNORE &OPTIONAL IGNORE)
     (SYS:PRINTING-RANDOM-OBJECT (CONN STREAM)
       (SEND STREAM :STRING-OUT "CHAOS Connection")
-      (LET ((FHOST (SI:GET-HOST-FROM-ADDRESS (FOREIGN-ADDRESS CONN) :CHAOS))
+      ;; BV: don't try to get host object for address 0
+      (LET ((FHOST (if (zerop (foreign-address conn)) "broadcast" (SI:GET-HOST-FROM-ADDRESS (FOREIGN-ADDRESS CONN) :CHAOS)))
 	    CONTACT)
 	(COND ((SETQ CONTACT (GETF (CONN-PLIST CONN) 'RFC-CONTACT-NAME))
 	       (FORMAT STREAM " to ~A ~A" FHOST CONTACT))
@@ -1073,7 +1076,9 @@ This is a very low level function, called mainly by the following 2 functions.
        (FERROR NIL "Attempt to transmit an invalid packet (~S).
 The length ~O is greater than the maximum packet size (~O)."
 	       PKT (PKT-NBYTES PKT) MAX-DATA-BYTES-PER-PKT))
-  (WHEN ACK-P
+  (WHEN (and ACK-P
+	     (not (= (pkt-opcode pkt) rfc-op))	;BV: from Sys 130
+	     (not (= (pkt-opcode pkt) brd-op)))	;BV: don't zap BRD pkts either
     (WITHOUT-INTERRUPTS
       (LET ((CONN (PKT-SOURCE-CONN PKT)))
 	(OR CONN (FERROR NIL "~S has null connection." PKT))
@@ -1270,7 +1275,9 @@ to allow the chaosnet ncp to reuse the packet."
   (DO-FOREVER
     ;; Check for connection in an erroneous state
     (AND CHECK-CONN-STATE
-	 (OR (MEMQ (STATE CONN) '(OPEN-STATE RFC-RECEIVED-STATE ANSWERED-STATE FOREIGN-STATE))
+	 (OR (MEMQ (STATE CONN) '(OPEN-STATE RFC-RECEIVED-STATE ANSWERED-STATE FOREIGN-STATE
+					     ;; BV: also this
+					     broadcast-sent-state))
 	     (IF (EQ (STATE CONN) 'CLS-RECEIVED-STATE)
 		 (UNLESS (READ-PKTS CONN)
 		   (FERROR 'SYS:CONNECTION-NO-MORE-DATA
@@ -1297,7 +1304,9 @@ a connection which has been closed by foreign host."
     ;; Not satisfied, wait for something interesting to happen
     (PROCESS-WAIT WHOSTATE
 		  #'(LAMBDA (X) (OR (READ-PKTS X)
-				    (NOT (MEMQ (STATE X) '(OPEN-STATE FOREIGN-STATE)))))
+				    (NOT (MEMQ (STATE X) '(OPEN-STATE FOREIGN-STATE
+								      ;; BV: also this
+								      broadcast-sent-state)))))
 		  CONN)))
 
 (DEFPROP REPORT-BAD-CONNECTION-STATE T :ERROR-REPORTER)
@@ -1366,10 +1375,13 @@ PKT should be a /"released/" packet, obtained with GET-PKT or GET-NEXT-PKT."
 	     (SETF (AREF ROUTING-TABLE-COST SUBNET) COST))))
 ;;; RPK please check this
 ;;; Should this say PKT-DEST-ADDRESS instead of INT-PKT-HARDWARE-DEST?
-	((AND (= OP BRD-OP) (ZEROP (INT-PKT-HARDWARE-DEST INT-PKT)))
+;;; BV: Yes it should.
+	((AND (= OP BRD-OP) (ZEROP (PKT-DEST-ADDRESS INT-PKT)))
 	 (RECEIVE-BRD INT-PKT))
 	(( (PKT-DEST-ADDRESS INT-PKT) MY-ADDRESS)	;Packet to be forwarded
-	 (COND ((OR (= (PKT-FWD-COUNT INT-PKT) 17)
+	 (COND ((zerop (pkt-dest-address int-pkt))
+		(free-int-pkt int-pkt))
+	       ((OR (= (PKT-FWD-COUNT INT-PKT) 17)
 		    (> (PKT-NBYTES INT-PKT) MAX-DATA-BYTES-PER-PKT))
 		(FREE-INT-PKT INT-PKT)
 		(INCF PKTS-OVER-FORWARDED))
@@ -1385,7 +1397,8 @@ PKT should be a /"released/" packet, obtained with GET-PKT or GET-NEXT-PKT."
 	     ((= OP MNT-OP) (FREE-INT-PKT INT-PKT))
 	     ((AND (OR (NULL (SETQ CONN (PKT-DEST-CONN INT-PKT)))
 		       ( (PKT-DEST-INDEX-NUM INT-PKT) (LOCAL-INDEX-NUM CONN))
-		       ( (PKT-SOURCE-ADDRESS INT-PKT) (FOREIGN-ADDRESS CONN)))
+		       (and (not (zerop (foreign-address conn)))	;BV: BRD conn has 0, which matches all
+		            ( (PKT-SOURCE-ADDRESS INT-PKT) (FOREIGN-ADDRESS CONN))))
 		   (NOT (SETQ CONN (CDR (ASSQ (PKT-DEST-INDEX-NUM INT-PKT)
 					      DISTINGUISHED-PORT-CONN-TABLE)))))
 	      (TRANSMIT-LOS-INT-PKT INT-PKT LOS-OP
@@ -1678,6 +1691,9 @@ PKT should be a /"released/" packet, obtained with GET-PKT or GET-NEXT-PKT."
   (LET ((CONN (PKT-DEST-CONN INT-PKT)))
     (COND ((NULL CONN)
 	   (FREE-INT-PKT INT-PKT))
+	  ((eq (state conn) 'BROADCAST-SENT-STATE)
+	   ;; BV: ignore (cf MIT AIM 628 sec 4.5
+	   )
 	  ((MEMQ (STATE CONN) '(OPEN-STATE RFC-SENT-STATE))
 	   (SETQ PKT (CONVERT-TO-PKT INT-PKT))
 	   (WITHOUT-INTERRUPTS
@@ -1731,10 +1747,15 @@ PKT should be a /"released/" packet, obtained with GET-PKT or GET-NEXT-PKT."
   (COND ((NOT (MEMQ (STATE CONN) '(RFC-SENT-STATE BROADCAST-SENT-STATE)))
 	 (FREE-INT-PKT INT-PKT))
 	(T (SETQ PKT (CONVERT-TO-PKT INT-PKT))
-	   (SETF (STATE CONN) 'ANSWERED-STATE)
+	   ;; BV: respect the setting in OPEN-BROADCAST-CONNECTION
+	   (unless (and (eq (state conn) 'broadcast-sent-state)
+			(not (getf (conn-plist conn) 'broadcast-ans-reception-changes-state)))
+	     (SETF (STATE CONN) 'ANSWERED-STATE))
 	   (SETF (READ-PKTS CONN) PKT)
 	   (SETF (PKT-LINK PKT) NIL)
-	   (INTERRUPT-CONN :CHANGE-OF-STATE CONN 'ANSWERED-STATE)
+	   (unless (and (eq (state conn) 'broadcast-sent-state)
+			(not (getf (conn-plist conn) 'broadcast-ans-reception-changes-state)))
+	     (INTERRUPT-CONN :CHANGE-OF-STATE CONN 'ANSWERED-STATE))
 	   (INTERRUPT-CONN :INPUT CONN))))
 
 ;;;; Timed Responses and background tasks
@@ -1779,7 +1800,7 @@ PKT should be a /"released/" packet, obtained with GET-PKT or GET-NEXT-PKT."
 
 ;;; Retransmit all unreceipted packets not recently sent
 (DEFUN RETRANSMISSION (CONN &AUX TIME (INHIBIT-SCHEDULING-FLAG T))
-  (WHEN (MEMQ (STATE CONN) '(OPEN-STATE RFC-SENT-STATE))
+  (WHEN (MEMQ (STATE CONN) '(OPEN-STATE RFC-SENT-STATE broadcast-sent-state))	;BV: incl broadcast
     ;; Only if it is open or awaiting a response from RFC
     (BLOCK CONN-DONE
       (DO-FOREVER
@@ -1927,6 +1948,7 @@ CONN ~S, (PKT-SOURCE-CONN PKT) ~S." PKT CONN (PKT-SOURCE-CONN PKT))))
 
 (DEFUN TRANSMIT-INT-PKT (INT-PKT &OPTIONAL (HOST (PKT-DEST-ADDRESS INT-PKT))
                                            (SUBNET (PKT-DEST-SUBNET INT-PKT))
+					   (broadcast-if-necessary t)
 				 &AUX HARDWARE-P LOCAL-PROC OTHER-LOCAL-PROCS)
   ;;; Simple routing if he is not on my subnet.
   (COND ((AND (NOT (= SUBNET MY-SUBNET))
@@ -1941,7 +1963,11 @@ CONN ~S, (PKT-SOURCE-CONN PKT) ~S." PKT CONN (PKT-SOURCE-CONN PKT))))
   (OR (= (%AREA-NUMBER INT-PKT) CHAOS-BUFFER-AREA)
       (FERROR NIL "Attempt to transmit non-interrupt packet ~A." INT-PKT))
   (AND (BIT-TEST #o200 (PKT-OPCODE INT-PKT)) (SETQ DATA-PKTS-OUT (1+ DATA-PKTS-OUT)))
-  (COND ((ZEROP HOST)
+  (COND ((and (ZEROP HOST)
+	      ;; BV: for broadcast pkts, 0 dest is OK (handled below)
+	      (not (and broadcast-if-necessary
+			(zerop host)
+			(zerop (pkt-dest-address int-pkt)))))
 	 ;; This means we know no path to the destination.
 	 ;; Just give up.
 	 (FREE-INT-PKT INT-PKT))
@@ -2100,6 +2126,8 @@ User programs may call this before attempting to use the chaosnet."
   (SEND BACKGROUND :RUN-REASON)
   (SEND RECEIVER :PRESET 'RECEIVE-ANY-FUNCTION)
   (SEND RECEIVER :RUN-REASON)
+  ;; BV: Enable also BRD reception
+  (SETQ *RECEIVE-BROADCAST-PACKETS-P* T)
   (SETQ ENABLE T))
 
 (DEFUN DISABLE ()

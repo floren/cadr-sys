@@ -223,6 +223,7 @@ TIMEOUT is how long to wait before giving up, in 60'ths of a second."
 	   (VALUES BIT-MAP BIT-MAP-LENGTH)))))
   
 (DEFUN OPEN-BROADCAST-CONNECTION (SUBNETS CONTACT-NAME &OPTIONAL (PKT-ALLOCATION 10.)
+				  update-ans-state-p
 				  &AUX SUBNET-BIT-MAP SUBNET-BIT-MAP-LENGTH)
   "Broadcast a service request from CONTACT-NAME over certain subnets.
 PKT-ALLOCATION is the buffering size for unread requests as they come over the net.
@@ -246,13 +247,23 @@ The connection returned is in the CHAOS:BROADCAST-SENT-STATE."
 	    (SETF (GETF (CONN-PLIST CONN) 'BROADCAST-CONNECTION) T)
 	    (SETF (GETF (CONN-PLIST CONN) 'SUBNET-BIT-MAP) SUBNET-BIT-MAP)
 	    (SETF (GETF (CONN-PLIST CONN) 'SUBNET-BIT-MAP-LENGTH) SUBNET-BIT-MAP-LENGTH)
-	    (SETF (GETF (CONN-PLIST CONN) 'CONTACT-NAME) CONTACT-NAME)
+	    ;; BV: use standard property to support various printing functions
+	    (SETF (GETF (CONN-PLIST CONN) 'rfc-CONTACT-NAME) CONTACT-NAME)
+	    ;; BV: note if state should change on receiving ANS
+	    (setf (getf (conn-plist conn) 'broadcast-ans-reception-changes-state) update-ans-state-p)
 	    (SET-PKT-STRING PKT SUBNET-BIT-MAP CONTACT-NAME)
 	    (WITHOUT-INTERRUPTS
 	      (SETF (WINDOW-AVAILABLE CONN) 1)
 	      (SETF (TIME-LAST-RECEIVED CONN) (TIME))
 	      (SETF (STATE CONN) 'BROADCAST-SENT-STATE))
-	    (TRANSMIT-PKT PKT ()))
+	    (TRANSMIT-PKT PKT ())
+	    ;; BV: support standard retransmission mechanisms (see OPEN-CONNECTION)
+	    (WITHOUT-INTERRUPTS
+	      (SETF (SEND-PKTS CONN) PKT)
+	      (SETF (SEND-PKTS-LAST CONN) PKT)
+	      (SETF (SEND-PKTS-LENGTH CONN) 1) 
+	      (SETQ RETRANSMISSION-NEEDED T)
+	      (SETQ PKT NIL)))
 	(AND PKT (FREE-PKT PKT)))
     CONN)))
 
