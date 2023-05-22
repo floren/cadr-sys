@@ -1252,7 +1252,8 @@ Returns T if the connection is still open."
 
 (DEFUN CONN-FINISHED-P (CONN)
   "T unless connection is open but not all our transmissions have been acknowledged."
-  (OR ( (WINDOW-AVAILABLE CONN) (FOREIGN-WINDOW-SIZE CONN))
+  (OR (null (send-pkts conn))
+     ;( (WINDOW-AVAILABLE CONN) (FOREIGN-WINDOW-SIZE CONN))
       (NEQ (STATE CONN) 'OPEN-STATE)))
 (DEFF FINISHED-P 'CONN-FINISHED-P)
 (MAKE-OBSOLETE FINISHED-P "use CHAOS:CONN-FINISHED-P")
@@ -1425,9 +1426,6 @@ PKT should be a /"released/" packet, obtained with GET-PKT or GET-NEXT-PKT."
 	      ;; Below here, this INT-PKT contains a normal acknowledgement field.
 	      (SETQ ACKN (PKT-ACK-NUM INT-PKT))	;Acknowledgement field
 	      (RECEIPT CONN ACKN)		;Clear receipted packets from send list
-	      (AND (PKTNUM-< (SEND-PKT-ACKED CONN) ACKN)
-		   (SETF (SEND-PKT-ACKED CONN) ACKN))
-	      (UPDATE-WINDOW-AVAILABLE CONN)
 	      (COND ((OR (>= OP DAT-OP) (= OP EOF-OP))
 		     (RECEIVE-EOF-OR-DAT CONN INT-PKT))
 		    ((= OP SNS-OP) (RECEIVE-SNS CONN INT-PKT))
@@ -1445,16 +1443,19 @@ PKT should be a /"released/" packet, obtained with GET-PKT or GET-NEXT-PKT."
    (LET ((SENDS (SEND-PKTS CONN))	;(Save array references...)
 	 (NEXT NIL)			;Prevent weird screw.
 	 (LENGTH (SEND-PKTS-LENGTH CONN)))
-     (DO ((PKT SENDS NEXT))		;For each PKT not yet ACKed which this ACKs,
+     (DO ((PKT SENDS NEXT))			;For each PKT the destination has received...
 	 ((OR (NULL PKT) (PKTNUM-< REC-LEV (PKT-NUM PKT))))
 ;      (SETQ NEXT (PKT-LINK PKT))
        (SETQ NEXT (SETQ SENDS (PKT-LINK PKT)))  ;Two variables only for "clairity"
        (FREE-PKT PKT)
-       (SETQ LENGTH (1- LENGTH)))
+       (DECF LENGTH))
      (SETF (SEND-PKTS CONN) SENDS)
      (SETF (SEND-PKTS-LENGTH CONN) LENGTH)
      (UNLESS SENDS
-       (SETF (SEND-PKTS-LAST CONN) NIL)))))
+       (SETF (SEND-PKTS-LAST CONN) NIL)))
+   (WHEN (PKTNUM-< (SEND-PKT-ACKED CONN) ACK-LEV)
+     (SETF (SEND-PKT-ACKED CONN) ACK-LEV))
+   (UPDATE-WINDOW-AVAILABLE CONN)))
 
 ;;; A new ack has come in, so adjust the amount left in the window.  If the window was
 ;;; full, and has now become "un-full", cause an output interrupt
@@ -1469,9 +1470,8 @@ PKT should be a /"released/" packet, obtained with GET-PKT or GET-NEXT-PKT."
 ;;; The following functions are called to process the receipt of a particular kind of packet.
 
 (DEFUN RECEIVE-STS (CONN INT-PKT)
-  (RECEIPT CONN (PKT-FIRST-DATA-WORD INT-PKT))
   (SETF (FOREIGN-WINDOW-SIZE CONN) (PKT-SECOND-DATA-WORD INT-PKT))
-  (UPDATE-WINDOW-AVAILABLE CONN)
+  (RECEIPT CONN (PKT-ACK-NUM INT-PKT) (PKT-FIRST-DATA-WORD INT-PKT))
   (FREE-INT-PKT INT-PKT))
 
 ;;; When this is called, CONN is known to be in OPEN-STATE.
@@ -1644,7 +1644,9 @@ PKT should be a /"released/" packet, obtained with GET-PKT or GET-NEXT-PKT."
 (DEFUN RFC-MEETS-LSN (CONN PKT)
   (SETF (FOREIGN-ADDRESS CONN) (PKT-SOURCE-ADDRESS PKT))
   (SETF (FOREIGN-INDEX-NUM CONN) (PKT-SOURCE-INDEX-NUM PKT))
-  (SETF (FOREIGN-WINDOW-SIZE CONN) (PKT-ACK-NUM PKT))
+  (SETF (FOREIGN-WINDOW-SIZE CONN) (IF (> (PKT-ACK-NUM PKT) MAXIMUM-WINDOW-SIZE)
+				       DEFAULT-WINDOW-SIZE
+				     (PKT-ACK-NUM PKT)))
   (SETF (PKT-NUM-READ CONN) (PKT-NUM PKT))
   (SETF (PKT-NUM-RECEIVED CONN) (PKT-NUM PKT))
   (SETF (PKT-NUM-ACKED CONN) (PKT-NUM PKT))
@@ -1665,7 +1667,6 @@ PKT should be a /"released/" packet, obtained with GET-PKT or GET-NEXT-PKT."
 		    (SETF (PKT-NUM-ACKED CONN) (PKT-NUM INT-PKT))
 		    (SETF (TIME-LAST-RECEIVED CONN) (TIME))
 		    (RECEIPT CONN (PKT-ACK-NUM INT-PKT))
-		    (UPDATE-WINDOW-AVAILABLE CONN)
 		    (SETF (STATE CONN) 'OPEN-STATE)
 		    (SETQ RESERVED-INT-PKT INT-PKT)
 		    (TRANSMIT-STS CONN 'OPN)
@@ -1801,14 +1802,30 @@ PKT should be a /"released/" packet, obtained with GET-PKT or GET-NEXT-PKT."
 ;;; Retransmit all unreceipted packets not recently sent
 (DEFUN RETRANSMISSION (CONN &AUX TIME (INHIBIT-SCHEDULING-FLAG T))
   (WHEN (MEMQ (STATE CONN) '(OPEN-STATE RFC-SENT-STATE broadcast-sent-state))	;BV: incl broadcast
-    ;; Only if it is open or awaiting a response from RFC
+    ;; Only if it is open or awaiting a response from RFC or BRD
+    (when (null (send-pkts conn))
+      (when (pktnum-< (send-pkt-acked conn) (pkt-num-sent conn))
+	;;Need to retransmit but no packets on send-list.  Remote end has received all of
+	;;our packets but has not acknowledged them all.  Send a SNS to elicit a STS
+	(setq inhibit-scheduling-flag nil)
+	(let ((pkt (allocate-int-pkt)))
+	  (setf (pkt-opcode pkt) sns-op)
+	  (setf (pkt-nbytes pkt) 0)
+	  (setf (pkt-fwd-count pkt) 0)
+	  (transmit-int-pkt-for-conn conn pkt))
+	(setq more-retransmission-needed t))	;Indicate that pkts remain unacknowledged
+      (return-from retransmission t))				;And return from this function
+    ;; Doing this outside the loop can lose
+    ;; because then TIME can be less than (PKT-TIME-TRANSMITTED PKT).
+    (SETQ TIME (TIME))			;On the other hand, doing it inside the loop loses
+    ;;because if there are enough PKTs pending for a particular CONN, it can
+    ;;hang because every time it sends one it has to restart from the beginning
+    ;;of the list.  So now we deal with the case mentioned above explicitly.
     (BLOCK CONN-DONE
       (DO-FOREVER
-	;; Doing this outside the loop can lose
-	;; because then TIME can be less than (PKT-TIME-TRANSMITTED PKT).
-	(SETQ TIME (TIME))
 	(LET ((INHIBIT-SCHEDULING-FLAG T))
-	  (DO ((PKT (SEND-PKTS CONN) (PKT-LINK PKT)))
+	  (DO* ((PKT (SEND-PKTS CONN) (PKT-LINK PKT))
+		(first-pkt-num (and pkt (pkt-num pkt))))
 	      ((NULL PKT) (RETURN-FROM CONN-DONE NIL))
 	    (COND ((NOT (EQ CONN (PKT-SOURCE-CONN PKT)))
 		   (FERROR NIL "~S in SEND-PKTS list for incorrect CONN:
@@ -1817,8 +1834,7 @@ CONN ~S, (PKT-SOURCE-CONN PKT) ~S." PKT CONN (PKT-SOURCE-CONN PKT))))
 	    (WHEN ( (TIME-DIFFERENCE TIME (PKT-TIME-TRANSMITTED PKT))
 		     (LSH (CONN-RETRANSMISSION-INTERVAL CONN)
 			  ;; Retransmit the lowest numbered packet most often
-			  (MAX 0 (MIN 5 (1- (%POINTER-DIFFERENCE (PKT-NUM PKT)
-								 (SEND-PKT-ACKED CONN)))))))
+			  (MAX 0 (MIN 5 (1- (pktnum-- (PKT-NUM PKT) first-pkt-num))))))
 	      (SETF (PKT-BEING-RETRANSMITTED PKT) T)
 	      (SETQ INHIBIT-SCHEDULING-FLAG NIL)
 	      (TRANSMIT-PKT PKT T)
