@@ -66,6 +66,25 @@ Will be NIL by the time YOU get to look at it")
 (ADD-INITIALIZATION "Next boot is a cold boot" '(SETQ COLD-BOOTING T)
 		    '(:BEFORE-COLD))
 
+(DEFUN TV::INITIALIZE-RUN-LIGHT-LOCATIONS ()
+  (WHEN (BOUNDP 'TV:DEFAULT-SCREEN)
+    (IF (BOUNDP 'TV::SYNC-RAM-CONTENTS)
+	;; if TV:SET-TV-SPEED has been done in this image,
+	;; use the results from that.
+	(SETUP-CPT TV::SYNC-RAM-CONTENTS NIL T)
+	(SETUP-CPT))
+    (IF (VARIABLE-BOUNDP TV:MAIN-SCREEN)
+	(SETQ %DISK-RUN-LIGHT
+	      (+ (- (* TV:MAIN-SCREEN-HEIGHT
+		       (TV:SHEET-LOCATIONS-PER-LINE TV:MAIN-SCREEN))
+		    #o15)
+		 (TV:SCREEN-BUFFER TV:MAIN-SCREEN))))
+    (SETQ TV::WHO-LINE-RUN-LIGHT-LOC (+ 2 (LOGAND %DISK-RUN-LIGHT #o777777)))))
+
+(ADD-INITIALIZATION "Put run lights at the bottom of the screen"
+		    '(TV::INITIALIZE-RUN-LIGHT-LOCATIONS)
+		    :BEFORE-COLD)
+
 ;;; Come here when machine starts.  Provides a base frame.
 (DEFUN LISP-TOP-LEVEL ()
   (LISP-REINITIALIZE NIL)			;(Re)Initialize critical variables and things
@@ -124,19 +143,7 @@ COLD-BOOT is T if this is for a cold boot."
      ;; Set up the TV sync program as soon as possible; until it is set up
      ;; read references to the TV buffer can get NXM errors which cause a
      ;; main-memory parity error halt.  Who-line updating can do this.
-     (WHEN (BOUNDP 'TV:DEFAULT-SCREEN)
-       (IF (BOUNDP 'TV::SYNC-RAM-CONTENTS)
-	   ;; if TV:SET-TV-SPEED has been done in this image,
-	   ;; use the results from that.
-	   (SETUP-CPT TV::SYNC-RAM-CONTENTS NIL T)
-	   (SETUP-CPT))
-       (IF (VARIABLE-BOUNDP TV:MAIN-SCREEN)
-	   (SETQ %DISK-RUN-LIGHT
-		 (+ (- (* TV:MAIN-SCREEN-HEIGHT
-			  (TV:SHEET-LOCATIONS-PER-LINE TV:MAIN-SCREEN))
-		       #o15)
-		    (TV:SCREEN-BUFFER TV:MAIN-SCREEN))))
-       (SETQ TV::WHO-LINE-RUN-LIGHT-LOC (+ 2 (LOGAND %DISK-RUN-LIGHT #o777777))))
+     (TV::INITIALIZE-RUN-LIGHT-LOCATIONS)
      ;; Clear all the bits of the main screen after a cold boot.
      (AND COLD-BOOT (CLEAR-SCREEN-BUFFER IO-SPACE-VIRTUAL-ADDRESS)))
 
