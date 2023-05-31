@@ -346,4 +346,28 @@
 	(FUNCALL OUT ':STRING-OUT BUF LOW HIGH)
 	(FUNCALL IN ':ADVANCE-INPUT-BUFFER))
       (FORMAT T "~%~:[No nulls found.~;~D. nulls removed from file.~]" FOUND COUNT))))
-	      
+	      
+;; Grab bag of test to run in a the new world.
+(DEFUN TEST-WORLD ()
+  (PRINT-HERALD)
+  (FORMAT T "~%Maximum address is currently ~D.~%" (FIND-MAX-ADDR))
+  (ROOM T)
+  (FORMAT T "~%~D Flavors defined.~%" (LENGTH *ALL-FLAVOR-NAMES*))
+  (COND (*FLAVOR-COMPILATIONS*
+	 (FORMAT T "~%Flavor compilations:~{~% ~S~}~%" *FLAVOR-COMPILATIONS*)))
+;;  (FIND-FLAVOR-COMPILATION-DISCREPENCIES)
+  (WHO-CALLS 'UNBOUND-FUNCTION)
+  (DBG:LIST-PROBLEMS)
+;;  (AND PKG-REHASH-HISTORY
+;;       (FORMAT T "~&Package Rehash History:~{~% ~A~20T~6D~}" PKG-REHASH-HISTORY))
+  (TIME:TEST-PARSER)
+  )
+
+(DEFUN TOTAL-SYSTEM-SOURCE-RECORDS (&REST SYSTEMS)
+  (LOOP FOR SYSTEM IN SYSTEMS
+	AS TOTAL = 0
+	DO (LOOP FOR FILE IN (SI:SYSTEM-SOURCE-FILES SYSTEM)
+		 AS (NIL PLIST) = (FS:DIRECTORY-LIST FILE)
+		 AS RECORDS = (OR (GET PLIST ':LENGTH-IN-BLOCKS) 0)
+		 DO (INCF TOTAL RECORDS))
+	(FORMAT T "~&System ~A, ~D Record~:P" SYSTEM TOTAL)))
