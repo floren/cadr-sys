@@ -2127,13 +2127,16 @@ This is useful if your monitor is adjusted so that some of it cannot be seen."
     (write-scan-line-table line-number bit-map-pointer)))
 
 (defun set-up-scan-line-table ()
-  (if-in-lambda
+  (select-processor
+   (:lambda
     (load-scan-line-table (sheet-locations-per-line main-screen))
     (setq %disk-run-light
 	  (+ (* (1- main-screen-height) (sheet-locations-per-line main-screen))
 	     14
 	     (lsh #o77 18.)))
-    (setq who-line-run-light-loc (+ 2 (logand %disk-run-light #o777777)))))
+    (setq who-line-run-light-loc (+ 2 (logand %disk-run-light #o777777))))
+   (:cadr
+    (initialize-run-light-locations))))
 
 (add-initialization "Load scan line table" '(set-up-scan-line-table))
 
