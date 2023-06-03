@@ -1815,14 +1815,11 @@ PKT should be a /"released/" packet, obtained with GET-PKT or GET-NEXT-PKT."
 	  (transmit-int-pkt-for-conn conn pkt))
 	(setq more-retransmission-needed t))	;Indicate that pkts remain unacknowledged
       (return-from retransmission t))				;And return from this function
-    ;; Doing this outside the loop can lose
-    ;; because then TIME can be less than (PKT-TIME-TRANSMITTED PKT).
-    (SETQ TIME (TIME))			;On the other hand, doing it inside the loop loses
-    ;;because if there are enough PKTs pending for a particular CONN, it can
-    ;;hang because every time it sends one it has to restart from the beginning
-    ;;of the list.  So now we deal with the case mentioned above explicitly.
     (BLOCK CONN-DONE
       (DO-FOREVER
+	;; Doing this outside the loop can lose
+	;; because then TIME can be less than (PKT-TIME-TRANSMITTED PKT).
+	(SETQ TIME (TIME))			;On the other hand, doing it inside the loop loses
 	(LET ((INHIBIT-SCHEDULING-FLAG T))
 	  (DO* ((PKT (SEND-PKTS CONN) (PKT-LINK PKT))
 		(first-pkt-num (and pkt (pkt-num pkt))))
