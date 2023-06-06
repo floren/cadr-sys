@@ -673,5 +673,5 @@ Packet: from MC (1440), released, forwarded 17 times
 ))
 
 (eval-when (load)
- (setf (aref routing-table-type 0) :chaos)
- (setq *receive-broadcast-packets-p* t))
+ (setf (aref chaos:routing-table-type 0) :chaos)
+ (setq chaos:*receive-broadcast-packets-p* t))
