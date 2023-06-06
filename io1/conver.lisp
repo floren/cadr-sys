@@ -24,7 +24,7 @@
 
 ;;; User options
    
-(DEFVAR *CONVERSE-RECEIVE-MODE* ':NOTIFY-WITH-MESSAGE
+(DEFVAR *CONVERSE-RECEIVE-MODE* :NOTIFY-WITH-MESSAGE
   ;This one is least obnoxious -- RMS 
  	"This variable controls what occurs when you receive a new interactive message.
          It has four possible values:
@@ -107,7 +107,7 @@ Usage of the functions QSENDS-ON and QSENDS-OFF is encouraged instead.")
 (DEFVAR *SYSTEMS-DONT-UPCASE-FOR* '(MULTICS) "List of types of host whose send servers
 care about case, and therefore we won't uppercasify what we send them.")
 
-(DEFVAR *SAVED-SENDS* (MAKE-ARRAY 100 ':TYPE 'ART-STRING ':LEADER-LIST '(0)))
+(DEFVAR *SAVED-SENDS* (MAKE-ARRAY 100 :TYPE 'ART-STRING :LEADER-LIST '(0)))
 (DEFVAR *LAST-CONVERSE-SENDER* NIL "Internally used so that we can reply.")
 
 (ADD-INITIALIZATION "Clear saved sends" '(SETQ *SAVED-SENDS* NIL) '(:BEFORE-COLD))
@@ -192,7 +192,7 @@ To save that text, you must kill in now, and yank it back later.")
 It is inserted between AFTER-LINE and BEFORE-LINE,
 which should be successive lines."
   (DECLARE (:SELF-FLAVOR CONVER))
-  (SETQ MY-NODE (MAKE-INSTANCE 'NODE ':SUPERIOR *INTERVAL*))
+  (SETQ MY-NODE (MAKE-INSTANCE 'NODE :SUPERIOR *INTERVAL*))
   (SETF (LINE-NODE AFTER-LINE) MY-NODE)
   (SETF (LINE-NODE BEFORE-LINE) MY-NODE)
   (SETQ LINE (MAKE-DIAGRAM-LINE 'BLACK-LINE-DIAGRAM))
@@ -200,7 +200,7 @@ which should be successive lines."
   (INSERT-LINE-WITH-LEADER LINE BEFORE-LINE)
   (INSERT-WITHIN-LINE AFTER-LINE 0 "To: " 0 4)	;put in To: line
   (SETQ TO-LINE-DEL LINE)
-; (INSERT (CREATE-BP LINE 0 ':MOVES) #/CR)
+; (INSERT (CREATE-BP LINE 0 :MOVES) #/CR)
   (SETQ FIRST-LINE AFTER-LINE
 	LAST-LINE LINE))
 
@@ -209,7 +209,7 @@ which should be successive lines."
 It is inserted between AFTER-LINE and BEFORE-LINE,
 which should be successive lines."
   (DECLARE (:SELF-FLAVOR CONVER))
-  (SETQ MY-NODE (MAKE-INSTANCE 'NODE ':SUPERIOR *INTERVAL*))
+  (SETQ MY-NODE (MAKE-INSTANCE 'NODE :SUPERIOR *INTERVAL*))
   ;; splice in MY-NODE (must check for node type)
   (IF (AND (TYPEP (LINE-NODE AFTER-LINE) 'NODE)
 	   (NODE-NEXT (LINE-NODE AFTER-LINE)))
@@ -227,10 +227,10 @@ which should be successive lines."
   (SETF (LINE-NODE LINE) MY-NODE)
   (SETQ TO-LINE-DEL LINE)
   ;; put To: line before end delimiter
-  (INSERT (CREATE-BP LINE 0 ':NORMAL)
+  (INSERT (CREATE-BP LINE 0 :NORMAL)
 	  (STRING-APPEND "To: " -WHO- #/CR #/CR))
   ;; make header diagram
-  (SETQ LINE (MAKE-DIAGRAM-LINE 'CONVERSE-HEADER-DIAGRAM ':NAME -WHO-))
+  (SETQ LINE (MAKE-DIAGRAM-LINE 'CONVERSE-HEADER-DIAGRAM :NAME -WHO-))
   (SETF (LINE-NODE LINE) MY-NODE)
   ;; splice header between AFTER-LINE and To: line
   (INSERT-LINE-WITH-LEADER LINE (LINE-NEXT AFTER-LINE))
@@ -243,8 +243,8 @@ which should be successive lines."
 ;;; If HEADER is nil then use AFTER-LINE for first-line and do not generate a 
 ;;; conversation header diagram. Don't even bother with nodes for BEFORE-LINE.
 (DEFMETHOD (CONVER :INIT) (INIT-PLIST)
-  (LET ((BEFORE-LINE (GET INIT-PLIST ':BEFORE-LINE))
-	(AFTER-LINE (GET INIT-PLIST ':AFTER-LINE)))
+  (LET ((BEFORE-LINE (GET INIT-PLIST :BEFORE-LINE))
+	(AFTER-LINE (GET INIT-PLIST :AFTER-LINE)))
     (IF (OR (NULL BEFORE-LINE) (NULL AFTER-LINE))
 	(FERROR NIL "You must supply a before-line and an after-line when creating a CONVER"))
     (IF WITH-HEADER-P
@@ -253,7 +253,7 @@ which should be successive lines."
 
 (DEFMACRO CHECK-CONVERSATION-INTEGRITY ()
   ;check to see that the current conversation is ok, warning if not.
-  `(IF (NULL (SEND SELF ':CONVERSATION-GOOD?))
+  `(IF (NULL (SEND SELF :CONVERSATION-GOOD?))
        (CONVERSE-BARF *CONVERSE-BUFFER-MUNGED-MESSAGE*)))
 
 (DEFMACRO CHECK-BUFFER-INTEGRITY ()
@@ -301,12 +301,12 @@ This function is called with SELF set to a normal conversation."
 This function is called with SELF set to a special conversation
 /(one that is with nobody in particular)."
   (DECLARE (:SELF-FLAVOR CONVER))
-  (WITH-BP (BP (CREATE-BP FIRST-LINE 0) ':NORMAL)
+  (WITH-BP (BP (CREATE-BP FIRST-LINE 0) :NORMAL)
     (DELETE-INTERVAL BP (END-OF-LINE (LINE-PREVIOUS TO-LINE-DEL)))
     (SETQ FIRST-LINE (BP-LINE BP)))
   (INSERT-WITHIN-LINE FIRST-LINE 0 "To: " 0 4)
   ;;  will have to reset the interval-first-bp of converse buffer to start-line
-; (INSERT (CREATE-BP TO-LINE-DEL 0 ':MOVES) #/CR)
+; (INSERT (CREATE-BP TO-LINE-DEL 0 :MOVES) #/CR)
   )
 
 ;;; returns the To: line area to is empty state
@@ -327,9 +327,9 @@ This function is called with SELF set to a special conversation
   (DELETE-INTERVAL *INTERVAL*)
   (INSERT (INTERVAL-FIRST-BP *INTERVAL*) #/CR)
   ;; make a headerless To: line conversation
-  (LET ((C (MAKE-INSTANCE 'CONVER ':WITH-HEADER-P NIL
-			  ':AFTER-LINE (BP-LINE (INTERVAL-FIRST-BP *INTERVAL*))
-			  ':BEFORE-LINE (BP-LINE (INTERVAL-LAST-BP *INTERVAL*)))))
+  (LET ((C (MAKE-INSTANCE 'CONVER :WITH-HEADER-P NIL
+			  :AFTER-LINE (BP-LINE (INTERVAL-FIRST-BP *INTERVAL*))
+			  :BEFORE-LINE (BP-LINE (INTERVAL-LAST-BP *INTERVAL*)))))
     ;; create the conversation list
     (SETQ *CONVERSE-LIST* (LIST C)))
   ;; now regenerate all the conversations in order
@@ -347,19 +347,19 @@ This function is called with SELF set to a special conversation
   "Try to get Converse working again.  You may lose many things in the process, though.
 If SEVERELY is T, then regenerate the buffers as well."
   ;; (if ... ask about saving buffer.
-  (SEND (FIND-CONVERSE-WINDOW) ':CLEAR-REQUEST-QUEUE)
-  (IF SEVERELY (SEND (FIND-CONVERSE-WINDOW) ':REGEN-YOURSELF)))
+  (SEND (FIND-CONVERSE-WINDOW) :CLEAR-REQUEST-QUEUE)
+  (IF SEVERELY (SEND (FIND-CONVERSE-WINDOW) :REGEN-YOURSELF)))
 
 ;;; for regenerating a conversation after main to-line conversation
 (DEFUN REGEN-SETUP-CONVERSATION (CONVERSATION &AUX LINE)
   "Regenerate the text for CONVERSATION from its saved messages.
 CONVERSATION should be a normal conversation -- one with a particular other user."
   (IF (CDR *CONVERSE-LIST*)
-      (SETQ LINE (SEND (CADR *CONVERSE-LIST*) ':FIRST-LINE))
+      (SETQ LINE (SEND (CADR *CONVERSE-LIST*) :FIRST-LINE))
       (SETQ LINE (BP-LINE (INTERVAL-LAST-BP *INTERVAL*))))
   (SETQ *CONVERSE-LIST*	(APPEND (LIST (CAR *CONVERSE-LIST*)) (LIST CONVERSATION)
 				(CDR *CONVERSE-LIST*)))
-  (SEND CONVERSATION ':REGEN-YOURSELF (LINE-PREVIOUS LINE) LINE)
+  (SEND CONVERSATION :REGEN-YOURSELF (LINE-PREVIOUS LINE) LINE)
   CONVERSATION)
 
 ;;; This is almost the same thing as :INIT except go through all the OLDMSGS and add
@@ -370,7 +370,7 @@ CONVERSATION should be a normal conversation -- one with a particular other user
     (INIT-CONVERSATION-WITHOUT-H AFTER-LINE BEFORE-LINE))
   (SETQ OLDMSGS NIL)
   (DOLIST (MSG (REVERSE TOLDMSGS))
-    (SEND SELF ':ADD-MSG MSG))) 
+    (SEND SELF :ADD-MSG MSG))) 
 
 ;;;; Diagram stuff
 
@@ -402,15 +402,15 @@ CONVERSATION should be a normal conversation -- one with a particular other user
 (DEFMETHOD (CONVERSE-HEADER-DIAGRAM :DRAW) (IGNORE SHEET &AUX W W1)
   (SETQ W (+ (TV:SHEET-STRING-LENGTH SHEET NAME 0 NIL NIL FONTS:CPTFONTB) 100))
   (SETQ W1 (FLOOR (- (TV:SHEET-INSIDE-WIDTH SHEET) W) 2))
-  (SEND SHEET ':DRAW-RECTANGLE W1
+  (SEND SHEET :DRAW-RECTANGLE W1
 			       (- (TV:SHEET-LINE-HEIGHT SHEET) 3)
 			       0
 			       (TV:SHEET-CURSOR-Y SHEET))
-  (SEND SHEET ':DRAW-RECTANGLE W1
+  (SEND SHEET :DRAW-RECTANGLE W1
 			       (- (TV:SHEET-LINE-HEIGHT SHEET) 3)
 			       (+ W W1)
 			       (TV:SHEET-CURSOR-Y SHEET))
-  (SEND SHEET ':STRING-OUT-EXPLICIT
+  (SEND SHEET :STRING-OUT-EXPLICIT
 	      NAME (+ W1 50) (TV:SHEET-CURSOR-Y SHEET)
 	      (+ (TV:SHEET-INSIDE-LEFT SHEET) (+ W W1)) NIL
 	      FONTS:CPTFONTB
@@ -434,7 +434,7 @@ CONVERSATION should be a normal conversation -- one with a particular other user
 (DEFMETHOD (CONVERSE :CLEAR-REQUEST-QUEUE) ()
   (SETQ CONVERSE-REQUEST-QUEUE NIL))
 
-(ADD-INITIALIZATION 'CLEAR-CONVERSE-QUEUE '(SEND (FIND-CONVERSE-WINDOW) ':CLEAR-REQUEST-QUEUE)
+(ADD-INITIALIZATION 'CLEAR-CONVERSE-QUEUE '(SEND (FIND-CONVERSE-WINDOW) :CLEAR-REQUEST-QUEUE)
 		    '(:BEFORE-COLD))
 
 ;;; Use this message to send a request to the Converse process.
@@ -447,7 +447,7 @@ CONVERSATION should be a normal conversation -- one with a particular other user
       ;; the order they are requested.
       (SETQ CONVERSE-REQUEST-QUEUE
 	    (NCONC CONVERSE-REQUEST-QUEUE (NCONS REQ))))
-    (SEND SELF ':FORCE-KBD-INPUT '(:EXECUTE CONVERSE-EXECUTE-QUEUE))))
+    (SEND SELF :FORCE-KBD-INPUT '(:EXECUTE CONVERSE-EXECUTE-QUEUE))))
 
 ;;; Similar if the request does not need to be processed unless/until
 ;;; Converse is awakened for some other reason.
@@ -463,10 +463,10 @@ CONVERSATION should be a normal conversation -- one with a particular other user
 ;;; Note: delayed requests should not be made when converse is exposed.
 (DEFMETHOD (CONVERSE :AFTER :EXPOSE) (&REST IGNORE)
   (IF CONVERSE-REQUEST-QUEUE
-      (SEND SELF ':FORCE-KBD-INPUT '(:EXECUTE CONVERSE-EXECUTE-QUEUE))))
+      (SEND SELF :FORCE-KBD-INPUT '(:EXECUTE CONVERSE-EXECUTE-QUEUE))))
 
 (DEFUN CONVERSE-EXECUTE-QUEUE ()
-  (SEND *CONVERSE-FRAME* ':EXECUTE-QUEUED-REQUESTS))
+  (SEND *CONVERSE-FRAME* :EXECUTE-QUEUED-REQUESTS))
 
 (DEFMETHOD (CONVERSE :EXECUTE-QUEUED-REQUESTS) ()
   (DOLIST (REQ CONVERSE-REQUEST-QUEUE)
@@ -477,12 +477,12 @@ CONVERSATION should be a normal conversation -- one with a particular other user
   "Create a conversation with user WHO and insert its text in the buffer."
   (CHECK-BUFFER-INTEGRITY)
   (IF (CDR *CONVERSE-LIST*)
-      (SETQ LINE (SEND (CADR *CONVERSE-LIST*) ':FIRST-LINE))
+      (SETQ LINE (SEND (CADR *CONVERSE-LIST*) :FIRST-LINE))
       (SETQ LINE (BP-LINE (INTERVAL-LAST-BP *INTERVAL*))))
   (SETQ CONVERSATION (MAKE-INSTANCE 'CONVER
-				    ':WHO WHO
-				    ':AFTER-LINE (LINE-PREVIOUS LINE)
-				    ':BEFORE-LINE LINE))
+				    :WHO WHO
+				    :AFTER-LINE (LINE-PREVIOUS LINE)
+				    :BEFORE-LINE LINE))
   (SETQ *CONVERSE-LIST*	(APPEND (LIST (CAR *CONVERSE-LIST*)) (LIST CONVERSATION)
 				(CDR *CONVERSE-LIST*)))
   CONVERSATION)
@@ -503,17 +503,17 @@ CONVERSATION should be a normal conversation -- one with a particular other user
   ;; first line in buffer must be first line of first message
   (OR (NOT (VARIABLE-BOUNDP *CONVERSE-LIST*)) ;;may be checking before we got any messages
       (AND (EQ (BP-LINE (INTERVAL-FIRST-BP *INTERVAL*))
-	       (SEND (CAR *CONVERSE-LIST*) ':FIRST-LINE))
+	       (SEND (CAR *CONVERSE-LIST*) :FIRST-LINE))
 	   ;; must be able to get to the last line
 	   
 	   ;; check each last line for next line being first line of next conversation
 	   (DO ((C *CONVERSE-LIST* (CDR C)))
 	       ((NULL (CDR C)) T)
-	     (IF (NOT (LINE-REACHABLE? (SEND (CAR C) ':FIRST-LINE)
-				       (SEND (CAR C) ':LAST-LINE)))
+	     (IF (NOT (LINE-REACHABLE? (SEND (CAR C) :FIRST-LINE)
+				       (SEND (CAR C) :LAST-LINE)))
 		 (RETURN NIL))
-	     (IF (NEQ (LINE-NEXT (SEND (CAR C) ':LAST-LINE))
-		      (SEND (CADR C) ':FIRST-LINE))
+	     (IF (NEQ (LINE-NEXT (SEND (CAR C) :LAST-LINE))
+		      (SEND (CADR C) :FIRST-LINE))
 		 (RETURN NIL))))))
 
 ;;; returns whether or not the TO-LINE-DEL is in between the FIRST-LINE and 
@@ -539,30 +539,30 @@ CONVERSATION should be a normal conversation -- one with a particular other user
   ;;go through all the conversations and find out which one the cursor is in
   (CHECK-BUFFER-INTEGRITY)
   (LET ((CONVERSATION (DOLIST (C *CONVERSE-LIST*)
-			(IF (SEND C ':LINE-MINE? (BP-LINE (POINT))) (RETURN C)))))
+			(IF (SEND C :LINE-MINE? (BP-LINE (POINT))) (RETURN C)))))
     (IF (NULL CONVERSATION)
 	(BARF *CONVERSE-POINT-INVALID-MESSAGE*))
-    (IF (BP-< (SEND CONVERSATION ':AFTER-TO-LINE-BP) (POINT))
-	(MOVE-BP (POINT) (SEND CONVERSATION ':AFTER-TO-LINE-BP))
+    (IF (BP-< (SEND CONVERSATION :AFTER-TO-LINE-BP) (POINT))
+	(MOVE-BP (POINT) (SEND CONVERSATION :AFTER-TO-LINE-BP))
       (SETQ CONVERSATION (DO ((CLIST *CONVERSE-LIST* (CDR CLIST)))
 			     ((OR (NULL CLIST) (EQ (CADR CLIST) CONVERSATION))
 			      (CAR CLIST))))
-      (IF CONVERSATION (MOVE-BP (POINT) (SEND CONVERSATION ':AFTER-TO-LINE-BP)))))
+      (IF CONVERSATION (MOVE-BP (POINT) (SEND CONVERSATION :AFTER-TO-LINE-BP)))))
   DIS-BPS)
 
 (DEFCOM COM-CONVERSE-NEXT-CONVERSATION "Move to the next conversation." ()
   ;;go through all the conversations and find out which one the cursor is in
   (CHECK-BUFFER-INTEGRITY)
   (LET ((CONVERSATION (DOLIST (C *CONVERSE-LIST*)
-			(IF (SEND C ':LINE-MINE? (BP-LINE (POINT))) (RETURN C)))))
+			(IF (SEND C :LINE-MINE? (BP-LINE (POINT))) (RETURN C)))))
     (IF (NULL CONVERSATION)
 	(BARF *CONVERSE-POINT-INVALID-MESSAGE*))
-    (IF (BP-< (POINT) (SEND CONVERSATION ':AFTER-TO-LINE-BP))
-	(MOVE-BP (POINT) (SEND CONVERSATION ':AFTER-TO-LINE-BP))
+    (IF (BP-< (POINT) (SEND CONVERSATION :AFTER-TO-LINE-BP))
+	(MOVE-BP (POINT) (SEND CONVERSATION :AFTER-TO-LINE-BP))
       (SETQ CONVERSATION (DO ((CLIST *CONVERSE-LIST* (CDR CLIST)))
 			     ((OR (NULL CLIST) (EQ (CAR CLIST) CONVERSATION))
 			      (CADR CLIST))))
-      (IF CONVERSATION (MOVE-BP (POINT) (SEND CONVERSATION ':AFTER-TO-LINE-BP)))))
+      (IF CONVERSATION (MOVE-BP (POINT) (SEND CONVERSATION :AFTER-TO-LINE-BP)))))
   DIS-BPS)
 
 (DEFCOM COM-CONVERSE-REGENERATE-BUFFER "Restore the Converse buffer to working condition." ()
@@ -609,18 +609,18 @@ Doesn't exit if ZWEI:*CONVERSE-END-EXITS* is set to T."
 (DEFCOM COM-CONVERSE-DELETE-CONVERSATION "Delete the conversation from the buffer." ()
   (CHECK-BUFFER-INTEGRITY)
   (LET ((CONVERSATION (DOLIST (C *CONVERSE-LIST*)
-			(IF (SEND C ':LINE-MINE? (BP-LINE (POINT))) (RETURN C)))))
+			(IF (SEND C :LINE-MINE? (BP-LINE (POINT))) (RETURN C)))))
     (IF (NULL CONVERSATION)
 	(BARF *CONVERSE-POINT-INVALID-MESSAGE*))
     (DELQ CONVERSATION *CONVERSE-LIST*)
-    (DELETE-INTERVAL (CREATE-BP (SEND CONVERSATION ':FIRST-LINE) 0)
-		     (CREATE-BP (LINE-NEXT (SEND CONVERSATION ':LAST-LINE)) 0)))
+    (DELETE-INTERVAL (CREATE-BP (SEND CONVERSATION :FIRST-LINE) 0)
+		     (CREATE-BP (LINE-NEXT (SEND CONVERSATION :LAST-LINE)) 0)))
   DIS-TEXT)
 
 (DEFCOM COM-CONVERSE-WRITE-BUFFER "Write the entire buffer (all conversations) into a file."
 	()
   (LET ((PATHNAME (READ-DEFAULTED-PATHNAME "Write entire buffer to file:" (PATHNAME-DEFAULTS))))
-    (WITH-OPEN-FILE (STREAM PATHNAME ':DIRECTION ':OUTPUT ':ERROR ':REPROMPT)
+    (WITH-OPEN-FILE (STREAM PATHNAME :DIRECTION :OUTPUT :ERROR :REPROMPT)
       (STREAM-OUT-INTERVAL STREAM *INTERVAL* NIL NIL T)))
   DIS-NONE)
 
@@ -630,18 +630,18 @@ Doesn't exit if ZWEI:*CONVERSE-END-EXITS* is set to T."
   ;;go through all the conversations and find out which one the cursor is in
   (CHECK-BUFFER-INTEGRITY)
   (LET ((CONVERSATION (DOLIST (C *CONVERSE-LIST*)
-			(IF (SEND C ':LINE-MINE? (BP-LINE (POINT))) (RETURN C)))))
+			(IF (SEND C :LINE-MINE? (BP-LINE (POINT))) (RETURN C)))))
     (IF (NULL CONVERSATION)
 	(BARF *CONVERSE-POINT-INVALID-MESSAGE*))
     (LET ((PATHNAME (READ-DEFAULTED-PATHNAME
 		      (FORMAT NIL "Write conversation with ~A to file:"
-			      (SEND CONVERSATION ':WHO))
+			      (SEND CONVERSATION :WHO))
 		      (PATHNAME-DEFAULTS))))
-      (WITH-OPEN-FILE (STREAM PATHNAME ':DIRECTION ':OUTPUT ':ERROR ':REPROMPT)
+      (WITH-OPEN-FILE (STREAM PATHNAME :DIRECTION :OUTPUT :ERROR :REPROMPT)
 	(STREAM-OUT-INTERVAL
 	  STREAM
-	  (CREATE-BP (LINE-PREVIOUS (SEND CONVERSATION ':FIRST-LINE)) 0)
-	  (CREATE-BP (SEND CONVERSATION ':LAST-LINE) 0)
+	  (CREATE-BP (LINE-PREVIOUS (SEND CONVERSATION :FIRST-LINE)) 0)
+	  (CREATE-BP (SEND CONVERSATION :LAST-LINE) 0)
 	  T T))))
   DIS-NONE)
 
@@ -663,13 +663,13 @@ Doesn't exit if ZWEI:*CONVERSE-END-EXITS* is set to T."
   ;;go through all the conversations and find out which one the cursor is in
   (CHECK-BUFFER-INTEGRITY)
   (LET ((CONVERSATION (DOLIST (C *CONVERSE-LIST*)
-			(IF (SEND C ':LINE-MINE? (BP-LINE (POINT))) (RETURN C)))))
+			(IF (SEND C :LINE-MINE? (BP-LINE (POINT))) (RETURN C)))))
     (IF (NULL CONVERSATION)
 	(BARF *CONVERSE-POINT-INVALID-MESSAGE*))
     (LET ((PATHNAME (READ-DEFAULTED-PATHNAME
 		      "Append Converse conversation to:" (PATHNAME-DEFAULTS)))
-	  (BP1 (CREATE-BP (LINE-PREVIOUS (SEND CONVERSATION ':FIRST-LINE)) 0))
-	  (BP2 (CREATE-BP (SEND CONVERSATION ':LAST-LINE) 0)))
+	  (BP1 (CREATE-BP (LINE-PREVIOUS (SEND CONVERSATION :FIRST-LINE)) 0))
+	  (BP2 (CREATE-BP (SEND CONVERSATION :LAST-LINE) 0)))
       (WITH-OPEN-FILE-RETRY (OSTREAM (PATHNAME FS:FILE-ERROR) '(:OUT))
 	(WITH-OPEN-FILE-CASE (ISTREAM PATHNAME)
 	  (FS:FILE-NOT-FOUND (TYPEIN-LINE "(New File)"))
@@ -784,10 +784,10 @@ Returns non-NIL if the message is successfully sent."
  the body of the message."
   (CHECK-BUFFER-INTEGRITY)
   (LET ((CONVERSATION (DOLIST (C *CONVERSE-LIST*)
-			(IF (SEND C ':LINE-MINE? (BP-LINE (POINT))) (RETURN C)))))
+			(IF (SEND C :LINE-MINE? (BP-LINE (POINT))) (RETURN C)))))
     (IF (NULL CONVERSATION)
 	(CONVERSE-BARF *CONVERSE-POINT-INVALID-MESSAGE*))
-    (LET ((MSG-WITH-TO (SEND CONVERSATION ':GET-TO-MSG)))
+    (LET ((MSG-WITH-TO (SEND CONVERSATION :GET-TO-MSG)))
       (LET ((DEST (IF (STRING-EQUAL MSG-WITH-TO "To:" 0 0 3 3)
 		      (STRING-TRIM " "
 				   (SUBSTRING MSG-WITH-TO 3 (STRING-SEARCH-CHAR #/CR
@@ -803,10 +803,10 @@ Returns non-NIL if the message is successfully sent."
 	    (DOLIST (DEST (PARSE-COMMAS-INTO-LIST DEST))
 	      (PARSE-SINGLE-DEST DEST T))
 	  (SYS:LOCAL-NETWORK-ERROR
-	   (CONVERSE-BARF "~A" (SEND ERROR ':REPORT-STRING))))
+	   (CONVERSE-BARF "~A" (SEND ERROR :REPORT-STRING))))
 	;; It's valid enough to record on a conversation,
 	;; so remove it from the TO-MSG and try sending.
-	(SEND CONVERSATION ':RESTORE-TO-MSG)
+	(SEND CONVERSATION :RESTORE-TO-MSG)
 	(VALUES DEST MSG)))))
 
 ;Within a Converse command, send MESSAGE to DESTINATION, returning T if successful.
@@ -825,7 +825,7 @@ Returns non-NIL if the message is successfully sent."
 	       (SETQ MAIL-P T)
 	       (CONVERSE-PROBLEM
 		 (FORMAT NIL "Message for ~A is being mailed, as host ~A is not on the ~
-chaosnet." USER (SEND (SI:PARSE-HOST HOST) ':NAME))))) |#
+chaosnet." USER (SEND (SI:PARSE-HOST HOST) :NAME))))) |#
       (COND ((NULL HOST)
 	     (SETQ LOSSAGE T)
 	     (CONVERSE-PROBLEM
@@ -843,15 +843,15 @@ chaosnet." USER (SEND (SI:PARSE-HOST HOST) ':NAME))))) |#
 (DEFUN CONVERSE-RECORD-MSG-SENT (DEST MESSAGE MAIL-P ERROR-P LOSSAGE-REASON
 				 &OPTIONAL INSIDE-CONVERSE-P)
   (LET ((CONVERSATION (DOLIST (C *CONVERSE-LIST*)
-			(IF (SEND C ':MY-NAME? DEST) (RETURN C)))))
+			(IF (SEND C :MY-NAME? DEST) (RETURN C)))))
     (IF (NULL CONVERSATION) (SETQ CONVERSATION (SETUP-CONVERSATION DEST)))
-    (SEND CONVERSATION ':ADD-MSG
+    (SEND CONVERSATION :ADD-MSG
 	  (FORMAT NIL
 		  "Message ~:[~;NOT ~]~:[sent~;mailed~] to ~A (~\DATIME\)~@[ because~% ~A~]~%~A" 
 		  ERROR-P MAIL-P DEST LOSSAGE-REASON MESSAGE))
     (WHEN INSIDE-CONVERSE-P
       ;; move the point to the To: line so user can type there
-      (MOVE-BP (POINT) (SEND CONVERSATION ':AFTER-TO-LINE-BP))
+      (MOVE-BP (POINT) (SEND CONVERSATION :AFTER-TO-LINE-BP))
       (MUST-REDISPLAY *WINDOW* DIS-TEXT))))
     
 (DEFUN CONVERSE-EDIT-AND-SEND-MSG (DESTINATION MESSAGE)
@@ -861,13 +861,13 @@ in the list if there is more than one."
   (LET ((DEST (PARSE-SINGLE-DEST (CAR (PARSE-COMMAS-INTO-LIST DESTINATION)))))
     (LET ((CONVERSATION
 	    (OR (DOLIST (C *CONVERSE-LIST*)
-		  (IF (SEND C ':MY-NAME? DEST) (RETURN C)))
+		  (IF (SEND C :MY-NAME? DEST) (RETURN C)))
 		(SETUP-CONVERSATION DEST))))
       ;; move the point to the To: line so user can type there
-      (MOVE-BP (POINT) (BEG-LINE (SEND CONVERSATION ':AFTER-TO-LINE-BP)))
+      (MOVE-BP (POINT) (BEG-LINE (SEND CONVERSATION :AFTER-TO-LINE-BP)))
       (INSERT-MOVING (POINT) MESSAGE)))
   (MUST-REDISPLAY *WINDOW* DIS-TEXT)
-  (SEND (FIND-CONVERSE-WINDOW) ':SELECT))
+  (SEND (FIND-CONVERSE-WINDOW) :SELECT))
 
 (DEFCOM COM-CONVERSE-MAIL-MESSAGE
 	"Mail the current message to the specified destination instead of sending it." ()
@@ -928,7 +928,7 @@ in the list if there is more than one."
 ;;; Post-command hook to dump out any pending requests
 ;;; (They might have come in while in a break loop)
 (DEFUN CONVERSE-POST-COMMAND-HOOK (&OPTIONAL IGNORE)
-  (SEND *CONVERSE-FRAME* ':EXECUTE-QUEUED-REQUESTS))
+  (SEND *CONVERSE-FRAME* :EXECUTE-QUEUED-REQUESTS))
 (DEFPROP CONVERSE-POST-COMMAND-HOOK 100 COMMAND-HOOK-PRIORITY)
 
 (DEFFLAVOR CONVERSE-FRAME
@@ -951,40 +951,40 @@ in the list if there is more than one."
 ;  (LET ((*COM-DOCUMENTATION-ALIST*
 ;	  (CONS '(#/M COM-CONVERSE-HELP) *COM-DOCUMENTATION-ALIST*)))
   (DO-FOREVER
-    (SEND *CONVERSE-FRAME* ':EDIT)))
+    (SEND *CONVERSE-FRAME* :EDIT)))
 
 (DEFMETHOD (CONVERSE-FRAME :AFTER :INIT) (IGNORE)
   (LET ((PANE
-	  (SEND SELF ':CREATE-WINDOW 'ZWEI-WINDOW-PANE ':NAME "Converse"
-			':EXPOSE-P T)))
-    (SEND SELF ':SELECT-PANE PANE)
-    (SEND PANE ':SET-BASE-TICK *TICK*)
+	  (SEND SELF :CREATE-WINDOW 'ZWEI-WINDOW-PANE :NAME "Converse"
+			:EXPOSE-P T)))
+    (SEND SELF :SELECT-PANE PANE)
+    (SEND PANE :SET-BASE-TICK *TICK*)
     (SYS:%USING-BINDING-INSTANCES (CLOSURE-BINDINGS EDITOR-CLOSURE))
     (LET ((*BATCH-UNDO-SAVE* T))
       (INSERT (INTERVAL-LAST-BP *INTERVAL*) #/CR))
     ;; make a headerless To: line conversation
-    (LET ((C (MAKE-INSTANCE 'CONVER ':WITH-HEADER-P NIL
-			    ':AFTER-LINE (BP-LINE (INTERVAL-FIRST-BP *INTERVAL*))
-			    ':BEFORE-LINE (BP-LINE (INTERVAL-LAST-BP *INTERVAL*)))))
+    (LET ((C (MAKE-INSTANCE 'CONVER :WITH-HEADER-P NIL
+			    :AFTER-LINE (BP-LINE (INTERVAL-FIRST-BP *INTERVAL*))
+			    :BEFORE-LINE (BP-LINE (INTERVAL-LAST-BP *INTERVAL*)))))
       ;; create the conversation list
       (SETQ *CONVERSE-LIST* (LIST C)))
     (MOVE-BP (POINT) (END-LINE (INTERVAL-FIRST-BP *INTERVAL*)))))
 
 (DEFMETHOD (CONVERSE-FRAME :FORCE-KBD-INPUT) (INPUT)
-  (SEND TV:SELECTION-SUBSTITUTE ':FORCE-KBD-INPUT INPUT))
+  (SEND TV:SELECTION-SUBSTITUTE :FORCE-KBD-INPUT INPUT))
 
 (DEFMETHOD (CONVERSE-FRAME :BEFORE :EXPOSE) (&REST IGNORE)
   (UNLESS (TV:SHEET-EXPOSED-P SELF)
-    (SEND SELF ':FORCE-KBD-INPUT '(:EXECUTE INITIALIZE-FOR-USER))))
+    (SEND SELF :FORCE-KBD-INPUT '(:EXECUTE INITIALIZE-FOR-USER))))
   
 (COMPILE-FLAVOR-METHODS CONVER CONVERSE-FRAME)
 
 ;;; initialize the command loop and window for converse  
 (DEFUN INITIALIZE-CONVERSE-COMMAND-LOOP ()
   (INIT-CONVERSE-COMTAB)
-  (LET ((W (TV:MAKE-WINDOW 'CONVERSE-FRAME ':ACTIVATE-P T)))
-    (SEND (SEND W ':PROCESS)
-	  ':RUN-REASON W)))
+  (LET ((W (TV:MAKE-WINDOW 'CONVERSE-FRAME :ACTIVATE-P T)))
+    (SEND (SEND W :PROCESS)
+	  :RUN-REASON W)))
 
 (ADD-INITIALIZATION 'START-CONVERSE '(INITIALIZE-CONVERSE-COMMAND-LOOP) '(:ONCE))
 
@@ -995,31 +995,31 @@ in the list if there is more than one."
   ;; If the user has set one of the obsolete flags, gobble it down.
   (IF (NEQ *CONVERSE-AUTO-EXPOSE-P* 'OBSOLETE)
       (SETQ *CONVERSE-RECEIVE-MODE*
-	    (IF *CONVERSE-AUTO-EXPOSE-P* ':AUTO ':NOTIFY)
+	    (IF *CONVERSE-AUTO-EXPOSE-P* :AUTO :NOTIFY)
 	    *CONVERSE-AUTO-EXPOSE-P* 'OBSOLETE))
   (IF (NEQ *CONVERSE-NOTIFY-WITH-MESSAGE* 'OBSOLETE)
       (SETQ *CONVERSE-RECEIVE-MODE*
-	    (IF *CONVERSE-NOTIFY-WITH-MESSAGE* ':NOTIFY-WITH-MESSAGE ':NOTIFY)
+	    (IF *CONVERSE-NOTIFY-WITH-MESSAGE* :NOTIFY-WITH-MESSAGE :NOTIFY)
 	    *CONVERSE-NOTIFY-WITH-MESSAGE* 'OBSOLETE))
   ;; Beep as desired.
   ;; If not in :AUTO mode and not exposed, the beeping was done already!
-  (IF (OR ALREADY-EXPOSED (EQ *CONVERSE-RECEIVE-MODE* ':AUTO))
+  (IF (OR ALREADY-EXPOSED (EQ *CONVERSE-RECEIVE-MODE* :AUTO))
       (DOTIMES (I *CONVERSE-BEEP-COUNT*)
 	(BEEP 'CONVERSE-MESSAGE-RECEIVED)))
   ;;find or create the proper conversation for this to go in
   (SETQ CONVERSATION (DOLIST (C *CONVERSE-LIST*)
-		       (IF (SEND C ':MY-NAME? SENDER) (RETURN C))))
+		       (IF (SEND C :MY-NAME? SENDER) (RETURN C))))
   (IF (NULL CONVERSATION) (SETQ CONVERSATION (SETUP-CONVERSATION SENDER)))
   ;; add the message to the conversation and set up the point for easy reply
-  (SEND CONVERSATION ':ADD-MSG MSG)
+  (SEND CONVERSATION :ADD-MSG MSG)
   (UNLESS ALREADY-EXPOSED
     (IF *CONVERSE-APPEND-P*
-	(MOVE-BP (POINT) (CREATE-BP (SEND CONVERSATION ':LAST-LINE) 0))
-      (MOVE-BP (POINT) (SEND CONVERSATION ':AFTER-TO-LINE-BP))))
+	(MOVE-BP (POINT) (CREATE-BP (SEND CONVERSATION :LAST-LINE) 0))
+      (MOVE-BP (POINT) (SEND CONVERSATION :AFTER-TO-LINE-BP))))
   (MUST-REDISPLAY *WINDOW* DIS-TEXT)
-  (COND ((MEMQ (SEND *CONVERSE-FRAME* ':STATUS) '(:EXPOSED :SELECTED)))
-	((EQ *CONVERSE-RECEIVE-MODE* ':AUTO)
-	 (SEND *CONVERSE-FRAME* ':SELECT)))
+  (COND ((MEMQ (SEND *CONVERSE-FRAME* :STATUS) '(:EXPOSED :SELECTED)))
+	((EQ *CONVERSE-RECEIVE-MODE* :AUTO)
+	 (SEND *CONVERSE-FRAME* :SELECT)))
   (TYPEIN-LINE "Latest message from ~A at ~A" SENDER (TIME:PRINT-CURRENT-TIME NIL)))
 
 (DEFFLAVOR CONVERSE-SIMPLE-REPLY-WINDOW
@@ -1034,20 +1034,20 @@ in the list if there is more than one."
 
 (DEFMETHOD (CONVERSE-SIMPLE-REPLY-WINDOW :AFTER :DEACTIVATE) ()
   (ARRAY-INITIALIZE TV:BIT-ARRAY 0)
-  (SEND SELF ':REFRESH-MARGINS))
+  (SEND SELF :REFRESH-MARGINS))
 		      
 (DEFMETHOD (CONVERSE-SIMPLE-REPLY-WINDOW :MOUSE-CLICK) (BUTTONS IGNORE IGNORE)
   (SELECTQ BUTTONS
     (#/MOUSE-1-1
       (PROCESS-RUN-FUNCTION "Select Converse"
 			    #'(LAMBDA (CFRAME REPLY-WINDOW)
-				(SEND REPLY-WINDOW ':DEACTIVATE)
-				(SEND CFRAME ':SELECT))
+				(SEND REPLY-WINDOW :DEACTIVATE)
+				(SEND CFRAME :SELECT))
 			    CONVERSE-FRAME SELF)
       T)
     (#/MOUSE-2-1
      (PROCESS-RUN-FUNCTION "Kill Reply Window"
-			   SELF ':DEACTIVATE)
+			   SELF :DEACTIVATE)
      T)))
 
 (COMPILE-FLAVOR-METHODS CONVERSE-SIMPLE-REPLY-WINDOW)
@@ -1059,12 +1059,12 @@ in the list if there is more than one."
 
 (DEFUN CONVERSE-SIMPLE-REPLY (CONVERSE-FRAME SENDER MESSAGE)
   (USING-RESOURCE (REPLY-WINDOW CONVERSE-SIMPLE-REPLY-WINDOW)
-    (SEND REPLY-WINDOW ':SET-LABEL (FORMAT NIL "Message from ~A" SENDER))
-    (SEND REPLY-WINDOW ':EXPOSE NIL ':CLEAN)
-    (SEND REPLY-WINDOW ':SELECT)
+    (SEND REPLY-WINDOW :SET-LABEL (FORMAT NIL "Message from ~A" SENDER))
+    (SEND REPLY-WINDOW :EXPOSE NIL :CLEAN)
+    (SEND REPLY-WINDOW :SELECT)
     (UNWIND-PROTECT
       (LET ((TERMINAL-IO REPLY-WINDOW))
-	(SEND REPLY-WINDOW ':SET-CONVERSE-FRAME CONVERSE-FRAME)
+	(SEND REPLY-WINDOW :SET-CONVERSE-FRAME CONVERSE-FRAME)
 	(FORMAT REPLY-WINDOW "Message from ~A~%~A" SENDER MESSAGE)
 	(FORMAT REPLY-WINDOW "~&Type Y to Reply, N to do Nothing or C to enter Converse.")
 	(SELECTQ (FQUERY '(:CHOICES
@@ -1079,9 +1079,9 @@ in the list if there is more than one."
 	   (FORMAT T "~&Type message to send to ~A" SENDER)
 	   (REPLY NIL SENDER NIL NIL)) ;;make it fast, avoid timing errors
 	  (CONVERSE
-	   (SEND REPLY-WINDOW ':DEACTIVATE)
-	   (SEND CONVERSE-FRAME ':SELECT))))
-      (SEND REPLY-WINDOW ':DEACTIVATE))))
+	   (SEND REPLY-WINDOW :DEACTIVATE)
+	   (SEND CONVERSE-FRAME :SELECT))))
+      (SEND REPLY-WINDOW :DEACTIVATE))))
 
 
 ;;; This makes up for lack of an activity system, in several ways
@@ -1091,9 +1091,9 @@ in the list if there is more than one."
 			   (AND (TYPEP S 'CONVERSE-FRAME) (RETURN S))))
 		      ((TV:FIND-WINDOW-OF-FLAVOR 'CONVERSE-FRAME))
 		      (T (TV:MAKE-WINDOW 'CONVERSE-FRAME))))
-	 (PROCESS (SEND FRAME ':PROCESS)))
-    (OR (SEND PROCESS ':RUN-REASONS)
-	(SEND PROCESS ':RUN-REASON FRAME))
+	 (PROCESS (SEND FRAME :PROCESS)))
+    (OR (SEND PROCESS :RUN-REASONS)
+	(SEND PROCESS :RUN-REASON FRAME))
     FRAME))
 
 (DEFUN LAST-MESSAGE-SENDER () 
@@ -1134,7 +1134,7 @@ Programs which call it are gauranteed to do something useful only if MESSAGE and
 DESTINATION are non-NIL."
   (SETQ DESTINATION-LIST (PARSE-COMMAS-INTO-LIST DESTINATION))  ;dest is now a list.
   (COND ((NULL DESTINATION)  ;;person wants to select converse.  ;;maybe ("")
-	 (SEND (FIND-CONVERSE-WINDOW) ':SELECT)) ;;do your thing
+	 (SEND (FIND-CONVERSE-WINDOW) :SELECT)) ;;do your thing
 	((NULL MESSAGE)
 	 (FORMAT T
 		 "~%Please enter a message for ~A.~%
@@ -1146,10 +1146,10 @@ You may also switch to Converse with the text of your message intact: type ~:@C.
 	       (QSEND-GET-MESSAGE *STANDARD-INPUT*))
 	 (COND (SWITCH-TO-CONVERSE
 		(SETQ *AWAITING-EXPOSURE* T) ;in case of converse-problem  ;;???? -hdt
-		(SEND (FIND-CONVERSE-WINDOW) ':ENTER-REQUEST
+		(SEND (FIND-CONVERSE-WINDOW) :ENTER-REQUEST
 		      'CONVERSE-EDIT-AND-SEND-MSG DESTINATION MESSAGE)
 		(PROCESS-WAIT "Expose Converse"
-			      (FIND-CONVERSE-WINDOW) ':EXPOSED-P)
+			      (FIND-CONVERSE-WINDOW) :EXPOSED-P)
 		(TV:AWAIT-WINDOW-EXPOSURE)
 		(SETQ *AWAITING-EXPOSURE* NIL))
 	       (T  ;;didn't select converse, just send it.
@@ -1159,16 +1159,16 @@ You may also switch to Converse with the text of your message intact: type ~:@C.
 
 (DEFUN QSEND-GET-MESSAGE (&OPTIONAL (STREAM *STANDARD-INPUT*) IGNORE END-WITH-RETURN-OK)
   (IF (AND (NOT RUBOUT-HANDLER)
-	   (MEMQ ':RUBOUT-HANDLER (SEND STREAM ':WHICH-OPERATIONS)))
-      (SEND STREAM ':RUBOUT-HANDLER
+	   (MEMQ :RUBOUT-HANDLER (SEND STREAM :WHICH-OPERATIONS)))
+      (SEND STREAM :RUBOUT-HANDLER
 	       '((:EDITING-COMMAND #/END #/C-Z #/C-C
 				   (#/C-M-Y "Yank last msg received")
 				   (#/C-M-E "Switch to Converse")))
 	       #'QSEND-GET-MESSAGE STREAM NIL END-WITH-RETURN-OK)
-      (DO ((MSG (MAKE-ARRAY 100 ':TYPE 'ART-STRING ':LEADER-LIST '(0)))
+      (DO ((MSG (MAKE-ARRAY 100 :TYPE 'ART-STRING :LEADER-LIST '(0)))
 	   (CH))
 	  (NIL) ;;consider efficiency hack for non-control characters
-	(SETQ CH (SEND STREAM ':TYI))
+	(SETQ CH (SEND STREAM :TYI))
 	(AND
 	  (OR (AND (MEMQ CH '(#/END #/C-Z #/C-C NIL)))
 	      (AND END-WITH-RETURN-OK (EQ CH #/RETURN))) ;;why doesn't this work?
@@ -1178,7 +1178,7 @@ You may also switch to Converse with the text of your message intact: type ~:@C.
 	       (LET ((TEXT (LAST-MESSAGE-TEXT)))
 		 (IF (NULL TEXT) (SETQ TEXT ""))
 		 (STRING-NCONC MSG TEXT)
-		 (SEND STREAM ':FORCE-KBD-INPUT TEXT)))
+		 (SEND STREAM :FORCE-KBD-INPUT TEXT)))
 	      ;;normal case for a vanilla character
 	      (T (ARRAY-PUSH-EXTEND MSG CH))))))
 
@@ -1210,7 +1210,7 @@ Otherwise we return the list of successful recipients."
       (IF (NOT LOSSAGE-REASON)
 	  (PUSH DEST SUCCESS-RCPTS))
       (SEND (FIND-CONVERSE-WINDOW)
-	    ':ENTER-DELAYED-REQUEST
+	    :ENTER-DELAYED-REQUEST
 	    'CONVERSE-RECORD-MSG-SENT
 	    DEST MESSAGE MAIL-P LOSSAGE-REASON LOSSAGE-REASON)))
   SUCCESS-RCPTS)
@@ -1256,7 +1256,7 @@ If given a list, return the list."
 
 (DEFUN GET-OFFICIAL-HOST-NAME (HOST)
   "Return the official name (a string) of a host specified in any way you like."
-  (SEND (SI:PARSE-HOST HOST T) ':NAME))
+  (SEND (SI:PARSE-HOST HOST T) :NAME))
 
 (DEFUN DECIDE-HOST (HOSTS USER)
   "Ask the user to pick one of HOSTS, the hosts on which USER is logged in.
@@ -1282,7 +1282,7 @@ The selected host is returned."
   "Print a warning message from converse, possibly in background (for qsend).
 Message goes to *QUERY-IO* (typein window) or as a notification."
   (BEEP 'CONVERSE-PROBLEM)
-  (IF (SEND (FIND-CONVERSE-WINDOW) ':EXPOSED-P)
+  (IF (SEND (FIND-CONVERSE-WINDOW) :EXPOSED-P)
       (APPLY 'FORMAT *QUERY-IO* FORMAT-STRING ARGS)
     (APPLY 'TV:NOTIFY NIL (STRING-APPEND "Converse is reporting a problem: ~&" FORMAT-STRING)
 	   ARGS)))
@@ -1304,15 +1304,15 @@ Returns NIL if successful, or an error object."
          (SETQ PERSON (NSUBSTRING DESTINATION 0 HOST)
                HOST (SI:PARSE-HOST
 		      (NSUBSTRING DESTINATION (1+ HOST) (STRING-LENGTH DESTINATION))))
-	 (IF (NOT (MEMQ (SEND HOST ':SYSTEM-TYPE) *SYSTEMS-DONT-UPCASE-FOR*))
+	 (IF (NOT (MEMQ (SEND HOST :SYSTEM-TYPE) *SYSTEMS-DONT-UPCASE-FOR*))
 	    (SETQ PERSON (STRING-UPCASE PERSON))))  ;other hosts want it in uppercase
         (T (SETQ PERSON "anyone"  HOST DESTINATION)))
   (WITH-OPEN-STREAM (STREAM (CHAOS:OPEN-STREAM HOST (STRING-APPEND "SEND " PERSON)
-					       ':ERROR NIL ':DIRECTION ':OUTPUT))
+					       :ERROR NIL :DIRECTION :OUTPUT))
     (COND ((NOT (ERRORP STREAM))
 	   (FORMAT STREAM "~A@~A ~\DATIME\~%" USER-ID SI:LOCAL-HOST)
-           (SEND STREAM ':STRING-OUT MSG)
-	   (SEND STREAM ':CLOSE)
+           (SEND STREAM :STRING-OUT MSG)
+	   (SEND STREAM :CLOSE)
 	   NIL)
 	  (T STREAM))))
 
@@ -1331,11 +1331,11 @@ Returns NIL if successful, or an error object."
 	     (SETQ TO "unspecified"))
 	   (CHAOS:RETURN-PKT RFC))
 	 (CHAOS:ACCEPT CONN)
-	 (WITH-OPEN-STREAM (CSTREAM (CHAOS:MAKE-STREAM CONN ':DIRECTION ':INPUT))
+	 (WITH-OPEN-STREAM (CSTREAM (CHAOS:MAKE-STREAM CONN :DIRECTION :INPUT))
 	   (CONDITION-BIND ((SYS:REMOTE-NETWORK-ERROR
 			     'RECEIVE-MSG-CONDITION-HANDLER))
 	     (*CATCH 'CONNECTION-CLOSED
-	       (SETQ FLINE (SEND CSTREAM ':LINE-IN))
+	       (SETQ FLINE (SEND CSTREAM :LINE-IN))
 	       (COND ((SETQ TEM (STRING-SEARCH-CHAR #/@ FLINE))
 		      (SETQ SENDER (NSUBSTRING FLINE 0 TEM)))
 		     ((SETQ TEM (STRING-SEARCH "from " FLINE))
@@ -1345,10 +1345,10 @@ Returns NIL if successful, or an error object."
 		     (T
 		      (SETQ SENDER "")))
 	       (LET ((HOST (SI:GET-HOST-FROM-ADDRESS
-			     (CHAOS:FOREIGN-ADDRESS CONN) ':CHAOS)))
+			     (CHAOS:FOREIGN-ADDRESS CONN) :CHAOS)))
 		 (SETQ SENDER (STRING-APPEND
 				SENDER #/@
-				(IF HOST (SEND HOST ':NAME)
+				(IF HOST (SEND HOST :NAME)
 				  (FORMAT NIL "CHAOS|~O" (CHAOS:FOREIGN-ADDRESS CONN))))))
 	       (SETQ MSG
 		     (FORMAT NIL "~A~%~:[~*~;To: ~A~%~]~A"
@@ -1367,12 +1367,12 @@ Returns NIL if successful, or an error object."
 	   ;; If user wants a simple reply window, get it now.
 	   ;; Don't wake up CONVERSE.
 	   (LET* ((CFRAME (FIND-CONVERSE-WINDOW))
-		  (EXPOSEDP (SEND CFRAME ':EXPOSED-P)))
+		  (EXPOSEDP (SEND CFRAME :EXPOSED-P)))
 	     (COND ((AND (NOT EXPOSEDP)
 			 (MEMQ *CONVERSE-RECEIVE-MODE*
 			       '(:SIMPLE :POP-UP :NOTIFY :NOTIFY-WITH-MESSAGE)))
 		    (DOTIMES (I *CONVERSE-BEEP-COUNT*) (BEEP 'CONVERSE-MESSAGE-RECEIVED))
-		    (SEND CFRAME ':ENTER-DELAYED-REQUEST
+		    (SEND CFRAME :ENTER-DELAYED-REQUEST
 			     'CONVERSE-RECEIVE-MSG SENDER MSG)
 		    (SELECTQ *CONVERSE-RECEIVE-MODE*
 		      ((:SIMPLE :POP-UP)
@@ -1380,11 +1380,11 @@ Returns NIL if successful, or an error object."
 					     CFRAME SENDER MSG))
 		      ((:NOTIFY :NOTIFY-WITH-MESSAGE)
 		       (TV:NOTIFY CFRAME "Converse message received from ~A"
-				  (IF (EQ *CONVERSE-RECEIVE-MODE* ':NOTIFY-WITH-MESSAGE)
+				  (IF (EQ *CONVERSE-RECEIVE-MODE* :NOTIFY-WITH-MESSAGE)
 				      (STRING-RIGHT-TRIM '(#/CR #/SP) MSG)
 				    SENDER)))))
 		   (T
-		    (SEND CFRAME ':ENTER-REQUEST
+		    (SEND CFRAME :ENTER-REQUEST
 			     'CONVERSE-RECEIVE-MSG SENDER MSG EXPOSEDP))))))))
 
 (DEFUN RECEIVE-MSG-CONDITION-HANDLER (&REST IGNORE)
@@ -1392,8 +1392,8 @@ Returns NIL if successful, or an error object."
 
 (DEFUN PRINT-SENDS (&OPTIONAL (STREAM *STANDARD-OUTPUT*)) 
   "Print out all messages received from other users."	  
-  (SEND STREAM ':FRESH-LINE)
-  (SEND STREAM ':STRING-OUT *SAVED-SENDS*))
+  (SEND STREAM :FRESH-LINE)
+  (SEND STREAM :STRING-OUT *SAVED-SENDS*))
 
 ;;; Now install it
 (ADD-INITIALIZATION "SEND"
