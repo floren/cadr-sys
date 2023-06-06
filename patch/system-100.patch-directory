@@ -1,6 +1,6 @@
 ;;; -*- Mode:LISP; Package:USER; Base:10; Readtable:T; Patch-File:T -*-
 ;;; Patch directory for System version 100
-;;; Written 6-Jun-23 16:58:37 by AMS,
+;;; Written 6-Jun-23 17:09:10 by AMS,
 ;;; while running on Lisp Machine One from band 2
 ;;; with Experimental System 100.13, Hacks by AMS 2.0, microcode 323, WIP.
 
@@ -27,4 +27,5 @@ Increase Chaosnet routing table size to 256. so that we can handle all subnets."
 Show all documentation for Terminal-N." "AMS" NIL)
   (15 "New variable UNKNOWN-ADDRESS-FUNCTION; used when encountering unknown Chaos addresses." "AMS" NIL)
   (16 "SUPDUP: Change overprint default to NIL; so that things work better with ITS." "AMS" NIL)
+  (17 "CHAOS-UNKNOWN-HOST-FUNCTION: Fix typo so that :MACHINE-TYPE property works again." "AMS" NIL)
   ))
