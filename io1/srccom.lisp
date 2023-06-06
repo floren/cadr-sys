@@ -14,7 +14,7 @@
   (FILE-TYPE "File" :DOCUMENTATION "What kind of source it has")
   (FILE-STREAM	NIL :DOCUMENTATION "Input stream")
   (FILE-MAJOR-MODE NIL :DOCUMENTATION "Symbol")
-  (FILE-COMPARE ':TEXT :DOCUMENTATION "Kind of comparison to use")
+  (FILE-COMPARE :TEXT :DOCUMENTATION "Kind of comparison to use")
   )
 
 (DEFUN FILE-IDENTIFIER (FILE-OBJECT)
@@ -27,11 +27,11 @@ FILE-OBJECT is a SRCCOM:FILE structure."
   "Make a SRCCOM:FILE object for a file to be source compared.
 FILENAME is opened and the SRCCOM:FILE object contains a stream for it."
   (SETQ STREAM (OPEN FILENAME '(:IN)))
-  (LET ((GENERIC-PATHNAME (SEND FILENAME ':GENERIC-PATHNAME)))
+  (LET ((GENERIC-PATHNAME (SEND FILENAME :GENERIC-PATHNAME)))
     (FS:READ-ATTRIBUTE-LIST GENERIC-PATHNAME STREAM)
-    (SETQ MODE (OR (SEND GENERIC-PATHNAME ':GET ':MODE) ':LISP)))
+    (SETQ MODE (OR (SEND GENERIC-PATHNAME :GET :MODE) :LISP)))
   (MAKE-FILE FILE-STREAM STREAM
-	     FILE-NAME (SEND STREAM ':TRUENAME)
+	     FILE-NAME (SEND STREAM :TRUENAME)
 	     FILE-MAJOR-MODE MODE))
 
 
@@ -44,7 +44,7 @@ The line is simply a string containing the data on the line."
       (AREF FILE LINE-NO)
       (MULTIPLE-VALUE-BIND (LINE EOF)
           (ECASE (FILE-COMPARE FILE)
-            (:TEXT (SEND (FILE-STREAM FILE) ':LINE-IN T))
+            (:TEXT (SEND (FILE-STREAM FILE) :LINE-IN T))
             (:FORM (LET ((X (READ (FILE-STREAM FILE) '**EOF**)))
                     (IF (EQ X '**EOF**)
                         (VALUES NIL T)          ;No form, end of file
@@ -89,13 +89,13 @@ In Lisp code, this is the function from the most recent DEFUN line.")
 
 
 (DEFUN SOURCE-COMPARE (FILENAME-1 FILENAME-2 &OPTIONAL (OUTPUT-STREAM STANDARD-OUTPUT)
-		       			     (TYPE ':TEXT)
+		       			     (TYPE :TEXT)
 					     &AUX FILE-1 FILE-2)
   ;; Add TYPE arg 8/4/83 (RAF @ TI-CSL60). see SOURCE-COMPARE-FILES.
   "Source compare files FILENAME-1 and FILENAME-2, output to OUTPUT-STREAM.
 See SOURCE-COMPARE-FILES for some additional information."
   (SETQ FILENAME-1 (FS:MERGE-AND-SET-PATHNAME-DEFAULTS FILENAME-1 *PATHNAME-DEFAULTS*
-						       ':UNSPECIFIC ':OLDEST)
+						       :UNSPECIFIC :OLDEST)
 	FILENAME-2 (FS:MERGE-PATHNAME-DEFAULTS FILENAME-2 FILENAME-1))
   (UNWIND-PROTECT
     (PROGN
@@ -103,12 +103,12 @@ See SOURCE-COMPARE-FILES for some additional information."
 	    FILE-2 (CREATE-FILE FILENAME-2))
       (DESCRIBE-SRCCOM-SOURCES FILE-1 FILE-2 OUTPUT-STREAM)
       (SOURCE-COMPARE-FILES FILE-1 FILE-2 OUTPUT-STREAM TYPE))
-    (AND FILE-1 (SEND (FILE-STREAM FILE-1) ':CLOSE))
-    (AND FILE-2 (SEND (FILE-STREAM FILE-2) ':CLOSE))))
+    (AND FILE-1 (SEND (FILE-STREAM FILE-1) :CLOSE))
+    (AND FILE-2 (SEND (FILE-STREAM FILE-2) :CLOSE))))
 
 
 ;;; Useful interface for automatic comparison
-(DEFUN PROMPTED-SOURCE-COMPARE (FILE-1 FILE-2 &OPTIONAL (TYPE ':TEXT))
+(DEFUN PROMPTED-SOURCE-COMPARE (FILE-1 FILE-2 &OPTIONAL (TYPE :TEXT))
   ;; Add TYPE arg, 8/4/83 (RAF @ TI-CSL60).
   (MULTIPLE-VALUE (FILE-1 FILE-2)
     (GET-SRCCOM-FILE-NAMES FILE-1 FILE-2))
@@ -155,7 +155,7 @@ and the question is a pain in the neck."
 	  (FILE-IDENTIFIER FILE-1)
 	  (FILE-IDENTIFIER FILE-2))
   (UNLESS (TYPEP STREAM 'TV:SHEET)
-    (SEND STREAM ':STRING-OUT " -*-Fundamental-*-"))
+    (SEND STREAM :STRING-OUT " -*-Fundamental-*-"))
   (TERPRI))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -163,12 +163,12 @@ and the question is a pain in the neck."
 
 (DEFUN SOURCE-COMPARE-FILES (FILE-1 FILE-2
                              &OPTIONAL (*OUTPUT-STREAM* STANDARD-OUTPUT)
-                                       (TYPE ':TEXT))
+                                       (TYPE :TEXT))
   "Source compare data from two SRCCOM:FILE objects, with output to
   *OUTPUT-STREAM*.  SRCCOM:FILE objects are made with SRCCOM:CREATE-FILE,
   and contain input streams.  The (opt.) TYPE argument determines how the
-  files are compared, ':TEXT => line by line textual compare,
-                      ':FORM => compare form by form.
+  files are compared, :TEXT => line by line textual compare,
+                      :FORM => compare form by form.
 Some free variable serve as parameters:
 *PRINT-LABELS* - T means print the last function name, etc.,
  preceding each run of non-matching lines.
@@ -182,7 +182,7 @@ Some free variable serve as parameters:
  See SRCCOM:PRINT-DIFFERENCES for a sample."
   (SETF (FILE-COMPARE FILE-1) TYPE)
   (SETF (FILE-COMPARE FILE-2) TYPE)
-  (IF (EQ TYPE ':FORM) (SET-FORM-VARIABLES 'START))
+  (IF (EQ TYPE :FORM) (SET-FORM-VARIABLES 'START))
   (LET ((FILES-IDENTICAL T))
     (DO ((LINE-NO-1 0 (1+ LINE-NO-1))
 	 (LINE-NO-2 0 (1+ LINE-NO-2))
@@ -199,7 +199,7 @@ Some free variable serve as parameters:
     (CLOSE (FILE-STREAM FILE-1))
     (CLOSE (FILE-STREAM FILE-2))
     FILES-IDENTICAL)
-  (IF (EQ TYPE ':FORM) (SET-FORM-VARIABLES 'END)))
+  (IF (EQ TYPE :FORM) (SET-FORM-VARIABLES 'END)))
 
 (DEFUN SET-FORM-VARIABLES (option)              ;8/4/83 RAF @ TI-CSL60
   "OPTION = 'START => initialize free variables for form compare.
@@ -278,18 +278,18 @@ Some free variable serve as parameters:
   (FORMAT *OUTPUT-STREAM* "~&**** ~A ~A, Line #~D"
 	  (FILE-TYPE FILE) (FILE-NAME FILE) DIFF-LINE-NO)
   (COND ((SETQ LABEL (AND *PRINT-LABELS* (LINE-LAST-LABEL FILE DIFF-LINE-NO)))
-	 (SEND *OUTPUT-STREAM* ':STRING-OUT ", After /"")
-	 (SEND *OUTPUT-STREAM* ':STRING-OUT (STRING-REMOVE-FONTS LABEL) 0
+	 (SEND *OUTPUT-STREAM* :STRING-OUT ", After /"")
+	 (SEND *OUTPUT-STREAM* :STRING-OUT (STRING-REMOVE-FONTS LABEL) 0
 	       (MIN (STRING-LENGTH LABEL)
-		    (IF (LET ((WHICH-OPERATIONS (SEND *OUTPUT-STREAM* ':WHICH-OPERATIONS)))
-			  (AND (MEMQ ':READ-CURSORPOS WHICH-OPERATIONS)
-				  (MEMQ ':SIZE-IN-CHARACTERS WHICH-OPERATIONS)))
-			(- (SEND *OUTPUT-STREAM* ':SIZE-IN-CHARACTERS)
-			   (SEND *OUTPUT-STREAM* ':READ-CURSORPOS ':CHARACTER)
+		    (IF (LET ((WHICH-OPERATIONS (SEND *OUTPUT-STREAM* :WHICH-OPERATIONS)))
+			  (AND (MEMQ :READ-CURSORPOS WHICH-OPERATIONS)
+				  (MEMQ :SIZE-IN-CHARACTERS WHICH-OPERATIONS)))
+			(- (SEND *OUTPUT-STREAM* :SIZE-IN-CHARACTERS)
+			   (SEND *OUTPUT-STREAM* :READ-CURSORPOS :CHARACTER)
 			   1)
 		      25.)))
-	 (SEND *OUTPUT-STREAM* ':TYO #/")))
-  (SEND *OUTPUT-STREAM* ':TYO #/CR)
+	 (SEND *OUTPUT-STREAM* :TYO #/")))
+  (SEND *OUTPUT-STREAM* :TYO #/CR)
   (PRINT-FILE-SEGMENT FILE DIFF-LINE-NO SAME-LINE-NO))
 
 
@@ -301,7 +301,7 @@ Some free variable serve as parameters:
     (OR (SETQ LINE (GET-FILE-LINE FILE LINE-NO))
 	(RETURN))
     (ECASE (FILE-COMPARE file)
-      (:TEXT (SEND *OUTPUT-STREAM* ':LINE-OUT (STRING-REMOVE-FONTS LINE)))
+      (:TEXT (SEND *OUTPUT-STREAM* :LINE-OUT (STRING-REMOVE-FONTS LINE)))
       (:FORM (Grind-Top-Level Line nil *OUTPUT-STREAM*)
              (Terpri *OUTPUT-STREAM*)
              (Terpri *OUTPUT-STREAM*)))))
@@ -322,8 +322,8 @@ See SOURCE-COMPARE-FILES for some additional information."
 	  FILE-2 (CREATE-FILE FILENAME-2))
     (WITH-OPEN-FILE (OUTPUT-STREAM OUTPUT-FILENAME '(:OUT))
       (SOURCE-COMPARE-AUTOMATIC-MERGE-1 FILE-1 FILE-2 OUTPUT-STREAM)))
-  (AND FILE-1 (SEND (FILE-STREAM FILE-1) ':CLOSE))
-  (AND FILE-2 (SEND (FILE-STREAM FILE-2) ':CLOSE)))
+  (AND FILE-1 (SEND (FILE-STREAM FILE-1) :CLOSE))
+  (AND FILE-2 (SEND (FILE-STREAM FILE-2) :CLOSE)))
 
 (DEFUN SOURCE-COMPARE-AUTOMATIC-MERGE-1 (FILE-1 FILE-2 *OUTPUT-STREAM*)
   "Do actual source compare & merge operations."
@@ -366,9 +366,9 @@ as streams that write into editor buffers do."
   ;; Do not CREATE these BPs with status :MOVES, or they will get
   ;; relocated by the insertion of the rest of the merged data!
   (DOLIST (RECORD (SETQ *MERGE-RECORD* (NREVERSE *MERGE-RECORD*)))
-    (SETF (ZWEI:BP-STATUS (FIRST RECORD)) ':MOVES)
-    (SETF (ZWEI:BP-STATUS (THIRD RECORD)) ':MOVES)
-    (SETF (ZWEI:BP-STATUS (FIFTH RECORD)) ':MOVES))
+    (SETF (ZWEI:BP-STATUS (FIRST RECORD)) :MOVES)
+    (SETF (ZWEI:BP-STATUS (THIRD RECORD)) :MOVES)
+    (SETF (ZWEI:BP-STATUS (FIFTH RECORD)) :MOVES))
   *MERGE-RECORD*)
 
 
@@ -379,10 +379,10 @@ as streams that write into editor buffers do."
     (SETQ *MERGE-THIS-RECORD* NIL)
     (RECORD-MERGE-BOUND))
   (TERPRI *OUTPUT-STREAM*)
-  (SEND *OUTPUT-STREAM* ':LINE-OUT "*** MERGE LOSSAGE ***")
+  (SEND *OUTPUT-STREAM* :LINE-OUT "*** MERGE LOSSAGE ***")
   (PRINT-AUTOMATIC-MERGE-1 FILE-1 DIFF-LINE-NO-1 SAME-LINE-NO-1)
   (PRINT-AUTOMATIC-MERGE-1 FILE-2 DIFF-LINE-NO-2 SAME-LINE-NO-2)
-  (SEND *OUTPUT-STREAM* ':LINE-OUT "*** END OF MERGE LOSSAGE ***")
+  (SEND *OUTPUT-STREAM* :LINE-OUT "*** END OF MERGE LOSSAGE ***")
   (WHEN *RECORD-MERGE-BOUNDS-P*
     (RECORD-MERGE-BOUND)
     (PUSH (NREVERSE *MERGE-THIS-RECORD*) *MERGE-RECORD*))
@@ -396,4 +396,4 @@ as streams that write into editor buffers do."
   (WHEN *RECORD-MERGE-BOUNDS-P* (RECORD-MERGE-BOUND)))
 
 (DEFUN RECORD-MERGE-BOUND ()
-  (PUSH (ZWEI:COPY-BP (SEND *OUTPUT-STREAM* ':READ-BP) ':NORMAL) *MERGE-THIS-RECORD*))
+  (PUSH (ZWEI:COPY-BP (SEND *OUTPUT-STREAM* :READ-BP) :NORMAL) *MERGE-THIS-RECORD*))
