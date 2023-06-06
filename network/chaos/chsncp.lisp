@@ -1815,11 +1815,14 @@ PKT should be a /"released/" packet, obtained with GET-PKT or GET-NEXT-PKT."
 	  (transmit-int-pkt-for-conn conn pkt))
 	(setq more-retransmission-needed t))	;Indicate that pkts remain unacknowledged
       (return-from retransmission t))				;And return from this function
+    ;; Doing this outside the loop can lose
+    ;; because then TIME can be less than (PKT-TIME-TRANSMITTED PKT).
+    (SETQ TIME (TIME))			;On the other hand, doing it inside the loop loses
+    ;;because if there are enough PKTs pending for a particular CONN, it can
+    ;;hang because every time it sends one it has to restart from the beginning
+    ;;of the list.  So now we deal with the case mentioned above explicitly.
     (BLOCK CONN-DONE
       (DO-FOREVER
-	;; Doing this outside the loop can lose
-	;; because then TIME can be less than (PKT-TIME-TRANSMITTED PKT).
-	(SETQ TIME (TIME))			;On the other hand, doing it inside the loop loses
 	(LET ((INHIBIT-SCHEDULING-FLAG T))
 	  (DO* ((PKT (SEND-PKTS CONN) (PKT-LINK PKT))
 		(first-pkt-num (and pkt (pkt-num pkt))))
@@ -1828,7 +1831,8 @@ PKT should be a /"released/" packet, obtained with GET-PKT or GET-NEXT-PKT."
 		   (FERROR NIL "~S in SEND-PKTS list for incorrect CONN:
 CONN ~S, (PKT-SOURCE-CONN PKT) ~S." PKT CONN (PKT-SOURCE-CONN PKT))))
 	    (SETQ MORE-RETRANSMISSION-NEEDED T)
-	    (WHEN ( (TIME-DIFFERENCE TIME (PKT-TIME-TRANSMITTED PKT))
+	    (COND ((TIME-LESSP TIME (PKT-TIME-TRANSMITTED PKT)))	;Dont do this one again.
+		  (( (TIME-DIFFERENCE TIME (PKT-TIME-TRANSMITTED PKT))
 		     (LSH (CONN-RETRANSMISSION-INTERVAL CONN)
 			  ;; Retransmit the lowest numbered packet most often
 			  (MAX 0 (MIN 5 (1- (pktnum-- (PKT-NUM PKT) first-pkt-num))))))
@@ -1841,7 +1845,7 @@ CONN ~S, (PKT-SOURCE-CONN PKT) ~S." PKT CONN (PKT-SOURCE-CONN PKT))))
 		     (SETF (PKT-BEING-RETRANSMITTED PKT) NIL)
 		     (FREE-PKT PKT))
 		    (T (SETF (PKT-BEING-RETRANSMITTED PKT) NIL)))
-	      (RETURN NIL)))))		;Must always start from beginning of chain if
+	      (RETURN NIL))))))		;Must always start from beginning of chain if
 					; turned on scheduling, since chain could be invalid
       (PROCESS-ALLOW-SCHEDULE))))
 
