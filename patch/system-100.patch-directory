@@ -1,6 +1,6 @@
 ;;; -*- Mode:LISP; Package:USER; Base:10; Readtable:T; Patch-File:T -*-
 ;;; Patch directory for System version 100
-;;; Written 6-Jun-23 16:41:04 by AMS,
+;;; Written 6-Jun-23 16:48:55 by AMS,
 ;;; while running on Lisp Machine One from band 2
 ;;; with Experimental System 100.13, Hacks by AMS 2.0, microcode 323, WIP.
 
@@ -25,4 +25,5 @@ Increase Chaosnet routing table size to 256. so that we can handle all subnets."
   (13 "INSPECT: Fix so that it doesn't go to cold-load stream." "ams" NIL)
   (14 "Fix so that C-n moves properly in ZWEI.
 Show all documentation for Terminal-N." "AMS" NIL)
+  (15 "New variable UNKNOWN-ADDRESS-FUNCTION; used when encountering unknown Chaos addresses." "AMS" NIL)
   ))
