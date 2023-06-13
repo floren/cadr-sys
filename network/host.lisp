@@ -552,12 +552,13 @@ Locations are stored in the file SYS: SITE; LMLOCS LISP.")
 	       ASSOCIATED-MACHINE
 	       (IF (GET-SITE-OPTION :DEFAULT-ASSOCIATED-MACHINE)
 		   (FS:GET-PATHNAME-HOST (GET-SITE-OPTION :DEFAULT-ASSOCIATED-MACHINE))
-		 ;; Make sure we don't use a ZWEI host (buffers etc)
-		 (CAR (REM-IF #'(LAMBDA (H)
-				  (CONDITION-CASE ()
-				      (EQ (SEND H :SYSTEM-TYPE) :ZWEI)
-				    (ERROR NIL)))
-			      FS:*PATHNAME-HOST-LIST*)))
+		 ;; Make sure we don't use a ZWEI host (buffers etc).
+		 (CAR (MEM #'(LAMBDA (X H)
+			       (CONDITION-CASE ()
+				      (NEQ (SEND H :SYSTEM-TYPE) :ZWEI)
+				      (ERROR NIL)))
+			   NIL
+			   FS:*PATHNAME-HOST-LIST*)))
 	       HOST-OVERRIDDEN-SITE-OPTION-ALIST NIL)))
   (INITIALIZATIONS 'SITE-OPTION-INITIALIZATION-LIST T))
 
