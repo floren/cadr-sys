@@ -1,5 +1,7 @@
 ;;; -*- Mode:Lisp; Readtable:ZL; Package:USER; Base:8; Patch-File:T -*-
 ;;; Patch file for System version 100.19
+;;; Reason:
+;;;  Add support for handling BRD Chaosnet packets; fix some timing issues in Chaosnet code.
 ;;; Written 6-Jun-23 17:38:37 by ams,
 ;;; while running on Lisp Machine One from band 2
 ;;; with Experimental System 100.13, Hacks by AMS 2.0, microcode 323, WIP.
