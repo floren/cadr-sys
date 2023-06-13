@@ -1,6 +1,6 @@
 ;;; -*- Mode:LISP; Package:USER; Base:10; Readtable:T; Patch-File:T -*-
 ;;; Patch directory for System version 100
-;;; Written 6-Jun-23 17:38:35 by ams,
+;;; Written 13-Jun-23 09:31:35 by AMS,
 ;;; while running on Lisp Machine One from band 2
 ;;; with Experimental System 100.13, Hacks by AMS 2.0, microcode 323, WIP.
 
@@ -30,4 +30,5 @@ Show all documentation for Terminal-N." "AMS" NIL)
   (17 "CHAOS-UNKNOWN-HOST-FUNCTION: Fix typo so that :MACHINE-TYPE property works again." "AMS" NIL)
   (18 "Make sure we don't try to a ZWEI host (ED-FILE, ED-BUFFER, ...) as a SI:ASSOCIATED-MACHINE." "ams" NIL)
   (19 NIL "ams" NIL)
+  (20 "SET-LOCAL-HOST-VARIABLE: Try to find the first non-ZWEI host instead." "AMS" NIL)
   ))
