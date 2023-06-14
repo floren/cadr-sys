@@ -958,7 +958,37 @@ The keyword arguments are:
 	  FINALLY (RETURN "No hosts responded."))
     (MAPC 'CLOSE-CONN CONNECTIONS)))
 
+(DEFUN FIND-SHORTEST-LOCAL-DOMAIN-PREFIX (NAMES
+					  &OPTIONAL (DOMAINS SI:LOCAL-INTERNET-DOMAINS))
+  "Find the shortest prefix of a local domain."
+  (WHEN (AND NAMES DOMAINS)
+    (CAR (SORT (MAPCON #'(LAMBDA (NMS)
+			   (LET* ((N (CAR NMS))
+				  (D (STRING-SEARCH-CHAR #/. N)))
+			     (AND D
+				  (CLI:MEMBER (SUBSTRING N (1+ D))
+					      DOMAINS
+					      :TEST #'STRING-EQUAL)
+				  (LIST (SUBSTRING N 0 D)))))
+		       NAMES)
+	       #'(LAMBDA (A B)
+		   (< (STRING-LENGTH A) (STRING-LENGTH B)))))))
+
 (DEFUN CHAOS-UNKNOWN-HOST-FUNCTION (NAME)
+  "Try to find the host with NAME using the HOSTAB servers.
+If NAME does not contain a dot, the :LOCAL-INTERNET-DOMAINS site variable
+domains are used to search for it."
+  (WHEN (AND SI:LOCAL-INTERNET-DOMAINS
+	     ;; If there is no dot in the name
+	     (NOT (STRING-SEARCH-CHAR #/. NAME)))
+    ;; Try each of the local domains
+    (DOLIST (DOM SI:LOCAL-INTERNET-DOMAINS)
+      (WHEN (CHAOS-UNKNOWN-HOST-FUNCTION-1 (STRING-APPEND NAME "." DOM))
+	(RETURN T))))
+  ;; Else (or if it fails) try the name itself
+  (CHAOS-UNKNOWN-HOST-FUNCTION-1 NAME))
+
+(DEFUN CHAOS-UNKNOWN-HOST-FUNCTION-1 (NAME)
   (DOLIST (HOST (SI:GET-SITE-OPTION :CHAOS-HOST-TABLE-SERVER-HOSTS))
     (AND (SI:PARSE-HOST HOST T ())		; prevent infinite recursion
 	 (WITH-OPEN-STREAM (STREAM (OPEN-STREAM HOST "HOSTAB" :ERROR NIL))
@@ -972,6 +1002,12 @@ The keyword arguments are:
 		 (DONE RESULT)
 	       (MULTIPLE-VALUE (LINE EOF) (SEND STREAM :LINE-IN))
 	       (IF EOF
+		   (LET ((SHORT
+			   (FIND-SHORTEST-LOCAL-DOMAIN-PREFIX (GET LIST :HOST-NAMES))))
+		     ;; If there is a candidate short-name, push it.
+		     (WHEN SHORT
+		       (PUSHNEW SHORT (GET LIST :HOST-NAMES) :TEST #'STRING-EQUAL))
+		   ;; Sort the names found, to make the shortest one the short-name.
 		   (SETQ RESULT (WHEN LIST
 				  (PUTPROP LIST (STABLE-SORT (GET LIST :HOST-NAMES)
 							     #'(LAMBDA (X Y)
@@ -979,11 +1015,13 @@ The keyword arguments are:
 								    (STRING-LENGTH Y))))
 					   :HOST-NAMES)
 				  (APPLY #'SI:DEFINE-HOST LIST))
-			 DONE T)
+			 DONE T))
 		 (SETQ LEN (STRING-LENGTH LINE)
 		       SP (STRING-SEARCH-CHAR #/SP LINE 0 LEN))
-		 (SETQ PROP (INTERN (SUBSTRING LINE 0 SP) ""))
-		 (INCF SP)
+		 (IF (NULL SP)		;Better safe than sorry
+		     (SETQ DONE T)	; just forget the whole thing
+		     (SETQ PROP (INTERN (SUBSTRING LINE 0 SP) ""))
+		     (INCF SP)
 		 (CASE PROP
 		   (:ERROR (SETQ DONE T))
 		   (:NAME
@@ -994,9 +1032,15 @@ The keyword arguments are:
 		    (PUTPROP LIST (INTERN (SUBSTRING LINE SP LEN) "") PROP))
 		   (OTHERWISE
 		    (LET ((FUNCTION (GET PROP 'HOST-ADDRESS-PARSER)))
-		      (OR FUNCTION (SETQ FUNCTION (GET :CHAOS 'HOST-ADDRESS-PARSER)))
-		      (PUSH (FUNCALL FUNCTION PROP LINE SP LEN)
-			    (GET LIST PROP)))))))
+		      (IF FUNCTION
+			  ;; Try parsing it as a network address
+			  (LET ((VAL (FUNCALL FUNCTION PROP LINE SP LEN)))
+			    (WHEN VAL (PUSH VAL (GET LIST PROP))))
+			  ;; Else it is a generic property: octal number or string
+			  (LET* ((VAL (SUBSTRING LINE SP))
+				 (PVAL (OR (PARSE-INTEGER VAL :RADIX 8 :JUNK-ALLOWED T)
+					   VAL)))
+			    (PUSH PVAL (GET LIST PROP))))))))))
 	     (RETURN T))))))
 
 (DEFUN CHAOS-UNKNOWN-ADDRESS-FUNCTION (ADDR NETWORK)

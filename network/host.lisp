@@ -291,10 +291,10 @@ and, if possible, defines and returns a host object. Or NIL if it can not.")
 
 (DEFINE-SITE-VARIABLE LOCAL-INTERNET-DOMAINS :LOCAL-INTERNET-DOMAINS
   "List of domains to which our site belongs.
-If a host is specified with one of these domains, we ignore the domain.
-If a host is specified with an unrecognized domain,
- we do not look in our own host table, always ask a host table server,
- and keep the domain in the host name.")
+If a host is specified with one of these domains, 
+we try to make the shortest prefix (without the domain) a short-name.
+If an unknown host is specified without a domain, we search these
+domains for the host.")
 
 (DEFUN PARSE-HOST (HOST &OPTIONAL NO-ERROR-P (UNKNOWN-OK T)
 		   &AUX ELEMENT)
@@ -306,10 +306,12 @@ NO-ERROR-P says just return NIL if there is no such host known.
 UNKNOWN-OK says call the UNKNOWN-HOST-FUNCTION (if that's not NIL)
 to give it a chance to create a host and add it to the host table."
   (IF (TYPEP HOST 'HOST) HOST
-    (LET ((IDX (STRING-SEARCH-CHAR #/. HOST)))
-      (AND IDX
-	   (MEMBER-EQUALP (SUBSTRING HOST (1+ IDX)) LOCAL-INTERNET-DOMAINS)
-	   (SETQ HOST (SUBSTRING HOST 0 IDX))))
+;; This is not useful in the modern world.
+;; See CHAOS:CHAOS-UNKNOWN-HOST-FUNCTION for better uses.
+;    (LET ((IDX (STRING-SEARCH-CHAR #/. HOST)))
+;      (AND IDX
+;	   (MEMBER-EQUALP (SUBSTRING HOST (1+ IDX)) LOCAL-INTERNET-DOMAINS)
+;	   (SETQ HOST (SUBSTRING HOST 0 IDX))))
     (COND ((AND (SETQ ELEMENT (LOOP FOR ELEMENT IN HOST-ALIST
 				    WHEN (MEM #'STRING-EQUAL HOST (HOST-NAME-LIST ELEMENT))
 				    RETURN ELEMENT))
