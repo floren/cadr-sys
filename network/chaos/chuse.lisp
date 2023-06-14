@@ -982,7 +982,7 @@ domains are used to search for it."
              ;; If there is no dot in the name
              (NOT (STRING-SEARCH-CHAR #/. NAME))
              ;; And not only digits
-             (CLI:SOME #'(LAMBDA (C) (NOT (DIGIT-CHAR-P C 8))) NAME)
+             (CLI:SOME #'(LAMBDA (C) (NOT (DIGIT-CHAR-P C 8))) NAME))
     ;; Try each of the local domains
     (DOLIST (DOM SI:LOCAL-INTERNET-DOMAINS)
       (WHEN (CHAOS-UNKNOWN-HOST-FUNCTION-1 (STRING-APPEND NAME "." DOM))
