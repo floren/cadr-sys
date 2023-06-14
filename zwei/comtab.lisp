@@ -1122,6 +1122,7 @@ Signals the condition ZWEI:BARF, passing along the args to BARF."
 	    #/M-P COM-UP-COMMENT-LINE
 	    #/M-Q COM-FILL-PARAGRAPH
 	    #/M-G COM-FILL-REGION
+	    #/C-/\ COM-JUST-ONE-SPACE
 	    #/M-/\ COM-DELETE-HORIZONTAL-SPACE
 	    #/M-CR COM-BACK-TO-INDENTATION
 	    #/M-M COM-BACK-TO-INDENTATION
