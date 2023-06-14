@@ -1,6 +1,7 @@
 ;;; -*- Mode:Lisp; Readtable:ZL; Package:USER; Base:8; Patch-File:T -*-
 ;;; Patch file for System version 100.21
-;;; Reason: Change the use of the :LOCAL-INTERNET-DOMAINS site variable.
+;;; Reason:
+;;;  Change the use of the :LOCAL-INTERNET-DOMAINS site variable.
 ;;; Written 13-Jun-23 05:08:16 by AMS,
 ;;; while running on Lisp Machine One from band 2
 ;;; with Experimental System 100.0, microcode 323.

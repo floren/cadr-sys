@@ -1,8 +1,8 @@
 ;;; -*- Mode:LISP; Package:USER; Base:10; Readtable:T; Patch-File:T -*-
 ;;; Patch directory for System version 100
-;;; Written 14-Jun-23 16:08:17 by ams,
+;;; Written 14-Jun-23 16:35:58 by ams,
 ;;; while running on Lisp Machine One from band 2
-;;; with Experimental System 100.13, Hacks by AMS 2.0, microcode 323, WIP.
+;;; with Experimental System 100.21, Hacks by AMS 2.0, microcode 323, WIP.
 
 (:EXPERIMENTAL
  ((0 "System Loaded" "AMS" NIL)
@@ -32,6 +32,5 @@ Show all documentation for Terminal-N." "AMS" NIL)
   (19 "Add support for handling BRD Chaosnet packets; fix some timing issues in Chaosnet code." "ams" NIL)
   (20 "SET-LOCAL-HOST-VARIABLE: Try to find the first non-ZWEI host instead." "AMS" NIL)
   (21 "ZWEI: C-q is now bound to /"Quoted Insert./"  C-\ is bound to /"Just One Space/"." "ams" NIL)
-  (22 "" "AMS" T)
+  (22 "Change the use of the :LOCAL-INTERNET-DOMAINS site variable." "AMS" NIL)
   ))
-
