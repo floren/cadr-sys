@@ -979,12 +979,14 @@ The keyword arguments are:
 If NAME does not contain a dot, the :LOCAL-INTERNET-DOMAINS site variable
 domains are used to search for it."
   (WHEN (AND SI:LOCAL-INTERNET-DOMAINS
-	     ;; If there is no dot in the name
-	     (NOT (STRING-SEARCH-CHAR #/. NAME)))
+             ;; If there is no dot in the name
+             (NOT (STRING-SEARCH-CHAR #/. NAME))
+             ;; And not only digits
+             (CLI:SOME #'(LAMBDA (C) (NOT (DIGIT-CHAR-P C 8))) NAME)
     ;; Try each of the local domains
     (DOLIST (DOM SI:LOCAL-INTERNET-DOMAINS)
       (WHEN (CHAOS-UNKNOWN-HOST-FUNCTION-1 (STRING-APPEND NAME "." DOM))
-	(RETURN T))))
+        (RETURN T))))
   ;; Else (or if it fails) try the name itself
   (CHAOS-UNKNOWN-HOST-FUNCTION-1 NAME))
 
