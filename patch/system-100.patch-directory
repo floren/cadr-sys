@@ -32,4 +32,6 @@ Show all documentation for Terminal-N." "AMS" NIL)
   (19 "Add support for handling BRD Chaosnet packets; fix some timing issues in Chaosnet code." "ams" NIL)
   (20 "SET-LOCAL-HOST-VARIABLE: Try to find the first non-ZWEI host instead." "AMS" NIL)
   (21 "ZWEI: C-q is now bound to /"Quoted Insert./"  C-\ is bound to /"Just One Space/"." "ams" NIL)
+  (22 "" "AMS" T)
   ))
+
