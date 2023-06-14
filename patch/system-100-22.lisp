@@ -21,45 +21,6 @@ If an unknown host is specified without a domain, we search these
 domains for the host.")
 ))
 
-; From file OZ: /tree/network/host.lisp at 13-Jun-23 05:08:24
-#8R SYSTEM-INTERNALS#:
-(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
-  (COMPILER::PATCH-SOURCE-FILE "OZ: //tree//network//host"
-
-(DEFUN PARSE-HOST (HOST &OPTIONAL NO-ERROR-P (UNKNOWN-OK T)
-		   &AUX ELEMENT)
-  "Return a host object for name HOST, taken from the HOST-ALIST.
-This is the right function to use for making network connections,
-but is not right for parsing pathnames.  Use FS:GET-PATHNAME-HOST for that.
-HOST can also be a host object already; then it's simply returned.
-NO-ERROR-P says just return NIL if there is no such host known.
-UNKNOWN-OK says call the UNKNOWN-HOST-FUNCTION (if that's not NIL)
-to give it a chance to create a host and add it to the host table."
-  (IF (TYPEP HOST 'HOST) HOST
-;; This is not useful in the modern world.
-;; See CHAOS:CHAOS-UNKNOWN-HOST-FUNCTION for better uses.
-;    (LET ((IDX (STRING-SEARCH-CHAR #/. HOST)))
-;      (AND IDX
-;	   (MEMBER-EQUALP (SUBSTRING HOST (1+ IDX)) LOCAL-INTERNET-DOMAINS)
-;	   (SETQ HOST (SUBSTRING HOST 0 IDX))))
-    (COND ((AND (SETQ ELEMENT (LOOP FOR ELEMENT IN HOST-ALIST
-				    WHEN (MEM #'STRING-EQUAL HOST (HOST-NAME-LIST ELEMENT))
-				    RETURN ELEMENT))
-		(NOT (NULL (HOST-ADDRESSES ELEMENT))))
-	   (GET-ALIST-ELEM-HOST ELEMENT))
-	  ((STRING-EQUAL HOST "CHAOS|" :END1 6)
-	   (LET ((ADDRESS (PARSE-NUMBER HOST 6 NIL 8)))
-	     (OR (GET-HOST-FROM-ADDRESS ADDRESS :CHAOS)
-		 (MAKE-UNNAMED-HOST :DEFAULT `(:CHAOS (,ADDRESS))))))
-	  ((AND UNKNOWN-OK UNKNOWN-HOST-FUNCTION)
-	   (FUNCALL UNKNOWN-HOST-FUNCTION HOST)
-	   (PARSE-HOST HOST NO-ERROR-P NIL))
-	  (NO-ERROR-P
-	   NIL)
-	  (T
-	   (FERROR 'SYS:UNKNOWN-HOST-NAME "~S is not a known host." HOST)))))
-))
-
 ; From file OZ: /tree/network/chaos/chuse.lisp at 13-Jun-23 05:09:06
 #8R CHAOS#:
 (COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "CHAOS")))
@@ -80,22 +41,6 @@ to give it a chance to create a host and add it to the host table."
 		       NAMES)
 	       #'(LAMBDA (A B)
 		   (< (STRING-LENGTH A) (STRING-LENGTH B)))))))
-
-(DEFUN CHAOS-UNKNOWN-HOST-FUNCTION (NAME)
-  "Try to find the host with NAME using the HOSTAB servers.
-If NAME does not contain a dot, the :LOCAL-INTERNET-DOMAINS site variable
-domains are used to search for it."
-  (WHEN (AND SI:LOCAL-INTERNET-DOMAINS
-	     ;; If there is no dot in the name
-	     (NOT (STRING-SEARCH-CHAR #/. NAME))
-             ;; And not only digits
-             (CLI:SOME #'(LAMBDA (C) (NOT (DIGIT-CHAR-P C 8))) NAME))
-    ;; Try each of the local domains
-    (DOLIST (DOM SI:LOCAL-INTERNET-DOMAINS)
-      (WHEN (CHAOS-UNKNOWN-HOST-FUNCTION-1 (STRING-APPEND NAME "." DOM))
-	(RETURN T))))
-  ;; Else (or if it fails) try the name itself
-  (CHAOS-UNKNOWN-HOST-FUNCTION-1 NAME))
 
 (DEFUN CHAOS-UNKNOWN-HOST-FUNCTION-1 (NAME)
   (DOLIST (HOST (SI:GET-SITE-OPTION :CHAOS-HOST-TABLE-SERVER-HOSTS))
@@ -151,4 +96,62 @@ domains are used to search for it."
 					   val)))
 			    (push pval (get list prop))))))))))
 	     (RETURN T))))))
+
+(DEFUN CHAOS-UNKNOWN-HOST-FUNCTION (NAME)
+  "Try to find the host with NAME using the HOSTAB servers.
+If NAME does not contain a dot, the :LOCAL-INTERNET-DOMAINS site variable
+domains are used to search for it."
+  (WHEN (AND SI:LOCAL-INTERNET-DOMAINS
+	     ;; If there is no dot in the name
+	     (NOT (STRING-SEARCH-CHAR #/. NAME))
+             ;; And not only digits
+             (CLI:SOME #'(LAMBDA (C) (NOT (DIGIT-CHAR-P C 8))) NAME))
+    ;; Try each of the local domains
+    (DOLIST (DOM SI:LOCAL-INTERNET-DOMAINS)
+      (WHEN (CHAOS-UNKNOWN-HOST-FUNCTION-1 (STRING-APPEND NAME "." DOM))
+	(RETURN T))))
+  ;; Else (or if it fails) try the name itself
+  (CHAOS-UNKNOWN-HOST-FUNCTION-1 NAME))
+
 ))
+
+; From file OZ: /tree/network/host.lisp at 13-Jun-23 05:08:24
+#8R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER::PATCH-SOURCE-FILE "OZ: //tree//network//host"
+
+(DEFUN PARSE-HOST (HOST &OPTIONAL NO-ERROR-P (UNKNOWN-OK T)
+		   &AUX ELEMENT)
+  "Return a host object for name HOST, taken from the HOST-ALIST.
+This is the right function to use for making network connections,
+but is not right for parsing pathnames.  Use FS:GET-PATHNAME-HOST for that.
+HOST can also be a host object already; then it's simply returned.
+NO-ERROR-P says just return NIL if there is no such host known.
+UNKNOWN-OK says call the UNKNOWN-HOST-FUNCTION (if that's not NIL)
+to give it a chance to create a host and add it to the host table."
+  (IF (TYPEP HOST 'HOST) HOST
+;; This is not useful in the modern world.
+;; See CHAOS:CHAOS-UNKNOWN-HOST-FUNCTION for better uses.
+;    (LET ((IDX (STRING-SEARCH-CHAR #/. HOST)))
+;      (AND IDX
+;	   (MEMBER-EQUALP (SUBSTRING HOST (1+ IDX)) LOCAL-INTERNET-DOMAINS)
+;	   (SETQ HOST (SUBSTRING HOST 0 IDX))))
+    (COND ((AND (SETQ ELEMENT (LOOP FOR ELEMENT IN HOST-ALIST
+				    WHEN (MEM #'STRING-EQUAL HOST (HOST-NAME-LIST ELEMENT))
+				    RETURN ELEMENT))
+		(NOT (NULL (HOST-ADDRESSES ELEMENT))))
+	   (GET-ALIST-ELEM-HOST ELEMENT))
+	  ((STRING-EQUAL HOST "CHAOS|" :END1 6)
+	   (LET ((ADDRESS (PARSE-NUMBER HOST 6 NIL 8)))
+	     (OR (GET-HOST-FROM-ADDRESS ADDRESS :CHAOS)
+		 (MAKE-UNNAMED-HOST :DEFAULT `(:CHAOS (,ADDRESS))))))
+	  ((AND UNKNOWN-OK UNKNOWN-HOST-FUNCTION)
+	   (FUNCALL UNKNOWN-HOST-FUNCTION HOST)
+	   (PARSE-HOST HOST NO-ERROR-P NIL))
+	  (NO-ERROR-P
+	   NIL)
+	  (T
+	   (FERROR 'SYS:UNKNOWN-HOST-NAME "~S is not a known host." HOST)))))
+))
+
+
