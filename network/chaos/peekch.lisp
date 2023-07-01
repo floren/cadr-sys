@@ -171,8 +171,9 @@ Sent: pkt <n>, ack for pkt <n>, <n> queued
 							(CAR PEEK-CHAOS-HOST)))
 					      (RPLACD PEEK-CHAOS-HOST
 						      (FORMAT NIL "~@[~A ~](~O), "
+							      (unless (zerop (car peek-chaos-host))
 							      (SI:GET-HOST-FROM-ADDRESS
-								(CAR PEEK-CHAOS-HOST) ':CHAOS)
+								(CAR PEEK-CHAOS-HOST) ':CHAOS))
 							      (CAR PEEK-CHAOS-HOST))))
 					 (CDR PEEK-CHAOS-HOST)))
 		 (,CONN) NIL))))
