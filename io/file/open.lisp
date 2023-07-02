@@ -1586,10 +1586,20 @@ NIL says that no completion was possible."
       (let ((position (string-search-set '(#/space #/. #/-) name)))
 	(if position (setq name (substring name 0 position))))
       (setq name (string-append name "*"))
+#|
+      ;; NAME here is an "interchange component", typically uppercase,
+      ;; but for unix-style pathnames parse-pathname respects input case,
+      ;; so using parse-pathname is wrong here. And completely unnecessary.
       (let ((temp-pathname (fs:parse-pathname name (send pathname :host))))
 	(setq directory-pathname (send pathname
 				     :new-pathname
-				     :name (send temp-pathname :name) :version :wild)))))
+				     :name (send temp-pathname :name) :version :wild)))
+|#
+      ;; Instead, just use the name with the * on.
+      (setq directory-pathname (send pathname
+				     :new-pathname
+				     :name name :version :wild))
+      ))
   ;; now get directory-list
   (setq directory-list (send directory-pathname :DIRECTORY-LIST options))
   (if (errorp directory-list)
