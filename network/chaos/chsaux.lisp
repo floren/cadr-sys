@@ -1493,7 +1493,7 @@ If you want to quit, hit the ~:@C key, to end your message hit the ~:@C key."
 ;;;; Host table frobs
 
 (DEFUN GENERATE-HOST-TABLE (&OPTIONAL INPUT-FILE)
-  (LET ((DEFAULT-INPUT-FILE "SYS: CHAOS; HOSTS TEXT >")
+  (LET ((DEFAULT-INPUT-FILE "SYS: SITE; HOSTS TEXT >")
 	(SI:*FORCE-PACKAGE* "CHAOS"))
     (COND ((AND (NOT INPUT-FILE)		;if not specified 
 		(NOT (PROBEF DEFAULT-INPUT-FILE)))	;and reasonable file doesn't exist
