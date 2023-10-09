@@ -855,7 +855,7 @@ Does Query Replace over all the file in the selected tags table, one file at a t
       (SETQ BP (NEXT-FILE-BP BEGINNING))
       (SETQ BEGINNING NIL)
       (WHEN (LET ((*INTERVAL* (BP-TOP-LEVEL-NODE BP)))
-	      (SETQ FOUND-AT (SEARCH BP *TAGS-QUERY-REPLACE-FROM*)))
+	      (SETQ FOUND-AT (ZWEI-SEARCH BP *TAGS-QUERY-REPLACE-FROM*)))
 	(POINT-PDL-PUSH (POINT) *WINDOW* NIL NIL)
 	(MAKE-BUFFER-CURRENT (BP-TOP-LEVEL-NODE BP))
 	;; Move bp to just before the occurrence, so we avoid
@@ -924,7 +924,7 @@ Does Query Replace over all the file in the selected tags table, one file at a t
       (SETQ BEGINNING NIL)
       (WHEN (LET ((*INTERVAL* (BP-TOP-LEVEL-NODE BP)))
 	      (DOLIST (STR *TAGS-QUERY-REPLACE-FROM*)
-		(IF (SEARCH BP STR) (RETURN T))))
+		(IF (ZWEI-SEARCH BP STR) (RETURN T))))
 	(POINT-PDL-PUSH (POINT) *WINDOW* NIL NIL)
 	(MAKE-BUFFER-CURRENT (BP-TOP-LEVEL-NODE BP))
 	(MOVE-BP (POINT) BP)
