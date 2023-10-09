@@ -283,7 +283,7 @@ Update the mode line (attribute list) in the text from current settings of buffe
 (DEFCONST *UPDATE-PLIST-ON-WRITE-OK* T
   "Non-NIL enables adding Base and other important attributes to files missing them.")
 
-(DEFUN CHECK-PLIST-FOR-IMPORTANT-ATTRIBUTES (PLIST BUFFER &AUX (DEFAULT '(())))
+(DEFUN CHECK-PLIST-FOR-IMPORTANT-ATTRIBUTES (PLIST BUFFER)
   (MULTIPLE-VALUE-BIND (NIL PARSING-ERROR)
       (FS:EXTRACT-ATTRIBUTE-LIST (INTERVAL-STREAM BUFFER))
     (IF PARSING-ERROR
