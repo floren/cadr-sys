@@ -80,8 +80,6 @@ LINES-TO-SEARCH non-NIL means give up after searching that many lines;
 			(RETURN (CREATE-BP LINE INDEX)))
 		       (FIRSTP
 			(RETURN (IF FIXUP-P (COPY-BP LIMIT-BP) NIL)))))))))))
-(DEFF SEARCH 'ZWEI-SEARCH)
-(COMPILER:MAKE-OBSOLETE SEARCH "use ZWEI:ZWEI-SEARCH")
 
 ;;; Subroutine of SEARCH.  Used to search for a string containing a CR.
 ;;; NLPOS is the index in STRING of the first CR.
@@ -375,16 +373,6 @@ Returns the number of occurrences replaced."
       ((= I TIMES) I)
     (OR (SETQ BP (ZWEI-SEARCH BP FROM)) (RETURN I))
     (SETQ BP (CASE-REPLACE (FORWARD-CHAR BP (- LEN)) BP TO T))))
-
-(DEFUN CHAR-UPPERCASE-P (CHAR)
-  "T if CHAR is an upper case letter."
-  ( #/A (CHAR-CODE CHAR) #/Z))
-(compiler:make-obsolete char-uppercase-p "use UPPER-CASE-P")
-
-(DEFUN CHAR-LOWERCASE-P (CHAR)
-  "T if CHAR is a lower case letter."
-  ( #/a (CHAR-CODE CHAR) #/z))
-(compiler:make-obsolete char-lowercase-p "use LOWER-CASE-P")
 
 (DEFUN CASE-REPLACE (BP1 BP2 TO &OPTIONAL IN-ORDER-P &AUX BP FIRST SECOND)
   "Replace the text from BP1 to BP2 with a copy of TO, preserving case if appropriate.
