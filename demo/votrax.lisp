@@ -25,12 +25,12 @@
 
 (setq votrax-stream 
 	      (si:make-serial-stream
-		':number-of-stop-bits 2
-		':number-of-data-bits 8
-		':check-parity-errors t
-		':check-framing-errors t
-		':baud 300.
-		':ascii-protocol t) )
+		:number-of-stop-bits 2
+		:number-of-data-bits 8
+		:check-parity-errors t
+		:check-framing-errors t
+		:baud 300.
+		:ascii-protocol t) )
 
 
 (DECLARE (SPECIAL PHONEME-ALIST LAST-UTTERANCE))
@@ -79,28 +79,28 @@
   (DO ((LIST LIST (CDR LIST))
        (INT 300)
        (PH))
-      ((NULL LIST) (funcall votrax-stream ':TYO -1) T)
+      ((NULL LIST) (funcall votrax-stream :TYO -1) T)
     (SETQ PH (CAR LIST))
     (COND ((NUMBERP PH)
 	   (SETQ INT (- 400 (* PH 100))))
 	  (T
-	   (funcall votrax-stream ':tyo (+ INT (CDR (ASSQ PH PHONEME-ALIST))))))))
+	   (funcall votrax-stream :tyo (+ INT (CDR (ASSQ PH PHONEME-ALIST))))))))
 
 (DEFUN SPEAK (&OPTIONAL (X LAST-UTTERANCE))
   (SPEAK-1 (SETQ LAST-UTTERANCE X)))
 
 (DEFUN SPEAK-WORDS (&QUOTE &REST LIST-OF-WORDS)
   (DOLIST (WORD LIST-OF-WORDS)
-    (SPEAK-1 (OR (GET WORD ':VOTRAX-WORD)
+    (SPEAK-1 (OR (GET WORD :VOTRAX-WORD)
 		 (SPEAK-WORDS-GET-WORD WORD)))))
 
 (DEFUN SPEAK-WORD (WORD)
-  (SPEAK-1 (OR (GET WORD ':VOTRAX-WORD)
+  (SPEAK-1 (OR (GET WORD :VOTRAX-WORD)
 	       (SPEAK-WORDS-GET-WORD WORD))))
 
 (DEFUN SPEAK-WORDS-GET-WORD (WORD)
   (FORMAT T "~%I don't know how to say ~A, please tell me: " WORD)
-  (PUTPROP WORD (READ) ':VOTRAX-WORD))
+  (PUTPROP WORD (READ) :VOTRAX-WORD))
 
 (DECLARE (SPECIAL WORD-FILE))
 (DEFUN DUMP-WORD-FILE (FILENAME)
@@ -108,7 +108,7 @@
   (MAPATOMS 'DUMP-WORD-FILE-1)
   (CLOSE WORD-FILE))
 
-(DEFUN DUMP-WORD-FILE-1 (ATOM &AUX (WORD-SAYING (GET ATOM ':VOTRAX-WORD)))
+(DEFUN DUMP-WORD-FILE-1 (ATOM &AUX (WORD-SAYING (GET ATOM :VOTRAX-WORD)))
   (AND WORD-SAYING
        (PRINT `(DEFPROP ,ATOM ,WORD-SAYING :VOTRAX-WORD) WORD-FILE)))
 
@@ -124,15 +124,15 @@
     (OR EOW (RETURN NIL))))
 
 (DEFUN (:VOTRAX SI:PRINC-FUNCTION) (X STREAM)
-  (COND ((EQ (TYPEP X) ':FIXNUM)
+  (COND ((EQ (TYPEP X) :FIXNUM)
 	 (SPEAK-SENTENCE (FORMAT NIL "~R" (- X)))
 	 (FORMAT STREAM "~D" (- X)))
 	(T (FORMAT STREAM "~D" X))))
 
 (DEFUN SPEAK-RAN (N)
   (DOTIMES (I N)
-    (funcall votrax-stream ':TYO (RANDOM 400)))
-  (funcall votrax-stream ':TYO -1))
+    (funcall votrax-stream :TYO (RANDOM 400)))
+  (funcall votrax-stream :TYO -1))
 
 (DEFUN OPERATOR ()
   (SPEAK-SENTENCE "THE NUMBER YOU HAVE REACHED <> TWO FIVE THREE <> SIX SEVEN SIX FIVE <> IS NOT IN SERVICE <> PLEASE CHECK THE NUMBER AND DIAL AGAIN OR ASK YOUR OPERATOR FOR ASSISTANCE <> <> THIS IS A RECORDING"))
