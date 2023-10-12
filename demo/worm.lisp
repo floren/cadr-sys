@@ -5,7 +5,7 @@
 (DECLARE (SPECIAL WORM-ALU-FUNCTION ORDER WORM-X WORM-Y BITS DIR))
 
 (DEFVAR WORM-WINDOW
-	(TV:WINDOW-CREATE 'HOF-WINDOW ':BLINKER-P NIL)
+	(TV:WINDOW-CREATE 'HOF-WINDOW :BLINKER-P NIL)
   "The window where the worm is demoed.")
 
 (DEFVAR *CHAR*)
@@ -20,7 +20,7 @@
 ;This is a 6-long array of stack groups,
 ;each of which runs one worm.
 (DEFVAR WORMS
-	(LET ((ARRAY (MAKE-ARRAY 6 ':TYPE 'ART-Q-LIST)))
+	(LET ((ARRAY (MAKE-ARRAY 6 :TYPE 'ART-Q-LIST)))
 	  (DOTIMES (I 6)
 	    (AS-1 (MAKE-STACK-GROUP (FORMAT NIL "WORM-~D" I)) ARRAY I))
 	  ARRAY))
@@ -42,14 +42,14 @@
 	     &AUX LENGTH (TERMINAL-IO WORM-WINDOW))
   (TV:WINDOW-CALL (WORM-WINDOW :DEACTIVATE)
     (CATCH-ERROR-RESTART ((SYS:ABORT ERROR) "Exit WORM.")
-      (FUNCALL WORM-WINDOW ':SET-LABEL "Worm")
+      (FUNCALL WORM-WINDOW :SET-LABEL "Worm")
       (OR (BOUNDP 'FONTS:WORM) (LOAD "SYS: LMDEMO;WORMCH" 'FONTS))
       (SETQ LENGTH (^ 3 (1+ ORDER)))
       (PRESET (AR-1 WORMS 0) 'WORM-BIG-CHAR 'TV:ALU-IOR 0)
       (SETQ FITP NIL)
       (DO I 0 (1+ I) (OR FITP ( I 2))		; Paint blackness over whole worm
 	  (SETQ FITP T)
-	  (FUNCALL TERMINAL-IO ':CLEAR-SCREEN)
+	  (FUNCALL TERMINAL-IO :CLEAR-SCREEN)
 	  (DOTIMES (I (1+ LENGTH))
 	    (IF (FUNCALL (AR-1 WORMS 0))
 		(signal eh:abort-object)))) ;;qit
@@ -69,14 +69,14 @@
        (STOP-VAL 0))
       (NIL)
     (COND ((OR RUN (< I STOP-VAL))
-	   (AND (FUNCALL TERMINAL-IO ':TYI-NO-HANG)
+	   (AND (FUNCALL TERMINAL-IO :TYI-NO-HANG)
 		(SETQ RUN NIL STOP-VAL 0)))
-	  (T (FUNCALL WORM-WINDOW ':SET-LABEL
+	  (T (FUNCALL WORM-WINDOW :SET-LABEL
 		      (LET ((BASE 9))
 			(FORMAT NIL "Worm    Generation ~S (base 9)" I)))
-	     (FUNCALL TERMINAL-IO ':SET-CURSORPOS 0 YPOS)
-	     (FUNCALL TERMINAL-IO ':CLEAR-EOL)
-	     (FUNCALL TERMINAL-IO ':STRING-OUT
+	     (FUNCALL TERMINAL-IO :SET-CURSORPOS 0 YPOS)
+	     (FUNCALL TERMINAL-IO :CLEAR-EOL)
+	     (FUNCALL TERMINAL-IO :STRING-OUT
 		      "    P: Run  nR: Run until n  nN: Run n steps  nS: Run till nth order  Abort: exit
     ")
 	     (PROG (CH VAL)
@@ -91,12 +91,12 @@
 					    STOP-VAL (* VAL (1+ (TRUNCATE I VAL)))))
 			 ((EQ CH #/P) (SETQ RUN T))))
 	     (IF (OR RUN (< I STOP-VAL))
-		 (FUNCALL WORM-WINDOW ':SET-LABEL "Worm    Type any character to stop"))))
+		 (FUNCALL WORM-WINDOW :SET-LABEL "Worm    Type any character to stop"))))
     (DOTIMES (I 6)
       (IF (FUNCALL (AR-1 WORMS I))
 	  (SIGNAL EH:ABORT-OBJECT)))))
 
-(OR (BOUNDP 'WORM-TURNS) (SETQ WORM-TURNS (MAKE-ARRAY 12. ':TYPE 'ART-Q-LIST)))
+(OR (BOUNDP 'WORM-TURNS) (SETQ WORM-TURNS (MAKE-ARRAY 12. :TYPE 'ART-Q-LIST)))
 
 (FillArray WORM-TURNS '( 6  0
 			 3  5
