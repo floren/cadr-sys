@@ -23,8 +23,8 @@
 
 (defun rotate (myself w)
   (let* ((width (array-dimension myself 0))
-	 (mask (make-array (list width width) ':type 'art-1b))
-	 (temp (make-array (list width width) ':type 'art-1b)))
+	 (mask (make-array (list width width) :type 'art-1b))
+	 (temp (make-array (list width width) :type 'art-1b)))
     (copy-all-to mask 0 0 mask .CLEAR)
     (copy-all-from mask (truncate width 2) (truncate width 2) mask .SET)
     (do ((quad (truncate width 2) (truncate quad 2)))
@@ -44,7 +44,7 @@
       (copy-all-from mask (truncate quad 2) (truncate quad 2) mask .AND)	; 13
       (copy-all-to mask quad 0 mask .IOR)		; 14
       (copy-all-to mask 0 quad mask .IOR)		; 15
-      (funcall w ':bitblt tv:alu-seta width width myself 0 0 0 0))
+      (funcall w :bitblt tv:alu-seta width width myself 0 0 0 0))
     (return-array (prog1 mask (setq mask nil)))
     (return-array (prog1 temp (setq temp nil))))
   myself)
@@ -55,17 +55,17 @@
 (defun run-rotate ()
   (tv:window-call (*hof-window* :deactivate)
     (with-real-time
-      (funcall *hof-window* ':set-label "Life Window")
+      (funcall *hof-window* :set-label "Life Window")
       (if (null *rotate-source*)
 	  (setq *rotate-source* (make-array (list *rotate-size* *rotate-size*)
-					    ':type 'art-1b)))
-      (funcall *hof-window* ':clear-screen)
+					    :type 'art-1b)))
+      (funcall *hof-window* :clear-screen)
       (bitblt tv:alu-xor *rotate-size* *rotate-size* *rotate-source* 0 0 *rotate-source* 0 0) 
       (princ (documentation 'format) *hof-window*)
-      (funcall *hof-window* ':bitblt-from-sheet
+      (funcall *hof-window* :bitblt-from-sheet
 	       tv:alu-seta *rotate-size* *rotate-size* 0 0 *rotate-source* 0 0)
       (rotate *rotate-source* *hof-window*)
-      (funcall *hof-window* ':tyi))))
+      (funcall *hof-window* :tyi))))
 
 (defdemo "Rotate"
 	 "A demonstration of an interesting algorithm for rotating a bit array."
@@ -80,17 +80,17 @@
 
 (defun life (window)
   (*catch 'exit
-    (multiple-value-bind (w h) (funcall window ':inside-size)
+    (multiple-value-bind (w h) (funcall window :inside-size)
       (let* ((h2 (+ h 2))
 	     (w2 (+ w 2))
 	     (w32 (* (ceiling w2 32) 32))
-	     (myself (make-pixel-array w32 h ':type 'art-1b))
-	     (nbr1   (make-pixel-array w32 h2 ':type 'art-1b))
-	     (nbr2   (make-pixel-array w32 h2 ':type 'art-1b))
-	     (nbr4   (make-pixel-array w32 h2 ':type 'art-1b))
-	     (carry2 (make-pixel-array w32 h2 ':type 'art-1b))
-	     (carry4 (make-pixel-array w32 h2 ':type 'art-1b)))
-	(funcall window ':bitblt-from-sheet tv:alu-seta w h 0 0 myself 0 0)
+	     (myself (make-pixel-array w32 h :type 'art-1b))
+	     (nbr1   (make-pixel-array w32 h2 :type 'art-1b))
+	     (nbr2   (make-pixel-array w32 h2 :type 'art-1b))
+	     (nbr4   (make-pixel-array w32 h2 :type 'art-1b))
+	     (carry2 (make-pixel-array w32 h2 :type 'art-1b))
+	     (carry4 (make-pixel-array w32 h2 :type 'art-1b)))
+	(funcall window :bitblt-from-sheet tv:alu-seta w h 0 0 myself 0 0)
 	(dotimes (generation 100000)
 	  (bitblt .XOR w2 h2 nbr1   0 0 nbr1   0 0)
 	  (bitblt .XOR w2 h2 nbr2   0 0 nbr2   0 0)
@@ -127,10 +127,10 @@
   
 	  ;; myself = (NOT nbr4) .AND ((myself .AND nbr2) .IOR (nbr1 .AND nbr2))
 	  (bitblt .NAND w  h  nbr4 1 1 myself 0 0)
-	  (funcall window ':bitblt tv:alu-seta w h myself 0 0 0 0)
-	  (funcall window ':home-cursor)
+	  (funcall window :bitblt tv:alu-seta w h myself 0 0 0 0)
+	  (funcall window :home-cursor)
 	  (format window "~D" generation)
-	  (if (funcall window ':tyi-no-hang) (*throw 'exit t))
+	  (if (funcall window :tyi-no-hang) (*throw 'exit t))
 	  )
 	(return-array (prog1 carry4 (setq nbr1 nil)))
 	(return-array (prog1 carry2 (setq nbr1 nil)))
@@ -142,10 +142,10 @@
 (defun run-life ()
   (tv:window-call (*little-hof-window* :deactivate)
     (with-real-time
-      (funcall *little-hof-window* ':set-label "Life Window")
-      (multiple-value-bind (width height) (funcall *little-hof-window* ':inside-size)
-	(funcall *little-hof-window* ':clear-screen)
-	(funcall *little-hof-window* ':draw-line
+      (funcall *little-hof-window* :set-label "Life Window")
+      (multiple-value-bind (width height) (funcall *little-hof-window* :inside-size)
+	(funcall *little-hof-window* :clear-screen)
+	(funcall *little-hof-window* :draw-line
 		 100 (truncate height 2)
 		 (- width 100) (truncate height 2)))
       (life *little-hof-window*))))
