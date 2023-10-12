@@ -1,13 +1,13 @@
 ;;;Hey, EMACS, You hosehead!  This is -*-Mode: LISP; Package: HACKS; Base: 8.-*-
 
 (defvar *circle* (tv:make-window 'tv:window
-				 ':borders 5
-				 ':activate-p nil
-				 ':blinker-p nil
-				 ':label (list ':top
-					       ':string
+				 :borders 5
+				 :activate-p nil
+				 :blinker-p nil
+				 :label (list :top
+					       :string
 					       "The Rotating circles hack!!!"
-					       ':font 'fonts:cptfontb)))
+					       :font 'fonts:cptfontb)))
 
 (defun output ()
   *circle*)
@@ -16,20 +16,20 @@
   *circle*)
 
 (defun list-opers ()
-  (funcall (output) ':which-operations))
+  (funcall (output) :which-operations))
 
 (defun clear ()
-  (funcall (output) ':clear-screen))
+  (funcall (output) :clear-screen))
 
 (defun screen-size ()
-  (multiple-value-list (funcall (output) ':inside-size)))
+  (multiple-value-list (funcall (output) :inside-size)))
 
 (defun modified-origin ()
   (mapcar (function (lambda (x) (truncate x 2)))
 	  (screen-size)))
 
 (defun draw-circle (x y r)
-  (funcall (output) ':draw-circle x y r))
+  (funcall (output) :draw-circle x y r))
 
 (defun find-center-point (r)
   (list (list (- (truncate (car (screen-size)) 2) r)
@@ -75,36 +75,36 @@
     (draw-all-circles radius angle))))
 
 (defun do-rc (step radius)
-  (funcall *circle* ':select)
+  (funcall *circle* :select)
   (rotate-circles-once step radius)
-  (funcall *circle* ':home-down)
-  (funcall *circle* ':string-out "Hit any key to flush:")
-  (funcall *circle* ':tyi)
-  (funcall *circle* ':kill))
+  (funcall *circle* :home-down)
+  (funcall *circle* :string-out "Hit any key to flush:")
+  (funcall *circle* :tyi)
+  (funcall *circle* :kill))
 
 (defvar *poppin-fresh* (tv:make-window 'tv:pop-up-text-window
-				       ':borders 3
-				       ':activate-p nil
-				       ':label nil
-				       ':blinker-p t
-				       ':font-map (list fonts:cptfont)
-				       ':edges-from (list 100 100 (- (car (screen-size)) 100) 200) 
-				       ':integral-p t))
+				       :borders 3
+				       :activate-p nil
+				       :label nil
+				       :blinker-p t
+				       :font-map (list fonts:cptfont)
+				       :edges-from (list 100 100 (- (car (screen-size)) 100) 200) 
+				       :integral-p t))
 
 (defun rotating-circles ()
   (setq ibase 10.)
   (setq base 10.) 
-  (funcall *circle* ':expose)
-  (funcall *circle* ':select)
-  (funcall *poppin-fresh* ':expose)
-  (funcall *poppin-fresh* ':select)
-  (funcall *poppin-fresh* ':home-cursor)
+  (funcall *circle* :expose)
+  (funcall *circle* :select)
+  (funcall *poppin-fresh* :expose)
+  (funcall *poppin-fresh* :select)
+  (funcall *poppin-fresh* :home-cursor)
   (prog (r c)
-	(funcall *poppin-fresh* ':string-out "Radius (0 - ) : ")
+	(funcall *poppin-fresh* :string-out "Radius (0 - ) : ")
 	(setq r (read-from-string (readline *poppin-fresh*)))
-	(funcall *poppin-fresh* ':string-out "Angle (1 - 90) : ")
+	(funcall *poppin-fresh* :string-out "Angle (1 - 90) : ")
 	(setq c (read-from-string (readline *poppin-fresh*)))
-	(funcall *poppin-fresh* ':kill)
+	(funcall *poppin-fresh* :kill)
 	(do-rc c r)))
 
 (defdemo "Rotating Circles" "A spirograph crock" (rotating-circles))
