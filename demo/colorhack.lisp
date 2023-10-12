@@ -114,7 +114,7 @@
 (defconst c*blue  2)
 
 (defun make-color-map-array ()
-  (make-array map-size ':type 'art-8b))
+  (make-array map-size :type 'art-8b))
 
 (defvar c*temp-map (make-color-map-array))
 (defvar c*save-map (make-color-map-array))
@@ -289,8 +289,8 @@
 ;;  specified time, melting the new color, RGB, into the last color of the map.
 ;;
 
-(defvar float-array  (make-array map-size ':type 'art-float))
-(defvar delta-array  (make-array map-size ':type 'art-float))
+(defvar float-array  (make-array map-size :type 'art-float))
+(defvar delta-array  (make-array map-size :type 'art-float))
 
 
 (defun melt-in (old-array r g b time &optional (factor 10.))
@@ -345,7 +345,7 @@
 	(do ((r 0 (+ r delta-r))
 	     (g 0 (+ g delta-g))
 	     (b 0 (+ b delta-b)))
-	    ((funcall standard-output ':listen))
+	    ((funcall standard-output :listen))
 	  (if (> r *max-intensity*)
 	      (setq r (- *max-intensity* (- r *max-intensity*))
 		    delta-r (- delta-r)))
@@ -625,21 +625,21 @@ y))))
 (defun make-colorhack-windows ()
   (unless *RGB-counter*
     (setq *RGB-counter* (tv:make-window 'color-definition-flavor
-					':save-bits nil
-					':borders 10
-					':activate-p t
-					':blinker-p nil
-					':expose-p nil
-					':font-map `(,fonts:43vxms)
-					':character-width "888"
-					':character-height 4)))
+					:save-bits nil
+					:borders 10
+					:activate-p t
+					:blinker-p nil
+					:expose-p nil
+					:font-map `(,fonts:43vxms)
+					:character-width "888"
+					:character-height 4)))
   (unless *RGB-mixer*
     (setq *RGB-mixer* (tv:make-window 'tv:window
-				      ':superior *color-screen*
-				      ':save-bits nil
-				      ':activate-p t
-				      ':expose-p nil
-				      ':blinker-p nil))
+				      :superior *color-screen*
+				      :save-bits nil
+				      :activate-p t
+				      :expose-p nil
+				      :blinker-p nil))
     (setq *mixer-array* (tv:sheet-screen-array *RGB-mixer*))))
 
 (defconst left 1)
@@ -652,9 +652,9 @@ y))))
        1)))
 
 (defun define-color (color &optional (initial-color (read-color color)))
-  (send *RGB-counter* ':set-label (format nil "Color #~O" color))
-  (send *RGB-counter* ':expose-near '(:mouse))	;Let's see the counter
-  (send *RGB-counter* ':select)
+  (send *RGB-counter* :set-label (format nil "Color #~O" color))
+  (send *RGB-counter* :expose-near '(:mouse))	;Let's see the counter
+  (send *RGB-counter* :select)
   (tv:with-mouse-grabbed			;So no interrupting menus...
     (do* ((old-screen terminal-io)
 	  (old-buttons 0 current-buttons)
@@ -667,9 +667,9 @@ y))))
 	  (r (first initial-color) (max (min (+ r delta-r) *max-intensity*) 0))
 	  (g (second initial-color) (max (min (+ g delta-g) *max-intensity*) 0))
 	  (b (third initial-color) (max (min (+ b delta-b) *max-intensity*) 0)))
-	 ((send *RGB-counter* ':tyi-no-hang)
-	  (send *RGB-counter* ':deexpose)	;Don't want to see this anymore...
-	  (send old-screen ':select)
+	 ((send *RGB-counter* :tyi-no-hang)
+	  (send *RGB-counter* :deexpose)	;Don't want to see this anymore...
+	  (send old-screen :select)
 	  (list r g b))
       (color:write-color-map color r g b)
       (and (plusp button)
@@ -679,25 +679,25 @@ y))))
 		 (setq delta-g (new-delta-mouse old-buttons current-buttons))
 		 (setq delta-b (new-delta-mouse old-buttons current-buttons)))))
       (if ( r old-r)
-	  (progn (send *RGB-counter* ':set-cursorpos 0 0 ':character)
-		 (send *RGB-counter* ':clear-eol)
-		 (send *RGB-counter* ':string-out (format nil "~3O" r))))
+	  (progn (send *RGB-counter* :set-cursorpos 0 0 :character)
+		 (send *RGB-counter* :clear-eol)
+		 (send *RGB-counter* :string-out (format nil "~3O" r))))
       (if ( g old-g)
-	  (progn (send *RGB-counter* ':set-cursorpos 0 1 ':character)
-		 (send *RGB-counter* ':clear-eol)
-		 (send *RGB-counter* ':string-out (format nil "~3O" g))))
+	  (progn (send *RGB-counter* :set-cursorpos 0 1 :character)
+		 (send *RGB-counter* :clear-eol)
+		 (send *RGB-counter* :string-out (format nil "~3O" g))))
       (if ( b old-b)
-	  (progn  (send *RGB-counter* ':set-cursorpos 0 2 ':character)
-		  (send *RGB-counter* ':clear-eol)
-		  (send *RGB-counter* ':string-out (format nil "~3O" b)))))))
+	  (progn  (send *RGB-counter* :set-cursorpos 0 2 :character)
+		  (send *RGB-counter* :clear-eol)
+		  (send *RGB-counter* :string-out (format nil "~3O" b)))))))
 
 ;;
 ;;  Another variant of the same ...
 ;;
 
 (defun mix-color (&optional (initial-color black) (overlap 0.333))
-  (send *RGB-mixer* ':expose)
-  (send *RGB-mixer* ':clear-screen)		;In case someone else was using it
+  (send *RGB-mixer* :expose)
+  (send *RGB-mixer* :clear-screen)		;In case someone else was using it
   (black-map c*temp-map)
   (set-map c*temp-map)
   (set-color 17 white)				;White border and label
@@ -713,9 +713,9 @@ y))))
 	  (r (first initial-color) (max (min (+ r delta-r) *max-intensity*) 0))
 	  (g (second initial-color) (max (min (+ g delta-g) *max-intensity*) 0))
 	  (b (third initial-color) (max (min (+ b delta-b) *max-intensity*) 0)))
-	 ((send terminal-io ':tyi-no-hang)
-	  (send *RGB-mixer* ':deexpose)		;Don't want to see this anymore...
-	  (send *RGB-mixer* ':deselect)
+	 ((send terminal-io :tyi-no-hang)
+	  (send *RGB-mixer* :deexpose)		;Don't want to see this anymore...
+	  (send *RGB-mixer* :deselect)
 	  (list r g b))
       (color:write-color-map 1 r 0 0)		;Red primary
       (color:write-color-map 2 0 g 0)		;Green primary
