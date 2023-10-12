@@ -10,7 +10,7 @@
   "Returns a string of all of the commands that the WHAT program can hack."
   (WITH-OUTPUT-TO-STRING (S)
     (DOLIST (ENTRY WHAT-PARSE-STRING-ALIST)
-	 (FUNCALL S ':LINE-OUT (CAR ENTRY)))))
+	 (FUNCALL S :LINE-OUT (CAR ENTRY)))))
 
 (DEFUN WHAT-RANDOMNESS ()
   "Pick a random WHAT to do and do it."
@@ -50,7 +50,7 @@ See also the documentation of WHAT-PARSE-STRING-ALIST."
 	 (SETQ SENDS (STRING-APPEND ZWEI:*SAVED-SENDS*))
 	 (SETQ S (STRING-APPEND #\RETURN #\RETURN))
 	 (DOTIMES (I NUMBER)
-	   (SEND STANDARD-OUTPUT ':FRESH-LINE)
+	   (SEND STANDARD-OUTPUT :FRESH-LINE)
 	   (SETQ POS (STRING-SEARCH S SENDS POS))
 	   (IF (NULL POS) (RETURN))
 	   (FORMAT STREAM
@@ -87,7 +87,7 @@ See also the documentation of WHAT-PARSE-STRING-ALIST."
   (IF (NUMBERP STRING)
       (SETQ STRING (FORMAT NIL "~D" STRING))) ;make parsable
   (LET ((STANDARD-OUTPUT STREAM))
-    (FUNCALL STREAM ':FRESH-LINE)
+    (FUNCALL STREAM :FRESH-LINE)
     (IF (EMPTY? STRING) (SETQ STRING (READLINE-TRIM STREAM)))
     ;;special hacks for special cases.
     (COND ((EMPTY? STRING) ;if its still empty...
@@ -105,7 +105,7 @@ See also the documentation of WHAT-PARSE-STRING-ALIST."
 			    (SETQ FOUND-IT (STRING-EQUAL STRING SEARCH-STRING)))
 			   ((EQ FIND-MODE T)  ;if text appears anywhere
 			    (SETQ FOUND-IT (STRING-SEARCH SEARCH-STRING STRING)))
-			   ((EQ FIND-MODE ':BEGINNING)  ;if text is at the beginning
+			   ((EQ FIND-MODE :BEGINNING)  ;if text is at the beginning
 			    (SETQ L1 (STRING-LENGTH STRING)
 				  L2 (STRING-LENGTH SEARCH-STRING))
 			    (COND ((AND ( L1 L2)
@@ -115,7 +115,7 @@ See also the documentation of WHAT-PARSE-STRING-ALIST."
 				       (SETQ ARGS NIL)  ;got it verbatim, no args
 				     ;;more there, set args to the rest of the string
 				     (SETQ ARGS (SUBSTRING STRING (1+ L2)))))))
-			   ((EQ FIND-MODE ':END)  ;if text is at the end.
+			   ((EQ FIND-MODE :END)  ;if text is at the end.
 			    (SETQ L1 (STRING-LENGTH STRING)
 				  L2 (STRING-LENGTH SEARCH-STRING))
 			    (COND ((AND ( L1 L2)
@@ -124,7 +124,7 @@ See also the documentation of WHAT-PARSE-STRING-ALIST."
 				   (IF (= L1 L2)
 				       (SETQ ARGS NIL) ;its initialize to this, but...
 				     (SETQ ARGS (SUBSTRING STRING 0 (-  L1 L2)))))))
-			   ((EQ FIND-MODE ':MATCH)
+			   ((EQ FIND-MODE :MATCH)
 			    (LET* (($-POS (STRING-SEARCH-CHAR #/$ SEARCH-STRING))
 				   (BEGIN-STRING (SUBSTRING SEARCH-STRING 0 (1- $-POS)))
 				   (END-STRING (SUBSTRING SEARCH-STRING (1+ $-POS)))
@@ -209,8 +209,8 @@ See the WHAT-PARSE-STRING-ALIST for further details."
   (DOLIST (P SI:ALL-PROCESSES)
     (FORMAT T "~&Process ~A has arrest reasons: ~A, ~%   run reasons ~A, ~
 idle-time ~A, and a whostate of ~A.~%"
-	    P (SEND P ':ARREST-REASONS) (SEND P ':RUN-REASONS) (SEND P ':IDLE-TIME)
-	    (SEND P ':WHOSTATE))))
+	    P (SEND P :ARREST-REASONS) (SEND P :RUN-REASONS) (SEND P :IDLE-TIME)
+	    (SEND P :WHOSTATE))))
 
 
 (DEFVAR *WHAT-TO-TEST* '("is this" "is up" "temperature" "temp" "lusers"
@@ -341,7 +341,7 @@ STRING is the string to look for in the stuff that what tries to parse.
 
 FIND-MODE if NIL says that we must get this string verbatim, if T says
  accept it if it can be found anywhere in the string we are parsing.
- Similarly, ':beginning and ':end mean consider this a match if the 
+ Similarly, :beginning and :end mean consider this a match if the 
  verbatim STRING exists at the, respectively, beginning or end of what what is parsing.
 
 WHAT-TO-DO can be a string to print out as a result, or a function to be called 
@@ -349,9 +349,9 @@ instead (if the find-mode was not NIL, then try carefully to send this function
 whatever we can figure out that its arguments should be.  If what-to-do is a list,
 then try to view the first one of those files that we can detect exists, else
 claim that we don't know now.  Actually, the car of the list is checked to see if
-it is the token ':map, if so we try reparsing again, by replacing the string
+it is the token :map, if so we try reparsing again, by replacing the string
 found with the cdr of the list.  You must use T as the searching mode is
-':MAP, otherwise it will very rarely trigger. If the token is ':match, then look for the 
+:MAP, otherwise it will very rarely trigger. If the token is :match, then look for the 
 $ in the string we are searching for.  Match if the string is the same string
 as the string with the $ in it, except allow *anything* in place of the $.
 You probably don't want to have spaces surrounding the $.
