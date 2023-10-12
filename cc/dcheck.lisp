@@ -77,7 +77,7 @@
   (DC-PRINT-STATUS1 (PHYS-MEM-READ DC-STS-ADR)))
 
 (DEFUN DC-PRINT-STATUS1 (STATUS)
-  (FUNCALL TERMINAL-IO ':TYO #\CR)
+  (FUNCALL TERMINAL-IO :TYO #\CR)
   (CC-PRINT-SET-BITS STATUS '( IDLE ANY-ATTN SEL-UNIT-ATTN INTR MULTIPLE-SELECT NO-SELECT
 			      SEL-UNIT-FAULT SEL-UNIT-READ-ONLY SEL-UNIT-OFF-CYLINDER
 			      SEL-UNIT-OFF-LINE SEL-UNIT-SEEK-ERROR TIMEOUT-ERROR
@@ -307,7 +307,7 @@ being debugged by this machine.")
   (FORMAT T
 	  "~%Trying reads of various blocks; will get HEADER-COMPARE if disk bus bits bad~%")
   (DC-EXEC DC-READ 0 0 0 CCW-LOC 0 DC-ALL-ERROR-BITS UNIT)
-  (FUNCALL TERMINAL-IO ':STRING-OUT " cyl ")
+  (FUNCALL TERMINAL-IO :STRING-OUT " cyl ")
   (DO CYL 1 (LSH CYL 1) (= CYL 2000)
     (DC-EXEC DC-READ CYL 0 0 CCW-LOC 0 DC-ALL-ERROR-BITS UNIT)
     (FORMAT T "~% cyl ~D (decimal)" CYL))
@@ -480,7 +480,7 @@ Good values that were seen: ~{~O~^,~}~%" MISSING-VALUES GOOD-VALUES)))
   (UNTIL-KEY
     (DC-SEEK 0 UNIT)
     (DC-SEEK CYL UNIT))
-  (FUNCALL TERMINAL-IO ':TYO #\CR))
+  (FUNCALL TERMINAL-IO :TYO #\CR))
 
 ;;; Basic XBUS errors call this guy, which prints a message and enters a test loop.
 (DEFUN DCHECK-ERR-LOOP (MESSAGE ADR VAL1 VAL2)
@@ -745,10 +745,10 @@ Good values that were seen: ~{~O~^,~}~%" MISSING-VALUES GOOD-VALUES)))
 
 (declare (special buffer-hwd buffer-bit))
 (or (boundp 'buffer-hwd)    ;20. pages for decode-track plus 1 for channel program
-    (setq buffer-hwd (make-array (* 1000 21.) ':type 'art-16b)
+    (setq buffer-hwd (make-array (* 1000 21.) :type 'art-16b)
 	  buffer-bit (make-array (* 1000 21. 16.)
-				 ':type 'art-1b
-				 ':displaced-to buffer-hwd)))
+				 :type 'art-1b
+				 :displaced-to buffer-hwd)))
 ;Get buffer out of other machine
 (defun get-buffer ()
   (dbg-reset-status)
