@@ -5,7 +5,7 @@
 (DEFUN MARV (&OPTIONAL (MARV-E 259.) (N 200.) (X 50.) (Y 0))
   (PROG NIL 
     A   ;(AS-2 1. TV-BUFFER (+ X 200.) (+ Y 200.))
-        (FUNCALL TERMINAL-IO ':DRAW-POINT (+ X 200.) (+ Y 200.) TV:ALU-XOR)
+        (FUNCALL TERMINAL-IO :DRAW-POINT (+ X 200.) (+ Y 200.) TV:ALU-XOR)
         (AND (ZEROP (SETQ N (1- N)))
              (RETURN T))
         (SETQ X (- X (TRUNCATE (* MARV-E Y) 1000.))
@@ -15,9 +15,9 @@
 
 ;INPUT CHARACTER WITH DDT STYLE ECHOING
 (DEFUN CARPET-TYI (&AUX CH)			;
-  (SETQ CH (FUNCALL TERMINAL-IO ':TYI))
+  (SETQ CH (FUNCALL TERMINAL-IO :TYI))
   (AND (< CH 200)
-       (FUNCALL TERMINAL-IO ':TYO CH))
+       (FUNCALL TERMINAL-IO :TYO CH))
   CH)
 
 ;BAG THE BYTE OR WORD
@@ -38,8 +38,8 @@ TOP  (TERPRI)
 READ (SETQ NUM 0 SOME NIL)
 RNUM (SETQ CH (CARPET-TYI))
      (COND ((= CH #\BACKSPACE)
-	    (SEND TERMINAL-IO ':BACKWARD-CHAR)
-	    (SEND TERMINAL-IO ':CLEAR-CHAR)
+	    (SEND TERMINAL-IO :BACKWARD-CHAR)
+	    (SEND TERMINAL-IO :CLEAR-CHAR)
 	    (SETQ NUM (TRUNCATE NUM 8))
 	    (GO RNUM))
 	   ((NOT (AND (>= CH 60) (<= CH 71)))
@@ -104,7 +104,7 @@ OPN1 (PRINC " ")
   (CLOSURE '(SR-SHEET SR-SIZE X-ORG Y-ORG
 	     COLOR CHAR-ORIGIN CURRENT-SWITCHES)
      #'(LAMBDA (ARG &AUX NUM)
-	 (if (eq arg ':get-window)
+	 (if (eq arg :get-window)
 	     sr-sheet
 	   (SETQ NUM (IF (NUMBERP ARG) ARG 0))
 	   (DO ((M (- 1 SR-SIZE) (1+ M))
@@ -156,7 +156,7 @@ OPN1 (PRINC " ")
 		     (TRUNCATE A 1000))
 	     (LOGXOR (\ ACC 1000)
 		     (TRUNCATE ACC 1000))))
-      ((FUNCALL TERMINAL-IO ':TYI-NO-HANG)
+      ((FUNCALL TERMINAL-IO :TYI-NO-HANG)
        ACC)
     (SI:%BEEP (LSH FREQ O) M))))
 
@@ -172,21 +172,21 @@ OPN1 (PRINC " ")
   (OR (BOUNDP 'LIVE-BOUNCE-LL)
       (SETQ LIVE-BOUNCE-LL (CREATE-SWITCH-REGISTER
 			     (tv:make-window 'tv:window
-					     ':edges '(122 40 1035 100)
-					     ':blinker-p nil
-					     ':borders nil
-					     ':label nil
-					     ':save-bits t)
+					     :edges '(122 40 1035 100)
+					     :blinker-p nil
+					     :borders nil
+					     :label nil
+					     :save-bits t)
 			     20. 1 1 T)))
-  (setq window (funcall live-bounce-ll ':get-window))
-  (funcall window ':expose)
+  (setq window (funcall live-bounce-ll :get-window))
+  (funcall window :expose)
   (FUNCALL LIVE-BOUNCE-LL NIL)
   (DO ((NB 1)
        (DNB 1)
        (DIR 1)
        (LT 1)
        (COMP 0))
-      ((FUNCALL window ':TYI-NO-HANG))
+      ((FUNCALL window :TYI-NO-HANG))
     (FUNCALL LIVE-BOUNCE-LL (LOGXOR LT COMP))
     (SETQ LT (LSH LT DIR))
     (COND ((= 1 (LOGAND LT 1))
@@ -213,39 +213,39 @@ OPN1 (PRINC " ")
            (SETQ LT (LSH (1- (LSH 1 NB)) (- 25 NB)))))
     (DO I DELAY (1- I) (= I 0)
     ))
-  (funcall window ':deselect)))
+  (funcall window :deselect)))
 
 (DEFDEMO "Live Bounce" "A light-hack based on a program for the late SIPB PDP8/S."
   (LIVE-BOUNCE))
 
 (DEFUN GREEN-HORNET (&OPTIONAL (WINDOW TERMINAL-IO) (SEPARATION 40))
  (WITH-REAL-TIME
-  (FUNCALL WINDOW ':CLEAR-SCREEN)
-  (FUNCALL WINDOW ':HOME-DOWN)
+  (FUNCALL WINDOW :CLEAR-SCREEN)
+  (FUNCALL WINDOW :HOME-DOWN)
   (MULTIPLE-VALUE-BIND (IW IH)
-      (FUNCALL WINDOW ':INSIDE-SIZE)
+      (FUNCALL WINDOW :INSIDE-SIZE)
     (LET ((CENTER-X1 (- (TRUNCATE IW 2) (TRUNCATE SEPARATION 2)))
 	  (CENTER-X2 (+ (TRUNCATE IW 2) (TRUNCATE SEPARATION 2)))
 	  (CENTER-Y (TRUNCATE IH 2)))
       (DO I (- (MIN CENTER-Y CENTER-X1) 10.) (1- I) ( I 5)
-	  (FUNCALL WINDOW ':DRAW-CIRCLE
+	  (FUNCALL WINDOW :DRAW-CIRCLE
 		   (IF (BIT-TEST 20 I) CENTER-X1 CENTER-X2)
 		   CENTER-Y
 		   I))))
-  (FUNCALL WINDOW ':TYI)
+  (FUNCALL WINDOW :TYI)
   T))
 
 (DEFUN CIRCLES (&OPTIONAL (WINDOW TERMINAL-IO))
  (WITH-REAL-TIME
-  (FUNCALL WINDOW ':CLEAR-SCREEN)
-  (FUNCALL WINDOW ':HOME-DOWN)
+  (FUNCALL WINDOW :CLEAR-SCREEN)
+  (FUNCALL WINDOW :HOME-DOWN)
   (MULTIPLE-VALUE-BIND (IW IH)
-      (FUNCALL WINDOW ':INSIDE-SIZE)
+      (FUNCALL WINDOW :INSIDE-SIZE)
     (LET ((CENTER-X (// IW 2))
 	  (CENTER-Y (// IH 2)))
       (DO I (- (MIN CENTER-X CENTER-Y) 40) (- I 5) ( I 5)
-	  (FUNCALL WINDOW ':DRAW-CIRCLE CENTER-X CENTER-Y I))))
-  (FUNCALL WINDOW ':TYI)
+	  (FUNCALL WINDOW :DRAW-CIRCLE CENTER-X CENTER-Y I))))
+  (FUNCALL WINDOW :TYI)
   T))
 
 ;;; The following are so boring that they should not show up on the menu. - DLW
@@ -263,11 +263,11 @@ OPN1 (PRINC " ")
 (DEFUN LEXIPHAGE (&OPTIONAL (STRING "THE BAG"))
   (OR (BOUNDP 'FONTS:43VXMS)
       (LOAD "SYS:FONTS;43VXMS" "FONTS"))
-  (LET ((WINDOW (TV:MAKE-WINDOW 'TV:WINDOW ':BOTTOM 300. ':FONT-MAP (LIST FONTS:43VXMS)
-				':BLINKER-P NIL ':MORE-P NIL ':SAVE-BITS T ':LABEL NIL)))
+  (LET ((WINDOW (TV:MAKE-WINDOW 'TV:WINDOW :BOTTOM 300. :FONT-MAP (LIST FONTS:43VXMS)
+				:BLINKER-P NIL :MORE-P NIL :SAVE-BITS T :LABEL NIL)))
     (MULTIPLE-VALUE-BIND (WIDTH HEIGHT)
-	(SEND WINDOW ':INSIDE-SIZE)
-      (LET* ((STRING-WIDTH (SEND WINDOW ':STRING-LENGTH STRING))
+	(SEND WINDOW :INSIDE-SIZE)
+      (LET* ((STRING-WIDTH (SEND WINDOW :STRING-LENGTH STRING))
 	     (CENTER-Y (TRUNCATE HEIGHT 2))
 	     (HALF-STRING-HEIGHT 30)
 	     (LEFT-EDGE (MAX 0 (TRUNCATE (- WIDTH STRING-WIDTH) 2)))
@@ -276,9 +276,9 @@ OPN1 (PRINC " ")
 	     (ERASE-ALUF (TV:SHEET-ERASE-ALUF WINDOW))
 	     )
 	(TV:SHEET-FORCE-ACCESS (WINDOW)
-	   (SEND WINDOW ':CLEAR-SCREEN)
-	   (SEND WINDOW ':SET-CURSORPOS LEFT-EDGE TOP-EDGE)
-	   (SEND WINDOW ':STRING-OUT STRING))
+	   (SEND WINDOW :CLEAR-SCREEN)
+	   (SEND WINDOW :SET-CURSORPOS LEFT-EDGE TOP-EDGE)
+	   (SEND WINDOW :STRING-OUT STRING))
 	(TV:WINDOW-CALL (WINDOW :DEACTIVATE)
 	  (WITH-REAL-TIME
 	    ;; Initial delay, so user can read the string.
@@ -289,57 +289,57 @@ OPN1 (PRINC " ")
 			   *LEXIPHAGE-MOUTH-X*)))
 		(( X END-X))
 	      (SETQ DY (IF (ZEROP DY) HALF-STRING-HEIGHT (1- DY)))
-	      (SEND WINDOW ':DRAW-TRIANGLE
+	      (SEND WINDOW :DRAW-TRIANGLE
 		       X CENTER-Y
 		       (+ X *LEXIPHAGE-MOUTH-X*) (+ CENTER-Y DY)
 		       (+ X *LEXIPHAGE-MOUTH-X*) (+ CENTER-Y (- DY *LEXIPHAGE-MOUTH-Y*))
 		       CHAR-ALUF)
-	      (SEND WINDOW ':DRAW-TRIANGLE
+	      (SEND WINDOW :DRAW-TRIANGLE
 		       X CENTER-Y
 		       (+ X *LEXIPHAGE-MOUTH-X*) (- CENTER-Y DY)
 		       (+ X *LEXIPHAGE-MOUTH-X*) (- CENTER-Y (- DY *LEXIPHAGE-MOUTH-Y*))
 		       CHAR-ALUF)
-	      (SEND WINDOW ':DRAW-TRIANGLE
+	      (SEND WINDOW :DRAW-TRIANGLE
 		       (+ X *LEXIPHAGE-MOUTH-X*) (+ CENTER-Y (- DY *LEXIPHAGE-MOUTH-Y*))
 		       (+ X *LEXIPHAGE-MOUTH-X*) (+ CENTER-Y (- DY *LEXIPHAGE-TOOTH-Y*))
 		       (+ X (FIX (* 0.9S0 *LEXIPHAGE-MOUTH-X*)))
 		       (+ CENTER-Y (FIX (* 0.9S0 (- DY *LEXIPHAGE-MOUTH-Y*))))
 		       CHAR-ALUF)
-	      (SEND WINDOW ':DRAW-TRIANGLE
+	      (SEND WINDOW :DRAW-TRIANGLE
 		       (+ X *LEXIPHAGE-MOUTH-X*) (- CENTER-Y (- DY *LEXIPHAGE-MOUTH-Y*))
 		       (+ X *LEXIPHAGE-MOUTH-X*) (- CENTER-Y (- DY *LEXIPHAGE-TOOTH-Y*))
 		       (+ X (FIX (* 0.9S0 *LEXIPHAGE-MOUTH-X*)))
 		       (- CENTER-Y (FIX (* 0.9S0 (- DY *LEXIPHAGE-MOUTH-Y*))))
 		       CHAR-ALUF)
 	      (DOTIMES (I *LEXIPHAGE-PERIOD*))
-	      (SEND WINDOW ':DRAW-TRIANGLE
+	      (SEND WINDOW :DRAW-TRIANGLE
 		       X CENTER-Y
 		       (+ X *LEXIPHAGE-MOUTH-X*) (+ CENTER-Y DY)
 		       (+ X *LEXIPHAGE-MOUTH-X*) (+ CENTER-Y (- DY *LEXIPHAGE-MOUTH-Y*))
 		       ERASE-ALUF)
-	      (SEND WINDOW ':DRAW-TRIANGLE
+	      (SEND WINDOW :DRAW-TRIANGLE
 		       X CENTER-Y
 		       (+ X *LEXIPHAGE-MOUTH-X*) (+ CENTER-Y DY)
 		       X (+ CENTER-Y DY)
 		       ERASE-ALUF)
-	      (SEND WINDOW ':DRAW-TRIANGLE
+	      (SEND WINDOW :DRAW-TRIANGLE
 		       (+ X *LEXIPHAGE-MOUTH-X*) (+ CENTER-Y (- DY *LEXIPHAGE-MOUTH-Y*))
 		       (+ X *LEXIPHAGE-MOUTH-X*) (+ CENTER-Y (- DY *LEXIPHAGE-TOOTH-Y*))
 		       (+ X (FIX (* 0.8S0 *LEXIPHAGE-MOUTH-X*)))
 		       (+ CENTER-Y (FIX (* 0.8S0 (- DY *LEXIPHAGE-MOUTH-Y*))))
 		       ERASE-ALUF)
-	      (SEND WINDOW ':DRAW-TRIANGLE
+	      (SEND WINDOW :DRAW-TRIANGLE
 		       (+ X *LEXIPHAGE-MOUTH-X*) (- CENTER-Y (- DY *LEXIPHAGE-MOUTH-Y*))
 		       (+ X *LEXIPHAGE-MOUTH-X*) (- CENTER-Y (- DY *LEXIPHAGE-TOOTH-Y*))
 		       (+ X (FIX (* 0.8S0 *LEXIPHAGE-MOUTH-X*)))
 		       (- CENTER-Y (FIX (* 0.8S0 (- DY *LEXIPHAGE-MOUTH-Y*))))
 		       ERASE-ALUF)
-	      (SEND WINDOW ':DRAW-TRIANGLE
+	      (SEND WINDOW :DRAW-TRIANGLE
 		       X CENTER-Y
 		       (+ X *LEXIPHAGE-MOUTH-X*) (- CENTER-Y DY)
 		       (+ X *LEXIPHAGE-MOUTH-X*) (- CENTER-Y (- DY *LEXIPHAGE-MOUTH-Y*))
 		       ERASE-ALUF)
-	      (SEND WINDOW ':DRAW-TRIANGLE
+	      (SEND WINDOW :DRAW-TRIANGLE
 		       X CENTER-Y
 		       (+ X *LEXIPHAGE-MOUTH-X*) (- CENTER-Y DY)
 		       X (- CENTER-Y DY)
@@ -352,12 +352,12 @@ OPN1 (PRINC " ")
 
 (DEFUN MF10-HACK5 (&OPTIONAL (ZAP 1000) (13357ALIAS 13357))
  (WITH-REAL-TIME
-  (SEND TERMINAL-IO ':CLEAR-SCREEN)
-  (SEND TERMINAL-IO ':HOME-DOWN)
+  (SEND TERMINAL-IO :CLEAR-SCREEN)
+  (SEND TERMINAL-IO :HOME-DOWN)
   (OR (BOUNDP 'MF10-HACK5-BAR)
       (SETQ MF10-HACK5-BAR (CREATE-SWITCH-REGISTER TERMINAL-IO 20 100 20 T)))
   (SEND MF10-HACK5-BAR NIL)
-  (DO I 13357ALIAS (ROT I 1) (SEND TERMINAL-IO ':TYI-NO-HANG)
+  (DO I 13357ALIAS (ROT I 1) (SEND TERMINAL-IO :TYI-NO-HANG)
       (SEND MF10-HACK5-BAR I)
       (DO J 0 (+ J 1) (= J ZAP)
 	  ))))
@@ -368,13 +368,13 @@ OPN1 (PRINC " ")
    (TERPRI)
    (COND ((NULL FONT) (SETQ FONT FONTS:BIGFNT)))
    (SETQ PRINT-BIG-PREVIOUS (TV:SHEET-CURRENT-FONT TERMINAL-IO))
-   (SEND TERMINAL-IO ':SET-FONT-MAP (LIST FONT))
-   (SEND TERMINAL-IO ':SET-CURRENT-FONT FONT))
+   (SEND TERMINAL-IO :SET-FONT-MAP (LIST FONT))
+   (SEND TERMINAL-IO :SET-CURRENT-FONT FONT))
 
 (DEFUN PRINT-SMALL ()
    (TERPRI)
-   (SEND TERMINAL-IO ':SET-FONT-MAP (LIST FONTS:CPTFONT))
-   (SEND TERMINAL-IO ':SET-CURRENT-FONT FONTS:CPTFONT))
+   (SEND TERMINAL-IO :SET-FONT-MAP (LIST FONTS:CPTFONT))
+   (SEND TERMINAL-IO :SET-CURRENT-FONT FONTS:CPTFONT))
 
 
 (DECLARE (SPECIAL FEFS ADL-QS ADL-VARS NAME-QS FREE-QS TOTAL-BOXED-LENGTH 
@@ -467,10 +467,10 @@ ADL-QS ~D, LOCAL NAME QS ~D, FREE-VARIABLE-ADL-QS ~D,"
       (AS-1 (CREATE-SWITCH-REGISTER TERMINAL-IO BITS NIL  (+ (* I 44) 40) T)
 	    LITES
 	    I))
-    (SEND TERMINAL-IO ':CLEAR-SCREEN)
+    (SEND TERMINAL-IO :CLEAR-SCREEN)
     (DOTIMES (I N)
       (SEND (AR-1 LITES I) NIL))
-    (DO NIL ((EQ 203 (SEND TERMINAL-IO ':TYI-NO-HANG)))
+    (DO NIL ((EQ 203 (SEND TERMINAL-IO :TYI-NO-HANG)))
       (DO ((I 0 (1+ I))
 	   (L ADDRESS-LIST (CDR L)))
 	  ((>= I N))
@@ -478,17 +478,17 @@ ADL-QS ~D, LOCAL NAME QS ~D, FREE-VARIABLE-ADL-QS ~D,"
 		 (SEND FCTN (CAR L)))))))
 
 (DEFUN RANDOM-TEST (&OPTIONAL (WINDOW TERMINAL-IO) &AUX TEM)
-    (SEND WINDOW ':CLEAR-SCREEN)
+    (SEND WINDOW :CLEAR-SCREEN)
     (DO () (())
       (SETQ TEM (RANDOM))
-      (AND (SEND TERMINAL-IO ':TYI-NO-HANG) (RETURN NIL))
-      (SEND WINDOW ':DRAW-POINT (LDB 2010 TEM) (LDB 1010 TEM))))
+      (AND (SEND TERMINAL-IO :TYI-NO-HANG) (RETURN NIL))
+      (SEND WINDOW :DRAW-POINT (LDB 2010 TEM) (LDB 1010 TEM))))
 
 (defun dance (&optional (WINDOW TERMINAL-IO)
 			(mina 100) (maxa 456) (minb 200) (maxb 565)
                         (minc 60) (maxc 1076) (mind 300) (maxd 1100))
  (WITH-REAL-TIME
-       (SEND WINDOW ':DRAW-LINE mina minb maxc maxd tv:alu-xor)
+       (SEND WINDOW :DRAW-LINE mina minb maxc maxd tv:alu-xor)
        (do ((a mina)
             (b minb)
             (c maxc)
@@ -498,8 +498,8 @@ ADL-QS ~D, LOCAL NAME QS ~D, FREE-VARIABLE-ADL-QS ~D,"
             (db 1)
             (dc -1)
             (dd -1))
-         ((send terminal-io ':tyi-no-hang)
-	  (SEND WINDOW ':draw-line a b c d tv:alu-xor))
+         ((send terminal-io :tyi-no-hang)
+	  (SEND WINDOW :draw-line a b c d tv:alu-xor))
        (setq oa a ob b oc c od d)
        (setq a (+ a da))
        (cond ((= da 1)
@@ -525,12 +525,12 @@ ADL-QS ~D, LOCAL NAME QS ~D, FREE-VARIABLE-ADL-QS ~D,"
 		     (setq dd -1))))
 	     (( d mind)
 	      (setq dd 1)))
-       (SEND WINDOW ':draw-line a b c d tv:alu-xor)
-       (SEND WINDOW ':draw-line oa ob oc od tv:alu-xor))))
+       (SEND WINDOW :draw-line a b c d tv:alu-xor)
+       (SEND WINDOW :draw-line oa ob oc od tv:alu-xor))))
 
 (defun spazz (&OPTIONAL (WINDOW TERMINAL-IO))
   (MULTIPLE-VALUE-BIND (X2 Y2)
-      (SEND WINDOW ':INSIDE-SIZE)
+      (SEND WINDOW :INSIDE-SIZE)
     (LET* ((mina (random x2))
 	   (minc (random x2))
 	   (minb (random y2))
