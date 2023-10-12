@@ -149,7 +149,7 @@
 (defvar s*hash-table   nil   " Hash Table to go from seg names to numbers")
 (defvar s*seg-names   nil    " Names of segments in hash table")
 
-(setq tdv*temp-float-vect (make-array 5 ':type 'art-float))
+(setq tdv*temp-float-vect (make-array 5 :type 'art-float))
 
 (defun swap-fix-mode ()
   (ferror t "~% Fix Point Calcs don't work yet")
@@ -277,7 +277,7 @@
 ;----------------------
 
 (defun T-FUN (t-function &rest fun-vars &aux new-array)
-  (IF (null tdv*tfun-array) (setq tdv*tfun-array (Make-Array '(4 4) ':type tdv*array-type)))
+  (IF (null tdv*tfun-array) (setq tdv*tfun-array (Make-Array '(4 4) :type tdv*array-type)))
   (setq new-array (apply t-function (copylist fun-vars)))
   (setq tdv*tfun-array (T-ARRAY-MULTIPLY new-array tdv*stack-top tdv*tfun-array))
   (T-COPY-ARRAY tdv*tfun-array tdv*stack-top)
@@ -290,11 +290,11 @@
 
 (defun T-INIT ()
   (COND ((null tdv*stack-array)
-	 (setq tdv*stack-array    (make-array tdv*stack-max-length ':type 'art-q))
-	 (setq tdv*stack-document (make-array tdv*stack-max-length ':type 'art-q))
+	 (setq tdv*stack-array    (make-array tdv*stack-max-length :type 'art-q))
+	 (setq tdv*stack-document (make-array tdv*stack-max-length :type 'art-q))
 	 (DO ((i 0 (1+ i)))
 	     ((= i tdv*stack-max-length))
-	   (ASET (MAKE-ARRAY '(4 4) ':type tdv*array-type) tdv*stack-array i)
+	   (ASET (MAKE-ARRAY '(4 4) :type tdv*array-type) tdv*stack-array i)
 	   (ASET '(Empty) tdv*stack-document i))))
 
   (setq tdv*stack-length 0)
@@ -326,7 +326,7 @@
   (if (eq vect out-vect) (ferror t "~% Oops, In and out vectors equal"))
 
   (IF (NULL out-vect)
-      (setq out-vect (MAKE-ARRAY 5 ':type tdv*array-type)))
+      (setq out-vect (MAKE-ARRAY 5 :type tdv*array-type)))
   (IF tdv*fix-mode
       (DO ((j 0 (1+ j))
 	   (sum 0 0))
@@ -367,7 +367,7 @@
   (IF (eq vect out-vect) (ferror t "~% Oops, In and out vectors equal"))
 
   (IF (NULL out-vect)
-      (setq out-vect (MAKE-ARRAY 5 ':type tdv*array-type)))
+      (setq out-vect (MAKE-ARRAY 5 :type tdv*array-type)))
   
   (DO ((i 0 (1+ i)))
       ((= i 4))
@@ -475,12 +475,12 @@
       (ferror t "~% Oops, in and out arrays equal"))
 
   (IF (NULL out-array)
-      (setq out-array (MAKE-ARRAY '(4 4) ':type 'tdv*array-type)))
+      (setq out-array (MAKE-ARRAY '(4 4) :type 'tdv*array-type)))
 
   (COND (tdv*fix-mode
 	 (IF (NULL float-array)
 	     (setq float-array
-		   (setq tdv*temp-float-array (MAKE-ARRAY '(4 4) ':type 'art-float))))
+		   (setq tdv*temp-float-array (MAKE-ARRAY '(4 4) :type 'art-float))))
 	 (setq float-array (MATH:MULTIPLY-MATRICES array1 array2 float-array))
 	 (setq ww (apply 'max (listarray float-array)))
 	 (IF (zerop ww) (setq ww 1))
@@ -549,11 +549,11 @@
   (COND ((OR (Null s*seg-arrays) (Null s*seg-lengths) (Null s*open-seg-array)
 	     (Null s*max-segs) (< (Array-dimension s*seg-arrays 0) max-number-segments))
 	 (setq s*latest-seg 0
-	       s*seg-arrays (Make-Array max-number-segments ':type 'art-q)
-	       s*seg-lengths (Make-Array max-number-segments ':type 'art-half-fix)
-	       s*open-seg-array (Make-Array max-number-segments ':type 'art-half-fix)
-	       s*seg-names (Make-Array max-number-segments ':type 'art-q)
-	       s*hash-table (MAKE-HASH-TABLE ':size (* 2 max-number-segments)))))
+	       s*seg-arrays (Make-Array max-number-segments :type 'art-q)
+	       s*seg-lengths (Make-Array max-number-segments :type 'art-half-fix)
+	       s*open-seg-array (Make-Array max-number-segments :type 'art-half-fix)
+	       s*seg-names (Make-Array max-number-segments :type 'art-q)
+	       s*hash-table (MAKE-HASH-TABLE :size (* 2 max-number-segments)))))
 	
   (DO ((N 0 (1+ N)))
       ((= N (Array-Length s*seg-arrays)))
@@ -757,10 +757,10 @@
     ; does the segment exist yet ?
 
   (COND ((null open-segment)
-	 (setq open-segment (MAKE-ARRAY initial-segment-length ':type 'art-q))
+	 (setq open-segment (MAKE-ARRAY initial-segment-length :type 'art-q))
 	 (DO ((i 0 (1+ i)))
 	     ((= i (Array-length open-segment)))
-	   (ASET (MAKE-ARRAY 5 ':type tdv*array-type) open-segment i))
+	   (ASET (MAKE-ARRAY 5 :type tdv*array-type) open-segment i))
 	 (ASET 0 s*seg-lengths seg-number)
 	 (ASET open-segment s*seg-arrays seg-number)))
 
@@ -774,7 +774,7 @@
 	 (Adjust-Array-Size open-segment (FIX (* seg-length 1.7)))
 	 (DO ((i max-length (1+ i)))
 	     ((= i (Array-length open-segment)))
-	   (ASET (MAKE-ARRAY 5 ':type tdv*array-type) open-segment i))
+	   (ASET (MAKE-ARRAY 5 :type tdv*array-type) open-segment i))
 	 (ASET open-segment s*seg-arrays seg-number)))
 
     ; Now, get the last element in the list
@@ -803,7 +803,7 @@
   (IF (OR (NULL tdv*clearing-array)
 	  (NOT (eq (Array-type array) (Array-type tdv*clearing-array))))
       (setq tdv*clearing-array
-	    (MAKE-PIXEL-ARRAY 32. 1 ':type (array-type array))))
+	    (MAKE-PIXEL-ARRAY 32. 1 :type (array-type array))))
   (BITBLT tv:alu-seta tdv*window-xdim tdv*window-ydim tdv*clearing-array 0 0 array 0 0))
 
 ;. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
@@ -951,7 +951,7 @@
 
   (setq tdv*window (IF tdv*color-mode (USE-COLOR-SCREEN-IF-POSSIBLE) terminal-io))
 	    
-  (setq tdv*window-array1 (Send tdv*window ':screen-array))
+  (setq tdv*window-array1 (Send tdv*window :screen-array))
   (setq xdim (pixel-array-width tdv*window-array1)
 	ydim (pixel-array-height tdv*window-array1))
 
@@ -964,7 +964,7 @@
 	  (< (pixel-array-height tdv*window-array2) ydim))
       (setq tdv*window-array2
 	    (tv:Make-sheet-bit-array tdv*window xdim ydim)))
-;	    (MAKE-ARRAY (list xdim ydim) ':type (ARRAY-TYPE tdv*window-array1))))
+;	    (MAKE-ARRAY (list xdim ydim) :type (ARRAY-TYPE tdv*window-array1))))
 
   (IF tdv*color-mode
       (setq tdv*window-color-array2 tdv*window-array2)
@@ -1030,7 +1030,7 @@
     It assumes, (God! I hope I can make this assumption), that all the points have been 
   clipped to a plus or minus w sized viewport.  If this is not true, Help ! "
 
-  (IF (null out-vect) (setq out-vect (MAKE-ARRAY 5 ':type tdv*array-type)))
+  (IF (null out-vect) (setq out-vect (MAKE-ARRAY 5 :type tdv*array-type)))
 
   (setq ww (AREF vect 3))
   (IF (< (ABS ww) toll) (setq ww toll))
@@ -1217,8 +1217,8 @@
 
 ; create output vectors if have to
  (IF (OR (null out-vect-s) (null out-vect-e))
-     (setq out-vect-s (MAKE-ARRAY 5 ':type tdv*array-type)
-	   out-vect-e (MAKE-ARRAY 5 ':type tdv*array-type)))
+     (setq out-vect-s (MAKE-ARRAY 5 :type tdv*array-type)
+	   out-vect-e (MAKE-ARRAY 5 :type tdv*array-type)))
 
 ; get components of vectors
   (setq xs (AREF vect-s 0)
@@ -1330,7 +1330,7 @@
                       ............................................"
 
 
-  (IF (null clip-vect) (setq clip-vect (MAKE-ARRAY 6 ':type tdv*array-type)))
+  (IF (null clip-vect) (setq clip-vect (MAKE-ARRAY 6 :type tdv*array-type)))
 
   (setq x (AREF vect 0)
 	y (AREF vect 1)
@@ -1380,7 +1380,7 @@
     Note that in fix point mode, all the values are scaled in order to make good homogeneous
     coordinates."
 
-  (IF (null out-vect) (setq out-vect (MAKE-ARRAY 5 ':type tdv*array-type)))
+  (IF (null out-vect) (setq out-vect (MAKE-ARRAY 5 :type tdv*array-type)))
 
   (COND (tdv*fix-mode
 	 (setq x (first invect-list)
@@ -1442,7 +1442,7 @@
 (defun IDENT (&optional (out-array tdv*temp-array) &aux (w tdv*basic-w))
 
   (IF (NULL out-array)
-      (setq out-array (setq tdv*temp-array (MAKE-ARRAY '(4 4) ':type tdv*array-type))))
+      (setq out-array (setq tdv*temp-array (MAKE-ARRAY '(4 4) :type tdv*array-type))))
 
 
   (fill-4by4-array out-array
@@ -1458,7 +1458,7 @@
 	     &aux c s (w tdv*basic-w))
 
   (IF (NULL out-array)
-      (setq out-array (setq tdv*temp-array (MAKE-ARRAY '(4 4) ':type tdv*array-type))))
+      (setq out-array (setq tdv*temp-array (MAKE-ARRAY '(4 4) :type tdv*array-type))))
 
   (setq s (SIN theta)
 	c (COS theta))
@@ -1468,7 +1468,7 @@
 	    c (FIX (* c w))))
 
   (IF (NULL out-array)
-      (setq out-array (setq tdv*temp-array (MAKE-ARRAY '(4 4) ':type tdv*array-type))))
+      (setq out-array (setq tdv*temp-array (MAKE-ARRAY '(4 4) :type tdv*array-type))))
 
   (fill-4by4-array out-array
 		   w   0   0   0
@@ -1482,7 +1482,7 @@
 	     &aux c s (w tdv*basic-w))
 
   (IF (NULL out-array)
-      (setq out-array (setq tdv*temp-array (MAKE-ARRAY '(4 4) ':type tdv*array-type))))
+      (setq out-array (setq tdv*temp-array (MAKE-ARRAY '(4 4) :type tdv*array-type))))
 
   (setq s (SIN theta)
 	c (COS theta))
@@ -1492,7 +1492,7 @@
 	    c (FIX (* c w))))
 
   (IF (NULL out-array)
-      (setq out-array (setq tdv*temp-array (MAKE-ARRAY '(4 4) ':type tdv*array-type))))
+      (setq out-array (setq tdv*temp-array (MAKE-ARRAY '(4 4) :type tdv*array-type))))
 
   (fill-4by4-array out-array
 		   c   0   s   0
@@ -1507,7 +1507,7 @@
 	     &aux c s (w tdv*basic-w))
 
   (IF (NULL out-array)
-      (setq out-array (setq tdv*temp-array (MAKE-ARRAY '(4 4) ':type tdv*array-type))))
+      (setq out-array (setq tdv*temp-array (MAKE-ARRAY '(4 4) :type tdv*array-type))))
 
   (setq s (SIN theta)
 	c (COS theta))
@@ -1517,7 +1517,7 @@
 	    c (FIX (* c w))))
 
   (IF (NULL out-array)
-      (setq out-array (setq tdv*temp-array (MAKE-ARRAY '(4 4) ':type tdv*array-type))))
+      (setq out-array (setq tdv*temp-array (MAKE-ARRAY '(4 4) :type tdv*array-type))))
 
   (fill-4by4-array out-array
 		   c (- s) 0   0
@@ -1532,7 +1532,7 @@
 	     &aux (w tdv*basic-w))
 
   (IF (NULL out-array)
-      (setq out-array (setq tdv*temp-array (MAKE-ARRAY '(4 4) ':type tdv*array-type))))
+      (setq out-array (setq tdv*temp-array (MAKE-ARRAY '(4 4) :type tdv*array-type))))
 
   (IF tdv*fix-mode
       (setq w (// w (FLOAT (MAX 1 w (ABS sx) (ABS sy) (ABS sz))))
@@ -1553,7 +1553,7 @@
 	     &optional (out-array tdv*temp-array)  &aux (w tdv*basic-w))
 
   (IF (NULL out-array)
-      (setq out-array (setq tdv*temp-array (MAKE-ARRAY '(4 4) ':type tdv*array-type))))
+      (setq out-array (setq tdv*temp-array (MAKE-ARRAY '(4 4) :type tdv*array-type))))
 
   (IF tdv*fix-mode
       (setq w (// w (FLOAT (MAX 1 w (ABS tx) (ABS ty) (ABS tz))))
@@ -1577,13 +1577,13 @@
   (setq w (* ww wb))
 
   (IF (NULL out-array)
-      (setq out-array (setq tdv*temp-array (MAKE-ARRAY '(4 4) ':type tdv*array-type))))
+      (setq out-array (setq tdv*temp-array (MAKE-ARRAY '(4 4) :type tdv*array-type))))
 
   (IF (NULL temp1)
-      (setq temp1 (setq tdv*temp-array1 (MAKE-ARRAY '(4 4) ':type 'art-float))))
+      (setq temp1 (setq tdv*temp-array1 (MAKE-ARRAY '(4 4) :type 'art-float))))
 
   (IF (NULL temp2)
-      (setq temp2 (setq tdv*temp-array2 (MAKE-ARRAY '(4 4) ':type 'art-float))))
+      (setq temp2 (setq tdv*temp-array2 (MAKE-ARRAY '(4 4) :type 'art-float))))
 
   (setq a (// (- right left) 2.0)
 	b (// (+ right left) 2.0)
@@ -1618,13 +1618,13 @@
   (setq w (* ww wb))
 
   (IF (NULL out-array)
-      (setq out-array (setq tdv*temp-array (MAKE-ARRAY '(4 4) ':type tdv*array-type))))
+      (setq out-array (setq tdv*temp-array (MAKE-ARRAY '(4 4) :type tdv*array-type))))
 
   (IF (NULL temp1)
-      (setq temp1 (setq tdv*temp-array1 (MAKE-ARRAY '(4 4) ':type 'art-float))))
+      (setq temp1 (setq tdv*temp-array1 (MAKE-ARRAY '(4 4) :type 'art-float))))
 
   (IF (NULL temp2)
-      (setq temp2 (setq tdv*temp-array2 (MAKE-ARRAY '(4 4) ':type 'art-float))))
+      (setq temp2 (setq tdv*temp-array2 (MAKE-ARRAY '(4 4) :type 'art-float))))
 
   (setq a (// (- right left) 2.0)
 	b (// (+ right left) 2.0)
@@ -1663,7 +1663,7 @@
 	f (// (+ far near  ) 2.0))
 
   (IF (NULL out-array)
-      (setq out-array (setq tdv*temp-array (MAKE-ARRAY '(4 4) ':type tdv*array-type))))
+      (setq out-array (setq tdv*temp-array (MAKE-ARRAY '(4 4) :type tdv*array-type))))
 
   (COND (tdv*fix-mode
 	 (setq ws (// tdv*basic-w
