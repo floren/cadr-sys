@@ -43,7 +43,7 @@
 	(SETQ TERM-TOKEN
 	      (INTERN (STRING-APPEND "#"
 				     (STRING-UPCASE (FORMAT:OUTPUT NIL
-						      (FORMAT:OCHAR CH ':EDITOR))))
+						      (FORMAT:OCHAR CH :EDITOR))))
 		      (SYMBOL-PACKAGE 'FOO)))
   SEP 
   X	(COND (TOK 
