@@ -2,7 +2,7 @@
 
 ;;; Slope-indexes vary from 0 to 7.  This table is indexed into by the index
 ;;; and gives you the slope value.
-(DEFVAR *SLOPE-ARRAY* (MAKE-ARRAY 11 ':TYPE 'ART-Q))
+(DEFVAR *SLOPE-ARRAY* (MAKE-ARRAY 11 :TYPE 'ART-Q))
 (FILLARRAY *SLOPE-ARRAY* '(0 1 2 1 0 -1 -2 -1))
 
 ;;; Take two 8-lists representing X durations and Y durations.  Convert
@@ -58,7 +58,7 @@
        (CUR-X X)
        (CUR-Y Y))
       (NIL)
-    (IF (FUNCALL WINDOW ':TYI-NO-HANG)
+    (IF (FUNCALL WINDOW :TYI-NO-HANG)
 	(RETURN NIL))
     (DOLIST (TL LIST)
       (DOTIMES (I SLOWNESS))
@@ -66,4 +66,4 @@
 	    PREV-Y CUR-Y
 	    CUR-X (+ PREV-X (* (FIRST TL) (SECOND TL)))
 	    CUR-Y (+ PREV-Y (* (FIRST TL) (THIRD TL))))
-      (FUNCALL WINDOW ':DRAW-TRIANGLE X Y PREV-X PREV-Y CUR-X CUR-Y TV:ALU-XOR))))
+      (FUNCALL WINDOW :DRAW-TRIANGLE X Y PREV-X PREV-Y CUR-X CUR-Y TV:ALU-XOR))))
