@@ -327,10 +327,10 @@
     (multiple-value (y x)	;Y and X swapped
       (ctest-maploc loc))
     (format t "x=~d,y=~d" x y)
-    (<- PROBE-OB ':GOTO-LOC LOC)
-    (<- PROBE-OB ':PROBE-DOWN)
+    (<- PROBE-OB :GOTO-LOC LOC)
+    (<- PROBE-OB :PROBE-DOWN)
     (MULTIPLE-VALUE (XE YE)
-      (<- PROBE-OB ':CLIMB-ON-PIN))
+      (<- PROBE-OB :CLIMB-ON-PIN))
     (FORMAT T "~%XERR ~S, YERR ~S" XE YE))
     )
 
@@ -349,8 +349,8 @@
   (error-restart 
       (prog (lx rx lxdiff rxdiff cxdiff lxe lye rxe rye)
 	    (cond ((equal signal-name "NC") (return t)))  ;that one isnt there!
-	L0 (setq lx (<- left-probe ':xpos)
-		 rx (<- right-probe ':xpos))
+	L0 (setq lx (<- left-probe :xpos)
+		 rx (<- right-probe :xpos))
 	   (setq lxdiff (- x1 lx)
 		 rxdiff (- x2 rx)
 		 cxdiff (- lx rx))       ;current dist between probes
@@ -358,36 +358,36 @@
 ; collide even if y's cross.
 	   (cond ((and (> lxdiff 0)  		   ;left probe moving away,
 		       (> (+ lxdiff cxdiff) 250.))  ;and far enuf away
-		  (<- left-probe ':goto x1 y1)	   ;safe to move it.
-		  (<- right-probe ':goto x2 y2))
+		  (<- left-probe :goto x1 y1)	   ;safe to move it.
+		  (<- right-probe :goto x2 y2))
 		 ((and (> (minus rxdiff) 0)	   ;same stuff, right probe
 		       (> (+ (minus rxdiff) cxdiff) 250.))
-		  (<- right-probe ':goto x2 y2)
-		  (<- left-probe ':goto x1 y1))
+		  (<- right-probe :goto x2 y2)
+		  (<- left-probe :goto x1 y1))
 		 ((> (min cxdiff (- x1 rx) (- lx x2) (- x1 x2)) 250.)
-		  (<- right-probe ':goto x2 y2)	   ;they are far apart and will stay far apart
-		  (<- left-probe ':goto x1 y1))
+		  (<- right-probe :goto x2 y2)	   ;they are far apart and will stay far apart
+		  (<- left-probe :goto x1 y1))
 ;Try to arrange the second motion to involve a x-motion of at least 250 mills toward
 ; the other arm.
 		 ((> (minus lxdiff) 250.)
-		  (<- right-probe ':goto x2 y2)
-		  (<- left-probe ':goto x1 y1))
+		  (<- right-probe :goto x2 y2)
+		  (<- left-probe :goto x1 y1))
 		 ((> rxdiff 250.)
-		  (<- left-probe ':goto x1 y1)
-		  (<- right-probe ':goto x2 y2))
+		  (<- left-probe :goto x1 y1)
+		  (<- right-probe :goto x2 y2))
 ;cause one arm to step away from the other by 20 steps (about .2 inch), then try again.
 		 ((zerop lxdiff)
-		  (<- right-probe ':step-x -20.)
+		  (<- right-probe :step-x -20.)
 		  (go L0))
-		 (t (<- left-probe ':step-x 20.)
+		 (t (<- left-probe :step-x 20.)
 		    (go L0)))
-	   (<- left-probe ':probe-down)
-	   (multiple-value (lxe lye) (<- left-probe ':climb-on-pin))
-	   (<- right-probe ':probe-down)
-	   (multiple-value (rxe rye) (<- right-probe ':climb-on-pin))
+	   (<- left-probe :probe-down)
+	   (multiple-value (lxe lye) (<- left-probe :climb-on-pin))
+	   (<- right-probe :probe-down)
+	   (multiple-value (rxe rye) (<- right-probe :climb-on-pin))
 	   (cond ((eq (ctest-test-cont signal-name t) 'win)
-		  (<- LEFT-PROBE ':APPARENT-ERROR LXE LYE)  ;WON, SO PROBES MUST BE IN RIGHT
-		  (<- RIGHT-PROBE ':APPARENT-ERROR RXE RYE)  ;PLACE
+		  (<- LEFT-PROBE :APPARENT-ERROR LXE LYE)  ;WON, SO PROBES MUST BE IN RIGHT
+		  (<- RIGHT-PROBE :APPARENT-ERROR RXE RYE)  ;PLACE
 		  (return t))))))))
 
 ;definitions below basically copied from MC;WL;LG684 517
