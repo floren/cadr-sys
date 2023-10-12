@@ -72,8 +72,8 @@
 				     :direction :input :characters nil :byte-size 16.)
     (initialize-file-plist filespec)
     (setq fdefine-file-pathname (store-string 'sym::p-n-string
-					      (send (send filespec ':generic-pathname)
-						    ':string-for-printing)))
+					      (send (send filespec :generic-pathname)
+						    :string-for-printing)))
     (or (and (= (qfasl-nibble) #o143150)
 	     (= (qfasl-nibble) #o71660))
 	(ferror nil "~A is not a QFASL file" filespec))
@@ -115,9 +115,9 @@
 (defun set-file-loaded-id (stream &aux qid)
   (setq qid  (vlist* 'sym::property-list-area
 		     (store-string 'sym::p-n-string
-				   (string (send stream ':truename)))
+				   (string (send stream :truename)))
 		     (store-string 'sym::p-n-string
-				   (time:print-universal-time (send stream ':creation-date)
+				   (time:print-universal-time (send stream :creation-date)
 							      nil))))
   ;; ((nil fileversionid "coldloaded"))
   (let ((id-prop (vlist 'sym::property-list-area
@@ -133,7 +133,7 @@
 
 ;This is the function which gets a 16-bit "nibble" from the fasl file.
 (defun qfasl-nibble ()
-  (send qfasl-binary-file ':tyi))
+  (send qfasl-binary-file :tyi))
 
 ;This function processes one "whack" (independent section) of a fasl file.
 (defun qfasl-whack ()
@@ -266,7 +266,7 @@
     (push (intern (m-fasl-next-value) sym-package) path)))  ;fasl-value is string
 
 (defun m-fasl-pname ()				;Return a string
-  (let ((str (make-array (* fasl-group-length 2) ':type 'art-string))
+  (let ((str (make-array (* fasl-group-length 2) :type 'art-string))
 	tem)
     (dotimes (i fasl-group-length)
       (setq tem (qfasl-next-nibble))
@@ -496,7 +496,7 @@
 	 (dotimes (n num)				;Initialize specified num of vals
 	   (vwrite ptr (q-fasl-next-value))
 	   (setq ptr (1+ ptr)))
-       (let ((temp1 (make-array last-array-dims ':initial-value qnil)) temp2)
+       (let ((temp1 (make-array last-array-dims :initial-value qnil)) temp2)
 	 ;; Read in the values, then transpose them,
 	 (dotimes (n num)
 	   (setf (ar-1-force temp1 n) (q-fasl-next-value)))
@@ -537,7 +537,7 @@
 	     (setq ptr (1+ ptr)))
 	   (cond ((oddp num)				;odd, catch last nibble
 		  (vwrite ptr (qfasl-nibble)))))
-       (let ((temp1 (make-array last-array-dims ':type art-16b)) temp2)
+       (let ((temp1 (make-array last-array-dims :type art-16b)) temp2)
 	 ;; Read in the values, then transpose them,
 	 (dotimes (n num)	;Initialize specified num of vals
 	   (setf (ar-1-force temp1 n) (qfasl-nibble)))
@@ -845,7 +845,7 @@
 			  (cond ((and (null plist) (stringp elem))
 				 (setq elem (fs:get-pathname-host elem)))
 				((memq elem '(sym::unspecific sym::/:unspecific))
-				 (setq elem ':unspecific))
+				 (setq elem :unspecific))
 				((or (null elem) (stringp elem) (numberp elem)))
 				((consp elem)
 				 (if (dolist (elemelem elem)
@@ -854,7 +854,7 @@
 				(t (return nil)))
 			  (push elem plist)))
 	 (ferror nil "This pathname is too complicated for me ~S" form))
-     (setq pathname (send pathname ':string-for-printing))
+     (setq pathname (send pathname :string-for-printing))
      (m-q-enter-fasl-table pathname (store-string 'sym::p-n-string pathname)))
     (`(sym::record-source-file-name
 	(sym::quote ,object) (sym::quote ,type)) t
