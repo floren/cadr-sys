@@ -16,11 +16,11 @@
 (defun godel-and-wait (x1-rate y1-rate x2-rate y2-rate &optional (slowness 4000))
   (tv:window-call (*hof-window* :deactivate)
     (godel-internal x1-rate y1-rate x2-rate y2-rate slowness)
-    (funcall *hof-window* ':tyi)))
+    (funcall *hof-window* :tyi)))
 
 (defun godel-internal (x1-rate y1-rate x2-rate y2-rate &optional (slowness 4000))
  (with-real-time
-    (funcall *hof-window* ':set-label
+    (funcall *hof-window* :set-label
 	     (format nil "Godel.  Velocity 1 = (~D,~D), velocity 2 = (~D,~D)."
 		         x1-rate y1-rate x2-rate y2-rate))
     (do ((x1 0 (logand 1777 (+ x1 x1-rate)))
@@ -28,7 +28,7 @@
 	 (x2 0 (logand 1777 (+ x2 x2-rate)))
 	 (y2 0 (logand 1777 (+ y2 y2-rate)))
 	 (first t nil))
-	((funcall *hof-window* ':tyi-no-hang))
+	((funcall *hof-window* :tyi-no-hang))
       (cond ((and (not first)
 		  (memq x1 '(0 1000))		;Pause at repeat point
 		  (memq x2 '(0 1000))
@@ -36,7 +36,7 @@
 		  (memq y2 '(0 1000)))
 	     (return nil)))
       (do i 1 (1+ i) (> i slowness))
-      (funcall *hof-window* ':draw-line
+      (funcall *hof-window* :draw-line
 	       (abs (- x1 1000))
 	       (abs (- y1 1000))
 	       (abs (- x2 1000))
@@ -65,7 +65,7 @@
       (escher-internal x1-rate y1-rate x2-rate y2-rate slowness)))
 
 (defun escher-internal (x1-rate y1-rate x2-rate y2-rate &optional (slowness 1000))
-  (funcall *hof-window* ':set-label
+  (funcall *hof-window* :set-label
 	   (format nil "Escher.  Velocity 1 = (~D,~D), velocity 2 = (~D,~D)."
 		       x1-rate y1-rate x2-rate y2-rate))
   (with-real-time
@@ -74,7 +74,7 @@
 	 (x2 0 (logand 1777 (+ x2 x2-rate)))
 	 (y2 0 (logand 1777 (+ y2 y2-rate)))
 	 (first t nil))
-	((funcall *hof-window* ':tyi-no-hang))
+	((funcall *hof-window* :tyi-no-hang))
       (cond ((and (not first)
 		  (memq x1 '(0 1000))		;Pause at repeat point
 		  (memq x2 '(0 1000))
@@ -87,10 +87,10 @@
 	    (x2 (abs (- x2 1000)))
 	    (y2 (abs (- y2 1000)))
 	    (s *hof-window*))
-	(funcall s ':draw-line x1 y1 x2 y2 tv:alu-xor)
-	(funcall s ':draw-line (- 1000 x1) y1 (- 1000 x2) y2 tv:alu-xor)
-	(funcall s ':draw-line x1 (- 1000 y1) x2 (- 1000 y2) tv:alu-xor)
-	(funcall s ':draw-line (- 1000 x1) (- 1000 y1) (- 1000 x2) (- 1000 y2) tv:alu-xor)))))
+	(funcall s :draw-line x1 y1 x2 y2 tv:alu-xor)
+	(funcall s :draw-line (- 1000 x1) y1 (- 1000 x2) y2 tv:alu-xor)
+	(funcall s :draw-line x1 (- 1000 y1) x2 (- 1000 y2) tv:alu-xor)
+	(funcall s :draw-line (- 1000 x1) (- 1000 y1) (- 1000 x2) (- 1000 y2) tv:alu-xor)))))
 
 (defun escher-demo (&optional (slowness 0))
   (tv:window-call (*hof-window* :deactivate)
@@ -99,9 +99,9 @@
 	   for x2 in '(4 3 2 1 2)
 	   for y2 in '(3 2 3 3 3)
 	   do (progn
-		(funcall *hof-window* ':clear-screen)
+		(funcall *hof-window* :clear-screen)
 		(escher-internal x1 y1 x2 y2 slowness)
-		(funcall *hof-window* ':tyi)))))
+		(funcall *hof-window* :tyi)))))
 
 (defdemo "Escher (xor'ing lines)"
 	 "Display patters of xor'ing line segments whose endpoints act like billiard balls."
@@ -115,7 +115,7 @@
        (y1 0 (logand 1777 (+ y1 y1-rate)))
        (x2 0 (logand 1777 (+ x2 x2-rate)))
        (y2 0 (logand 1777 (+ y2 y2-rate))))
-      ((funcall standard-input ':tyi-no-hang))
+      ((funcall standard-input :tyi-no-hang))
     (let ((x1 (abs (- x1 1000)))
 	  (y1 (abs (- y1 1000)))
 	  (x2 (abs (- x2 1000)))
@@ -139,9 +139,9 @@
 	 (y1 0 (logand 1777 (+ y1 y1-rate)))
 	 (x2 0 (logand 1777 (+ x2 x2-rate)))
 	 (y2 0 (logand 1777 (+ y2 y2-rate))))
-	((funcall *hof-window* ':tyi-no-hang))
+	((funcall *hof-window* :tyi-no-hang))
       (do i 1 (1+ i) (> i slowness))
-      (funcall *hof-window* ':draw-line (+ 100 (abs (- x1 1000)))
+      (funcall *hof-window* :draw-line (+ 100 (abs (- x1 1000)))
 	       (+ 100 (abs (- y1 1000)))
 	       (+ 100 (abs (- x2 1000)))
 	       (+ 100 (abs (- y2 1000)))
@@ -166,7 +166,7 @@
 	 (yy2 0 (+ yy2 y2-rate))
 	 (first t nil)
 	 (x1)(y1)(x2)(y2))
-	((funcall *hof-window* ':tyi-no-hang))
+	((funcall *hof-window* :tyi-no-hang))
       (and (>= xx1 2000) (setq xx1 (- xx1 2000)))
       (and (>= xx2 2000) (setq xx2 (- xx2 2000)))
       (and (>= yy1 2000) (setq yy1 (- yy1 2000)))
@@ -177,9 +177,9 @@
 		  (memq x2 '(0 1000))
 		  (memq y1 '(0 1000))
 		  (memq y2 '(0 1000)))
-	     (funcall *hof-window* ':tyi)))
+	     (funcall *hof-window* :tyi)))
       (do i 1 (1+ i) (> i slowness))
-      (funcall *hof-window* ':draw-line (+ 100 (abs (- x1 1000)))
+      (funcall *hof-window* :draw-line (+ 100 (abs (- x1 1000)))
 	       (+ 100 (abs (- y1 1000)))
 	       (+ 100 (abs (- x2 1000)))
 	       (+ 100 (abs (- y2 1000)))
@@ -198,7 +198,7 @@
 	 (yy2 0 (+ yy2 y2-rate))
 	 (first t nil)
 	 (x1)(y1)(x2)(y2))
-	((funcall *hof-window* ':tyi-no-hang))
+	((funcall *hof-window* :tyi-no-hang))
       (and (>= xx1 2000) (setq xx1 (- xx1 2000)))
       (and (>= xx2 2000) (setq xx2 (- xx2 2000)))
       (and (>= yy1 2000) (setq yy1 (- yy1 2000)))
@@ -209,12 +209,12 @@
 		  (memq x2 '(0 1000))
 		  (memq y1 '(0 1000))
 		  (memq y2 '(0 1000)))
-	     (funcall *hof-window* ':tyi)))
+	     (funcall *hof-window* :tyi)))
       (let ((angle (atan* (small-float (- (abs (- y2 1000)) (abs (- y1 1000))))
 			  (small-float (- (abs (- x2 1000)) (abs (- x1 1000)))))))
 	(and (> angle 3.14) (setq angle (- 6.28 angle)))
 	(sys:%beep (+ 500. (fix (* angle key))) tempo))
-      (funcall *hof-window* ':draw-line (+ 100 (abs (- x1 1000)))
+      (funcall *hof-window* :draw-line (+ 100 (abs (- x1 1000)))
 	       (+ 100 (abs (- y1 1000)))
 	       (+ 100 (abs (- x2 1000)))
 	       (+ 100 (abs (- y2 1000)))
@@ -235,7 +235,7 @@
 
 (defun hack-in-m-silent-internal (x1-rate y1-rate x2-rate y2-rate x3-rate y3-rate x4-rate y4-rate
 				&optional (slowness 0))
-  (funcall *hof-window* ':set-label
+  (funcall *hof-window* :set-label
 	   (format nil "Velocities: ~@{(~D,~D) ~}"
 		       x1-rate y1-rate x2-rate y2-rate x3-rate y3-rate x4-rate y4-rate))
   (with-real-time
@@ -257,7 +257,7 @@
 		  (memq x4 '(0 1000))
 		  (memq y3 '(0 1000))
 		  (memq y4 '(0 1000)))
-	     (funcall *hof-window* ':tyi-no-hang)))
+	     (funcall *hof-window* :tyi-no-hang)))
       (do i 1 (1+ i) (> i slowness))
       (draw-tri (abs (- x1 1000))
 		(abs (- y1 1000))
@@ -273,7 +273,7 @@
 		(abs (- y4 1000))))))
 
 (defun draw-tri (x1 y1 x2 y2 x3 y3)
-  (funcall *hof-window* ':draw-triangle x1 y1 x2 y2 x3 y3 tv:alu-xor))
+  (funcall *hof-window* :draw-triangle x1 y1 x2 y2 x3 y3 tv:alu-xor))
 
 (defun birds-demo (&optional (slowness 0))
   (tv:window-call (*hof-window* :deactivate)
@@ -287,9 +287,9 @@
 	   with y4
 	   do (progn
 		(setq y4 x3 x4 y3)
-		(funcall *hof-window* ':clear-screen)
+		(funcall *hof-window* :clear-screen)
 		(hack-in-m-silent-internal x1 y1 x2 y2 x3 y3 x4 y4 slowness)
-		(funcall *hof-window* ':tyi)))))
+		(funcall *hof-window* :tyi)))))
 
 (defdemo "Birds (xor'ing triangles)"
 	 "Display patters of xor'ing triangles whose endpoints act like billiard balls."
@@ -299,9 +299,9 @@
 
 (defvar *atan-window*
 	(tv:window-create 'tv:window
-			  ':edges '(300 300 500 500)
-			  ':blinker-p nil
-			  ':label nil))
+			  :edges '(300 300 500 500)
+			  :blinker-p nil
+			  :label nil))
 
 (defun draw-atan (size mul &optional (window tv:main-screen))
   (tv:window-call (*atan-window* :deactivate)
@@ -312,9 +312,9 @@
      (loop for size in '(50. 50. 50.)
 	   for mul in '(50. 200. 500.)
 	   do (progn
-		(funcall *atan-window* ':clear-screen)
+		(funcall *atan-window* :clear-screen)
 		(draw-atan-internal size mul *atan-window*)
-		(funcall *atan-window* ':tyi)))))
+		(funcall *atan-window* :tyi)))))
 
 (comment ;it isn't interesting enough to be in the menu.
 (defdemo "Atan (arc tangent xor hack)"
@@ -339,7 +339,7 @@
 (defun draw-potn (size point-list)
   (tv:window-call (*atan-window* :deactivate)
     (draw-potn-internal size point-list *atan-window*)
-    (funcall *atan-window* ':tyi))
+    (funcall *atan-window* :tyi))
   nil)
 
 (defun potn-demo ()
@@ -347,9 +347,9 @@
      (loop for size in '(50. 50. 50.)
 	   for point-list in '()
 	   do (progn
-		(funcall *atan-window* ':clear-screen)
+		(funcall *atan-window* :clear-screen)
 		(draw-potn-internal size point-list *atan-window*)
-		(funcall *atan-window* ':tyi)))))
+		(funcall *atan-window* :tyi)))))
 
 ;;; Each point is (x y value).
 (defun draw-potn-internal (size point-list &optional (window tv:main-screen))
