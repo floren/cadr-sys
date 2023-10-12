@@ -27,9 +27,9 @@
 
 (defstruct (demo-list-element (:type :list))
   demo-name
-  (demo-value-symbol ':value)
+  (demo-value-symbol :value)
   demo-value
-  (demo-documentation-symbol ':documentation)
+  (demo-documentation-symbol :documentation)
   demo-documentation)
 
 ;;; Given a demo list, add the new demo, or update the old demo of the same
@@ -75,17 +75,17 @@
   (:default-init-plist :blinker-p nil :more-p nil :label ""))
 
 (defmethod (hof-window :before :select) (&rest ignore)
-  (funcall-self ':clear-input)
-  (funcall-self ':set-label ""))
+  (funcall-self :clear-input)
+  (funcall-self :set-label ""))
 
 (compile-flavor-methods hof-window)
 
 (defvar *hof-window*
 	(tv:window-create 'hof-window
-			  ':position '(77 77)
-			  ':inside-size '(1001 1001)))
+			  :position '(77 77)
+			  :inside-size '(1001 1001)))
 
 (defvar *little-hof-window*
 	(tv:window-create 'hof-window
-			  ':position '(500 500)
-			  ':inside-size '(200 200)))
+			  :position '(500 500)
+			  :inside-size '(200 200)))
