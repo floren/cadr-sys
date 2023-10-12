@@ -215,7 +215,7 @@
 	    (COND ((= OP #o14)			;EOF
 		   (MINI-SEND-STS)		;Acknowledge the EOF
 		   (SETQ MINI-EOF-SEEN T)
-		   (COND ((EQ OP ':TYI)		;And tell caller
+		   (COND ((EQ OP :TYI)		;And tell caller
 			  (AND ARG1 (ERROR ARG1))
 			  NIL)
 			 (ARG1 (ERROR "EOF"))
@@ -248,7 +248,7 @@
 		       (COND ((= OP #o14)	;EOF
 			      (MINI-SEND-STS)	;Acknowledge the EOF
 			      (SETQ MINI-EOF-SEEN T)
-			      (COND ((EQ OP ':TYI)	;and tell caller
+			      (COND ((EQ OP :TYI)	;and tell caller
 				     (AND ARG1 (ERROR ARG1))
 				     NIL)
 				    (ARG1 (ERROR "EOF"))
@@ -257,7 +257,7 @@
 			      (SETQ MINI-CH-IDX 0)
 			      (MINI-ASCII-STREAM :TYI))
 			     (T (MINI-BARF "Bad opcode received" OP)))))))
-       (IF (AND (EQ OP ':READ-CHAR) (FIXNUMP TEM))
+       (IF (AND (EQ OP :READ-CHAR) (FIXNUMP TEM))
 	   (INT-CHAR TEM)
 	   TEM)))
     ((:UNTYI :UNREAD-CHAR) (SETQ MINI-UNRCHF ARG1))
