@@ -115,7 +115,7 @@ signal a notification the next time they are checked.")
   "Activate an alarm in the list of alarms.  Don't call this yourself!"
   (OR ALARM-PROCESS
       (SETQ ALARM-PROCESS
-	    (MAKE-PROCESS "Alarm Background" ':PRIORITY ALARM-PROCESS-PRIORITY)))
+	    (MAKE-PROCESS "Alarm Background" :PRIORITY ALARM-PROCESS-PRIORITY)))
   (COND ((NULL (SI:PROCESS-RUN-REASONS ALARM-PROCESS))
 	 (PROCESS-PRESET ALARM-PROCESS 'ALARM-BACKGROUND-TOP-LEVEL)
 	 (PROCESS-ENABLE ALARM-PROCESS))))
@@ -130,7 +130,7 @@ signal a notification the next time they are checked.")
 		    (DOLIST (ALARM ALARM-LIST)
 		      (FUNCALL (GET ALARM 'RESET)))
 		    (SETQ ALARM-LIST NIL)))
-	     (FUNCALL ALARM-PROCESS ':KILL)))))
+	     (FUNCALL ALARM-PROCESS :KILL)))))
 
 (ADD-INITIALIZATION "Deactivate Alarms"
 		    '(DEACTIVATE-ALARM-PROCESS T)
@@ -188,14 +188,14 @@ The error was: ~A" *CURRENT-ALARM* CONDITION))
 
 (DEFUN PLIST-INFO (PLIST)
   "Returns a cons which returns useful info about the creation date of a file."
-  (CONS (GET PLIST ':TRUENAME) (GET PLIST ':CREATION-DATE)))
+  (CONS (GET PLIST :TRUENAME) (GET PLIST :CREATION-DATE)))
 
 (DEFUN (FILE CHECK) ()
   (LET ((PLIST (FS:MULTIPLE-FILE-PLISTS FILES-TO-BE-MONITORED)))
     (DOLIST (ENTRY PLIST)
       (COND ((NOT (EQUAL (PLIST-INFO (ASSOC (CAR ENTRY) FILES-TO-BE-MONITORED-PREVIOUS-PLIST))
 			 (PLIST-INFO ENTRY)))
-	     (PUSH (LIST (CAR ENTRY) (GET ENTRY ':CREATION-DATE))
+	     (PUSH (LIST (CAR ENTRY) (GET ENTRY :CREATION-DATE))
 		   FILES-TO-BE-NOTIFIED))))
     (SETQ FILES-TO-BE-MONITORED-PREVIOUS-PLIST PLIST)
     FILES-TO-BE-NOTIFIED))
@@ -245,8 +245,8 @@ of the mail files of the people we care about.")
 	  FILENAME (CADDAR U)
 	  OLD-ENTRY (ASSOC (CAR U) MAIL-CHECK-USERS-CREATION-DATE-ALIST))
     (COND ((NOT (ERRORP (SETQ PROBE (OPEN FILENAME '(:PROBE)))))
-	   (SETQ CREATION-DATE (FUNCALL PROBE ':CREATION-DATE))
-	   (PUSH (OR (FUNCALL PROBE ':GET ':AUTHOR) "an unknown person")
+	   (SETQ CREATION-DATE (FUNCALL PROBE :CREATION-DATE))
+	   (PUSH (OR (FUNCALL PROBE :GET :AUTHOR) "an unknown person")
 		 MAIL-CHECK-USERS-AUTHOR-LIST)
 	   (COND ((OR (NULL (CDR OLD-ENTRY))
 		      ( CREATION-DATE (CDR OLD-ENTRY)))
@@ -285,7 +285,7 @@ of the mail files of the people we care about.")
       (FORMAT STREAM "  Nobody's mail file is being monitored.~%")
     (DOLIST (ENTRY MAIL-CHECK-USERS)
       (FORMAT STREAM "~%[~A] ~A's mail file ~A on host ~A is being monitored."
-	      (INCF N) (FIRST ENTRY) (THIRD ENTRY) (SEND (SECOND ENTRY) ':NAME)))))
+	      (INCF N) (FIRST ENTRY) (THIRD ENTRY) (SEND (SECOND ENTRY) :NAME)))))
 						
 (DEFUN (MAIL RESET) ()
   (SETQ MAIL-CHECK-USERS NIL
@@ -423,11 +423,11 @@ TIME MESSAGE INTERVAL REPEAT-END-TIME ALSO-SHOW-MESSAGE-P FUNCTION ARGS")
 		  (NEQ (CDR H) 'UP)))
 	 (TV:NOTIFY NIL
 	   (WITH-OUTPUT-TO-STRING (S)
-	     (FUNCALL S ':STRING-OUT (CHAOS:HOST-SHORT-NAME (CAR H)))
+	     (FUNCALL S :STRING-OUT (CHAOS:HOST-SHORT-NAME (CAR H)))
 	     (COND ((NUMBERP (CDR H))
-		    (FUNCALL S ':STRING-OUT " is going down at ")
+		    (FUNCALL S :STRING-OUT " is going down at ")
 		    (TIME:PRINT-UNIVERSAL-TIME (CDR H) S))
-		   (T (FUNCALL S ':STRING-OUT
+		   (T (FUNCALL S :STRING-OUT
 			       (COND ((EQ (CDR H) 'UP) " is up.")
 				     (T " is down."))))))))
     (COND ((SETQ TEM (ASSOC (CAR H) HOSTS-CURRENT-STATUS))
@@ -447,7 +447,7 @@ TIME MESSAGE INTERVAL REPEAT-END-TIME ALSO-SHOW-MESSAGE-P FUNCTION ARGS")
       (FORMAT STREAM "  You are not monitoring the status of any hosts.~%")
     (DOLIST (HOST HOSTS-TO-CHECK)
       (FORMAT STREAM "~%[~A] You will be notified if the status of host ~A changes."
-	      (INCF N) (SEND HOST ':NAME)))))
+	      (INCF N) (SEND HOST :NAME)))))
 
 (DEFUN (HOSTS REMOVE-ALARM) (N)
   (WITHOUT-INTERRUPTS
@@ -504,7 +504,7 @@ user at a particular host has new mail and who the mail is from.
 With no arguments, it will check for your mail on the  host that
 you logged into.  NOTIFY-INITIALLY-P if NIL will not bother to notify
 you when new mail arrives, if T it will.  It defualts to T"
-  (IF (NULL FILENAME) (SETQ FILENAME (SEND (FS:USER-HOMEDIR) ':NEW-MAIL-PATHNAME)))
+  (IF (NULL FILENAME) (SETQ FILENAME (SEND (FS:USER-HOMEDIR) :NEW-MAIL-PATHNAME)))
   (SETQ HOST (SI:PARSE-HOST HOST))
   (FUNCALL (GET 'MAIL 'ADD-ALARM) (LIST USER HOST (FS:MERGE-PATHNAME-DEFAULTS FILENAME)))
   (OR NOTIFY-INITIALLY-P
@@ -601,9 +601,9 @@ will be be notified."
 	 (RESPONSE (TV:MULTIPLE-CHOOSE "Operate on some alarms." ALIST BLIST)))
     (DOLIST (ELT RESPONSE)
       (LET ((ALARM (CAR ELT)))
-	(IF (MEMQ ':VIEW ELT)
+	(IF (MEMQ :VIEW ELT)
 	    (VIEW-ALARM ALARM))
-	(IF (MEMQ ':REMOVE ELT)
+	(IF (MEMQ :REMOVE ELT)
 	    (REMOVE-ALARM ALARM))))))
 
 (DEFUN VIEW-ALARM (ALARM)
