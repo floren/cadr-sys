@@ -14,19 +14,19 @@
 
 ;;; Hacks to permit CC-RUN-MTEST only to load the microcode once.
 
-(DEFVAR MTEST-UCODE (MAKE-ARRAY 1000. ':LEADER-LIST '(0)))
+(DEFVAR MTEST-UCODE (MAKE-ARRAY 1000. :LEADER-LIST '(0)))
 (DEFVAR UCODE-COUNTER 0)
 (DEFVAR UCODE-TRUENAME)
 
 (DEFUN MTEST-UCODE-STREAM (OP &OPTIONAL ARG1 &REST REST)
   (SELECTQ OP
     (:RESET
-     (WITH-OPEN-FILE (STREAM "sys:ubin;memd uload >" ':direction ':input)
-       (setq ucode-truename (funcall stream ':truename))
+     (WITH-OPEN-FILE (STREAM "sys:ubin;memd uload >" :direction :input)
+       (setq ucode-truename (funcall stream :truename))
        (setq ucode-counter 0)
        (store-array-leader 0 mtest-ucode 0)
        (do
-	 ((value (funcall stream ':tyi) (funcall stream ':tyi)))
+	 ((value (funcall stream :tyi) (funcall stream :tyi)))
 	 ((not value))
 	 (array-push-extend mtest-ucode value))))
     (:tyi
@@ -43,7 +43,7 @@
 
 (putprop 'mtest-ucode-stream t 'si:io-stream-p)
 
-(defvar ucode-dummy (funcall 'mtest-ucode-stream ':reset))
+(defvar ucode-dummy (funcall 'mtest-ucode-stream :reset))
 
 (DEFUN CC-RUN-MTEST (&OPTIONAL ALREADY-LOADED RANGE (MAP-OFFSET 0) AUTO-P (RESET-P T)
 		     &AUX PC SYMBOLIC-PC CHAR 
