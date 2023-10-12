@@ -243,6 +243,6 @@
 
 (setq docrt (si:copy-readtable si:initial-readtable))
 (let ((readtable docrt))
-  (setsyntax #/' ':single nil)
-  (setsyntax #/; ':single nil)
-  (setsyntax #/: ':single nil))
+  (setsyntax #/' :single nil)
+  (setsyntax #/; :single nil)
+  (setsyntax #/: :single nil))
