@@ -30,7 +30,7 @@
 		      clipped-p t))
   (if (> y1 yh) (setq y1 yh
 		      clipped-p t))
-  (funcall sheet ':draw-line x0 y0 x1 y1 tv:alu-xor)
+  (funcall sheet :draw-line x0 y0 x1 y1 tv:alu-xor)
   clipped-p)
 
 (defun crack (p x0 y0 x1 y1 xl yl xh yh &optional (sheet tv:selected-window) &aux x y)
