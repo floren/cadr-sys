@@ -104,11 +104,11 @@ KEYWORD-ARGS are passed to OPEN."
 	(LOOP FOR FILE = INITIAL-FILE
 	      THEN (FS:MERGE-PATHNAME-DEFAULTS
 		     (PROGN (FORMAT T "~%Host ~a not available."
-				    (FUNCALL HOST ':NAME))
+				    (FUNCALL HOST :NAME))
 			    (FORMAT T "~%Use what pathname instead? (default = ~a) " FILE)
 			    (READLINE))
 		     FILE)
-	      FOR HOST = (FUNCALL (FS:PARSE-PATHNAME FILE) ':HOST)
+	      FOR HOST = (FUNCALL (FS:PARSE-PATHNAME FILE) :HOST)
 	      UNTIL (CHAOS:HOST-UP-P HOST (* 10. 60.))
 	      FINALLY (RETURN FILE)))
   (LEXPR-FUNCALL 'OPEN ACTUAL-FILE KEYWORD-ARGS))
@@ -132,10 +132,10 @@ KEYWORD-ARGS are passed to OPEN."
 	  (NIL)
 	(COND (LINE				;CAN BE NIL IF IT BOMBS ON THE LOSER AND HE RETURNS NIL FROM EH
 	       (SALVAGE-LINE LINE STREAM)
-	       (FUNCALL STREAM ':TYO #\CR)))
+	       (FUNCALL STREAM :TYO #\CR)))
 	(COND ((OR (NULL LINE) (= LINE LIMIT))
 	       (CLOSE STREAM)
-	       (FORMAT T "~&Written: ~A~%" (FUNCALL STREAM ':TRUENAME))
+	       (FORMAT T "~&Written: ~A~%" (FUNCALL STREAM :TRUENAME))
 	       (RETURN NIL)))))))
 
 (DEFUN GET-DEFSTRUCT-INDEX (SYM &OPTIONAL TYPE)
@@ -202,7 +202,7 @@ KEYWORD-ARGS are passed to OPEN."
 		(FNT))
 	       (( I LEN)
 		(OR (ZEROP LEN) (ZEROP FONT-FLAG)
-		    (FUNCALL STREAM ':STRING-OUT "0")))
+		    (FUNCALL STREAM :STRING-OUT "0")))
 	     (COND ((ZEROP (LOGAND 1 I))	;Get next word
 		    (SETQ WD (QF-MEM-READ ADR)
 			  ADR (1+ ADR))))
@@ -210,7 +210,7 @@ KEYWORD-ARGS are passed to OPEN."
 		   WD (CC-SHIFT WD -16.))
 	     (SETQ FNT (LSH CH -8))
 	     (COND (( FNT FONT-FLAG)
-		    (FUNCALL STREAM ':TYO #/)
-		    (FUNCALL STREAM ':TYO (+ #/0 FNT))
+		    (FUNCALL STREAM :TYO #/)
+		    (FUNCALL STREAM :TYO (+ #/0 FNT))
 		    (SETQ FONT-FLAG FNT)))
-	     (FUNCALL STREAM ':TYO (LOGAND CH #o377)))))))
+	     (FUNCALL STREAM :TYO (LOGAND CH #o377)))))))
