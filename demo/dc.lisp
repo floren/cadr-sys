@@ -30,7 +30,7 @@
   (truncate *dc-height* 2))
 (defconst *dc-slope* (// (small-float *dc-offset*) *dc-height*))
 
-(defconst *dc-whiteness* (make-array '(32 32) ':type 'art-1b))
+(defconst *dc-whiteness* (make-array '(32 32) :type 'art-1b))
 (dotimes (x 32)
   (dotimes (y 32)
     (aset 0 *dc-whiteness* x y)))
@@ -219,7 +219,7 @@
 
 (defun dc-top-level (window)
   (time:get-time)		; Make sure timebase initialized
-  (funcall window ':top-level))
+  (funcall window :top-level))
 
 (defmethod (dc-window :top-level) ()
   (process-wait "go" #'car (locate-in-instance self 'go))
@@ -232,14 +232,14 @@
 (defun dc (&optional (superior tv:mouse-sheet))
   (if (null *dc*)
       (setq *dc* (tv:make-window 'dc-window
-				 ':superior superior
-				 ':width *dc-total-width*
-				 ':height *dc-total-height*)))
+				 :superior superior
+				 :width *dc-total-width*
+				 :height *dc-total-height*)))
   (multiple-value-bind (w h)
-      (funcall superior ':inside-size)
-    (funcall *dc* ':center-around (truncate w 2) (truncate h 2)))
-  (funcall *dc* ':start)
-  (funcall *dc* ':expose))
+      (funcall superior :inside-size)
+    (funcall *dc* :center-around (truncate w 2) (truncate h 2)))
+  (funcall *dc* :start)
+  (funcall *dc* :expose))
 
 (defmethod (dc-window :start) ()
   (setq go t))
@@ -250,5 +250,5 @@
 
 (defun dc-demo ()
   (dc)
-  (funcall tv:selected-window ':tyi)
-  (funcall *dc* ':bury))
+  (funcall tv:selected-window :tyi)
+  (funcall *dc* :bury))
