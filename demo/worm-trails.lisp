@@ -12,9 +12,9 @@
 (defvar *blinker* nil)
 
 (defvar pond-dimensions)
-(defvar x-delta-array (make-array 9. ':type 'art-half-fix))
-(defvar y-delta-array (make-array 9. ':type 'art-half-fix))
-(defvar direction-to-go (make-array 256. ':type 'art-4b))
+(defvar x-delta-array (make-array 9. :type 'art-half-fix))
+(defvar y-delta-array (make-array 9. :type 'art-half-fix))
+(defvar direction-to-go (make-array 256. :type 'art-4b))
 
 (defconst pi//4 (// pi 4))
 (defconst pi//8 (// pi 8.))
@@ -29,20 +29,20 @@
 (defun worm-trails ()
   (unwind-protect (progn
 		    (if (null *worm-pond*) (initialize-pond))
-		    (send *worm-pond* ':expose)
-		    (send *worm-pond* ':select)
+		    (send *worm-pond* :expose)
+		    (send *worm-pond* :select)
 		    (do ((play-it-again t
 					(let ((query-io *worm-pond*))
 					  (y-or-n-p "Again? "))))
 			((null play-it-again))
-		      (send *worm-pond* ':clear-screen)
+		      (send *worm-pond* :clear-screen)
 		      (let ((returnage (wander-around)))
-			(send *worm-pond* ':set-cursorpos 0 0 ':character)
+			(send *worm-pond* :set-cursorpos 0 0 :character)
 			(format *worm-pond*
 				"Died of ~A~&Length: ~A~&Moves were ~A~%"
 				(first returnage) (second returnage)
 				(nreverse (cddr returnage))))))
-		  (send *worm-pond* ':deselect)))
+		  (send *worm-pond* :deselect)))
 
 (defun wander-around ()
   (let ((x-pos (truncate (car pond-dimensions) 2))	;start in the center of the screen
@@ -69,7 +69,7 @@
 (defun move (direction)
   (let ((new-x (+ x-pos (* (aref x-delta-array direction) *worm-step-length*)))
 	(new-y (+ y-pos (* (aref y-delta-array direction) *worm-step-length*))))
-    (send *worm-pond* ':draw-line
+    (send *worm-pond* :draw-line
 	     x-pos y-pos
 	     new-x new-y tv:alu-ior)
     (if (evenp direction)
@@ -83,19 +83,19 @@
        (direction 1 (1+ direction))
        (pixel-value 1 (lsh pixel-value 1)))
       ((= direction 9.) node-value)
-    (if (not (zerop (send *worm-pond* ':point
+    (if (not (zerop (send *worm-pond* :point
 			     (+ x-pos (aref x-delta-array direction))
 			     (+ y-pos (aref y-delta-array direction)))))
 	(setq node-value (+ node-value pixel-value)))))
 
 (defun ask-where-to-go (node &aux (offset (* *worm-trails-blinker-halfsize*
 					     *worm-trails-blinker-factor*)))
-  (send *worm-pond* ':draw-circle x-pos y-pos *decision-node-radius*)
+  (send *worm-pond* :draw-circle x-pos y-pos *decision-node-radius*)
   (sys:%beep 500. 100000.)
   (setq tv:mouse-x x-pos
 	tv:mouse-y y-pos)
-  (send *blinker* ':set-cursorpos (- x-pos offset) (- y-pos offset))
-  (send *blinker* ':set-visibility ':on)
+  (send *blinker* :set-cursorpos (- x-pos offset) (- y-pos offset))
+  (send *blinker* :set-visibility :on)
   (tv:with-mouse-usurped
     (setq tv:who-line-mouse-grabbed-documentation
 	  "  Move mouse around to see possible worm moves -- Click any to select one.")
@@ -109,15 +109,15 @@
 	((and (not (zerop tv:mouse-last-buttons))
 	      (de-click)
 	      (not over-line))
-	 (send *blinker* ':set-visibility ':off)
+	 (send *blinker* :set-visibility :off)
 	 (learn-to-go-from node new-direction)
 	 new-direction)
-      (send *blinker* ':set-cursorpos (- mouse-x offset) (- mouse-y offset))
+      (send *blinker* :set-cursorpos (- mouse-x offset) (- mouse-y offset))
       (setq new-direction (calculate-direction mouse-x mouse-y))
       (cond (( old-direction new-direction)
 	     (if (not over-line)
 		 (ghost-line old-direction))
-	     (cond ((zerop (send *worm-pond* ':point
+	     (cond ((zerop (send *worm-pond* :point
 				    (+ x-pos (aref x-delta-array new-direction))
 				    (+ y-pos (aref y-delta-array new-direction))))
 		    (ghost-line new-direction)
@@ -134,7 +134,7 @@
        t)))
 
 (defun ghost-line (direction)
-  (send *worm-pond* ':draw-line
+  (send *worm-pond* :draw-line
 	   x-pos y-pos
 	   (+ x-pos (* (aref x-delta-array direction) *worm-step-length*))
 	   (+ y-pos (* (aref y-delta-array direction) *worm-step-length*))
@@ -169,7 +169,7 @@
   (sys:%beep 2000. 100000.)
   (setq tv:who-line-mouse-grabbed-documentation
 	"  Hit any character when done gawking at screen")
-  (send *worm-pond* ':tyi)
+  (send *worm-pond* :tyi)
   (cons reason (cons (+ straight-trails
 ;I think this number is more what the user wants to know - RMS.
 			diagonal-trails)
@@ -185,27 +185,27 @@
 
 (defun initialize-pond ()
   (setq *worm-pond* (tv:make-window 'wormy-flavor
-				    ':borders 5
-				    ':label nil
-				    ':activate-p t
-				    ':expose-p nil
-				    ':blinker-p nil)
+				    :borders 5
+				    :label nil
+				    :activate-p t
+				    :expose-p nil
+				    :blinker-p nil)
 	*blinker* (tv:make-blinker *worm-pond* 'tv:magnifying-blinker
-				   ':height
+				   :height
 				   (* 2 *worm-trails-blinker-halfsize*
 				      *worm-trails-blinker-factor*)
-				   ':width
+				   :width
 				   (* 2 *worm-trails-blinker-halfsize*
 				      *worm-trails-blinker-factor*)
-				   ':x-offset
+				   :x-offset
 				   (* *worm-trails-blinker-halfsize*
 				      *worm-trails-blinker-factor*)
-				   ':y-offset
+				   :y-offset
 				   (* *worm-trails-blinker-halfsize*
 				      *worm-trails-blinker-factor*)
-				   ':magnification *worm-trails-blinker-factor*
-				   ':half-period 10.
-				   ':visibility ':off)
-	pond-dimensions (multiple-value-list (send *worm-pond* ':size)))
+				   :magnification *worm-trails-blinker-factor*
+				   :half-period 10.
+				   :visibility :off)
+	pond-dimensions (multiple-value-list (send *worm-pond* :size)))
   (fillarray x-delta-array '(0 1 1 0 -1 -1 -1 0 1))
   (fillarray y-delta-array '(0 0 -1 -1 -1 0 1 1 1)))
