@@ -18,7 +18,7 @@
 
 (defun crock-top-level (window)
   (time:get-time)				;Make sure timebase initialized
-  (funcall window ':top-level))
+  (funcall window :top-level))
 
 ;; Hour hand
 (defvar *hour-hand* '((6 0) (6 1) (6 2) (4 3) (5 4) (5 5) (6 6) (3 7) (6 10) (3 11) (6 12)
@@ -35,16 +35,16 @@
 			(6 0 6) (6 0 5) (6 0 4) (6 0 3) (6 0 2) (7 0 1)))
 
 (defmethod (crock-window :after :init) (ignore)
-  (setq hour-hand (make-instance 'wide-hand ':curve *hour-hand*)
-	minute-hand (make-instance 'wide-hand ':curve *minute-hand*)
-	second-hand (make-instance 'thin-hand ':length *crock-radius*)))
+  (setq hour-hand (make-instance 'wide-hand :curve *hour-hand*)
+	minute-hand (make-instance 'wide-hand :curve *minute-hand*)
+	second-hand (make-instance 'thin-hand :length *crock-radius*)))
 
 (defmethod (crock-window :after :refresh) (&optional ignore)
   (cond ((not tv:restored-bits-p)
-	 (funcall-self ':draw-face)
-	 (funcall hour-hand ':set-current-angle nil)
-	 (funcall minute-hand ':set-current-angle nil)
-	 (funcall second-hand ':set-current-angle nil))))
+	 (funcall-self :draw-face)
+	 (funcall hour-hand :set-current-angle nil)
+	 (funcall minute-hand :set-current-angle nil)
+	 (funcall second-hand :set-current-angle nil))))
 
 (defflavor hand ((current-angle nil)) ()
   (:settable-instance-variables current-angle)
@@ -53,16 +53,16 @@
 (defmethod (hand :draw-if-necessary) (window x0 y0 angle)
   (cond ((not (and current-angle (= angle current-angle)))
 	 (tv:prepare-sheet (window)
-	   (and current-angle (funcall-self ':draw window x0 y0 current-angle))
+	   (and current-angle (funcall-self :draw window x0 y0 current-angle))
 	   (setq current-angle angle)
-	   (funcall-self ':draw window x0 y0 current-angle)))))
+	   (funcall-self :draw window x0 y0 current-angle)))))
 
 (defflavor thin-hand (length) (hand)
   (:initable-instance-variables length))
 
 (defmethod (thin-hand :draw) (window x0 y0 angle)
   (setq angle (// (* angle 2pi) 360.))
-  (funcall window ':draw-line x0 y0
+  (funcall window :draw-line x0 y0
 	   (fix (+ x0 (* length (cos angle))))
 	   (fix (+ y0 (* length (sin angle))))
 	   tv:alu-xor))
@@ -81,10 +81,10 @@
   (setq nseg (loop for elem in curve maximize (length (cdr elem))))
   (tv:prepare-sheet (window)
     (loop for elem in curve
-	  with p1xs = (make-list nseg ':initial-value x0)
-	  and p1ys = (make-list nseg ':initial-value y0)
-	  and p2xs = (make-list nseg ':initial-value x0)
-	  and p2ys = (make-list nseg ':initial-value y0)
+	  with p1xs = (make-list nseg :initial-value x0)
+	  and p1ys = (make-list nseg :initial-value y0)
+	  and p2xs = (make-list nseg :initial-value x0)
+	  and p2ys = (make-list nseg :initial-value y0)
 	  for rx0 = (+ x0 (tv:sheet-inside-left window)) then rx1
 	  and ry0 = (+ y0 (tv:sheet-inside-top window)) then ry1
 	  as width = (pop elem)
@@ -110,11 +110,11 @@
 
 (defmethod (crock-window :draw-face) ()
   (multiple-value-bind (w h)
-      (funcall-self ':inside-size)
+      (funcall-self :inside-size)
     (setq center-x (truncate w 2)
 	  center-y (truncate h 2)))
-  (funcall-self ':draw-filled-in-circle center-x center-y *crock-radius* tv:alu-xor)
-  (funcall-self ':draw-filled-in-circle center-x center-y (- *crock-radius* 4) tv:alu-xor)
+  (funcall-self :draw-filled-in-circle center-x center-y *crock-radius* tv:alu-xor)
+  (funcall-self :draw-filled-in-circle center-x center-y (- *crock-radius* 4) tv:alu-xor)
   (loop for i from 1. to 12.
 	do (put-string-in-circle self center-x center-y *crock-radius*
 				 (format nil "~D" i)
@@ -137,11 +137,11 @@
 		   (let ((dy (- (if ( y center-y) (- y hei) (+ y hei)) center-y)))
 		     (* dy dy)))
 		rad2)
-	do (funcall window ':set-cursorpos
+	do (funcall window :set-cursorpos
 		    (- x (if (> cos 0.5s0) (+ width 10) width))
 		    (- y (if (> sin 0.5s0) (+ height 4) height))
-		    ':pixel)
-	   (funcall window ':string-out string)
+		    :pixel)
+	   (funcall window :string-out string)
 	   (return nil)))
 
 (defun compute-string-length (string font &aux cwt)
@@ -160,13 +160,13 @@
 	(time:get-time)
       (setq hou (\ hou 12.))
       (and (zerop hou) (setq hou 12.))
-      (funcall hour-hand ':draw-if-necessary self center-x center-y
+      (funcall hour-hand :draw-if-necessary self center-x center-y
 	       ;; Display accurate to 15 mins
 	       (+ -90.0s0 (// (* (+ (// (+ min 7.5s0) 15.) (* hou 4)) 360.) '#,(* 12. 4))))
-      (funcall minute-hand ':draw-if-necessary self center-x center-y
+      (funcall minute-hand :draw-if-necessary self center-x center-y
 	       ;; Display accurate to 1/2 minute
 	       (+ -90.0s0 (// (* (+ (// (+ sec 15.) 30.) (* min 2)) 360.) '#,(* 60. 2))))
-      (funcall second-hand ':draw-if-necessary self center-x center-y
+      (funcall second-hand :draw-if-necessary self center-x center-y
 	       (+ -90.0s0 (* sec 6.)))
       (and (zerop sec) (zerop (\ min 30.))
 	   (play-time (if (zerop min) hou 1))))
@@ -186,9 +186,9 @@
       (let ((width (tv:sheet-inside-width tv:mouse-sheet))
 	    (height (tv:sheet-inside-height tv:mouse-sheet)))
 	(setq *crock* (tv:make-window 'crock-window 
-				      ':width (- width 40) ':left 20
-				      ':height (- height 200) ':top 100))))
-  (funcall *crock* ':select))
+				      :width (- width 40) :left 20
+				      :height (- height 200) :top 100))))
+  (funcall *crock* :select))
 
 (compile-flavor-methods crock-window thin-hand wide-hand)
 
@@ -196,8 +196,8 @@
 
 (defun crock-demo ()
   (crock)
-  (funcall tv:selected-window ':tyi)
-  (funcall *crock* ':bury))
+  (funcall tv:selected-window :tyi)
+  (funcall *crock* :bury))
 
 ;;; Some help in drawing these things
 
