@@ -56,11 +56,11 @@
   (LET ((CC-LOW-LEVEL-FLAG 'VERY))
     (IF (AND (EQ DBG-ACCESS-PATH 'SERIAL)
 	     (VARIABLE-BOUNDP SERIAL-STREAM))
-	(FUNCALL SERIAL-STREAM ':CLEAR-INPUT))
+	(FUNCALL SERIAL-STREAM :CLEAR-INPUT))
     (FORMAT T "~&For best results, ground -TPTSE, 1C07-09 on CMEM boards...")
     (DBG-RESET)		;Forcibly reset the whole machine
     (CC-RESET-MACH)		;NOW SET TO THE CORRECT MODE
-    (SEND TERMINAL-IO ':STRING-OUT "Machine reset.")
+    (SEND TERMINAL-IO :STRING-OUT "Machine reset.")
     (RUN-TEST-FUNCTION CC-TEST-DATA-PATHS ALL-DATA-PATHS)
     (RUN-TEST-FUNCTION CC-FAST-ADDRESS-TESTS ALL-MEMORIES)
     (RUN-TEST-FUNCTION CC-FAST-ADDRESS-TEST-C-MEM-BANKS C-MEM-BANKS-TO-TEST)
@@ -95,7 +95,7 @@
      (FORMAT T "Resetting machine . . .")
      (DBG-RESET)		;Forcibly reset the whole machine
      (CC-RESET-MACH)		;Now set to the correct mode
-     (SEND TERMINAL-IO ':TYO #\CR)
+     (SEND TERMINAL-IO :TYO #\CR)
      (MAPC #'(LAMBDA (X)
 	       (FORMAT T "~&~4TGross data test ~A~%" (CAR X))
 	       (APPLY 'CC-GROSS-DATA-TEST X))
@@ -455,7 +455,7 @@
 
 (DEFUN CC-PRINT-BIT-LIST (MESSAGE BITLIST)
   (COND (BITLIST
-	 (IF MESSAGE (SEND TERMINAL-IO ':STRING-OUT MESSAGE))
+	 (IF MESSAGE (SEND TERMINAL-IO :STRING-OUT MESSAGE))
 	 (DO ((L (SORT BITLIST #'LESSP) (CDR L))
 	      (COMMA NIL T)
 	      (LASTVALUE -2 (CAR L))
@@ -475,11 +475,11 @@
 			   (FORMAT T ", ~D" RANGE-END)
 			 (FORMAT T "-~D" RANGE-END)))
 		  (SETQ RANGE-END NIL)
-		  (AND COMMA (SEND TERMINAL-IO ':STRING-OUT ", "))
+		  (AND COMMA (SEND TERMINAL-IO :STRING-OUT ", "))
 		  (FORMAT:ONUM (CAR L)))))
 	 (SETQ CC-SUSPECT-BIT-LIST
 	       (NUMERIC-LIST-DIFFERENCE CC-SUSPECT-BIT-LIST BITLIST))
-	 (SEND TERMINAL-IO ':TYO #\CR))))
+	 (SEND TERMINAL-IO :TYO #\CR))))
 
 ;;; CADR ADDRESS TESTS THAT RUN IN THE MACHINE
 
@@ -1621,7 +1621,7 @@ AND of bad addresses: ~O~%OR of bad address: ~O"
   (CC-MEASURE-CLOCK 0) (CC-MEASURE-CLOCK 4)
   (DOTIMES (I 8.)
     (ASET (CC-MEASURE-CLOCK I) ADJUST-CLOCK-ARRAY I))
-  (SEND TERMINAL-IO ':LINE-OUT "
+  (SEND TERMINAL-IO :LINE-OUT "
 Speed  ILong 	  Pin	Actual	Nominal")
   (do ((i 0 (1+ i))
        (pins '(5D08-6 5D08-3 5D08-16 5D08-14 5D08-5 5D08-4 5D08-17 5D08-15) (cdr pins))
@@ -1704,10 +1704,10 @@ Speed  ILong 	  Pin	Actual	Nominal")
 		  (FORMAT T "OB has 1 in bit ~D" BITNO)
 		  (IF (NOT (ZEROP FIRST-IR-BIT))
 		      (FORMAT T " (= ~D)" (+ BITNO FIRST-IR-BIT)))
-		  (SEND TERMINAL-IO ':STRING-OUT ", I"))
+		  (SEND TERMINAL-IO :STRING-OUT ", I"))
 		 (T (FORMAT T "I has 1 in bit ~D, OB" (+ BITNO FIRST-IR-BIT))))
 	   (IF (ZEROP BAD)
-	       (SEND TERMINAL-IO ':LINE-OUT " has zero.  IR got zero")
+	       (SEND TERMINAL-IO :LINE-OUT " has zero.  IR got zero")
 	     (CC-PRINT-BIT-LIST " has zero.  1-bits in IR: "
 				(CC-WRONG-BITS-LIST 0 BAD 48.)))))))
 
@@ -2294,7 +2294,7 @@ Clobbers 1000@A.  Zeros 2@M, 2@A"
 (DEFUN TEST-KEY (KEY VALUE)
   (FORMAT T "~&Hold down the ~:C key on the debugee and then type space on this keyboard."
 	  KEY)
-  (SEND STANDARD-INPUT ':TYI)
+  (SEND STANDARD-INPUT :TYI)
   (LET ((READ-KEY (KEYBOARD-DBG-READ 764100)))
     (IF ( READ-KEY VALUE)
 	(FORMAT T "Keyboard should have been ~O and was ~O" VALUE READ-KEY))))
@@ -2313,7 +2313,7 @@ and then type space")
 and then type space")
   (CHECK-ANDS-AND-OR 764106 12. NIL "Mouse X position")
   (FORMAT T "~&Testing console beeper, should be beeping")
-  (LOOP DO (KEYBOARD-DBG-READ 764110) UNTIL (SEND STANDARD-INPUT ':TYI-NO-HANG))
+  (LOOP DO (KEYBOARD-DBG-READ 764110) UNTIL (SEND STANDARD-INPUT :TYI-NO-HANG))
   (FORMAT T "~&Testing Chaosnet interface")
   (LET ((CHAOS:CHATST-USE-DEBUG (NOT *TEST-LOCAL-KEYBOARD*)))
     (CHAOS:CHATST)))
@@ -2325,7 +2325,7 @@ and then type space")
     (DO ((I 0 (1+ I))
 	 (RES))
 	((IF (NULL ITERATION)
-	     (SEND STANDARD-INPUT ':TYI-NO-HANG)
+	     (SEND STANDARD-INPUT :TYI-NO-HANG)
 	     ( I ITERATION)))
       (SETQ RES (LOGAND MASK (KEYBOARD-DBG-READ ADDR))
 	    OR (LOGIOR OR RES)
@@ -2345,19 +2345,19 @@ and then type space")
     (UNWIND-PROTECT
       (PROGN
 	(SETQ STREAM (SI:MAKE-SERIAL-STREAM
-		       ':NUMBER-OF-STOP-BITS 1
-		       ':PARITY ':ODD))
+		       :NUMBER-OF-STOP-BITS 1
+		       :PARITY :ODD))
 	(DOLIST (PROP '(:CHECK-PARITY-ERRORS :CHECK-OVER-RUN-ERRORS :CHECK-FRAMING-ERRORS))
-	  (FUNCALL STREAM ':PUT PROP T))
+	  (FUNCALL STREAM :PUT PROP T))
 	(FORMAT T "~&Testing serial I/O using /"remote loop back/" in the UART.")
 	(UNWIND-PROTECT
 	  (PROGN
-	    (FUNCALL STREAM ':PUT ':LOCAL-LOOP-BACK T)
+	    (FUNCALL STREAM :PUT :LOCAL-LOOP-BACK T)
 	    (TEST-SERIAL-IO-SERIES STREAM *SERIAL-IO-TESTS*))
-	  (FUNCALL STREAM ':PUT ':LOCAL-LOOP-BACK NIL))
+	  (FUNCALL STREAM :PUT :LOCAL-LOOP-BACK NIL))
 	(FORMAT T "~2&Attach a loop-back plug; type N if you don't want to do this test,
 or any other character to run the test.")
-	(LET ((CHAR (SEND STANDARD-INPUT ':TYI)))
+	(LET ((CHAR (SEND STANDARD-INPUT :TYI)))
 	  (COND ((NOT (CHAR-EQUAL #/N CHAR))
 		 (FORMAT T "~&Testing extra EIA-RS-232 bits.")
 		 (TEST-SERIAL-IO-EIA-RS-232-BITS STREAM)
@@ -2380,16 +2380,16 @@ or any other character to run the test.")
 	      (FORMAT T "; "))
 	  (SETQ FIRST NIL)
 	  (FORMAT T "~S = ~S" NAME VALUE)
-	  (FUNCALL STREAM ':PUT NAME VALUE)))
+	  (FUNCALL STREAM :PUT NAME VALUE)))
       (TEST-SERIAL-IO-CHARS STREAM))))
 
 (DEFCONST *SERIAL-IO-TIMEOUT* 60.)
 
 (DEFUN TEST-SERIAL-IO-CHARS (STREAM)
-  (DOTIMES (SENT-CHAR (^ 2 (FUNCALL STREAM ':GET ':NUMBER-OF-DATA-BITS)))
-    (FUNCALL STREAM ':TYO SENT-CHAR)
-    (COND ((PROCESS-WAIT-WITH-TIMEOUT "Serial In" *SERIAL-IO-TIMEOUT* STREAM ':LISTEN)
-	   (LET ((GOT-CHAR (FUNCALL STREAM ':TYI)))
+  (DOTIMES (SENT-CHAR (^ 2 (FUNCALL STREAM :GET :NUMBER-OF-DATA-BITS)))
+    (FUNCALL STREAM :TYO SENT-CHAR)
+    (COND ((PROCESS-WAIT-WITH-TIMEOUT "Serial In" *SERIAL-IO-TIMEOUT* STREAM :LISTEN)
+	   (LET ((GOT-CHAR (FUNCALL STREAM :TYI)))
 	     (COND ((NOT (= SENT-CHAR GOT-CHAR))
 		    (FORMAT T "~&Error: sent ~O and got back ~O (both octal)~%"
 			    SENT-CHAR GOT-CHAR)
@@ -2407,12 +2407,12 @@ or any other character to run the test.")
   (LOOP FOR SET IN '(:DATA-TERMINAL-READY :DATA-TERMINAL-READY)
 	FOR GET IN '(:DATA-SET-READY      :CARRIER-DETECT)
 	DO
-	(FUNCALL STREAM ':PUT SET NIL)
-	(IF (NOT (NULL (FUNCALL STREAM ':GET GET)))
+	(FUNCALL STREAM :PUT SET NIL)
+	(IF (NOT (NULL (FUNCALL STREAM :GET GET)))
 	    (FORMAT T "~&Error: Sent zero on ~S and got one on ~S.~%" SET GET))
-	(FUNCALL STREAM ':PUT SET T)
-	(IF (NULL (FUNCALL STREAM ':GET GET))
+	(FUNCALL STREAM :PUT SET T)
+	(IF (NULL (FUNCALL STREAM :GET GET))
 	    (FORMAT T "~&Error: Sent one on ~S and got zero on ~S.~%" SET GET)))
   ;; Fix world.
-  (FUNCALL STREAM ':PUT ':REQUEST-TO-SEND T)
-  (FUNCALL STREAM ':PUT ':DATA-TERMINAL-READY T))
+  (FUNCALL STREAM :PUT :REQUEST-TO-SEND T)
+  (FUNCALL STREAM :PUT :DATA-TERMINAL-READY T))
