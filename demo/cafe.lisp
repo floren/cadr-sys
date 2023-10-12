@@ -33,18 +33,18 @@
 (defun initialize-cc-window ()
   (if (null *cc-window*)
       (setq *cc-window* (tv:make-window 'tv:window
-					':superior color:color-screen
-					':blinker-p nil ':borders nil
-					':label nil)))
-  (funcall *cc-window* ':expose)
-  (funcall *cc-window* ':clear-screen))
+					:superior color:color-screen
+					:blinker-p nil :borders nil
+					:label nil)))
+  (funcall *cc-window* :expose)
+  (funcall *cc-window* :clear-screen))
 
 ;;; This function draws the regular cafe wall pattern onto *cc-window*.
 ;;; The blocks are drawn in colors 1 and 2, and the spacer is drawn in color 3.
 (defun draw-color-checker ()
   (initialize-cc-window)
   (multiple-value-bind (window-width window-height)
-      (funcall *cc-window* ':inside-size)
+      (funcall *cc-window* :inside-size)
     ;; The image is made up of a bunch of rows and columns.  Between successive
     ;; rows are spacers, which use up some of the available height.
     (let* ((width (truncate window-width *cc-n-columns*))
@@ -95,7 +95,7 @@
 (defun draw-elaborate-color-checker ()
   (initialize-cc-window)
   (multiple-value-bind (window-width window-height)
-      (funcall *cc-window* ':inside-size)
+      (funcall *cc-window* :inside-size)
     ;; The image is made up of a bunch of rows and columns.  Between successive
     ;; rows are spacers, which use up some of the available height.
     (let* ((width (truncate window-width *cc-n-columns*))
@@ -128,13 +128,13 @@
 	 (loop for color from 10 to 16
 	       do (color:write-color-map color 377 377 377))
 	 (color:write-color-map 17 200 200 200)
-	 (funcall standard-input ':tyi)
+	 (funcall standard-input :tyi)
 	 (loop do
 	       (loop for b-to-w from 1 to 16
 		     do (hack-two-slots b-to-w
 					(1+ (\ (+ b-to-w 6) 16))
 					wait))
-	   ;(if (funcall standard-input ':tyi-no-hang)
+	   ;(if (funcall standard-input :tyi-no-hang)
 	   ;    (return))
 	       ))
 	(t
