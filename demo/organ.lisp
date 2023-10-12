@@ -10,10 +10,10 @@
 (defvar *organ-initial-speed*)			;Speed when ORGAN was last called
 
 (defvar *organ-input-buffer* (make-array 300
-					 ':type 'art-string
-					 ':leader-length 1))
+					 :type 'art-string
+					 :leader-length 1))
 
-(defvar *organ-speed-stack* (make-array 300 ':leader-length 1))
+(defvar *organ-speed-stack* (make-array 300 :leader-length 1))
 
 (defvar *organ-initial-right*)			;Variables for rubout handling
 (defvar *organ-initial-down*)
@@ -30,7 +30,7 @@
 		   1.0)))))
 
 (defvar *scale*
-  (let ((arr (make-array 177 ':type 'art-16b)))
+  (let ((arr (make-array 177 :type 'art-16b)))
     (aset (piano 230) arr #/z)
     (aset (piano 227) arr #/Z)
     (aset (piano 226) arr #/x)
@@ -95,7 +95,7 @@
        L (setq where (1+ where))
 	  (if (= where (string-length str))
 	      (if (and repeat
-		       (not (funcall terminal-io ':tyi-no-hang)))
+		       (not (funcall terminal-io :tyi-no-hang)))
 		  (go R)
 		  (return nil)))
 	  (setq char (aref str where))
@@ -130,25 +130,25 @@
 (defun organ (&aux (buffer *organ-input-buffer*)
 		   (speed-stack *organ-speed-stack*)
 	           (stream standard-input)
-		   (temp-array (make-array 1 ':type 'art-string)))
+		   (temp-array (make-array 1 :type 'art-string)))
   (organ-note-initial-cursorpos stream)
   (store-array-leader 0 buffer 0)		;Flush buffer contents
   (store-array-leader 0 speed-stack 0)
-  (do ((char (funcall stream ':tyi) (funcall stream ':tyi)))
+  (do ((char (funcall stream :tyi) (funcall stream :tyi)))
       ((= char #/.)
        (return-array temp-array)
        (string-append buffer))
     (selectq char
       (#\rubout (organ-do-rubout buffer speed-stack stream))
       ((#\return #\tab)
-       (funcall stream ':tyo char)
+       (funcall stream :tyo char)
        (array-push-extend buffer char))
       ((#\form 554 514)
-       (funcall stream ':clear-screen)
+       (funcall stream :clear-screen)
        (organ-note-initial-cursorpos stream)
        (princ buffer))
       ((#/? #\help)
-       (funcall stream ':clear-screen)
+       (funcall stream :clear-screen)
        (princ "
 Welcome to the ORGAN.  The keyboard is now an organ.  Most of the keys play
 notes, but the following have special meanings.  The most notable of these are
@@ -171,7 +171,7 @@ RUBOUT  Allows you to erase your mistakes.
 	   (princ buffer))
       (otherwise
        (cond ((< char 200)
-	      (funcall stream ':tyo char)
+	      (funcall stream :tyo char)
 	      (and (memq char '(#/< #/> #/[ #/] #/@))
 		   (array-push-extend speed-stack *speed*))
 	      (aset char temp-array 0)
@@ -185,15 +185,15 @@ RUBOUT  Allows you to erase your mistakes.
   (cond ((plusp (array-leader buffer 0))
 	 (setq char (array-pop buffer))
 	 (multiple-value (r d)
-	   (funcall stream ':read-cursorpos))	;in PIXEL!!
+	   (funcall stream :read-cursorpos))	;in PIXEL!!
 	 (cond ((or (zerop r)
 		    (= char #\tab))
-		(funcall stream ':set-cursorpos *organ-initial-right* *organ-initial-down*)
-		(funcall stream ':string-out buffer))
-	       (t (funcall stream ':set-cursorpos
-			   (- r (funcall stream ':character-width char))
+		(funcall stream :set-cursorpos *organ-initial-right* *organ-initial-down*)
+		(funcall stream :string-out buffer))
+	       (t (funcall stream :set-cursorpos
+			   (- r (funcall stream :character-width char))
 			   d)
-		  (funcall stream ':clear-eol)))
+		  (funcall stream :clear-eol)))
 	 (and (memq char '(#/< #/> #/[ #/] #/@))
 	      (setq *speed* (array-pop speed-stack))))
 	(t (tv:beep))))				;Is this the right thing??
@@ -210,7 +210,7 @@ RUBOUT  Allows you to erase your mistakes.
 
 (defun organ-note-initial-cursorpos (stream)
   (multiple-value (*organ-initial-right* *organ-initial-down*)
-    (funcall stream ':read-cursorpos)))
+    (funcall stream :read-cursorpos)))
 
 
 (DEFUN INS (SEXP)
@@ -223,7 +223,7 @@ RUBOUT  Allows you to erase your mistakes.
 
 ;Thank you, Khyai Udin Mas
 (defvar pelog-scale
-  (let ((arr (make-array 177 ':type 'art-16b)))
+  (let ((arr (make-array 177 :type 'art-16b)))
     (aset 2340 arr #/a)
     (aset 2340 arr #/A)
     (aset 2200 arr #/s)
