@@ -7,12 +7,12 @@
      (%p-store-cdr-code (cdr history) cdr-error)
      (%p-store-cdr-code history cdr-normal)
      (rplacd history list)
-     (send stream ':clear-screen)
+     (send stream :clear-screen)
      (loop repeat length
 	   for h = history then (cdr h)
 	   do (setf (car h) (make-list 4)))
      (multiple-value-bind (xlim ylim)
-	 (send stream ':inside-size)
+	 (send stream :inside-size)
        (loop with x1 = 0
 	     and y1 = (1- ylim)
 	     and x2 = 0
@@ -22,10 +22,10 @@
 	     and dx2 = 12
 	     and dy2 = 5
 	     with tem
-	     until (or (send stream ':tyi-no-hang)
+	     until (or (send stream :tyi-no-hang)
 		       (if times (= (setq times (1- times)) 0) NIL))
 	     when (caar history)
-	     do (send stream ':draw-line
+	     do (send stream :draw-line
 		      (first (car history))
 		      (second (car history))
 		      (third (car history))
@@ -36,7 +36,7 @@
 	     (setf (third (car history)) x2)
 	     (setf (fourth (car history)) y2)
 	     (setq history (cdr history))
-	     (send stream ':draw-line x1 y1 x2 y2 tv:alu-xor)
+	     (send stream :draw-line x1 y1 x2 y2 tv:alu-xor)
 	     (setq dx1 (1- (+ dx1 (random 3)))
 		   dy1 (1- (+ dy1 (random 3)))
 		   dx2 (1- (+ dx2 (random 3)))
@@ -67,7 +67,7 @@
 		     y2 (+ y2 dy2))
 	  finally (loop repeat length
 			when (caar history)
-			 do (send stream ':draw-line
+			 do (send stream :draw-line
 				  (first (car history))
 				  (second (car history))
 				  (third (car history))
