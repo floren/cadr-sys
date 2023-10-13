@@ -17,7 +17,7 @@
 (defconst *cc-spacer-fraction* .0625s0)		; Fraction of height devoted to spacer.
 
 (defun draw-color-into-rectangle (window color x1 y1 x2 y2)
-  (color:color-bitblt (+ (min (max x1 0) (tv:sheet-inside-width window))
+  (color:rectangle (+ (min (max x1 0) (tv:sheet-inside-width window))
 			 (tv:sheet-left-margin-size window))
 		      (+ (min (max y1 0) (tv:sheet-inside-height window))
 			 (tv:sheet-top-margin-size window))			   
