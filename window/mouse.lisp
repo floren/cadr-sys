@@ -1000,7 +1000,7 @@ area within the :handle-mouse method still retain control."))
   (WHEN SPEC
     (AND (EQ SPEC T) (SETQ SPEC 1))
     (IF (NUMBERP SPEC)
-	(SETQ BAR-WIDTH SPEC SPEC (MAKE-LIST NIL 4))
+	(SETQ BAR-WIDTH SPEC SPEC (MAKE-LIST 4))
         (SETQ BAR-WIDTH (- (THIRD SPEC) (FIRST SPEC))))
     (SETF (FIRST SPEC) LM)
     (SETF (SECOND SPEC) TM)
