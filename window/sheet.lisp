@@ -82,8 +82,8 @@ assuming that a screen's offsets are always 0."
        (Y-OFFSET 0))
       ((EQ W TOP)
        (VALUES X-OFFSET Y-OFFSET))
-    (SETQ X-OFFSET (+ X-OFFSET (SHEET-X W))
-	  Y-OFFSET (+ Y-OFFSET (SHEET-Y W)))))
+    (SETQ X-OFFSET (+ X-OFFSET (SHEET-X-OFFSET W))
+	  Y-OFFSET (+ Y-OFFSET (SHEET-Y-OFFSET W)))))
 
 (DEFUN SHEET-ME-OR-MY-KID-P (SHEET ME)
   "T if SHEET is ME or an inferior to any number of levels of ME."
@@ -444,8 +444,8 @@ However, other processes can run when this function is called."
       (SETF (SHEET-INFERIORS SUPERIOR) (DELQ SELF (SHEET-INFERIORS SUPERIOR))))))
 
 (DEFUN SHEET-OVERLAPS-P (SHEET LEFT TOP WIDTH HEIGHT
-			       &AUX (W-X (SHEET-X SHEET))
-			            (W-Y (SHEET-Y SHEET))
+			       &AUX (W-X (SHEET-X-OFFSET SHEET))
+			            (W-Y (SHEET-Y-OFFSET SHEET))
 				    (W-X1 (+ W-X (SHEET-WIDTH SHEET)))
 				    (W-Y1 (+ W-Y (SHEET-HEIGHT SHEET))))
   "True if a sheet overlaps the given area.
@@ -456,8 +456,8 @@ The specified coordinates are relative to SHEET's superior."
 	   ( W-Y (+ TOP HEIGHT)))))
 
 (DEFUN SHEET-OVERLAPS-EDGES-P (SHEET LEFT TOP RIGHT BOTTOM
-			       &AUX (W-X (SHEET-X SHEET))
-			            (W-Y (SHEET-Y SHEET))
+			       &AUX (W-X (SHEET-X-OFFSET SHEET))
+			            (W-Y (SHEET-Y-OFFSET SHEET))
 				    (W-X1 (+ W-X (SHEET-WIDTH SHEET)))
 				    (W-Y1 (+ W-Y (SHEET-HEIGHT SHEET))))
   "True if a sheet overlaps the given four coordinates.
@@ -472,7 +472,7 @@ The specified coordinates are relative to SHEET's superior."
   "True if two sheets overlap.  They need not have the same superior."
   (COND ((EQ (SHEET-SUPERIOR SHEET-A) (SHEET-SUPERIOR SHEET-B))
 	 ;; If superiors are the same, simple comparison
-	 (SHEET-OVERLAPS-P SHEET-A (SHEET-X SHEET-B) (SHEET-Y SHEET-B)
+	 (SHEET-OVERLAPS-P SHEET-A (SHEET-X-OFFSET SHEET-B) (SHEET-Y-OFFSET SHEET-B)
 			   (SHEET-WIDTH SHEET-B) (SHEET-HEIGHT SHEET-B)))
 	(T
 	 (MULTIPLE-VALUE (X-OFF-A Y-OFF-A)
@@ -485,8 +485,8 @@ The specified coordinates are relative to SHEET's superior."
 		  ( Y-OFF-B (+ Y-OFF-A (SHEET-HEIGHT SHEET-A))))))))
 
 (DEFUN SHEET-WITHIN-P (SHEET OUTER-LEFT OUTER-TOP OUTER-WIDTH OUTER-HEIGHT
-			     &AUX (W-X (SHEET-X SHEET))
-			          (W-Y (SHEET-Y SHEET))
+			     &AUX (W-X (SHEET-X-OFFSET SHEET))
+			          (W-Y (SHEET-Y-OFFSET SHEET))
 				  (W-X1 (+ W-X (SHEET-WIDTH SHEET)))
 				  (W-Y1 (+ W-Y (SHEET-HEIGHT SHEET))))
   "True if the sheet is fully within the specified rectangle.
@@ -517,8 +517,8 @@ The specified coordinates are relative to OUTER-SHEET's superior."
 (DEFUN SHEET-CONTAINS-SHEET-POINT-P (SHEET TOP-SHEET X Y)
   "T if (X,Y) lies in SHEET.  X and Y are co-ordinates in TOP-SHEET."
   (DO ((S SHEET (SHEET-SUPERIOR S))
-       (X X (- X (SHEET-X S)))
-       (Y Y (- Y (SHEET-Y S))))
+       (X X (- X (SHEET-X-OFFSET S)))
+       (Y Y (- Y (SHEET-Y-OFFSET S))))
       ((NULL S))			;Not in the same hierarchy, return nil
     (AND (EQ S TOP-SHEET)
 	 (RETURN (AND ( X 0) ( Y 0)
