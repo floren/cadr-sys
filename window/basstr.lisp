@@ -972,7 +972,7 @@ OPTIONS can include either :TYPEAHEAD or :KEYBOARD-PROCESS,
 (DEFUN KBD-ESC-OUTPUT-HOLD (IGNORE)
   (PROG (P W LOCKED ANS)
     (COND ((AND (SETQ P LAST-WHO-LINE-PROCESS)
-		(MEM 'EQUALP (PROCESS-WHOSTATE P) '("Output Hold" "Lock" "Window Lock"))
+		(MEM 'EQUALP (SI:PROCESS-WAIT-WHOSTATE P) '("Output Hold" "Lock" "Window Lock"))
 		(TYPEP (SETQ W (CAR (PROCESS-WAIT-ARGUMENT-LIST P))) 'SHEET))
 	   ;; Bludgeon our way past any deadlocks, e.g. due to the process P holding
 	   ;; the lock on the window we are trying to expose, or on something we need
