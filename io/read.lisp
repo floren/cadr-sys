@@ -1714,7 +1714,7 @@ FILE-ATTRIBUTE-BINDINGS makes a binding for this from the Cold-load attribute.")
       (MEMQ TREE THINGS))))			; TREE is an atom
 
 (DEFUN XR-#=-MACRO (STREAM IGNORE &OPTIONAL (LABEL XR-SHARP-ARGUMENT)
-		    &AUX LABEL-BINDING THING)
+		    &AUX THING)
   (COND
     (*READ-SUPPRESS*
      (VALUES))
