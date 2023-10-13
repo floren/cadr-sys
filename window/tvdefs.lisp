@@ -200,13 +200,6 @@ This is the data structure known about by the microcode."))
 (DEFUN SHEET-INSTANCE-AREA-FUNCTION (INIT-PLIST)
   (OR (GET INIT-PLIST ':AREA) SHEET-AREA))
 
-;;;*****
-(DEFF SHEET-X #'SHEET-X-OFFSET)
-(DEFF SHEET-Y #'SHEET-Y-OFFSET)
-(compiler:make-obsolete sheet-x "use TV:SHEET-X-OFFSET")
-(compiler:make-obsolete sheet-y "use TV:SHEET-Y-OFFSET")
-;;;*****
-
 ;;; The font-alists of actual screens are built using this as a pattern.
 (DEFCONST DEFAULT-FONT-ALIST
 	  '((:DEFAULT . FONTS:CPTFONT)
