@@ -182,8 +182,8 @@ The values are the new edges, or NIL if the user aborted."
 ;;; Return values are the position X, Y, or NIL if the middle button is clicked to abort.
 (DEFUN MOUSE-SET-WINDOW-POSITION (WINDOW &OPTIONAL (MOVE-P T)
 					 &AUX (SUPERIOR (SHEET-SUPERIOR WINDOW))
-				      (X (SHEET-X WINDOW))
-				      (Y (SHEET-Y WINDOW))
+				      (X (SHEET-X-OFFSET WINDOW))
+				      (Y (SHEET-Y-OFFSET WINDOW))
 				      XOFF YOFF BD)
   "Ask user for new position for WINDOW, return it, and usually move WINDOW.
 WINDOW is moved unless MOVE-P is NIL.
