@@ -63,10 +63,10 @@ use as a menu item-list."
 			     (FERROR NIL
 				"Attempt to get edges from sheet (~S) with different superior"
 				     EDGES-FROM))
-			 (LIST (SHEET-X EDGES-FROM)
-			       (SHEET-Y EDGES-FROM)
-			       (+ (SHEET-X EDGES-FROM) (SHEET-WIDTH EDGES-FROM))
-			       (+ (SHEET-Y EDGES-FROM) (SHEET-HEIGHT EDGES-FROM))))
+			 (LIST (SHEET-X-OFFSET EDGES-FROM)
+			       (SHEET-Y-OFFSET EDGES-FROM)
+			       (+ (SHEET-X-OFFSET EDGES-FROM) (SHEET-WIDTH EDGES-FROM))
+			       (+ (SHEET-Y-OFFSET EDGES-FROM) (SHEET-HEIGHT EDGES-FROM))))
 			(T (FERROR NIL
 				   "~S is illegal :EDGES-FROM specification" EDGES-FROM)))
 		  ':EDGES)))
@@ -1337,8 +1337,8 @@ Also changes the label if it happens to be the same."))
   "Return the sheet lowest in the sheet hierarchy which contains the given point."
   ;; Trace down to find the lowest sheet under the point
   (DO-NAMED FOO
-      ((X X (- X (SHEET-X SHEET)))
-       (Y Y (- Y (SHEET-Y SHEET))))
+      ((X X (- X (SHEET-X-OFFSET SHEET)))
+       (Y Y (- Y (SHEET-Y-OFFSET SHEET))))
       (NIL)
     (DO ((INFERIORS (IF (EQ ACTIVE-CONDITION ':EXPOSED)
 			(SHEET-EXPOSED-INFERIORS SHEET)
@@ -1349,9 +1349,9 @@ Also changes the label if it happens to be the same."))
 	 (RETURN-FROM FOO))
       (SETQ INFERIOR (CAR INFERIORS))
       (COND ((AND (NOT (SHEET-INVISIBLE-TO-MOUSE-P INFERIOR))
-		  ( X (SHEET-X INFERIOR)) ( Y (SHEET-Y INFERIOR))
-		  (< X (+ (SHEET-X INFERIOR) (SHEET-WIDTH INFERIOR)))
-		  (< Y (+ (SHEET-Y INFERIOR) (SHEET-HEIGHT INFERIOR)))
+		  ( X (SHEET-X-OFFSET INFERIOR)) ( Y (SHEET-Y-OFFSET INFERIOR))
+		  (< X (+ (SHEET-X-OFFSET INFERIOR) (SHEET-WIDTH INFERIOR)))
+		  (< Y (+ (SHEET-Y-OFFSET INFERIOR) (SHEET-HEIGHT INFERIOR)))
 		  (SELECTQ ACTIVE-CONDITION
 		    (:ACTIVE (OR (SHEET-EXPOSED-P INFERIOR)
 				 (SEND INFERIOR ':SCREEN-MANAGE-DEEXPOSED-VISIBILITY)))
@@ -1509,10 +1509,10 @@ it gets reset and can run again."))
       (NULL)
       (SYMBOL (SETQ PROCESS (MAKE-PROCESS NAME))
 	      (IF (EQ TEM T)
-		  (PROCESS-PRESET PROCESS SELF ':PROCESS-TOP-LEVEL))
-	      (PROCESS-PRESET PROCESS TEM SELF))
+		  (SEND PROCESS :PRESET SELF ':PROCESS-TOP-LEVEL))
+	      (SEND PROCESS :PRESET TEM SELF))
       (CONS (SETQ PROCESS (APPLY 'MAKE-PROCESS NAME (CDR TEM)))
-	    (PROCESS-PRESET PROCESS (CAR TEM) SELF))
+	    (SEND PROCESS :PRESET PROCESS (CAR TEM) SELF))
       (SI:PROCESS))))
 
 (DEFUN MAYBE-RESET-PROCESS (MESSAGE &REST IGNORE)
