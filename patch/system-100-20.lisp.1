@@ -1,0 +1,46 @@
+;;; -*- Mode:Lisp; Readtable:ZL; Package:USER; Base:8; Patch-File:T -*-
+;;; Patch file for System version 100.20
+;;; Reason:
+;;;  SET-LOCAL-HOST-VARIABLE: Try to find the first non-ZWEI host instead.
+;;; Written 13-Jun-23 09:30:25 by AMS,
+;;; while running on Lisp Machine One from band 2
+;;; with Experimental System 100.13, Hacks by AMS 2.0, microcode 323, WIP.
+
+
+
+; From file FC: /sys/network/host.lisp at 13-Jun-23 09:30:42
+#8R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER::PATCH-SOURCE-FILE "FC: //sys//network//host"
+
+(DEFUN SET-LOCAL-HOST-VARIABLES (&AUX ELEM)
+  (IF LOCAL-HOST
+      (SETQ LOCAL-HOST-NAME (SEND LOCAL-HOST :NAME)))
+  (COND ((SETQ ELEM (ASSOC-EQUALP LOCAL-HOST-NAME MACHINE-LOCATION-ALIST))
+	 (LET (TEM)
+	   (SETF `(LOCAL-HOST-NAME ,LOCAL-PRETTY-HOST-NAME ,LOCAL-FINGER-LOCATION
+				   ,LOCAL-FLOOR-LOCATION ,ASSOCIATED-MACHINE
+				   ,TEM)
+		 ELEM)
+	   (SETQ ASSOCIATED-MACHINE (FS:GET-PATHNAME-HOST ASSOCIATED-MACHINE))
+	   (SETQ HOST-OVERRIDDEN-SITE-OPTION-ALIST NIL)  ;In case error in EVAL.
+	   (SETQ HOST-OVERRIDDEN-SITE-OPTION-ALIST
+		 (LOOP FOR (KEY EXP) IN TEM
+		       COLLECT `(,KEY . ,(EVAL EXP))))))
+	(T
+	 (SETQ LOCAL-PRETTY-HOST-NAME "Unknown"
+	       LOCAL-FINGER-LOCATION "(Unknown)"
+	       LOCAL-FLOOR-LOCATION '(UNKNOWN 0)
+	       ASSOCIATED-MACHINE
+	       (IF (GET-SITE-OPTION :DEFAULT-ASSOCIATED-MACHINE)
+		   (FS:GET-PATHNAME-HOST (GET-SITE-OPTION :DEFAULT-ASSOCIATED-MACHINE))
+		 ;; Make sure we don't use a ZWEI host (buffers etc).
+		 (CAR (MEM #'(LAMBDA (X H)
+			       (CONDITION-CASE ()
+				      (NEQ (SEND H :SYSTEM-TYPE) :ZWEI)
+				      (ERROR NIL)))
+			   NIL
+			   FS:*PATHNAME-HOST-LIST*)))
+	       HOST-OVERRIDDEN-SITE-OPTION-ALIST NIL)))
+  (INITIALIZATIONS 'SITE-OPTION-INITIALIZATION-LIST T))
+))
