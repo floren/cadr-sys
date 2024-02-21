@@ -1120,6 +1120,8 @@ Signals the condition ZWEI:BARF, passing along the args to BARF."
 	    #/C-M-/; COM-KILL-COMMENT
 	    #/M-N COM-DOWN-COMMENT-LINE
 	    #/M-P COM-UP-COMMENT-LINE
+	    #/C-SH-M COM-MACRO-EXPAND-EXPRESSION
+	    #/M-SH-M COM-MACRO-EXPAND-EXPRESSION-ALL
 	    #/M-Q COM-FILL-PARAGRAPH
 	    #/M-G COM-FILL-REGION
 	    #/C-/\ COM-JUST-ONE-SPACE
