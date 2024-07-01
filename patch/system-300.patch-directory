@@ -1,9 +1,10 @@
 ;;; -*- Mode:LISP; Package:USER; Base:10; Readtable:T; Patch-File:T -*-
 ;;; Patch directory for System version 300
-;;; Written 27-Sep-23 09:41:34 by ams,
-;;; while running on Lisp Machine One from band 2
-;;; with Experimental System 100.22, microcode 323.
+;;; Written 1-Jul-24 16:10:40 by ams,
+;;; while running on Lisp Machine One from band 3
+;;; with Experimental System 300.0, microcode 323.
 
 (:EXPERIMENTAL
  ((0 "System Loaded" "ams" NIL)
+  (1 "Don't trap to debugger when trying to LOGIN if home directory doesn't exist." "ams" NIL)
   ))
