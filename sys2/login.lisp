@@ -54,10 +54,14 @@ the local file system if one is loaded."
 	;;(FS:SET-DEFAULT-PATHNAME (FS:USER-HOMEDIR) FS:LOAD-PATHNAME-DEFAULTS)
 	(SETQ WIN-P T)
 	(WHEN LOAD-INIT-FILE-P
-	  (LOAD (FS:INIT-FILE-PATHNAME "LISPM" HOST)
-		:PACKAGE "USER"
-		:IF-DOES-NOT-EXIST NIL
-		:SET-DEFAULT-PATHNAME NIL)))	;already done explicity above
+	  (CONDITION-CASE ()
+	      (LOAD (FS:INIT-FILE-PATHNAME "LISPM" HOST)
+		    :PACKAGE "USER"
+		    :IF-DOES-NOT-EXIST NIL
+		    :SET-DEFAULT-PATHNAME NIL) ; already done explicity above
+	    ((FS:DIRECTORY-NOT-FOUND
+		 (FORMAT *TERMINAL-IO*
+			 "~&There does not seem to be directory for you on ~A." HOST))))))
       (UNLESS WIN-P
 	;; If user aborts during login, particularly if he types Abort when
 	;; being asked for his password, log him out so he can try again.  But
