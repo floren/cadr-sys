@@ -299,25 +299,25 @@ You lose big!!"
 
 ;;;; the real guts of breakpointing
 
-(defmethod (breakpoint-error :case :proceed-asking-user :no-action) ()
-
-  )
-
-(defmethod (breakpoint-error :case :proced-asking-user :single-step) ()
-
-  )
-
-(defun proceed-breakpoint (sg fef pc single-step-p)
-  (let* ((bpt (assq pc (assq 'breakpoints (fef-debugging-info fef))))
-	 (inst (cadr bpt)))
-    (if (null bpt)
-	(ferror nil "Foo! I don't know about a breakpoint in ~S at ~D. Lossage!!" fef pc)
-      (without-interrupts
-	(let ((%inhibit-read-only t))
-	  (swapf (fef-instruction fef pc) inst)))
-      (setf (getf (sg-plist sg) 'single-macro-dispatch) t)
-      (proceed-error-sg :no-action)
 ;>>
+;(defmethod (breakpoint-error :case :proceed-asking-user :no-action) ()
+
+;  )
+
+;(defmethod (breakpoint-error :case :proced-asking-user :single-step) ()
+
+;  )
+
+;(defun proceed-breakpoint (sg fef pc single-step-p)
+;  (let* ((bpt (assq pc (assq 'breakpoints (fef-debugging-info fef))))
+;	 (inst (cadr bpt)))
+;    (if (null bpt)
+;	(ferror "Foo! I don't know about a breakpoint in ~S at ~D. Lossage!!" fef pc)
+;      (without-interrupts
+;	(let ((%inhibit-read-only t))
+;	  (swapf (fef-instruction fef pc) inst)))
+;      (setf (getf (sg-plist sg) 'single-macro-dispatch) t)
+;      (proceed-error-sg :no-action)
 
 
 ;;;; BREAKON
