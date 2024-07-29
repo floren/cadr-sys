@@ -710,6 +710,7 @@ The first surface string in each list is the preferred one for that system."
 (DEFINE-CANONICAL-TYPE :PL1 "PL1")
 (DEFINE-CANONICAL-TYPE :CLU "CLU")
 (DEFINE-CANONICAL-TYPE :C "C")
+(DEFINE-CANONICAL-TYPE :C-INCLUDE "H")
 
 ;; Yow!
 (define-canonical-type :lossage "LOSSAGE"
