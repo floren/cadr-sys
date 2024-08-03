@@ -24,18 +24,9 @@
 
 (DEFSYSTEM TAPE
   (:NAME "Tape")
-  #-CADR
   (:pathname-default "SYS:TAPE;")
-  #+CADR
-  (:pathname-default "LM:BV.TAPE;")		;BV: while porting
-  #-CADR
   (:warnings-pathname-default "sys:tape;tape-cwarns lisp")
-  #+CADR
-  (:warnings-pathname-default "lm:bv.tape;tape-cwarns lisp")
-  #-CADR
   (:patchable "SYS:TAPE;")
-  #+CADR
-  (:patchable "LM:BV.TAPE;")  
   (:not-in-disk-label)
   ;;; Support
   (:module tape ("tape" "error"))
@@ -98,10 +89,7 @@
 (defsystem tframe
   (:name "Tape Utility Frame")
   (:short-name "TFrame")
-  #-CADR
   (:pathname-default "sys:tape;")
-  #+CADR
-  (:pathname-default "lm:bv.tape;")
   #+CADR
   (:module lmipatch "lmi-frame-constraint-patch")
   (:module macros "tframe-macros")		; all macros in the system
@@ -120,10 +108,7 @@
 
 (DEFSYSTEM tape-compat
   (:NAME "tape-compat")
-  #-CADR
   (:PATHNAME-DEFAULT "SYS:TAPE;")
-  #+CADR
-  (:PATHNAME-DEFAULT "lm:bv.TAPE;")
   (:NOT-IN-DISK-LABEL)
   (:MODULE DEFS ("MTDEFS"))
   #-CADR
