@@ -285,15 +285,7 @@
 		(fs:locking (fs:file-lock fobj)
 		  (fs:set-file-attribute
 		    fobj
-		    #+CADR
-		    ;; In old code, the args are (FILE VAL INDICATOR)
-		    (typecase (cdr attribute)
-		      ((or compiled-function closure)
-		       (funcall (cdr attribute) file))
-		      (t (cdr attribute)))
 		    (car attribute)
-		    #-CADR
-		    ;; In new code, it is (FILE INDICATOR VAL)
 		    (typecase (cdr attribute)
 		      ((or compiled-function closure)
 		       (funcall (cdr attribute) file))

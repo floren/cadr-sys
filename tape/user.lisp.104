@@ -56,13 +56,7 @@
 	 ((null spec) (ferror nil "Invalid device specifier: ~S" device-string))
       (when (string-equal (first spec) device-string :end2 (length (first spec)))
 	(setq device-flavor (cadr spec)
-	      unit
-	      (if (or (null second-colon)
-		      (< (length (first spec)) (- second-colon first-colon 1)))
-		  ;; Use this for "host:deviceUnit:" or "deviceUnit:"
-		  (read-from-string device-string nil nil :start (length (first spec)))
-		;; Allow "host:device:unit"
-		(read-from-string string nil nil :start (1+ second-colon))))
+	      unit (read-from-string device-string nil nil :start (length (first spec))))
 	(return nil)))
     (values host device-flavor unit)))
 
@@ -639,68 +633,18 @@ object if the format for the tape is handled and can be determined."
       (return-from prompt-for-tape-info name))))
 
 
-;; Use local-host as default for host.
-;; Add log-file and tape-name args, since remote tapes are "endless", no need to ask again.
-(defun backup-files (file-list &key
-		     (host si:local-host)
-		     (log-file nil log-file-p)
-		     (tape-name nil tape-name-p)
-		     (incremental nil)
+(defun backup-files (file-list host &key
 		     (set-backup-bits t)
 		     (compare t)
 		     (tape-info-function 'prompt-for-tape-info)
 		     (device-spec *selected-device*)
 		     (format-spec *selected-format*))
   "This backs up the files in FILE-LIST to tape.  Each element in
-the list must be a file property list, or FILE-LIST a string.  
-The files backed up will be compared and/or have their backup bits 
-set as specified by the arguments.
-If INCREMENTAL is T, only files with :NOT-BACKED-UP property T are used.
-TAPE-INFO-FUNCTION takes no arguments and should return
+the list must be a file property list.  The files backed up will
+be compared and/or have their backup bits set as specified by the
+arguments.  TAPE-INFO-FUNCTION takes no arguments and should return
 two values for each tape mounted: the tape name and the pathname 
-for the log.  It is called for each tape in the dump.
-If TAPE-NAME is specified, TAPE-INFO-FUNCTION is not used,
-and TAPE-NAME is used as Unit if the DEVICE-SPEC is an RTAPE device."
-  ;; Check the arg types
-  (check-type host (or si:host string) "a host or a string")
-  (check-type log-file (or string null) "a string or NIL")
-  (check-type tape-name (or string null) "a string or NIL")
-  (check-type file-list (or string cons) "a string or list")
-  ;; Allow a string (with wildcards), and filter if incremental backup
-  (cond ((stringp file-list)
-	 (setq file-list (full-directory-list file-list
-					      ;; Filter it if needed
-					      :filter-keywords
-					      (when incremental '(:not-backed-up t)))))
-	(incremental
-	 ;; Already have a list, make sure to filter it
-	 (setq file-list (mapcan #'(lambda (pl)
-				     (when (process-filter-keywords '(:not-backed-up t)
-								    pl)
-				       (cons pl nil)))
-				 file-list))))
-  ;; In case host is e.g. a string
-  (setq host (si:parse-host host))
-  ;; Overly helpful, perhaps.
-  (when (typep device-spec 'rtape-device)
-    (let ((drive (rtape-status-drive (send device-spec :status)))
-	  (rt-host (send device-spec :host)))
-      (when (not (typep rt-host 'si:host))
-	(cerror "Prompt for a host to use"
-		"The selected device ~s has no host set." device-spec)
-	(let ((new
-		(do ((nhost (prompt-and-read :string-trim "RTAPE server host: ")
-			    (prompt-and-read :string-trim "RTAPE server host: ")))
-		    ((si:parse-host nhost t) (si:parse-host nhost))
-		  (format t "~&~s is not a host name. Try again.~%" nhost))))
-	  (when (typep new 'si:host)
-	    (format t "~&Setting host to ~a" new)
-	    (send device-spec :set-options :host new))))
-      (when (and tape-name (not (string-equal drive tape-name)))
-	(format t "~&Setting device unit to tape name ~s" tape-name)
-	(send device-spec :set-options :unit tape-name)
-	(reset-device device-spec))))
-
+for the log.  It is called for each tape in the dump."
   (using-device (device device-spec)
     (using-format (format format-spec)
       (with-device-locked device
@@ -717,83 +661,82 @@ and TAPE-NAME is used as Unit if the DEVICE-SPEC is an RTAPE device."
 	       (format t "~&*** ~D files failed during access ***~%" (length failed-files)))
 	     (format t "~&~%*** Backup Finished ***~%")
 	     failed-files)
-	  (when (not tape-name-p)
-	    (multiple-value-setq (tape-name log-file)
-	      (funcall (or tape-info-function 'prompt-for-tape-info) host t)))
-	  (do* ((files files-to-backup (cdr files))
-		(file (car files) (car files))
-		bad-files
-		files-to-log
-		new-tape)
-	       ((or (null file) new-tape)
-		(if (not new-tape)
-		    (format t "~&Last file written to tape.~%")
-		  (let ((condition (first new-tape))
-			(file-to-retry (second new-tape)))
-		    (format t "~&End of tape encountered writing ~A.  ~%~
+	  (multiple-value-bind (tape-name log-file)
+	      (funcall (or tape-info-function 'prompt-for-tape-info) host t)
+	    (do* ((files files-to-backup (cdr files))
+		  (file (car files) (car files))
+		  bad-files
+		  files-to-log
+		  new-tape)
+		 ((or (null file) new-tape)
+		  (if (not new-tape)
+		      (format t "~&Last file written to tape.~%")
+		    (let ((condition (first new-tape))
+			  (file-to-retry (second new-tape)))
+		      (format t "~&End of tape encountered writing ~A.  ~%~
                                    Fixing last file on tape - "
-			    (car file-to-retry))
-		    (push file-to-retry files)	;put this file back on list
-		    (typecase condition
-		      (end-of-tape-writing-file
-		       ;;;Got physical EOT (end-of-tape).  Attempt to mark logical EOT.
-		       ;;;If we get another EOT error here, there wasn't room for logical EOT,
-		       ;;;but the tape is still good!
-		       (condition-case (condition)
-				       (progn
-					(send format :beginning-of-file device)
-					(send format :finish-tape device))
-			 (physical-end-of-tape
-			  (format t "~&Unable to mark logical end of tape - proceeding anyway."))))
-		      (end-of-tape-writing-header))
-		    (format t "done.~%")))
-		(send format :finish-tape device)
-		(when compare
-		  (format t "~&Rewinding to compare ... ")
-		  (send format :rewind device)
-		  (format t "done.~2%Comparing files:~%")
-		  (do* ((vl (compare-files :format-spec format
-					   :device-spec device)
-			    (cdr vl))
-			(val (car vl) (car vl))
-			(count 0 (add1 count)))
-		       ((null vl))
-		    (when (errorp val)
-		      (push val bad-files)
-		      (delq (nth count files-to-log) files-to-log)))
-		  (if (null bad-files)
-		      (format t "~&All files compared were equal.")
-		    (progn
-		      (format t "~&*** Not all files were equal (bad files follow) ***")
-		      ;; +++ compare returns condition objects (at least in the case of "file not found" +++
-		      (dolist (condition bad-files)
-			(format t "~&~10@t~A~%" (send condition :report nil)))
-		      (format t "~&Make a note of these files and dump them again.~%")
-		      (y-or-n-p "Continue? "))))
-		(setq files-to-backup files)
-		(when (and files-to-log log-file)
-		  (format t "~&Logging files - ")
-		  (log-files files-to-log
-			     host log-file `(:tape ,tape-name)
-			     (type-of format) user-id time)
-		  (format t "done.~%"))
-		(when (and set-backup-bits files-to-log)
-		  (format t "~&Setting backup bits ... ")
-		  (set-backup-bits files-to-log)
-		  (format t "done.~%"))
-		(when files-to-backup
-		  (format t "~&Unloading tape ... ")
-		  (unload)
-		  (prompt-for-new-tape format device))
-		t)
-	    (condition-case (condition)
-			    (send format :write-file device file :end-of-tape-action :error)
-	      ((end-of-tape-writing-header end-of-tape-writing-file)
-	       (setq new-tape (list condition file)))
-	      (fs:file-operation-failure
-	       (format t "~&*** Failed writing file: \"~s\". ***" (car file))
-	       (push (cons (car file) condition) failed-files))
-	      (:no-error (push file files-to-log)))))))))
+			      (car file-to-retry))
+		      (push file-to-retry files) ;put this file back on list
+		      (typecase condition
+			(end-of-tape-writing-file
+			 ;;;Got physical EOT (end-of-tape).  Attempt to mark logical EOT.
+			 ;;;If we get another EOT error here, there wasn't room for logical EOT,
+			 ;;;but the tape is still good!
+			 (condition-case (condition)
+			     (progn
+			      (send format :beginning-of-file device)
+			      (send format :finish-tape device))
+			   (physical-end-of-tape
+			    (format t "~&Unable to mark logical end of tape - proceeding anyway."))))
+			(end-of-tape-writing-header))
+		      (format t "done.~%")))
+		  (send format :finish-tape device)
+		  (when compare
+		    (format t "~&Rewinding to compare ... ")
+		    (send format :rewind device)
+		    (format t "done.~2%Comparing files:~%")
+		    (do* ((vl (compare-files :format-spec format
+					     :device-spec device)
+			      (cdr vl))
+			  (val (car vl) (car vl))
+			  (count 0 (add1 count)))
+			 ((null vl))
+		      (when (errorp val)
+			(push val bad-files)
+			(delq (nth count files-to-log) files-to-log)))
+		    (if (null bad-files)
+			(format t "~&All files compared were equal.")
+		      (progn
+			(format t "~&*** Not all files were equal (bad files follow) ***")
+			;; +++ compare returns condition objects (at least in the case of "file not found" +++
+			(dolist (condition bad-files)
+			  (format t "~&~10@t~A~%" (send condition :report nil)))
+			(format t "~&Make a note of these files and dump them again.~%")
+			(y-or-n-p "Continue? "))))
+		  (setq files-to-backup files)
+		  (when files-to-log
+		    (format t "~&Logging files - ")
+		    (log-files files-to-log
+			       host log-file `(:tape ,tape-name)
+			       (type-of format) user-id time)
+		    (format t "done.~%"))
+		  (when (and set-backup-bits files-to-log)
+		    (format t "~&Setting backup bits ... ")
+		    (set-backup-bits files-to-log)
+		    (format t "done.~%"))
+		  (when files-to-backup
+		    (format t "~&Unloading tape ... ")
+		    (unload)
+		    (prompt-for-new-tape format device))
+		  t)
+	      (condition-case (condition)
+		  (send format :write-file device file :end-of-tape-action :error)
+		((end-of-tape-writing-header end-of-tape-writing-file)
+		 (setq new-tape (list condition file)))
+		(fs:file-operation-failure
+		 (format t "~&*** Failed writing file: \"~s\". ***" (car file))
+		 (push (cons (car file) condition) failed-files))
+		(:no-error (push file files-to-log))))))))))
 
 
 (defun view-tape (&key

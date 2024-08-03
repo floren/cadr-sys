@@ -1,0 +1,120 @@
+;;; -*- Mode:Lisp; Readtable:ZL; Package:USER; Base:8; Patch-File:T -*-
+;;; Private patches made by BV
+;;; Reason:
+;;;  Copy of LMI.
+;;; Written 13-Feb-24 08:25:48 by BV,
+;;; while running on CDR (CADR) from band 3
+;;; with Experimental System 100.22, Experimental Local-File 54.0, Experimental FILE-Server 11.0, Experimental Tape 27.0, microcode 323, 230816.
+
+
+
+; From file OZ: /tree/io/disk.lisp at 13-Feb-24 08:25:52
+#8R SYSTEM-INTERNALS#:
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "SYSTEM-INTERNALS")))
+  (COMPILER::PATCH-SOURCE-FILE "OZ: //tree//io//disk"
+
+(DEFUN READ-LMC-WORD (WORD-ADDRESS RQB UNIT LMC-FORMATP)
+  (multiple-value-bind (page offset)
+      (floor word-address page-size)
+    (DISK-READ rqb UNIT page)
+    (COND (LMC-FORMATP
+	   (dpb (aref (rqb-buffer RQB) (1+ (* offset 2)))
+		(BYTE 16. 16.)
+		(aref (rqb-buffer RQB) (* offset 2))))
+	  ('ELSE
+	   (dpb (aref (rqb-buffer RQB) (* offset 2))
+		(BYTE 16. 16.)
+		(aref (rqb-buffer RQB) (1+ (* offset 2))))))))
+
+(DEFMACRO WITH-DISK-RQB ((RQB . OPTIONS) &BODY BODY)
+  (LET ((R (GENTEMP "rqb"))
+	(RP (GENTEMP "rqbp")))
+    `(LET (,R ,RP)
+       (UNWIND-PROTECT
+	   (LET ((,RQB (MULTIPLE-VALUE (,R ,RP) (MAYBE-GET-DISK-RQB ,@OPTIONS))))
+	     ,@BODY)
+	 (AND ,RP ,R (RETURN-DISK-RQB ,R))))))
+
+(DEFUN MAYBE-GET-DISK-RQB (&REST L)
+  (DECLARE (ARGLIST &OPTIONAL (N-PAGES 1) LEADER-LENGTH)
+	   (VALUES RQB RETURNP))
+  (COND ((TYPEP (CAR L) 'ARRAY)
+	 (VALUES (CAR L) NIL))
+	('ELSE
+	 (VALUES (APPLY 'GET-DISK-RQB L) T))))
+
+(defmacro with-decoded-disk-unit ((decoded encoded use . options) &body body)
+  (let ((u (gentemp "unit"))
+	(d (gentemp "dont-dispose")))
+    `(let (,u ,d)
+       (unwind-protect
+	   (let ((,decoded (multiple-value-setq (,u ,d) (decode-unit-argument ,encoded ,use ,@options))))
+	     ,@body)
+	 (and ,u (not ,d) (dispose-of-unit ,u))))))
+
+(DEFUN MAGTAPE-UNIT-P (FROM-UNIT)
+  (AND (CLOSUREP FROM-UNIT)
+       (EQ (CLOSURE-FUNCTION FROM-UNIT) 'FS:BAND-MAGTAPE-HANDLER)))
+		       
+
+;; Copied from LAD: RELEASE-3.IO; DISK.LISP#406 on 2-Oct-86 17:27:01
+(DEFUN MEASURED-FROM-PART-SIZE (FROM-UNIT FROM-PART FROM-PART-BASE FROM-PART-SIZE)
+  "measure size, or first value of NIL if measured size cant be trusted"
+  (COND ((MAGTAPE-UNIT-P FROM-UNIT)
+	 ;; PROTOCOL KLUDGE. WE ALREADY KNOW THE SIZE IS CORRECT FROM FIND-DISK-PARTITION-FOR-READ
+	 ;; AND WE ALSO KNOW THAT WE CANNOT DO RANDOM READS ON SUCH A UNIT.
+	 ())
+	((STRING-EQUAL FROM-PART "LOD" :END1 3)
+	 (WITH-DISK-RQB (RQB 1)
+	   (DISK-READ RQB FROM-UNIT (1+ FROM-PART-BASE))
+	   (LET* ((BUF (RQB-BUFFER RQB))
+		  (SIZE (SYS-COM-PAGE-NUMBER BUF %SYS-COM-VALID-SIZE))
+		  (FINAL-SIZE (IF (AND (> SIZE #o10) ( SIZE FROM-PART-SIZE))
+				  SIZE
+				FROM-PART-SIZE))
+		  (MEMORY-SIZE
+		    (SYS-COM-PAGE-NUMBER BUF %SYS-COM-HIGHEST-VIRTUAL-ADDRESS)))
+	       (AND (> SIZE #o10)
+		    ( SIZE FROM-PART-SIZE)
+		    (VALUES FINAL-SIZE
+			    (IF (= (AREF BUF (* 2 %SYS-COM-BAND-FORMAT)) #o1000)
+				MEMORY-SIZE FINAL-SIZE)
+			    (AREF BUF (* 2 %SYS-COM-DESIRED-MICROCODE-VERSION)))))))
+	((OR (STRING-EQUAL FROM-PART "LMC" :END1 3)
+	     ;;(STRING-EQUAL FROM-PART "MCR" :END1 3)
+	     )
+	 (WITH-DISK-RQB (RQB)
+	   (LET ((LMC-FORMATP (STRING-EQUAL FROM-PART "LMC" :END1 3))
+		 (I-MEM-LOCATIONS 0)
+		 (MAIN-MEMORY-PAGES 0)
+		 (A//M-LOCATIONS 0)
+		 (MID-LOCATIONS 0)
+		 (MEASURED-SIZE 0)
+		 (DISK-WORD-ADDRESS (* PAGE-SIZE FROM-PART-BASE))
+		 (M-B-section-type)
+		 (M-C-initial-address)
+		 (M-D-n-locs))
+	     (DO-FOREVER
+	       (SETQ M-B-section-type (READ-lmc-word disk-WORD-address RQB FROM-unit LMC-FORMATP))
+	       (SETQ M-C-initial-address (READ-LMC-WORD (1+ disk-WORD-address) RQB FROM-unit LMC-FORMATP))
+	       (SETQ M-D-n-locs (READ-lmc-word (+ 2 disk-WORD-address) RQB FROM-unit LMC-FORMATP))
+	       (ECASE M-B-section-type
+		 (1			   ;I-MEM
+		  (setq I-MEM-LOCATIONS M-D-n-locs	
+			DISK-WORD-ADDRESS (+ DISK-WORD-ADDRESS 3 (* 2 M-D-n-locs))))
+		 (2			   ;D--MEM obsolete
+		  nil)
+		 (3			   ;MAIN MEMORY
+		  (setq MAIN-MEMORY-PAGES M-C-initial-address	
+			DISK-WORD-ADDRESS (+ DISK-WORD-ADDRESS 3 1)
+			MEASURED-SIZE (+ M-C-initial-address M-D-n-locs)))
+		 (4			   ;A and M Memory
+		  (setq A//M-LOCATIONS M-D-n-locs	
+			DISK-WORD-ADDRESS (+ 3 DISK-WORD-ADDRESS M-D-n-locs))
+		  (return (VALUES MEASURED-SIZE I-MEM-LOCATIONS A//M-LOCATIONS MID-LOCATIONS
+				  MAIN-MEMORY-PAGES)))
+		 (5			   ;Macro-IR-Decode
+		  (setq MID-LOCATIONS M-D-n-locs
+			DISK-WORD-ADDRESS (+ 3 M-D-n-locs DISK-WORD-ADDRESS))))))))))
+
+))

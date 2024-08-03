@@ -69,8 +69,7 @@
   (:compile-load test (:fasload tape) (:fasload tape))
   #+Lambda (:compile-load device-support (:fasload tape) (:fasload tape))
   #+Lambda (:compile-load devices (:fasload device-support tape) (:fasload device-support tape))
-  #+CADR
-  (:compile-load remote (:fasload tape))
+  #+CADR (:compile-load remote (:fasload tape))
   (:compile-load format-support (:fasload tape))
   (:compile-load formats (:fasload format-support tape) (:fasload format-support tape))
   (:compile-load backup (:fasload tape) (:fasload tape))

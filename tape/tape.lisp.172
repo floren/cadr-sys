@@ -674,23 +674,15 @@ is selected.")
 ;;;
 ;;;
 
-#-CADR
-;; We run without wires on CADR
 (defun wire-dma-buffer (dma-buffer &optional
 			   (number-of-pages (si:dma-buffer-size-in-pages dma-buffer)))
   (si:wire-wireable-array dma-buffer 0 (* number-of-pages si:page-size) nil nil))
 
-#-CADR
-;; We run without wires on CADR
 (defun unwire-dma-buffer (dma-buffer &optional
 			     (number-of-pages (si:dma-buffer-size-in-pages dma-buffer)))
   (si:unwire-wireable-array dma-buffer 0 (* number-of-pages si:page-size)))
 
 (defmacro with-buffer-wired ((buffer number-of-pages) &body body)
-  #+CADR
-  ;; We run without wires on CADR
-  `(progn ,@body)
-  #-CADR
   `(unwind-protect
        (progn
 	 (wire-dma-buffer ,buffer ,number-of-pages)

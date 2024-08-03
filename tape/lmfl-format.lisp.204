@@ -423,9 +423,7 @@
 			      (<= (- number-of-records record-count) chunk-size))
 		  (buffer-array (ecase byte-factor
 				  (1 (si:dma-buffer-8b buffer))
-				  (2 (si:dma-buffer-16b buffer))))
-		  ;; Always use the 8b version of the buffer for writing!
-		  (buffer-array-8b (si:dma-buffer-8b buffer)))
+				  (2 (si:dma-buffer-16b buffer)))))
 		 ((= record-count number-of-records)
 		  (condition-case (condition)
 		      (send device :write-filemark)
@@ -440,7 +438,7 @@
 					(* records-this-pass rs))
 		      (+ (* (sub1 records-this-pass) rs) last-record-fill)))
 	      (condition-case (condition)
-		  (send device :write-array buffer-array-8b records-this-pass record-size)
+		  (send device :write-array buffer-array records-this-pass record-size)
 		(physical-end-of-tape
 		 (ecase end-of-tape-action
 		   ((:error :return)

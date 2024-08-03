@@ -1,0 +1,154 @@
+;;; -*- Mode:LISP; Package:SYSTEM-INTERNALS; Base:10; Readtable:CL -*-
+;;; Based on code from LMI (IO;NEW-DISK and SYS;STORAGE-DEFS),
+;;; but "neutered" to work on CADR (System 100).
+;;; Lots of low-level things changed in the Lambda system (System 130).
+
+;; storage-defs
+
+(defmacro for-every-region-in-area ((region area) &body body)
+  "Execute BODY with REGION bound iteratively to every region in AREA."
+  (once-only (area)
+    `(do ((,region (%area-region-list ,area) (%region-list-thread ,region)))
+	 ((minusp ,region))
+       ,@body)))
+
+;; New-disk
+;; Reverse of what the LMI code does (making old functions obsolete)
+(deff %wire-page 'wire-page)
+(deff %unwire-page 'unwire-page)
+(deff %wire-words 'wire-words)
+(deff %unwire-words 'unwire-words)
+(deff %wire-array 'wire-array)
+(deff %unwire-array 'unwire-array)
+(deff %wire-structure 'wire-structure)
+(deff %unwire-structure 'unwire-structure)
+(deff %wire-area 'wire-area)
+(deff %unwire-area 'unwire-area)
+
+
+;;; Skip the wire-ability etc - we're only using this for remote tape,
+;;; not for Nubus-based devices.
+
+(defun make-wireable-array (n-pages type named-structure-symbol)
+  (check-type n-pages integer)
+  (check-type type (member art-1b art-2b art-4b art-8b art-16b art-32b art-string art-inum))
+  (check-type named-structure-symbol symbol)
+  
+  (let* ((array-length (* n-pages page-size (cdr (assq type array-elements-per-q))))
+	 (long-length (if (> array-length %array-max-short-index-length) 1 0)))
+    (#+CADR progn #-CADR with-consing-allowed-in-wireable-structures-area
+      (make-array array-length
+		  :type type
+		  :leader-length (max 2		;be sure named-structure-symbol is in leader
+				      (- page-size
+					 1	;for leader header
+					 1	;for leader length q
+					 1	;for array header
+					 long-length	;for long length q
+					 ))
+		  :named-structure-symbol named-structure-symbol
+		  #-CADR :area #-CADR wireable-structures-area
+		  ))))
+
+#|
+(defun wireable-array-p (array)
+  (and (arrayp array)
+       (not (array-displaced-p array))
+       (eq (%area-number array) wireable-structures-area)
+       (zerop (ldb (byte 8 0) (%pointer (%find-structure-leader array))))
+       (zerop (ldb (byte 8 0) (%structure-total-size (%find-structure-leader array))))
+       (zerop (ldb (byte 8 0) (%pointer-plus array (array-data-offset array))))))
+
+(defun wire-wireable-array (array from-index to-index set-modified dont-bother-paging-in)
+  from-index to-index
+  ;;someday, just do specified part
+  (if (not (wireable-array-p array))
+      (ferror nil "Array ~s was not made with MAKE-WIREABLE-ARRAY." array))
+  (%wire-structure array set-modified dont-bother-paging-in))
+
+(defun unwire-wireable-array (array from-index to-index)
+  from-index to-index
+  (if (not (wireable-array-p array))
+      (ferror nil "Array ~s was not made with MAKE-WIREABLE-ARRAY." array))
+  (%unwire-structure array))
+|#
+
+;;;
+;;;  DMA-BUFFERS
+;;;
+
+;when we can wire subsections of the array, make the matcher
+;accept any array that is at least as large as the requested size
+(defstruct (dma-buffer-leader
+	     (:type :array-leader)
+	     #+CADR (:conc-name nil)
+	     )
+  dma-buffer-ignore				;would be fill pointer
+  dma-buffer-named-structure-symbol
+  dma-buffer-16b
+  dma-buffer-8b
+  dma-buffer-string
+  dma-buffer-size-in-pages
+  dma-buffer-data-vadr
+  )
+
+(defresource dma-buffer (n-pages)
+  :constructor make-dma-buffer
+  :free-list-size 50.)
+
+(defun make-dma-buffer (ignore n-pages)
+  (let ((dma-buffer (make-wireable-array n-pages
+					 'art-32b
+					 'dma-buffer)))
+    (setf (dma-buffer-16b dma-buffer)
+	  (make-array (* n-pages page-size 2)
+		      :type :art-16b
+		      :displaced-to dma-buffer
+		      :leader-length 2
+		      :named-structure-symbol 'dma-buffer-16b))
+    (setf (dma-buffer-8b dma-buffer)
+	  (make-array (* n-pages page-size 4)
+		      :type :art-8b
+		      :displaced-to dma-buffer
+		      :leader-length 2
+		      :named-structure-symbol 'dma-buffer-8b))
+    (setf (dma-buffer-string dma-buffer)
+	  (make-array (* n-pages page-size 4)
+		      :type :art-string
+		      :displaced-to dma-buffer
+		      :leader-length 2
+		      :named-structure-symbol 'dma-buffer-string))
+    ;;
+    (setf (dma-buffer-size-in-pages dma-buffer) n-pages)
+    (setf (dma-buffer-data-vadr dma-buffer)
+	  (%pointer-plus dma-buffer (array-data-offset dma-buffer)))
+    dma-buffer))
+
+(defselect ((dma-buffer named-structure-invoke))
+  (:print-self (array stream ignore ignore)
+    (printing-random-object (array stream :typep)
+      (format stream "Length ~d. page~:p" (dma-buffer-size-in-pages array))
+      #-CADR
+      (when (eq (ldb %%pht1-swap-status-code (%page-status array))
+		%pht-swap-status-wired)
+	(format stream "; Wired, first page at #x~x"
+		(vadr-to-nubus-phys (dma-buffer-data-vadr array))))))
+  (:which-operations (ignore)
+    '(:print-self :which-operations))
+  )
+
+(defun get-dma-buffer (n-pages)
+  (let ((dma-buffer (allocate-resource 'dma-buffer n-pages)))
+    ;;people are allowed to change this
+    (setf (dma-buffer-named-structure-symbol dma-buffer) 'dma-buffer)
+    (setf (array-leader (dma-buffer-16b dma-buffer) 1) 'dma-buffer-16b)
+    (setf (array-leader (dma-buffer-8b dma-buffer) 1) 'dma-buffer-8b)
+    (setf (array-leader (dma-buffer-string dma-buffer) 1) 'dma-buffer-string)
+    dma-buffer))
+
+(defun free-dma-buffer (dma-buffer)
+  (setf (dma-buffer-named-structure-symbol dma-buffer) 'dma-buffer)
+    (setf (array-leader (dma-buffer-16b dma-buffer) 1) 'dma-buffer-16b)
+    (setf (array-leader (dma-buffer-8b dma-buffer) 1) 'dma-buffer-8b)
+    (setf (array-leader (dma-buffer-string dma-buffer) 1) 'dma-buffer-string)
+  (deallocate-resource 'dma-buffer dma-buffer))

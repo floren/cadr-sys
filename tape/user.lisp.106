@@ -56,13 +56,7 @@
 	 ((null spec) (ferror nil "Invalid device specifier: ~S" device-string))
       (when (string-equal (first spec) device-string :end2 (length (first spec)))
 	(setq device-flavor (cadr spec)
-	      unit
-	      (if (or (null second-colon)
-		      (< (length (first spec)) (- second-colon first-colon 1)))
-		  ;; Use this for "host:deviceUnit:" or "deviceUnit:"
-		  (read-from-string device-string nil nil :start (length (first spec)))
-		;; Allow "host:device:unit"
-		(read-from-string string nil nil :start (1+ second-colon))))
+	      unit (read-from-string device-string nil nil :start (length (first spec))))
 	(return nil)))
     (values host device-flavor unit)))
 

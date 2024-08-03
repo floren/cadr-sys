@@ -56,13 +56,7 @@
 	 ((null spec) (ferror nil "Invalid device specifier: ~S" device-string))
       (when (string-equal (first spec) device-string :end2 (length (first spec)))
 	(setq device-flavor (cadr spec)
-	      unit
-	      (if (or (null second-colon)
-		      (< (length (first spec)) (- second-colon first-colon 1)))
-		  ;; Use this for "host:deviceUnit:" or "deviceUnit:"
-		  (read-from-string device-string nil nil :start (length (first spec)))
-		;; Allow "host:device:unit"
-		(read-from-string string nil nil :start (1+ second-colon))))
+	      unit (read-from-string device-string nil nil :start (length (first spec))))
 	(return nil)))
     (values host device-flavor unit)))
 
@@ -645,7 +639,6 @@ object if the format for the tape is handled and can be determined."
 		     (host si:local-host)
 		     (log-file nil log-file-p)
 		     (tape-name nil tape-name-p)
-		     (incremental nil)
 		     (set-backup-bits t)
 		     (compare t)
 		     (tape-info-function 'prompt-for-tape-info)
@@ -654,53 +647,21 @@ object if the format for the tape is handled and can be determined."
   "This backs up the files in FILE-LIST to tape.  Each element in
 the list must be a file property list, or FILE-LIST a string.  
 The files backed up will be compared and/or have their backup bits 
-set as specified by the arguments.
-If INCREMENTAL is T, only files with :NOT-BACKED-UP property T are used.
+set as specified by the arguments.  
 TAPE-INFO-FUNCTION takes no arguments and should return
 two values for each tape mounted: the tape name and the pathname 
 for the log.  It is called for each tape in the dump.
-If TAPE-NAME is specified, TAPE-INFO-FUNCTION is not used,
-and TAPE-NAME is used as Unit if the DEVICE-SPEC is an RTAPE device."
+If TAPE-NAME is specified, TAPE-INFO-FUNCTION is not used."
   ;; Check the arg types
   (check-type host (or si:host string) "a host or a string")
   (check-type log-file (or string null) "a string or NIL")
   (check-type tape-name (or string null) "a string or NIL")
   (check-type file-list (or string cons) "a string or list")
-  ;; Allow a string (with wildcards), and filter if incremental backup
-  (cond ((stringp file-list)
-	 (setq file-list (full-directory-list file-list
-					      ;; Filter it if needed
-					      :filter-keywords
-					      (when incremental '(:not-backed-up t)))))
-	(incremental
-	 ;; Already have a list, make sure to filter it
-	 (setq file-list (mapcan #'(lambda (pl)
-				     (when (process-filter-keywords '(:not-backed-up t)
-								    pl)
-				       (cons pl nil)))
-				 file-list))))
+  ;; Allow a string (with wildcards)
+  (when (stringp file-list)
+    (setq file-list (full-directory-list file-list)))
   ;; In case host is e.g. a string
   (setq host (si:parse-host host))
-  ;; Overly helpful, perhaps.
-  (when (typep device-spec 'rtape-device)
-    (let ((drive (rtape-status-drive (send device-spec :status)))
-	  (rt-host (send device-spec :host)))
-      (when (not (typep rt-host 'si:host))
-	(cerror "Prompt for a host to use"
-		"The selected device ~s has no host set." device-spec)
-	(let ((new
-		(do ((nhost (prompt-and-read :string-trim "RTAPE server host: ")
-			    (prompt-and-read :string-trim "RTAPE server host: ")))
-		    ((si:parse-host nhost t) (si:parse-host nhost))
-		  (format t "~&~s is not a host name. Try again.~%" nhost))))
-	  (when (typep new 'si:host)
-	    (format t "~&Setting host to ~a" new)
-	    (send device-spec :set-options :host new))))
-      (when (and tape-name (not (string-equal drive tape-name)))
-	(format t "~&Setting device unit to tape name ~s" tape-name)
-	(send device-spec :set-options :unit tape-name)
-	(reset-device device-spec))))
-
   (using-device (device device-spec)
     (using-format (format format-spec)
       (with-device-locked device
