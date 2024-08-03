@@ -737,7 +737,7 @@
 ;;it can't access the SYS host.   If IGNORE-PATCHES is T, don't even try to
 ;;load patches (this is most useful when debugging, and there are no new patches."
 
-(DEFVAR *FILE-SERVER-FILE-HOST*  (SI:PARSE-HOST "mit-oz")
+(DEFVAR *FILE-SERVER-FILE-HOST*  :unbound
 	"THIS SHOULD BE A SITE VARIABLE....")
 
 (DEFUN BRING-UP-SERVER (&OPTIONAL FOR-WARM-BOOT)
@@ -814,7 +814,10 @@ When it is up again, please call BRING-UP-SERVER."  (si:get-site-option ':sys-ho
   (SETQ USER-ID "LMFile")
 
 
-  (fs:file-host-user-id "LMFILE" FS:*FILE-SERVER-FILE-HOST*) ;;;(si:parse-host "mc"))
+  (fs:file-host-user-id "LMFILE"
+			(if (eq fs:*file-server-file-host* :unbound)
+			    (SI:PARSE-HOST "mit-oz")
+			    FS:*FILE-SERVER-FILE-HOST*))
   (setq fs:user-personal-name-first-name-first "Lisp Machine File Server")
 
   (PKG-GOTO 'FS))
