@@ -1,9 +1,0 @@
-;;; -*- Mode:LISP; Package:USER; Base:10; Readtable:T; Patch-File:T -*-
-;;; Patch directory for MagTape version 23
-;;; Written 16-Mar-23 09:34:06 by AMS,
-;;; while running on Lisp Machine One from band 2
-;;; with Experimental System 100.0, microcode 323.
-
-(:EXPERIMENTAL
- ((0 "MagTape Loaded" "AMS" NIL)
-  ))

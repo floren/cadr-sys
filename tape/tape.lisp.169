@@ -1,0 +1,973 @@
+;;; -*- Mode:LISP; Package:TAPE; Readtable:CL; Base:10 -*-
+;;
+;; Copyright LISP Machine, Inc. 1986
+;;   See filename "Copyright" for
+;; licensing and release information.
+;;;
+;;; Generic tape code
+;;;
+;;; -dg 8/2/85
+;;;
+;;;
+
+;;; gratiutous change for recompilation 20-Oct-86 15:14:25
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; Tape device support
+;;;
+
+(defflavor basic-tape-device () ()
+  :abstract-flavor
+  (:required-instance-variables
+    unit
+    density
+    )
+  (:required-methods	      ; Arglist
+    ;; CONTROL
+    :initialize		      ; (&rest init-options)
+    :deinitialize	      ; ()
+    :lock-device	      ; ()
+    :unlock-device	      ; ()
+    :device-locked-p	      ; ()
+    :set-options	      ; (&rest options)
+    :reset		      ; ()
+    :status		      ; ()
+    :speed-threshold	      ; ()
+    ;; TAPE POSITIONING
+    :rewind		      ; (&optional (wait-p t))
+    :unload		      ; ()
+    :space		      ; (number-of-records &optional (speed :low))
+    :space-reverse	      ; (number-of-records &optional (speed :low))
+    :search-filemark	      ; (number-of-filemarks &optional (speed :low))
+    :search-filemark-reverse  ; (number-of-filemarks &optional (speed :low))
+    ;; READ/WRITE
+    :optimal-chunk-size	      ; (record-size)
+    :read-block		      ; (dma-buffer record-size)
+    :write-block	      ; (dma-buffer record-size)
+    :read-array		      ; (array number-of-records record-size)
+    :write-array	      ; (array number-of-records record-size)
+    :read-to-disk	      ; (disk-unit starting-block-address number-of-blocks record-size
+			      ;  &key silent)
+    :write-from-disk	      ; (disk-unit starting-block-address number-of-blocks record-size
+			      ;  &key silent)
+    :compare-to-disk	      ; (disk-unit starting-block-address number-of-blocks record-size
+			      ;  &key silent)
+    ;; OTHER
+    :write-filemark	      ; (&optional (number-of-filemarks 1))
+    ))
+
+(defvar *tape-device-alist* ()
+  "An alist of elements of the form (<name> . <flavor>)
+   used by the parse to get a device object.")
+
+(defmacro define-tape-device (flavor name detection-function)
+  "Adds name and flavor to the device parsing database."
+  (let ((place '#:place))
+    `(progn
+       (compile-flavor-methods ,flavor)
+       ,(when name
+	  `(let ((,place (ass 'string-equal ,name *tape-device-alist*)))
+	     (if ,place
+		 (setf (cdr ,place) '(,flavor ,detection-function))
+	       (push '(,name ,flavor ,detection-function) *tape-device-alist*))))
+       t)))
+	 
+(defmacro using-device ((var device-spec options) &body body)
+  "Executes BODY with tape device parsed from DEVICE-SPEC allocated and bound to VAR."
+  `(let ((,var (lexpr-funcall 'parse-device ,device-spec ,options)))
+     ,@body))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; Basic Tape Format Object Flavor
+;;;
+;;;
+
+(defflavor basic-tape-format () ()
+  :abstract-flavor
+  (:required-instance-variables
+    record-size
+    file-stream
+    )
+  (:required-methods	      ; Arglist
+    :initialize		      ; (&rest init-options)
+    :set-options	      ; (&rest options)
+    :read-tape-header	      ; (device)
+    :write-tape-header	      ; (device header-plist)
+    :tape-is-your-format-p    ; (device)
+    :restore-file	      ; (device &key 
+			      ;   transform 
+			      ;   query
+			      ;   (overwrite :never)
+			      ;   (create-directory :always)
+			      ;   silent)
+    :write-file		      ; (device file &key (end-of-tape-action :continue) silent)
+    :write-partition	      ; (partition-name unit device &key silent number-of-blocks offset)
+    :compare-file	      ; (device &key transform silent (error-action :return))
+    :beginning-of-file	      ; (device)
+    :next-file		      ; (device &optional (nfiles 1))
+    :previous-file	      ; (device &optional (nfiles 1))
+    :find-file		      ; (device match)
+    :find-file-reverse	      ; (device match)
+    :open-file		      ; (device &key
+			      ;   (direction :input) 
+			      ;   (byte-size :default)
+			      ;   (characters :default)
+			      ;   plist)
+    :list-files		      ; (device &key (stream *standard-output*) (number-of-files -1))
+    :finish-tape	      ; (device)
+    :rewind		      ; (device &optional (wait-p t))
+    :unload		      ; (device)
+    :position-to-append	      ; (device)
+    )
+  )
+
+(defvar *tape-format-alist* nil
+  "An alist of elements of the form (<name> . <flavor>)
+   used by the parser to get a tape format object.")
+
+(defmacro define-tape-format (flavor name)
+  "Adds name and flavor to the format parsing database."
+  (let ((place '#:place))
+    `(progn
+       (compile-flavor-methods ,flavor)
+       (let ((,place (ass 'string-equal ,name *tape-format-alist*)))
+	 (if ,place
+	     (setf (cdr ,place) ',flavor)
+	   (push (cons ,name ',flavor) *tape-format-alist*))))))
+
+(defmacro using-format ((var format-spec &rest options) &body body)
+  "Executes BODY with tape format parsed from FORMAT-SPEC allocated and bound to VAR."
+    `(let ((,var (parse-format ,format-spec . ,options)))
+       ,@body))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; Plist pruning code
+;;;
+;;;
+
+(defconst *error-action-on-imperfect-tape-plists* :warn
+  "Should be :WARN or :ERROR.
+   Default is :WARN for FS:MAKE-MT-FILE-STREAM.")
+
+(defconst tape-file-property-type-plist
+	  '(:directory (or string list)
+		       :name (or (:string) (:symbol))
+		       :type (or (:string) (:symbol))
+		       :version (:fixnum)
+		       :byte-size (:fixnum)
+		       :length-in-blocks (:integer 0)
+		       :length-in-bytes (:integer 0)
+		       :author (:string)
+		       :creation-date (:integer 1)
+		       :characters (:symbol))
+  "This list of canonical-types for the properties of tape file property lists")
+
+(defun check-plist-validity
+       (plist &optional (error-action *error-action-on-imperfect-tape-plists*))
+  ;; sometime in the system 99 beta release the filesystem and/or the magtape
+  ;; code conspired to put bogus plists on the tape which would cause the filesystem
+  ;; to barf when you tried to restore the tape. The magtape code has since been
+  ;; corrected to never output bogus plists but we must make sure never the less.
+  (let ((newplist (loop for x in plist
+			collect (if (and (symbolp x) (not (memq x '(t nil))))
+				    (intern (string x) pkg-keyword-package)
+				  x))))
+    (unless (equal newplist plist)
+      (format *error-output* "~&Property list ~S was converted to have all KEYWORD symbols.~%"
+	      plist)
+      (setq plist newplist)))
+  (do ((*print-base* 10.)
+       (new-plist)
+       (l plist)
+       (key)(value)(type))
+      ((null l)
+       new-plist)
+    (setq key (pop l)
+	  value (pop l))
+    (cond ((and (setq type (getf tape-file-property-type-plist key))
+		(not (typep value type)))
+	   (select error-action
+	     (:warn
+	      (cond ((and (not (eq (getf l key plist) plist)) (typep (getf l key) type))
+		     ;; this seems to be the only case in fact.
+		     (format *error-output* "~&Key ~S had bogus value ~S was and duplicated~%"
+			     key value))
+		    ('else
+		     (format *error-output* "~&Key ~S with bogus value ~S is being ignored~%"
+			     key value))))
+	     (t
+	      (ferror nil "Key ~S with bogus value ~S" key value))))
+	  ((eq key :truename))
+	  ((eq (getf new-plist key plist) plist)
+	   (setf (getf new-plist key) value))
+	  ('else
+	   (select error-action
+	     (:warn
+	      (format *error-output* "~&Duplicate key ~S with value ~S being ignored"
+		      key value))
+	     (t
+	      (ferror nil "~&Duplicate key ~S with value ~S" key value)))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; Random helpful code
+;;;
+;;;
+
+(defun prompt-for-new-tape (format device)
+  "Prompt the user for a new tape and return when its ready to go."
+  (do-forever
+    (tv:beep)
+    (selectq (code-char
+	      (prompt-and-read
+		:character
+		(format nil
+			"~%Mount the next tape on ~A unit ~D and hit any key to continue: "
+			device (send device :unit))))
+      (#\end
+       (signal (make-instance 'logical-end-of-tape :device-object device))))
+    (condition-case (condition)
+	(progn
+	 (send device :initialize)  ; need to initialize to get new tape online.
+	 (send format :rewind device t))
+      (:no-error (return t))
+      (tape-not-ready
+       (format *query-io* "~&The tape device does not seem to be ready.")))))
+
+(defun prompt-for-rewind-with-state ()
+  (tv:beep)
+  (do (return-value)
+      (return-value return-value)
+    (setq return-value
+	  (select (character
+		   (prompt-and-read
+		     :character
+		     "~&Tape has been altered, but the end of tape had not been properly marked.~%~
+                     Action? (~C, ~C, ~C or ~C) >> " #\end #\resume #\call #\help))
+	    ((#\resume) :resume)
+	    ((#\end) :save-state)
+	    ((#\call) :enter-debugger)
+	    ((#\help) (format *query-io* "~&~C~7T- Rewind or unload anyway.~%~
+                                          ~C~7T- Save state then rewind or unload.~%~
+                                          ~C~7T- Enter the debugger.~2%"
+			    #\resume #\end #\call))))))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; Device locking
+;;;
+;;;
+
+(defmacro with-device-locked (device &body body)
+  "Executes body with the tape device locked for the current process."
+  (let ((state '#:state))
+    `(let ((,state (send ,device :device-locked-p)))
+       (unwind-protect
+	   (progn (or ,state (send ,device :lock-device))
+		  ,@body)
+	 (unless ,state (send ,device :unlock-device))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; transformations and matching
+;;;
+;;;
+
+(defun process-transform (transform file-plist)
+  "Returns a pathname derived from FILE-PLIST appropriately tranformed by TRANSFORM.
+   TRANSFORM can be of the following types:
+   (OR STRING PATHNAME) -- (FS:MERGE-PATHNAME-COMPONENTS TRANSFORM PATHNAME)
+   (OR COMPILED-FUNCTION CLOSURE SYMBOL) -- (FUNCALL TRANSFORM PATHNAME)
+   If it is a pathname, then the components are merged by FS:MERGE-PATHNAME-COMPONENTS.
+   The resulting pathname host will always be that of the transform pathname."
+  (check-plist file-plist)
+  (etypecase transform
+    (null (car file-plist))
+    ((or string pathname)
+     (let ((tpn (fs:parse-pathname transform))
+	   (pathname (car file-plist)))
+       (fs:merge-pathname-components
+	 tpn
+	 (if (eq (send tpn :host) (send pathname :host))
+	     pathname
+	   (fs:make-pathname :host (send tpn :host)
+			     :directory (fs:pathname-directory pathname)
+			     :name (fs:pathname-name pathname)
+			     :canonical-type (send pathname :canonical-type)
+			     :version (fs:pathname-version pathname))))))
+    ((or compiled-function closure symbol)
+     (funcall transform file-plist))))
+
+(defun directory-match (directory pattern)
+  (cond ((or (and (null directory) (null pattern))
+	     (equal directory pattern)
+	     (eq pattern :root)
+	     (eq pattern :wild))
+	 t)
+	((or (null directory)
+	     (null pattern))
+	 nil)
+	(t
+	 (unless (listp directory) (setq directory (ncons directory)))
+	 (unless (listp pattern) (setq pattern (ncons pattern)))
+	 (cond ((eq (car pattern) :relative)
+		(do ((l directory (cdr l)))
+		    ((or (null l) (equal l (cdr pattern)))
+		     (and l t))))
+	       ((string-search-char #\* (car pattern))
+		(si:string-matchp (car pattern) (car directory)))
+	       (t
+		(and (fs:pathname-component-match
+		       (car pattern) (car directory) #\* #\%)
+		     (directory-match (cdr directory) (cdr pattern))))))))
+	       
+(defsubst component-match (component sample pattern)
+  (let ((sc (send sample component))
+	(pc (send pattern component)))
+    (or (and (memq pc '(:wild :newest)) t)
+	(fs:pathname-component-match pc sc #\* #\%))))
+
+(defun pathname-match (pathname pattern)
+    (and (directory-match (pathname-directory pathname)
+			  (pathname-directory pattern))
+	 (component-match :name pathname pattern)
+	 (or (eq (send pathname :canonical-type)
+		 (send pattern :canonical-type))
+	     (component-match :type pathname pattern))
+	 (component-match :version pathname pattern)))
+
+(defun tape-file-match (match plist)
+  "Returns non-nil if PLIST represents a valid match to MATCH.
+   MATCH can be of the following types:
+   LIST - Car should a symbol, either OR or AND, cdr should be a list of
+          valid match arguments.  TAPE-FILE-MATCH is called on all of
+          elements with the same plist, and the values applied to
+          AND or OR appropriately to determine the return value.
+   STRING or PATHNAME - uses :pathname-match operation on MATCH pathname
+   FUNCTION, CLOSURE, or SYMBOL - Funcall MATCH with plist as the argument"
+  (etypecase match
+    (list (lexpr-funcall (car match)
+			 (mapcar 'tape-file-match
+				 (cdr match)
+				 (circular-list plist))))
+    ((or pathname string)
+     (pathname-match (car plist)
+		     (fs:parse-pathname match)))
+    ((or compiled-function closure symbol)
+     (funcall match plist))))
+
+(defun determine-restore-file-pathname (plist transform overwrite query create-directory silent)
+  "Determines the target pathame for a file to be restored, considering transformations.
+   PLIST - must be a tape file property list
+   TRANSFORM  - passed with pathname derived from plist to PROCESS-TRANSFORM
+   OVERWRITE - determines when to overwrite a file if it exists.  Should be one of
+               :QUERY, :NEVER, or :ALWAYS
+   QUERY - if non-nil asks the user if the file should be restored
+   CREATE-DIRECTORY - determines what to do if the directory for the file doesn't exist
+                      it should be one of :QUERY, :NEVER, :ALWAYS or :ERROR"
+  (when (and (not (zerop (or (get plist :length-in-bytes) (get plist :length))))
+	     (or (null query)
+		 (y-or-n-p "Restore file: \"~A\" " (car plist))))
+    (let* (directory-not-created
+	   (pathname (process-transform transform plist))
+	   (existing-file
+	     (condition-case ()
+		 (probef pathname)
+	       (fs:directory-not-found
+		(case create-directory
+		  (:query (if (y-or-n-p "~&Create directory for \"~A\"? " pathname)
+			      (fs:create-directory pathname)
+			    (setq directory-not-created t)))
+		  (:never (setq directory-not-created t))
+		  (:always (format *standard-output*
+				   "~&Creating directory for pathname \"~A\"." pathname)
+			   (fs:create-directory pathname))
+		  (:error
+		   (ferror 'fs:directory-not-found "Directory for file \"~A\" not found."
+			   pathname))
+		  (t (ferror nil
+			     "Invalid :create-directory option: ~S" create-directory)))
+		nil))))
+      (cond (directory-not-created)
+	    (existing-file
+	     (progn
+	       (unless silent
+		 (format *standard-output* "~&File \"~A\" already exists. " pathname))
+	       (ecase overwrite
+		 (:query (when (y-or-n-p "Overwrite? ")
+			   existing-file))
+		 (:never (format *standard-output* "[Skipping]~&"))
+		 (:always (format *standard-output* "[Automatically Overwriting]~&")
+			  existing-file))))
+	    (t (unless silent
+		 (format *standard-output* " ~&Restoring file to: \"~A\" in :~A mode."
+			 pathname
+			 (if (get plist :characters) :character :raw)))
+	       pathname)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; Local and remote partition handling
+;;;
+;;;
+
+(defun valid-host-p (thing)
+  (and (si:parse-host thing t nil) t))
+
+(defconst *debug-server-locally* nil
+  "If non-nil, selecting the local machine by name (instead of unit) will
+cause a chaosnet server-connection to be used.  Otherwize local unit 0
+is selected.")
+
+(defmacro with-abort-disposal ((unit-var) &body body)
+  (let ((condition (gentemp "CONDITION-")))
+    `(condition-case (,condition)
+	 (progn ,@body)
+       (sys:abort (when ,unit-var
+		    (si:dispose-of-unit ,unit-var))
+		  (signal ,condition)))))
+
+(defmacro with-smooth-abort (&body body)
+  `(condition-case ()
+       (progn ,@body)
+     (sys:abort)))
+
+(defun unit-number (unit)
+  (etypecase unit
+    ((integer 0 8) unit)
+    (closure (symeval-in-closure unit 'si:remote-disk-unit))
+    (string (let* ((pos (string-search-char #\space unit))
+		   (val (when pos (read-from-string unit nil 0 :start pos))))
+	      (if (typep val '(integer 0 7))
+		  val
+		0)))))
+
+(defun unit-host (unit)
+  (etypecase unit
+    (integer si:local-host)
+    (closure (send (symeval-in-closure unit 'si:remote-disk-conn) :foreign-host))
+    (string (si:parse-host (nsubstring unit 0 (string-search-char #\space unit))))))
+
+(defun get-unit-neatly (unit-arg use)
+  (condition-case (condition)
+      (si:decode-unit-argument unit-arg use)
+    (si:host-not-responding-during-connection
+     (format *standard-output* "~&Host ~A not responding.~%" (send condition :foreign-host)))
+    (si:unknown-address
+     (format *standard-output* "~&Unknown host: ~A.~%" (get condition :address)))))
+
+;;; Since PARTITION-SEARCHER returns actual disk addresses that the tape softare will use
+;;; explicitly, it is *** CRUCIAL *** that this function works correctly, otherwise,
+;;; important parts of the disk could be written over erroneuouly.
+;;; ***** PLEASE BE CAREFUL WHEN ALTERING THE FOLLOWING CODE *****
+
+(defun partition-searcher (purpose-string number-of-blocks-needed
+			   &key
+			   default-partition
+			   (default-unit (select-processor (:cadr 0) (:lambda 0) (:explorer nil)))
+			   default-comment
+			   (interface-stream *terminal-io*)
+			   confirm-write)
+  "This is a function allow the user to look around for an appropriate
+   partition for a particulare use described in english in PURPOSE-STRING."
+  (declare (values host unit start length label-location name))
+  (check-type default-unit (or null (integer 0 8) closure string))
+  (check-type default-partition (or null string))
+  (with-smooth-abort
+    (let ((decoded-unit (if default-unit (get-unit-neatly default-unit purpose-string))))
+      (with-abort-disposal (decoded-unit)
+	(when decoded-unit
+	  (when (and default-partition decoded-unit)
+	    (multiple-value-bind (start length label-loc name)
+		(si:find-disk-partition default-partition nil decoded-unit)
+	      start
+	      (when (and (>= length number-of-blocks-needed)
+			 (or (null default-comment)
+			     (string-equal default-comment
+					   (si:partition-comment name decoded-unit)))
+			 (with-timeout ((* 60 60 1)
+					(format *standard-output* "Timed-out ... Yes")
+					t)
+			   (y-or-n-p "Use partition ~S on unit ~D of host ~a ~A (1 minute timeout)"
+				     default-partition
+				     (unit-number default-unit)
+				     (unit-host default-unit)
+				     purpose-string)))
+		(return-from partition-searcher
+		  (values (unit-host decoded-unit) decoded-unit start length label-loc name)))))
+	  (let ((choice (if decoded-unit
+			    (prompt-and-read
+			      :string-or-nil
+			      "~&Type partition name on ~A (unit ~D) for ~A or ~C to find one >> "
+			      (unit-host decoded-unit)
+			      (unit-number decoded-unit)
+			      purpose-string #\end))))
+	    (when choice
+	      (multiple-value-bind (start length label-loc name)
+		  (si:find-disk-partition choice nil decoded-unit nil confirm-write)
+		(cond ((not start)
+		       (format t "~&Invalid partition selection: ~S" choice))
+		      ((< length number-of-blocks-needed)
+		       (format *standard-output* "~&Invalid partition selection (need ~D blocks): ~S"
+			       number-of-blocks-needed choice))
+		      (t
+		       (return-from partition-searcher
+			 (values (unit-host decoded-unit)
+				 decoded-unit
+				 start
+				 length
+				 label-loc
+				 name))))
+		(format t "~&~2% --- Hit any key to enter Partition Searcher ---")
+		(read-char)))))
+	(do ((unit (or decoded-unit nil))
+	     (host (if decoded-unit (unit-host decoded-unit) si:local-host))
+	     partition
+	     char
+	     (reprint t))
+	    (())
+	  (with-abort-disposal (unit)
+	    (when reprint
+	      (send interface-stream :clear-screen)
+	      (format t "--- Partition Searcher: Searching for partition ~A ---"
+		      purpose-string)
+	      (cond (unit
+		     (print-disk-label unit)
+		     (format t "~&~2%Selected partition: ~A - Selected unit: ~A~2%"
+			     (nth 3 partition)
+			     (unit-number unit))))
+	      (setq reprint nil))
+	    (format t "~&~%Command >> ")
+	    (when (setq char (read-char interface-stream))
+	      (selector char char-equal
+		((#^q #^Q #\end)
+		 (if (null partition)
+		     (when (yes-or-no-p
+			     "~&You have not selected a partiton.~%~
+                           Do you really want to abort selecting a partition? ")
+		       (si:dispose-of-unit unit)
+		       (return-from partition-searcher nil))
+		   (return-from partition-searcher
+		     (lexpr-funcall 'values host unit partition))))
+		((#^p #^P)
+		 (let* ((string (prompt-and-read :string-or-nil "~&Partition to select >> "))
+			(vals (multiple-value-list (si:find-disk-partition string nil unit nil confirm-write))))
+		   (cond ((null (car vals))
+			  (tv:beep)
+			  (format t "~&Invalid partition selection.  Try again."))
+			 ((< (second vals) number-of-blocks-needed)
+			  (tv:beep)
+			  (format t "~&Partition not big enough (need ~D blocks). Try again."
+				  number-of-blocks-needed))
+			 (t (setq partition vals)))))
+		((#^u #^U)
+		 (let ((nunit (prompt-and-read :number "~&Unit to select >> ")))
+		   (if (typep nunit '(not (integer 0 8)))	;There should be a real test here!!!
+		       (format t "~&Invalid unit selection (must be and integer [0 7]). Try again.~%")
+		     (let ((du (get-unit-neatly (if (eq host si:local-host)
+						    nunit
+						  (format nil "~A ~D" host nunit))
+						"Disk Serving for Tape")))
+		       (when du
+			 (si:dispose-of-unit unit)
+			 (setq unit du
+			       partition nil
+			       reprint t))))))
+		((#^h #^H)
+		 (let* ((string (prompt-and-read :string "~&New host >> "))
+			(nhost (condition-case () (si:parse-host string) (si:unknown-host-name))))
+		   (if (null nhost)
+		       (format t "~&Unknown host.  Try again.~%")
+		     (let ((du (get-unit-neatly (if (eq nhost si:local-host)
+						    0
+						  (format nil "~A 0" nhost))
+						"Disk Serving for Tape")))
+		       (when du
+			 (si:dispose-of-unit unit)
+			 (setq host nhost
+			       unit du
+			       partition nil
+			       reprint t))))))
+		((#^e #^E)
+		 (when (yes-or-no-p "Do you really want to edit the disk label for ~A?" host)
+		   (with-smooth-abort (si:edit-disk-label unit))
+		   (setq reprint t)))
+		((#^l #\clear-screen)
+		 (setq reprint t))
+		((#\help #^?)
+		 (format t "~&~%The following commands are available:~%~
+                    ~C - Select a partition~%~
+                    ~C - Select a new disk unit~%~
+                    ~C - Select a new host~%~
+                    ~C - Edit disk label for current host and unit
+                    ~C - Redisplay (re-reading label)~%~
+                    ~C - Quit, returning current selection~%~
+                    ~C - Abort return a selection of NIL.~2%"
+			 #^p #^u #^h #^e #^l #\end #\abort))
+		(t (tv:beep))))))))))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; Dma buffer wiring - should end up in system somewhere
+;;;
+;;;
+
+(defun wire-dma-buffer (dma-buffer &optional
+			   (number-of-pages (si:dma-buffer-size-in-pages dma-buffer)))
+  (si:wire-wireable-array dma-buffer 0 (* number-of-pages si:page-size) nil nil))
+
+(defun unwire-dma-buffer (dma-buffer &optional
+			     (number-of-pages (si:dma-buffer-size-in-pages dma-buffer)))
+  (si:unwire-wireable-array dma-buffer 0 (* number-of-pages si:page-size)))
+
+(defmacro with-buffer-wired ((buffer number-of-pages) &body body)
+  `(unwind-protect
+       (progn
+	 (wire-dma-buffer ,buffer ,number-of-pages)
+	 ,@body)
+     (unwire-dma-buffer ,buffer ,number-of-pages)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; Hierarchical directory listing
+;;;
+;;;
+
+(defun process-filter-keywords (filter-keywords file-plist)
+  "Filter keywords should be an alist of the form
+   (<property> . <value> ...).  If each value matches the value of
+   the corresponding value in plist, T is returned, otherwise NIL.
+   This is useful for filtering for files that have a certain property
+   value.  (i.e. '(:BACKED-UP NIL))"
+  (do* ((win? t)
+	(l filter-keywords (cddr l))
+	(key (car l) (car l))
+	(value (cadr l) (cadr l))
+	(thing (when l
+		 (if (memq key '(:device :directory :name :type :version))
+		     (send (car file-plist) key)
+		   (get file-plist key)))
+	       (when l
+		 (if (memq key '(:device :directory :name :type :version))
+		     (send (car file-plist) key)
+		   (get file-plist key)))))
+       ((or (not win?) (null l)) win?)
+    (unless (or (equal value thing) (and (stringp value)
+					 (stringp thing)
+					 (si:string-matchp value thing)))
+      (setq win? nil))))
+
+
+(defun full-directory-list (path &key (inferiors t) (stream *standard-output*) filter-keywords)
+  "Returns a list of all files in the directory pointed to by PATH.
+   Directory files are NEVER returned, as such files are useless for dumping.
+   INFERIORS - if non-nil, the files found according to the name type and version
+               components of the original pathname (:WILD, :NEWEST, etc accepted) 
+               in any sudirectories are included. (Thus specifying \"<host>:~;*.*#*\"
+               would return all files on host.)
+   STREAM - if non-nil, the surveying of directories will be commented upon to STREAM.
+   FILTER-KEYWORDS - passed to PROCESS-FILTER-KEYWORDS."
+  (let* ((pathname (let* ((pn (fs:parse-pathname path))
+			  (name (send pn :name))
+			  (type (send pn :type))
+			  (version (send pn :version)))
+		     (cond-every ((neq name :wild)
+				  (push name filter-keywords)
+				  (push :name filter-keywords))
+				 ((neq type :wild)
+				  (push type filter-keywords)
+				  (push :type filter-keywords))
+				 ((numberp version)
+				  (push version filter-keywords)
+				  (push :version filter-keywords)))
+		     (send pn :new-pathname
+			   :name :wild
+			   :type :wild
+			   :version (if (numberp version) :wild version))))
+	 (top-list (condition-case (condition)
+		       (cdr (fs:directory-list pathname))
+		     (fs:file-not-found)))
+	 result)
+    (when stream
+      (format stream "~&Surveying \"~A: ~A\""
+	      (send (send pathname :host) :short-name)
+	      (send pathname :string-for-directory)))
+    (dolist (elem top-list result)
+      (cond ((or (get elem :deleted)
+		 (and (not inferiors) (get elem :directory))))
+	    ((get elem :directory)
+	     (setq result
+		   (nconc result
+			  (full-directory-list
+			    (let ((npn (car elem)))
+			      (fs:make-pathname
+				:host (send npn :host)
+				:device (send npn :device)
+				:directory (append (typecase (send npn :directory)
+						     (string (ncons (send npn :directory)))
+						     (cons (send npn :directory)))
+						   (ncons (send npn :name)))
+				:name (send pathname :name)
+				:type (send pathname :type)
+				:version (send pathname :version)))
+			    :stream stream
+			    :filter-keywords filter-keywords))))
+	    ((and filter-keywords
+		  (not (process-filter-keywords filter-keywords elem))))
+	    (t (setq result
+		     (nconc result
+			    (ncons elem))))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; Format and device argument checking macros
+
+(defmacro check-plist (var)
+  `(check-arg ,var (oddp (length ,var)) 
+	      "a proper plist of the form (<anything> . (<prop> <value> ...))"))
+
+(defmacro check-device (var)
+  `(check-type ,var basic-tape-device))
+
+(defmacro check-format (var)
+  `(check-type ,var basic-tape-format))
+
+(defmacro check-attribute-list (var)
+  `(check-arg ,var (evenp (length ,var))
+	      "an alternating list of the form (<keyword> <value> ...)"))
+
+(defmacro check-host (var)
+  `(check-arg ,var (ignore-errors (si:parse-host ,var))
+	      "a valid host"))
+
+(defmacro check-unit (var)
+  `(check-type ,var (or string closure (integer 0 7))))
+
+(defmacro check-dma-buffer (var)
+  `(check-arg ,var (eq (named-structure-p ,var) 'si:dma-buffer)
+	      "a valid SI:DMA-BUFFER array."))
+
+(defmacro check-array (array number-of-records record-size)
+  `(progn (check-type ,array array)
+	  (check-arg ,array (memq (array-type ,array) `(art-string art-8b art-16b))
+		     "a valid array for tape device data transfer.")
+	  (when (> (* ,number-of-records ,record-size)
+		   (* (/ 4 (cdr (assq (array-type ,array) array-elements-per-q)))
+		      (array-length ,array)))
+	    (signal 'protocol-violation
+		    :format-string "Array to small for data specified"))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; Tape device initialization list
+;;;
+;;;
+
+(defvar si:tape-warm-initialization-list ()
+  "Warm Initialization list for tape related software.")
+
+(add-initialization "Tape Initializations"
+		    `(initializations 'si:tape-warm-initialization-list t)
+		    `(:warm))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; Tape translation tables
+;;; 
+
+(defmacro deftchar (table from to)
+  `(aset ,to ,table ,from))
+
+(defconst ascii-to-lispm-translation-table (make-array 256 :element-type t :initial-element nil))
+(deftchar ascii-to-lispm-translation-table #o10 #\overstrike)
+(deftchar ascii-to-lispm-translation-table #o11 #\tab)
+(deftchar ascii-to-lispm-translation-table #o12 #\return)
+(deftchar ascii-to-lispm-translation-table #o14 #\page)
+
+(defconst lispm-to-ascii-translation-table (make-array 256 :element-type t :initial-element nil))
+(deftchar lispm-to-ascii-translation-table #\overstrike #o10)
+(deftchar lispm-to-ascii-translation-table #\tab #o11)
+(deftchar lispm-to-ascii-translation-table #\return #o12)
+(deftchar lispm-to-ascii-translation-table #\page #o14)
+
+(defun translate-array (array table start end)
+  (check-type table (array t (256)))
+  (let ((real-end (or end (array-length array))))
+    (do ((count start (add1 count))
+         newcode
+	 char-code)
+	((= count real-end))
+      (when (setq newcode (%p-contents-offset table
+					      (add1 (setq char-code (global:aref array count)))))
+	newcode
+	(global:aset newcode array count)))))
+
+(defun translate-ascii-to-lispm (array &key (start 0) end)
+  (check-type array array)
+  (translate-array array ascii-to-lispm-translation-table start (or end (array-length array))))
+
+(defun translate-lispm-to-ascii (array &key (start 0) end)
+  (check-type array array)
+  (translate-array array lispm-to-ascii-translation-table start (or end (array-length array))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; Canonical File type byte-sizes and translation attributes
+;;;
+
+(defconst *16-bit-file-canonical-types* '(:qfasl "EMC" "LMC"))
+
+(defconst *raw-file-canonical-types*
+	  '(:QFASL :PRESS :WIDTHS :KST "LMC" "EXE" "BIN" "DVI" "IMP" "EMC"))
+
+(defsubst translatable-file-p (pathname)
+  (not (mem 'string-equal (send pathname :canonical-type) *raw-file-canonical-types*)))
+
+(defun determine-pathname-byte-size (pathname)
+  (if (mem 'string-equal (send pathname :canonical-type) *16-bit-file-canonical-types*)
+      16
+    8))
+
+(defun file-byte-size (thing)
+  "Takes an alternating list or a stream and returns the appropriate byte size."
+  (check-type thing (or stream list))
+  (typecase thing
+    (stream (or (send-if-handles thing :byte-size)
+		(send-if-handles thing :get :byte-size)
+		(let ((tn (send-if-handles thing :truename)))
+		  (when tn (determine-pathname-byte-size tn)))
+		8))
+    (list (let ((pl (if (oddp (length thing))
+			thing
+		      (cons nil thing))))
+	    (or (get pl :byte-size)
+		(cond ((get pl :characters) 8)
+		      ((get pl :qfaslp) 16)
+		      (t (determine-pathname-byte-size
+			   (car pl)))))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; Tape stream mixin
+;;;
+
+(defflavor tape-stream-mixin ((dma-buffer)
+			      (io-buffer)
+			      (status :open)
+			      record-size
+			      byte-size
+			      format
+			      chunk-size
+			      device
+			      pathname
+			      (byte-pos 0))
+	   (si:property-list-mixin)
+  (:required-init-keywords :byte-size :record-size :format :device)
+  :settable-instance-variables
+  :gettable-instance-variables)
+
+;;; input stuff
+
+(defmethod (tape-stream-mixin :discard-input-buffer) (&rest ignore)
+  (deallocate-resource 'si:dma-buffer dma-buffer)
+  (setq dma-buffer nil
+	io-buffer nil
+	chunk-size nil))
+
+(defmethod (tape-stream-mixin :next-input-buffer) (&rest ignore)
+  ;;; This method can only read one block at a time to ensure that a full record
+  ;;; tapes written with unknown or variable record size are read correctly.
+  (when (eq status :closed)
+    (ferror nil
+	    "Attempt to read data from stream which is closed: ~S" self))
+  (zl:if (eq status :eof)
+      nil
+    (unless dma-buffer
+      (setq dma-buffer (allocate-resource 'si:dma-buffer 64)
+	    io-buffer (case byte-size
+			(8 (si:dma-buffer-8b dma-buffer))
+			(16 (si:dma-buffer-16b dma-buffer)))))
+    (let ((bytes-read (condition-case (condition)
+			  (ceiling (send device :read-block
+					 dma-buffer (* 32 1024))
+				   (/ byte-size 8))
+			(filemark-encountered
+			 (setq status :eof)
+			 nil)))
+	  (length (or (get self :length)
+		      (get self :length-in-bytes))))
+      (when bytes-read
+	(values io-buffer
+		0
+		(ZL:if (and length (> (+ bytes-read byte-pos) length))
+		    (prog1 (- length byte-pos)
+			   (setq byte-pos length))
+		  (incf byte-pos bytes-read)
+		  bytes-read))))))
+
+
+;;; output stuff
+
+(defmethod (tape-stream-mixin :discard-output-buffer) (&rest ignore)
+  (deallocate-resource 'si:dma-buffer dma-buffer)
+  (setq dma-buffer nil
+	io-buffer nil))
+
+(defmethod (tape-stream-mixin :new-output-buffer) ()
+  (unless dma-buffer
+    (setq dma-buffer
+	  (allocate-resource 'si:dma-buffer
+			     (/ (send device :optimal-chunk-size record-size)
+				(* si:page-size 4)))
+	  io-buffer (case byte-size
+		      (8 (si:dma-buffer-8b dma-buffer))
+		      (16 (si:dma-buffer-16b dma-buffer)))))
+  (values io-buffer
+	  0
+	  (/ (string-length (si:dma-buffer-string dma-buffer)) (/ byte-size 8))))
+
+(defmethod (tape-stream-mixin :send-output-buffer) (array ending-index)
+  (unless (eq array (case byte-size
+		      (8 (si:dma-buffer-8b dma-buffer))
+		      (16 (si:dma-buffer-16b dma-buffer))))
+    (ferror nil "Array does not correspond to the current output-buffer."))
+  (let* ((rsil (/ record-size (/ byte-size 8)))
+	 (number-of-records (ceiling ending-index rsil)))
+    (array-initialize array 0 ending-index (* number-of-records rsil))
+    (send device :write-array (si:dma-buffer-8b dma-buffer)
+	  number-of-records record-size)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; This is special hackage for old tape support... this doesn't have to be
+;;; done to all format object flavors
+
+(defmethod (tape-stream-mixin :directory) ()
+  (send pathname :directory))
+
+(defmethod (tape-stream-mixin :name) ()
+  (send pathname :name))
+
+(defmethod (tape-stream-mixin :type) ()
+  (send pathname :type))
+
+(defmethod (tape-stream-mixin :version) ()
+  (send pathname :version))
+  
+(defmethod (tape-stream-mixin :creation-date) ()
+  (get self :creation-date))
+
+(defmethod (tape-stream-mixin :qfaslp) ()
+  (get self :qfaslp))
+
+(defmethod (tape-stream-mixin :change-properties) (ignore &rest properties)
+  (loop for (ind prop) in properties by #'cddr
+	do (putprop self prop ind)))
+

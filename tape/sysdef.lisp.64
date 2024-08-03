@@ -1,0 +1,97 @@
+;;; -*- Mode:LISP; Package:USER; Base:10; Readtable:ZL -*-
+;;
+;; Copyright LISP Machine, Inc. 1986
+;;   See filename "Copyright" for
+;; licensing and release information.
+;;;
+;;; New tape software
+;;;
+;;; -dg 9/15/85
+;;;
+
+#,(multiple-value-bind (major minor)
+      (si:get-system-version 'system)
+    (unless (or (> major 109)
+		(>= minor 80))
+      (ferror nil
+	      "The new tape software can only be loaded in 109 systems with SYSTEM patch 109.80")))
+
+;;;DUMPIT is support for TANALYZ-FORMAT:
+
+(unless(si:find-package "DUMPIT")
+  (make-package "DUMPIT" :use '("LISP" "GLOBAL")))
+
+(DEFSYSTEM TAPE
+  (:NAME "Tape")
+  (:PATHNAME-DEFAULT "SYS:TAPE;")
+  (:warnings-pathname-default "sys:tape;tape-cwarns lisp")
+  (:patchable "SYS:TAPE;")
+  ;;; Support
+  (:module tape ("tape" "error"))
+  (:module backup ("backup"))
+  (:module user-interface ("user"))
+  (:module test ("test"))
+  ;;; Devices
+  (:module device-support ("tapemaster-driver" "nupi-support"))
+  (:module devices ("tapemaster-device" "nupi-device"))
+  ;;; Formats
+  (:module hexdump ("dumpit") :package "DUMPIT")
+  (:module format-support (hexdump))
+  (:module formats ("lmfl-format" "raw-format" "tanalyz-format" "tar-format"))
+
+  ;;; last stuff
+  (:module initializations ("initializations"))
+
+  (:component-systems tframe tape-compat)
+  ;;; Transformations
+  (:compile-load tape)
+  (:compile-load test (:fasload tape) (:fasload tape))
+  (:compile-load device-support (:fasload tape) (:fasload tape))
+  (:compile-load devices (:fasload device-support tape) (:fasload device-support tape))
+  (:compile-load format-support (:fasload tape))
+  (:compile-load formats (:fasload format-support tape) (:fasload format-support tape))
+  (:compile-load backup (:fasload tape) (:fasload tape))
+  (:compile-load user-interface (:fasload backup) (:fasload backup))
+  (:compile-load initializations (:fasload user-interface
+					   backup
+					   formats
+					   devices
+					   device-support
+					   test
+					   tape))
+  (:do-components (:fasload initializations
+			    user-interface
+			    backup
+			    formats
+			    devices
+			    device-support
+			    test
+			    tape)))
+
+(defpackage tframe
+  (:use global))
+
+(defsystem tframe
+  (:name "Tape Utility Frame")
+  (:short-name "TFrame")
+  (:pathname-default "sys:tape;")
+  (:module macros "tframe-macros")		; all macros in the system
+  (:module defs "tframe-defs")			; variable and option definitions
+  (:module process "tframe-process")		; process support
+  (:module window "tframe-window")		; TFrame Window
+  (:module coms "tframe-coms")			; TFrame commands
+
+  (:compile-load macros)
+  (:compile-load defs (:fasload macros))
+  (:compile-load process (:fasload macros defs))
+  (:compile-load window (:fasload macros defs process))
+  (:compile-load coms (:fasload macros defs)))
+
+(DEFSYSTEM tape-compat
+  (:NAME "tape-compat")
+  (:PATHNAME-DEFAULT "SYS:TAPE;")
+  (:NOT-IN-DISK-LABEL)
+  (:MODULE DEFS ("MTDEFS"))
+  (:MODULE MAIN ("MTSTR" "COPY" "MTAUX" "ANSI" "TOPS20"))
+  (:COMPILE-LOAD DEFS)
+  (:COMPILE-LOAD MAIN (:FASLOAD DEFS)))

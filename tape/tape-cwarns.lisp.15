@@ -1,0 +1,161 @@
+
+;System Tape made by keith at 15-Sep-88 04:57:36  -*-Mode: Lisp; Package: User; Base: 10-*-
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: TAPE; TAPE LISP >"
+  '((:COMPILE NIL
+     (TAPE::PARTITION-SEARCHER NIL NIL
+      (SI::EXTRA-PROCESSORS :IMPLAUSIBLE NIL "A ~S expression failed to give alternatives for ~S" SELECT-PROCESSOR (:FALCON))))))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: TAPE; ERROR LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: TAPE; TEST LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: TAPE; TAPEMASTER-DRIVER LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: TAPE; NUPI-SUPPORT LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: TAPE; TAPEMASTER-DEVICE LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: TAPE; NUPI-DEVICE LISP >"
+  '((:COMPILE NIL
+     (TAPE::NUPI-DEVICE-PRESENT? NIL NIL
+      (SI::EXTRA-PROCESSORS :IMPLAUSIBLE NIL "A ~S expression failed to give alternatives for ~S" SELECT-PROCESSOR (:FALCON))))))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: TAPE; DUMPIT LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: TAPE; LMFL-FORMAT LISP >"
+  '((:COMPILE NIL
+     ((:METHOD TAPE::LMFL-FORMAT :SPACE-TO-END-OF-THIS-FILE) NIL NIL
+      (SI::EXTRA-PROCESSORS :IMPLAUSIBLE NIL "A ~S expression failed to give alternatives for ~S" SELECT-PROCESSOR (:FALCON))))))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: TAPE; RAW-FORMAT LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: TAPE; TANALYZ-FORMAT LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: TAPE; TAR-FORMAT LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: TAPE; BACKUP LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: TAPE; USER LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: TAPE; INITIALIZATIONS LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: TAPE; TFRAME-MACROS LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: TAPE; TFRAME-DEFS LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: TAPE; TFRAME-PROCESS LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: TAPE; TFRAME-WINDOW LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: TAPE; TFRAME-COMS LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: TAPE; MTDEFS LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: TAPE; MTSTR LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: TAPE; COPY LISP >"
+  '((:COMPILE NIL
+     (FS::DETERMINE-COPY-DESTINATION NIL NIL
+      (COMPILER::BAD-TYPE-SPECIFICATION :IMPLAUSIBLE NIL "~S is not a known type specifier" FS::LOCAL-FILE-PATHNAME)
+      (COMPILER::BAD-TYPE-SPECIFICATION :IMPLAUSIBLE NIL "~S is not a known type specifier" FS::REMOTE-LMFILE-PATHNAME))
+     (FS::COPY-DESTINATION-EXISTS-P NIL NIL
+      (COMPILER::BAD-TYPE-SPECIFICATION :IMPLAUSIBLE NIL "~S is not a known type specifier" FS::LOCAL-FILE-PATHNAME)
+      (COMPILER::BAD-TYPE-SPECIFICATION :IMPLAUSIBLE NIL "~S is not a known type specifier" FS::REMOTE-LMFILE-PATHNAME))
+     (FS::COPY-DIRECTORY-AFTER-DIRECTORY NIL NIL
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." FS::SINCE)
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." FS::ONLY-LATEST)
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." FS::FILTER)
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." FS::COPY-SUBDIRECTORIES)
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." FS::RECOPY-FILE-ON-EOT)
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." FS::SELECTIVE)
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." FS::COPY-ONLY))
+     (FS::COMPARE-DIRECTORY NIL NIL
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." FS::SINCE)
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." FS::ONLY-LATEST)
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." FS::FILTER)
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." FS::COPY-SUBDIRECTORIES)
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." FS::RECOPY-FILE-ON-EOT)
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." FS::SELECTIVE)
+      (COMPILER::NOT-USED :IMPLAUSIBLE NIL "The variable ~S is bound but never used." FS::COPY-ONLY)))))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: TAPE; MTAUX LISP >"
+  '((:COMPILE NIL
+     (FS::LOAD-PDP10-DUMP-MAGTAPE NIL NIL
+      (COMPILER:UNDEFINED-FUNCTION-USED :PROBABLE-ERROR NIL "The undefined function ~S was called" FS::STREAM-COPY-PDP10-QFASL-FILE-TO-PDP10-TAPE)))))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: TAPE; ANSI LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: TAPE; TOPS20 LISP >"
+  '((:COMPILE NIL)))

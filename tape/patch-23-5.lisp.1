@@ -1,0 +1,140 @@
+;;; -*- Mode:Lisp; Readtable:CL; Package:USER; Base:10; Patch-File:T -*-
+;;; Patch file for Tape version 23.5
+;;; Reason:
+;;;  Tapemaster device doesn't seem to do search-multiple-filemarks in
+;;;  reverse direction when at end of tape -- leaves you at end of tape.
+;;; Written 1-Jun-88 15:51:11 by pld (Peter L. DeWolf) at site Gigamos Cambridge
+;;; while running on Azathoth from band 2
+;;; with Experimental System 124.15, Experimental Local-File 74.0, Experimental File-Server 23.1, Experimental Unix-Interface 12.0, Experimental ZMail 72.0, Experimental Tape 23.4, Experimental Lambda-Diag 16.0, microcode 1756, SDU Boot Tape 3.14, SDU ROM 8.
+
+
+
+; From file DJ: L.TAPE; TAPEMASTER-DEVICE.LISP#61 at 1-Jun-88 16:02:50
+#10R TAPE#: 
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "TAPE")))
+  (COMPILER::PATCH-SOURCE-FILE "SYS: TAPE; TAPEMASTER-DEVICE  "
+
+(defmethod (tapemaster-device :search-filemark) (number-of-filemarks &optional (speed :low))
+  (check-type number-of-filemarks (integer 1))
+  (check-arg speed (memq speed '(:high :low)) "a valid speed arg (:HIGH or :LOW)")
+  (with-device-locked self
+    (let ((speed-code (case speed (:high 1) (:low 0))))
+      (if (> number-of-filemarks 1)
+	  (tm:search-multiple-filemarks number-of-filemarks unit 0 speed-code)
+	(tm:search-filemark unit 0 speed-code)))))
+
+(defmethod (tapemaster-device :search-filemark-reverse) (number-of-filemarks &optional (speed :low))
+  (check-type number-of-filemarks (integer 1))
+  (check-arg speed (memq speed '(:high :low)) "a valid speed arg (:HIGH or :LOW)")
+  (with-device-locked self
+    (let ((speed-code (case speed (:high 1) (:low 0))))
+      (if (> number-of-filemarks 1)
+	  (tm:search-multiple-filemarks number-of-filemarks unit 1 speed-code)
+	(tm:search-filemark unit 1 speed-code)))))
+))
+
+; From file DJ: L.TAPE; USER.LISP#102 at 1-Jun-88 16:03:16
+#10R TAPE#: 
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "TAPE")))
+  (COMPILER::PATCH-SOURCE-FILE "SYS: TAPE; USER  "
+
+(defun backup-files (file-list host &key
+		     (set-backup-bits t)
+		     (compare t)
+		     (tape-info-function 'prompt-for-tape-info)
+		     (device-spec *selected-device*)
+		     (format-spec *selected-format*))
+  "This backs up the files in FILE-LIST to tape.  Each element in
+the list must be a file property list.  The files backed up will
+be compared and/or have their backup bits set as specified by the
+arguments.  TAPE-INFO-FUNCTION takes no arguments and should return
+two values for each tape mounted: the tape name and the pathname 
+for the log.  It is called for each tape in the dump."
+  (using-device (device device-spec)
+    (using-format (format format-spec)
+      (with-device-locked device
+	(format t "~&Backing-up ~D files: ~:D total bytes"
+		(length file-list)
+		(let ((num 0))
+		  (dolist (f file-list num)
+		    (incf num (* (get f :length-in-bytes) (/ (file-byte-size f) 8))))))
+	(do ((time (time:get-universal-time))
+	     (files-to-backup file-list)
+	     failed-files)
+	    ((null files-to-backup)
+	     (when failed-files
+	       (format t "~&*** ~D files failed during access ***~%" (length failed-files)))
+	     (format t "~&~%*** Backup Finished ***~%")
+	     failed-files)
+	  (multiple-value-bind (tape-name log-file)
+	      (funcall (or tape-info-function 'prompt-for-tape-info) host t)
+	    (do* ((files files-to-backup (cdr files))
+		  (file (car files) (car files))
+		  bad-files
+		  files-to-log
+		  new-tape)
+		 ((or (null file) new-tape)
+		  (cond (new-tape
+			 (let ((condition (first new-tape))
+			       (file-to-retry (second new-tape)))
+			   (format t "~&End of tape encountered writing ~A.  ~%~
+                                   Fixing last file on tape - "
+				   (car file-to-retry))
+			   (push file-to-retry files)	;put this file back on list
+			   (typecase condition
+			     (end-of-tape-writing-file
+			      (send format :beginning-of-file device)
+			      (send format :finish-tape device))
+			     (end-of-tape-writing-header))
+			   (format t "done.~%")))
+			(t
+			 (format t "~&Last file written to tape.~%")
+			 (send format :finish-tape device)))
+		  (when compare
+		    (format t "~&Rewinding to compare ... ")
+		    (send format :rewind device)
+		    (format t "done.~2%Comparing files:~%")
+		    (do* ((vl (compare-files :format-spec format
+					     :device-spec device)
+			      (cdr vl))
+			  (val (car vl) (car vl))
+			  (count 0 (add1 count)))
+			 ((null vl))
+		      (when (errorp val)
+			(push val bad-files)
+			(delq (nth count files-to-log) files-to-log)))
+		    (if (null bad-files)
+			(format t "~&All files compared were equal.")
+		      (progn
+			(format t "~&*** Not all files were equal (bad files follow) ***")
+			;; +++ compare returns condition objects (at least in the case of "file not found" +++
+			(dolist (condition bad-files)
+			  (format t "~&~10@t~A~%" (send condition :report nil)))
+			(format t "~&Make a note of these files and dump them again.~%")
+			(y-or-n-p "Continue? "))))
+		  (setq files-to-backup files)
+		  (when files-to-log
+		    (format t "~&Logging files - ")
+		    (log-files files-to-log
+			       host log-file `(:tape ,tape-name)
+			       (type-of format) user-id time)
+		    (format t "done.~%"))
+		  (when (and set-backup-bits files-to-log)
+		    (format t "~&Setting backup bits ... ")
+		    (set-backup-bits files-to-log)
+		    (format t "done.~%"))
+		  (when files-to-backup
+		    (format t "~&Unloading tape ... ")
+		    (unload)
+		    (prompt-for-new-tape format device))
+		  t)
+	      (condition-case (condition)
+		  (send format :write-file device file :end-of-tape-action :error)
+		((end-of-tape-writing-header end-of-tape-writing-file)
+		 (setq new-tape (list condition file)))
+		(fs:file-operation-failure
+		 (format t "~&*** Failed writing file: \"~s\". ***" (car file))
+		 (push (cons (car file) condition) failed-files))
+		(:no-error (push file files-to-log))))))))))
+
+))

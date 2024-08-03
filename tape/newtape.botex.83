@@ -1,0 +1,1053 @@
+@comment -*- Mode:Text; Package:TAPE; Base:10 -*-
+@library(patbo)
+@library(lisp)
+@comment Documentation for tape software
+@comment Started by DG 9/24/85
+@begin(document)
+@parindent 0in
+@parskip 15pt
+@c baselineskip 13pt
+@baselineskip 18pt
+@textbodyindent = 0.25in
+@setchapterstyle open
+@defindex fn
+@synindex vr fn
+@synindex fl fn
+@synindex op fn
+@synindex iv fn
+@synindex kw fn
+@defindex cp
+
+@unnumbered Design of the New Tape System
+
+
+Since the previous implementation of tape software on the Lambda
+has undergone several years of use and criticism, it has been
+completely redesigned.  The new implementation solves various
+problems inherent in the previous design of the tape software and
+provides a substantial improvement in speed, extensibility and
+functionality.
+
+The basic goal of the new design was user-extensibility.  The
+ability to add support for an arbitrary tape format on any
+supported tape device with a minimal amount of work has been
+accomplished by separating the formatting from the data transfer
+functions into modular parts with a strictly defined interface.
+The result is two distinct object flavors: @l(basic-tape-format)
+and @l(basic-tape-device).  Each has a set of required methods
+with specified return values used to effect operations.  There
+are several beneficial side effects which stem from this design:
+	
+@table 3
+
+@item Multi-unit operations
+Control locking of the interface hardware for tape devices has
+been implemented at the device object level.  Device locking is
+not permanent by process, as in the previous implementation, but
+controlled by user programs and checked at the device-object
+level.  Although, the software must still inherently rely on the
+competence of the user to guarantee the expected results, this
+scheme offers much more flexibility. In addition, it allows
+easier implementation of specialized tape operations like
+tape-to-tape format translation.
+
+@item User interface
+The strict specification of operations on tape-devices and
+tape-formats offers a more controlled environment for user
+programs that wish to use tape storage for more obscure purposes,
+while allowing automatic storage programs to operate more
+effectively and need less user assistance.
+
+@item Abstraction of tape operations
+As any flavor object can be created to the specifications of a
+tape-format or tape-device, non-tape device objects are
+completely interchangeable.  This permits operations like file
+backup to non-tape devices (such as other file-systems), without
+the need of specialized code.
+
+@item Speed of tape devices
+For dual-speed devices, the device-object can judge the transport
+speed that should be used by the amount of data requested, which
+results in substantial increase in speed for file and band
+transfer operations.
+
+@item Disk Partition Transfer
+Having tape device objects directly control the transfer of disk
+blocks to the tape allows the fastest data transfer rates
+possible since the device object can optimize operations
+according to the characteristics of the tape hardware.
+
+@end table
+
+
+The first version of the new tape system should be very stable.
+Yet, as it is not humanly possible to conceive of every
+eventuality or optimization, feedback from implementors of
+tape-device or tape-format support under this scheme is essential
+for improvement of the software.  Submissions of software for
+other standard tape formats not in this release should be sent to
+LMI to be considered for inclusion in a future release.
+Similarly, requests for assistance in the implementation of any
+format are welcome and should be directed to the Customer Service
+Hotline.
+
+@chapter The Generic Tape Device
+
+Support for tape devices has been designed to be very modular,
+complete and easy to use.  Devices as flavor objects need to
+support a relatively small number of operations, which can be
+performed as efficently (or as complexly), as the device can
+handle, but whose interface is simple enough to accomodate a
+variety of higher level formatting software, providing support
+for various standard tape formats.
+
+This chapter outlines the operations each tape device must
+support along with the characteristics particular to each
+operation to ensure the complete modularity of tape devices.
+
+@defflavor basic-tape-device
+
+This is the base flavor upon which all tape devices should be
+built.  It defines no methods or instance variables, it simply
+@i[requires] the necessary methods and instance variables for the
+definition of the device.  Tape devices expected to be used with
+the general tape software, @b(must) be built on this flavor, as
+it is used as the type specifier by routines in the general tape
+software to check the validity of tape-device objects.
+
+@end defflavor
+
+The values of the following instance variables should be
+@i[gettable] and @i[settable].  The latter should only be used
+within the object's method definitions, which is assumed to be
+accurate with respect to the limitations of the parameters.  All
+changes of the parameters from an external source should be made
+through the @l(:set-options) method explained below.
+
+@defmetaivar tape-devices unit
+The current unit selected by the device object.
+@end defmetaivar
+
+@defmetaivar tape-devices density
+The selected density (speed in some cases) of the drive.
+@end defmetaivar
+
+These methods provide the interface to the device as specified:
+
+@defmetamethod tape-devices :initialize &rest init-options
+
+This method is responsible for setting up the device before any
+of the supported operations can be performed.  The initial values
+of device parameters may be supplied in @ii[options].
+
+@end defmetamethod
+
+@defmetamethod tape-devices :lock-device
+
+This is method should lock the device so that no other processes
+or processors can use it when locked.  The locking scheme used
+and its implementation is completely up to the implementor.  All
+that is required is that no other object/process can use the
+physical device after this operation has been executed, until a
+@l(:unlock-device) operation is executed and terminates.  @b[See
+the section on Device Locking for a discussion on this topic.]
+
+@end defmetamethod
+
+@defmetamethod tape-devices :unlock-device
+
+This method undoes the action of the @l[:lock-device] operation.
+
+@end defmetamethod
+
+@defmetamethod tape-devices :device-locked-p
+
+This should return @l[t] if the device is currently locked for this
+object, or @l[nil] if not.
+
+@end defmetamethod 
+
+@defmetamethod tape-devices :set-options &rest options-and-args
+
+@ii[options-and-args] should be of the form: @l[(@ii"option arg"
+...)].  This should set each of the options to its corresponding argument,
+checking the validity of the arguments beforehand.  If an
+incorrect option is specified, an error should be signalled.  The
+return value is @l[t] if the options were correctly set.  If no
+options are specified, this method may, at the implementor's
+wish, pop-up a menu for the device options to change, or
+otherwise query the user.
+
+@end defmetamethod
+
+@defmetamethod tape-devices :reset
+
+This operation should reset the physical device associated with
+the flavor object.
+
+@end defmetamethod
+
+@defmetamethod tape-devices :status
+
+This should return a list of status descriptors which indicate
+the state of the device.  Each descriptor can be a keyword which
+implies logical truth of the condition or a list whose car is the
+keyword and cdr is a list of information about the condition.
+The supported status descriptors are as follows:
+
+@lisp
+	:write-protected
+	:busy
+	:off-line
+	:on-line
+	:physical-end-of-tape
+	:load-point
+	:end-of-file
+	(:error . condition-object)
+
+@end lisp
+
+@end defmetamethod
+
+@defmetamethod tape-devices :speed-threshold
+
+Since many tape drives have two transport speeds, and the
+reposition time plays an important factor in the overall
+performance of the read and write operations, this method has
+been provided to allow optimization of certain operations by
+specifying the threshold (in bytes) above which high speed can be
+used.  The operations that currently allow speed specification
+are the spacing operations and search filemark operations this
+optimization is @l[:search-filemark] and
+@l[:search-filemark-reverse].
+
+@end defmetamethod
+
+@defmetamethod tape-devices :rewind &optional (wait-p t)
+
+This should rewind the tape to BOT.  If @ii[wait-p] is non-@l[nil],
+the method will wait for the tape to reach its load point, then
+return, otherwise it will return immediately.  The return value 
+should be ignored.
+
+@end defmetamethod
+
+@defmetamethod tape-devices :unload
+
+This unloads the tape and/or puts the device @l[:off-line],
+depending on the characteristics of the physical tape drive.
+It does not wait for the tape to rewind.
+
+@end defmetamethod
+
+@defmetamethod tape-devices :space number-of-records &optional (speed :low)    
+
+This should move the tape forward the specified number of records.  This
+operation will space over a filemark on the tape, counting it as a record.  The
+@ii[speed] argument allows the user to specify how fast the drive spaces over
+records for drives that are dual speed.  Valid values are @l[:high] or @l[:low].
+This allows faster searching of the filemark when it is expected to be far from
+the current tape position, but the @l[:low] speed increses efficency for short
+files, as tape reposition time increases with transport speed.
+
+@end defmetamethod
+
+@defmetamethod tape-devices :space-reverse number-of-records &optional (speed :low)
+
+This is the same as space but moves in the reverse direction.
+
+@end defmetamethod
+
+@defmetamethod tape-devices :search-filemark number-of-sequential-filemarks &optional (speed :low)
+
+This should move forward until the specified number of sequential
+filemarks have been reached.  The tape should be positioned after the
+last of the filemarks found.  Eventually, if the filemarks are not
+found, a normal end-of-tape error will be signalled. The @ii[:speed]
+argument is like for :Space.
+
+@end defmetamethod
+
+@defmetamethod tape-devices :search-filemark-reverse number-of-sequential-filemarks &optional (speed :low)
+
+This is just like @l[:search-filemark] but in reverse.
+
+@end defmetamethod
+
+@defmetamethod tape-devices :optimal-chunk-size record-size
+
+This should return the optimal amount of data (in bytes) for
+read/write array operations for the specified record-size.
+It must be some multiple of @ii[record-size].
+
+@end defmetamethod
+
+@defmetamethod tape-devices :read-block dma-buffer record-size
+
+This should read one record from the tape into @ii[dma-buffer].  The
+number of bytes expected to be in the record on tape is specified as
+@ii[record-size].  The return value is the actual number of bytes that
+were in the record on tape.  If this is larger than the specified record
+size, the dma-buffer will have only been filled up to the requested
+record size.  If it is smaller, the dma-buffer will have only been
+filled up to the number of bytes in the record on tape.  As no error is
+signalled in either case, the requestor is expected to check the return
+value against the expected record-size.  In general, if the user does
+not know what the size of the next record will be, a large buffer can be
+used. Although the overhead increases slightly with a larger block, this
+is a perfectly safe thing to do.  In most cases, the larges block size
+that can be used is 64k bytes (sometimes less).
+
+@end defmetamethod
+
+@defmetamethod tape-devices :write-block dma-buffer record-size
+
+This should write one record, @ii[record-size] bytes long, of data
+from @ii[dma-buffer] on the tape.
+
+@end defmetamethod
+
+@defmetamethod tape-devices :read-array array number-of-records record-size
+
+This should read the specified number of record-size records into @ii[array]
+from tape.  This method should be able to handle the following array types:
+@l[art-8b], @l[art-16b], and @l[art-string].  Record-size must be an even
+multiple of 1024.  The return value should be ignored.
+
+@end defmetamethod
+
+@defmetamethod tape-devices :write-array array number-of-records record-size
+
+This is just like @l[:read-array] only it writes from the array to tape.
+
+@end defmetamethod
+
+@defmetamethod tape-devices :read-to-disk starting-address number-of-blocks record-size
+
+This should transfer the specified number of disk blocks from the tape to the
+disk starting at @ii[starting-address].  Care must be used in checking the
+arguments, as a reference to a non-existent disk address on the Lambda will make
+the machine crash.  @ii[Record-size] must be an even multiple of 1024.  The
+return values are the number of blocks actually written on disk and an error
+condition or NIL as in :read-array.
+
+@end defmetamethod
+
+
+@defmetamethod tape-devices :write-from-disk starting-address number-of-blocks record-size
+
+This is the similar to @l[:read-to-disk] except the direction of data transfer
+is reversed.
+
+@end defmetamethod
+
+
+@chapter Tape Format Objects
+
+Tape Format objects are flavor objects which implement certain generic
+operations such as writing, restoring and listing files on a tape.
+Their responsibility is to read, examine or write data to or from the
+tape device which represents the correct file data (specified by the
+arguments) in the appropriate format.
+
+
+@defflavor basic-tape-format
+
+This is the base flavor upon which all tape format flavors
+should be built.  It defines no method or instance variables, it simply
+@i[requires] the necessary methods and instance variables for the
+definition of the format.  As with tape-devices, all tape formats
+expected to work with the general tape software must be built on
+this flavor.
+@end defflavor
+
+@defmetaivar tape-formats record-size
+
+This is the size in bytes for each record to be written on the 
+tape, or @l[:variable] if this format uses variable-length records.
+
+@end defmetaivar
+
+@defmetaivar tape-formats file-stream
+
+This holds the stream object that is created if the @l[:open-file]
+method is invoked.  This will be explained in detail below.
+
+@end defmetaivar
+
+@defmetamethod tape-formats :initialize &rest options
+
+This is similar to the operation of the same name on tape devices.  It
+is responsible for setting up the tape format object.  @ii[options] is
+passed to the @l[:set-options] method.
+
+@end defmetamethod
+
+@defmetamethod tape-formats :set-options &rest options-and-args
+
+As for tape devices, this is responsible for checking and setting parameters for
+the tape format.  If no options are specified, the user should be presented
+with options to change by means of a pop-up window or something.
+
+@end defmetamethod
+
+@defmetamethod tape-formats :read-tape-header tape-device
+
+This should return tape header information in the form
+of a disembodied property list.  The car of the list should be the
+flavor symbol of the format (i.e. @t[LMFL] format), the cdr an
+alternating list of properties and values.
+
+@end defmetamethod
+
+@defmetamethod tape-formats :write-tape-header plist device
+
+This should take @ii[plist] and write a proper header according to the
+specification of the format on @ii[device].  For safety, it should
+send the device a @l(:rewind) message first.
+
+@end defmetamethod
+
+@defmetamethod tape-devices :tape-is-your-format-p device
+
+This should check the tape and return @l[t] if the tape is of this format,
+assuming that the tape is already rewound, NIL otherwise.
+
+@end defmetamethod
+
+@defmetamethod tape-formats :restore-file
+	device &key transform query (overwrite :always) (create-directory :always) silent
+	Restore a file from the tape.
+
+@table 3
+@kitem :transform
+If this is a pathname, the components of the pathname of the file on
+tape are merged into this one.
+If it is a function, it must take arguments:
+@lisp
+(device directory name type version)
+@end lisp
+and return a pathname to which the file will be restored.
+
+@kitem :query
+If non-@l[nil], the user will be asked for each file whether to
+restore it.
+
+@kitem :overwrite
+Decides whether to overwrite an existing non-deleted file with
+the same pathname (including version).  Valid values are:
+@l(:always :query :never).
+
+@kitem :create-directory
+Decides whether to create a directory for a file to be restored
+if the directory does not exist.  Valid values are:
+@l(:always :query :never :error).  @l[:never] skips over the file,
+@l[:error] will signal a directory-not-found error.
+
+@kitem :silent
+If non-nil, should not print anything unless a query is in order.
+Otherwise, this method should print out what file the tape file
+is being restored to.
+
+@end table
+@end defmetamethod
+
+@defmetamethod tape-formats :write-file device file
+                            &key (end-of-tape-action :continue)
+
+Writes a file on the tape.  @ii[file] should be a string, pathname or a file
+property list in the form @l[(@ii"truename" . (@ii"prop value" ...))] as returned by
+@l[fs:directory-list]. If the argument is a file plist, then the properties in the
+plist are written to tape, otherwise the file properties are derived from the
+input stream at write time.  The return value, if the write is successful is the
+nil, otherwise it may be an error condition (see below). @l[:end-of-tape-action]
+instructs the formatting software what to do if the physical end of tape is
+encountered.  Valid keywords are: @l[:continue] which causes continuation onto
+another tape reel, according to the format; @l[error] should cause a
+@l[physical-end-of-tape] error condition to be signalled; @l[return] will cause
+the error condition to be returned immediately as the second value, the first
+being the number of files actually written, as normal.  This feature is useful
+for utilities like the backup software which would rather know when the end of a
+tape has been reached, for cataloging backups.
+
+@end defmetamethod
+
+@defmetamethod tape-formats :compare-file device &key transform silent
+
+Compares the next file on tape with the source it was dumped from.
+Transform is treated exactly as for :restore-file, and should provide
+the pathname of the file to be compared against.  If this argument is NIL,
+then the local host is assumed to be the source.  If silent is nil, then
+this method should print out messages concerning the comparison of the files.
+The return value should be the file property list of the file if it was found
+to be different from the source, or NIL if the comparison succeeded without error.
+
+@end defmetamethod
+
+@defmetamethod tape-formats :beginning-of-file device
+
+This positions the tape to the beginning of the current file.
+Return value should be ignored.
+
+@end defmetamethod
+
+
+@defmetamethod tape-formats :next-file number-of-files device
+
+Positions the tape at the beginning of the file that is @i(number-of-files) away
+from the current file (i.e. 1 specifies the next file).
+
+@end defmetamethod
+
+@defmetamethod tape-formats :previous-file number-of-files device
+
+Like @l[:next-file] but moves backwards.
+
+@end defmetamethod
+
+@defmetamethod tape-formats :find-file match device
+
+This operations searches for file on tape.  
+@ii[match] can be of the following types:
+@description
+@item list
+Car should a symbol, either @l[or] or @l[and], cdr should be
+a list of valid match arguments.  @l[tape-file-match] is called on all of
+elements with the same plist, and the values applied to
+@l[and] or @l[or] appropriately to determine the return value.
+
+@item string or pathname
+Uses @l[:pathname-match] operation on @ii[match] pathname.
+
+@item function, closure, or symbol
+Funcall @ii[match] with plist as the argument.
+@end description
+
+If the processing of the match argument returns non-@l[nil], then
+the tape is positioned at the beginning of the matched file, and
+the file's plist returned.  Otherwise the search continues.
+
+@end defmetamethod
+
+@defmetamethod tape-formats :open-file device &key (:direction :input) (:byte-size :default) (:characters :default) plist
+
+This function returns a stream according to the arguments which have the same
+meaning as for @l[open].  @ii[plist] is only meaningful for @l[:output] streams,
+and must be supplied in that case.  If the direction is :INPUT, then the second
+value is the file property list of the file opened.  The properties are also
+copied onto the si:property-list instance variable of the stream, allowing the
+use of the generic property list functions (get, putprop, plist, etc.).
+
+@end defmetamethod
+
+
+@defmetamethod tape-formats :list-files device &key (stream *standard-output*) (number-of-files -1)
+
+Should print a description of each file on the tape to @l(stream)
+and return a list of all the file property-lists for each file.
+The listing should stop after @ii[number-of-files] is reached.
+
+@end defmetamethod
+
+@defmetamethod tape-formats :finish-tape device
+
+Marks the logical end of tape on @l(device). 
+
+@end defmetamethod
+
+@defmetamethod tape-formats :rewind device &optional (wait-p t) 
+
+This should cause the tape on @ii[device] to be rewound.  It has the same meaning as
+for tape-devices, but is provided here since some format objects may need to
+update some internal information when the tape is rewound.
+
+@end defmetamethod
+
+@defmetamethod tape-formats :unload device
+
+This should cause the tape on the device specified to be
+unloaded, and any state the format object has with respect to
+the current tape should be flushed.
+
+@end defmetamethod
+
+
+@defmetamethod tape-formats :position-to-append device
+
+Position tape so that all subsequent @l[:write-file] operations
+will add the files to the end of tape.
+
+@end defmetamethod
+
+
+
+@chapter Error Handling
+
+The new implementation of the tape software has gone quite out of
+its way to provide an accurate and consistent system of error
+condition flavors, to allow reliable catching and handling of
+various tape errors and states. The following set of flavors
+should be used in all places where they logically fit.  Higher
+level software will depend on this consistency and will be able
+to provide more `intelligence' to tape operations rather than
+dropping through to the error handler at every exception.
+
+
+
+Error handling support for tape software
+
+This is the  base flavor for all tape-related errors; all other
+error flavors use this one.
+
+@defflavor tape-error 
+This primitive has no instance variables of its own; though it
+does use the required flavor, @l[error].
+@end defflavor
+
+@section Hardware Errors
+ 
+These errors are internal hardware errors that cannot be
+reasonably handled by other software (fatal hardware errors).
+
+@defflavor hardware-error
+@l[:device-type], @l[:error-code], and @l[:error-message] are
+required instance variables for errors of type
+@l[hardware-error].  
+@end defflavor
+
+@defmethod hardware-error :report stream
+Returns a formatted string on @ii[stream] reporting a hardware
+error on @ii[device-type] and the code of the error.
+@end defmethod
+
+@section Driver Errors
+
+Driver errors are internal errors in the driver software.  Use
+these for internal error checking.  For the most part this
+probably won't be common, but if you prefer to set up internal
+error checking, you will have this error-flavor available to do
+so.  (Rather than using @l[(ferror nil ...)].) This flavor of
+error is also used to catch internal conditions.
+
+@defflavor driver-error
+@l[:device-type], @l[:error-code], and @l[:error-message] are
+required instance variables for errors of type
+@l[driver-error].
+@end defflavor
+
+@defmethod driver-error :report stream
+Returns a formatted string on @ii[stream] reporting a driver
+error on @ii[device-type] and the code of the error.
+@end defmethod
+
+@section Device Errors
+  
+Device errors are typical, sometimes expected, errors that the
+device may encounter, such as the physical end of the tape,
+device not on ready, etc.  The following is the base,
+uninstantiable flavor uponm which all other @l[device-error]
+flavors depend.
+
+@defflavor device-error
+This flavor has no instance varibles of its own; it requires the
+base tape error flavor @l[tape-error]. The following flavors are
+all built on this one
+@end defflavor
+
+
+@subsection Device Unavailable 
+
+@defflavor device-unavailable
+@l[:device-type], and @l[:current-owner] are required instance
+variables for errors of type @l[:device-unavailable].
+@end defflavor
+
+
+@defmethod device-unavailable :report stream
+Reports who and what is currently using the device.
+@end defmethod
+
+@b[DAVE, AM I DOING THE RIGHT THING HERE?]
+
+The following daemon methods are combined using @l[:case] method
+combination; they dispatch on the result of
+@l[:proceed-asking-user].
+
+@defmethod device-unavailable :steal-device-internally
+Steals the device from any other process using it; this should be
+used with care.
+@end defmethod
+
+@defmethod device-unavailable :steal-device-from-other-processor
+Steals the device from another processor, for instance if you
+have a 2@mousetimes2 or a 3@mousetimes3.
+@end defmethod
+
+@defmethod device-unavailable :wait-for-device-free
+Waits for the device to become free, then locks it.
+@end defmethod
+
+
+@subsection Wait Timeout
+
+@defflavor wait-timeout
+@l[:device-type], @l[:seconds-waited], and @l[:wait-string] are
+required instance variables for errors of type
+@l[wait-timeout].
+@end defflavor
+
+@defmethod wait-timeout :report stream
+Reports that the device timed out and give the amount of time.
+@end defmethod
+
+
+@subsection Bad Tape
+
+@defflavor bad-tape
+@l[:device-type], and @l[:retries] are required instance
+variables for errors of type @l[bad-tape].
+@end defflavor
+
+@defmethod bad-tape :report stream
+Reports when a hard error is found on a device, and the number of retries.
+@end defmethod
+ 
+
+@subsection Blank Tape
+
+@defflavor blank-tape
+@l[:device-type] is the required instance variable for errors of
+type @l[blank-tape].
+@end defflavor
+
+@defmethod blank-tape :report stream
+Reports that the tape on the device seems to be blank.
+@end defmethod
+
+
+@subsection Physical End of Tape
+
+@defflavor physical-end-of-tape
+@l[:device-type], @l[:unit], and @l[:data-transferred] are
+required instance variables for errors of type
+@l[physical-end-of-tape].
+@end defflavor
+
+@defmethod physical-end-of-tape :report stream
+Reports the physical end of the tape, giving the unit and the
+device.
+@end defmethod
+
+
+@subsection Physical Beginning of Tape
+
+@defflavor physical-beginning-of-tape
+@l[:device-type], @l[:unit], and @l[:data-transferred] are
+required instance variables for errors of type
+@l[physical-beginning-of-tape].
+@end defflavor
+
+@defmethod physical-beginning-of-tape :report stream
+Reports the physical beginning of the tape, giving the unit and
+the device.
+@end defmethod
+
+
+@subsection Filemark Encountered During Read
+
+@defflavor filemark-encountered
+@l[:device-type],@l[:unit], and @l[:data-transferred] are
+required instance variables for errors of type
+@l[filemark-encountered].
+@end defflavor
+
+@defmethod filemark-encountered :report stream
+Reports that a filemark was  encountered during a read, giving
+the unit and the device.
+@end defmethod
+
+
+@section Format Errors
+
+Format errors are errors in the format of information on the tape
+with respect to the specific format standard, for instance bad
+file headers.
+
+@defflavor format-error
+This flavor has no instance varibles of its own; it requires the
+base tape error flavor @l[tape-error]. The following flavors are
+all built on this one
+@end defflavor
+
+@subsection Bad Tape Header
+
+@defflavor bad-tape-header
+@l[:format-type], and @l[:header] are required instance variables
+for errors of type @l[bad-tape-header].
+@end defflavor
+
+@defmethod bad-tape-header :report stream
+Reports bad data in the tape header for a particular type of format.
+@end defmethod
+
+@subsection Bad File Headers
+
+@defflavor bad-file-header
+@l[:format-type], and @l[:header] are required instance variables
+for errors of type @l[bad-file-header].
+@end defflavor
+
+@defmethod bad-file-header :report stream
+Reports bad data in a file header for a particular type of
+format.
+@end defmethod
+
+
+@subsection Logical End of Tape
+
+@defflavor logical-end-of-tape
+@l[:device-object] is the only required instance variable for
+errors of type @l[logical-end-of-tape].
+@end defflavor
+
+
+@defmethod logical-end-of-tape :report stream
+Reports a logical end of tape on the device.
+@end defmethod
+
+
+@subsection End of Tape Writing Header
+
+@defflavor end-of-tape-writing-header
+@l[:plist] is the only required instance variable for errors of
+type @l[end-of-tape-writing-header].
+@end defflavor
+
+@defmethod end-of-tape-writing-header  :report stream
+Reports that an end of tape was encountered while writing the header
+for a  file, and gives the pathname.
+@end defmethod
+
+
+@subsection End of Tape Reading Header
+
+@defflavor end-of-tape-reading-header
+@l[:device] is the only required instance variable for errors of
+type @l[end-of-tape-reading-error].
+@end defflavor
+
+@defmethod end-of-tape-reading-header :report stream
+Reports that an end of tape was encountered while reading the
+header, gives the device.
+@end defmethod
+
+	  
+@subsection End of Tape Writing File
+
+@defflavor end-of-tape-writing-file
+@l[:plist], @l[:device], and @l[:bytes-transferred] are required
+instance variables for errors of type @l[end-of-tape-writing-file].
+In this case, @l[bytes-transferred] depends on the @l[:byte-size]
+of the file in question (which in some cases is 16 bits).
+@end defflavor
+
+@defmethod end-of-tape-writing-file :report stream
+Reports an end of tape while writing a  file, gives pathname
+and device.
+@end defmethod
+
+
+@subsection End of Tape Reading File
+
+@defflavor end-of-tape-reading-file
+@l[:plist], @l[:device], and @l[:bytes-transferred] are required
+instance variables for errors of type
+@l[end-of-tape-reading-file].
+@end defflavor
+	   
+@defmethod end-of-tape-reading-file :report stream
+Reports an end of tape while reading a file, gives pathname and
+device.
+@end defmethod
+
+@section User Errors
+
+User errors are errors that the user can correct and retry, or
+that the user has precipitated by not following the conventions.
+For instance, not mounting the tape.
+
+@defflavor user-error
+This flavor has no instance varibles of its own; it requires the
+base tape error flavor @l[tape-error]. The following flavors are
+all built on this one
+@end defflavor
+
+
+@subsection Tape Write Protected
+
+@defflavor write-protected
+@l[:device-type], and @l[:unit] are required instance variables
+for errors of type @l[write-protected].
+@end defflavor
+
+@defmethod write-protected :report stream
+Reports that the tape is write protected, gives the unit
+and the device.
+@end defmethod
+
+@subsection Tape Not Ready
+
+@defflavor tape-not-ready
+@l[:device-type], and @l[:unit] are required instance variables
+for errors of type @l[tape-not-ready].
+@end defflavor
+
+
+@defmethod tape-not-ready :report stream
+Reports that the tape is not ready, gives the unit and the
+device.
+@end defmethod
+
+
+@subsection Unknown Format
+
+@defflavor unknown-format
+@l[:device], @l[:unit], and @l[:header-string] are required
+instance variables for errors of type @l[unknown-format].
+@end defflavor
+
+@defmethod unknown-format :report stream
+Reports that the tape is an unknown format, gives the unit and
+the device.
+@end defmethod
+
+
+@subsection Filestream Exists
+
+@defflavor file-stream-exists
+@l[:format-object], and @l[:stream] are required instance
+variables for errors of type @l[file-stream-exists].
+@end defflavor
+
+@defmethod file-stream-exists :report report-stream
+Reports that a file stream is currently open, gives format.
+@b[DAVE, I DON'T UNDERSTAND WHY THIS IS AN ERROR?]
+@end defmethod
+
+@subsection No Such Partition
+
+@defflavor no-such-partition
+@l[:partition], @l[:disk-unit], and @l[:host] are required
+instance variables for errors of type @l[no-such-partition].
+@end defflavor 
+
+@defmethod no-such-partition :report report-stream
+Reports that there is no such partition, gives partition name,
+disk-unit and host.
+@end defmethod
+
+
+@subsection Invalid Option
+
+@defflavor invalid-option
+@l[:option], @l[:value], and @l[:object] are required instance
+variables for errors of type @l[invalid-option].
+@end defflavor
+
+@defmethod invalid-option :report stream
+Reports an invalid option, gives the option, its value and
+@b[DAVE, WHAT IS OBJECT?].
+@end defmethod
+
+@subsection Invalid Option Value
+
+@defflavor invalid-option-value
+@l[:option], @l[:value], and @l[:object] are required instance
+variables for errors of type @l[invalid-option-value].
+@end defflavor
+
+@defmethod invalid-option-value :report stream
+Reports an invalid value for an option, gives the option, its
+value and @b[DAVE, WHAT IS OBJECT?].
+@end defmethod
+
+
+@subsection Write in Middle of Tape
+
+@defflavor write-in-middle-of-tape
+@l[:device-object] is the only required instance variable for
+errors of type @l[write-in-middle-of-tape]. 
+@end defflavor
+
+@defmethod write-in-middle-of-tape :report stream
+Reports an attempt to write data in the middle
+of the tape, gives device.
+@end defmethod
+
+
+@subsection Read During Write
+ 
+@defflavor read-during-write
+@l[:device-object] is the only required instance variable for
+errors of type @l[read-during-write].
+@end defflavor
+
+@defmethod read-during-write :report stream
+Reports an attempt to examine the tape on the device before
+completely writing it.
+@end defmethod
+
+
+@subsection Operation not Supported
+
+@defflavor not-supported
+@l[:object], and @l[:operation] are required instance variables
+for errors of type @l[not-supported].
+@end defflavor
+
+@defmethod not-supported :report stream
+Reports that the @b[DAVE, WHAT IS OBJECT?] does not support
+the particular operation attempted.
+@end defmethod
+
+
+@subsection Protocol Violation
+
+Protocol violations are not necessarily the fault of user
+specified values, but in some cases the fault of the format
+software.  It is assumed however that format software is checked
+and adheres to the protocols of the tape system, leaving user
+mistakes when using the device directly the most likely case.
+
+@defflavor protocol-violation
+@l[:format-string] is the only required instance variable for
+errors of type @l[protocol-violation].
+@end defflavor
+
+@lisp
+(defmethod (protocol-violation :report) (stream)
+  (format stream "Protocol Violation: ~A"
+	  (lexpr-funcall 'format nil
+			 (send self :format-string)
+			 (send self :format-args))))
+
+@b[DAVE, HOW AND WHEN WOULD THIS BE USED?]
+@end lisp
+
+@section Higher Level Software Errors
+
+These would be errors that occur in other parts of the system
+that the tape software interacts with.
+
+@b[DAVE, IS THIS CORRECT?]
+
+@defflavor higher-level-software-error
+This flavor has no instance varibles of its own; it requires the
+base tape error flavor @l[tape-error]. The following flavors are
+all built on this one
+@end defflavor
+
+
+@summarycontents
+@contents
+@end(document)

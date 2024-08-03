@@ -1,0 +1,255 @@
+;;; -*- Mode:LISP; Package:TAPE; Readtable:CL; Base:10 -*-
+;;
+;; Copyright GigaMos Systems, Inc. 1988
+;;   See filename "Copyright" for
+;; licensing and release information.
+;;
+;;;
+;;; Format to implement a TAPETEST tape stream.
+;;;
+;;; The TAPETEST format tests scratch tapes for read/write errors.
+;;; It does *not* test the tape hardware!
+
+(eval-when(compile eval load)
+  (defconst *tapetest-max-blocking-factor* 63.)
+  (defconst *tapetest-max-record-size* (* *tapetest-max-blocking-factor* si:page-size 4)))
+
+(defconst *tapetest-pattern-zeros*
+	  (make-array *tapetest-max-record-size* :element-type '(mod 256) :initial-element 0.))
+
+(defconst *tapetest-pattern-ones*
+	  (make-array *tapetest-max-record-size* :element-type '(mod 256) :initial-element #xFF))
+
+(defconst *tapetest-pattern-buffer*
+	  (make-array *tapetest-max-record-size* :element-type '(mod 256) :initial-element #xAA))
+
+(defflavor tapetest-format
+	 ((blocking-factor 32.)
+	  (record-size     (* 32. si:page-size 4.))
+	  (file-stream #'ignore))
+	 (basic-tape-format)
+  (:gettable-instance-variables)
+  (:inittable-instance-variables blocking-factor))
+
+(defun tapetest-blocking(blocking-factor)
+  (declare(values record-size blocking-factor))
+  (check-type blocking-factor (integer 1 #.*tapetest-max-blocking-factor*))
+  (values (* blocking-factor si:page-size 4.)
+	  blocking-factor))
+
+(defmethod (tapetest-format :set-blocking) ()
+  (multiple-value-setq (record-size blocking-factor)
+    (tapetest-blocking blocking-factor)))
+
+(defmethod (tapetest-format :after :init) (&rest ignore)
+  (send self :set-blocking))
+
+(defmethod (tapetest-format :set-blocking-factor) (new-blocking-factor)
+  (setq blocking-factor new-blocking-factor)
+  (send self :set-blocking))
+
+(defmethod (tapetest-format :initialize) (&rest init-options)
+  (check-attribute-list init-options)
+  (when init-options
+    (lexpr-send self :set-options init-options)))
+
+(defmethod (tapetest-format :set-options) (&rest options)
+  (check-attribute-list options)
+  (if options
+      (do* ((l options (cddr l))
+	    (option (car l) (car l))
+	    (value (cadr l) (cadr l)))
+	   ((null l))
+	(case option
+	  (:blocking-factor
+	   (setq blocking-factor value)
+	   (send self :set-blocking))
+	  (t (signal 'invalid-option :object self :option option :value value))))
+    (progn
+      (tv:choose-variable-values
+	`((,(locf blocking-factor) "Blocking Factor" :number))
+	:label '(:string "Options for the TAPETEST tape format" :font fonts:tr12b))
+      (send self :set-blocking))))
+
+(defmethod (tapetest-format :open-file) (&rest ignore)
+  (signal 'not-supported :device-object self :operation :open-file))
+
+(defmethod (tapetest-format :read-tape-header) (&rest ignore)
+  (signal 'not-supported :device-object self :operation :read-tape-header))
+
+(defmethod (tapetest-format :write-tape-header) (&rest ignore)
+  (signal 'not-supported :device-object self :operation :write-tape-header))
+
+(defmethod (tapetest-format :tape-is-your-format-p) (&rest ignore)
+  nil)
+
+(defmethod (tapetest-format :restore-file) (&rest ignore)
+  (signal 'not-supported :device-object self :operation :restore-file))
+
+;;;The real stuff starts here
+
+(defun tapetest-compare-pattern(pat1 pat2 &optional max)
+  "Compare test pattern elements of arrays PAT1 and PAT2.
+Returns T if all elements match.
+All elements must be NUMBERP, and the arrays must have the same ARRAY-ACTIVE-LENGTH.
+If the comparison fails, the second value returned will be the index of the failing entry."
+  (declare(values compared-p bad-index))
+  (unless (eql(array-active-length pat1)(array-active-length pat2))
+    (error "Cannot compare pattern arrays - different lengths for ~s and ~s"))
+  (do*((i 0 (1+ i)))
+      ((= i (or max (array-active-length pat1)))
+       t)
+    (or (eql (aref pat1 i) (aref pat2 i))
+	(return (values nil i)))))
+
+(defun tapetest-compare-patterns(pattern
+				 &key
+				 (device *selected-device*)
+				 (format *selected-format*)
+				 &aux
+				 (record-size (send format :record-size)))
+  (check-type record-size integer)
+  (send device :rewind)
+  (do((rec 0)
+      flag index done)
+     (done
+       (format t "~%Comparison done, ~d records OK" rec))
+    (condition-case()
+	(progn
+	 (setq done t)
+	 (send device :read-array *tapetest-pattern-buffer* 1 record-size)
+	 (incf rec)
+	 (multiple-value-setq(flag index)
+	   (tapetest-compare-pattern pattern *tapetest-pattern-buffer* record-size))
+	 (if flag
+	     (format t ".")
+	   (error (format nil "~&Comparison failure, byte ~d record ~d" index rec))))
+      (filemark-encountered)
+      (:no-error (setq done nil)))))
+
+(defun tapetest-test-pattern(pattern
+			     &key
+			     (device *selected-device*)
+			     (format *selected-format*)
+			     (offset-records 0.)
+			     (max-records -1.)
+			     &aux
+			     (record-size (send format :record-size)))
+  (check-type record-size integer)
+  (send device :rewind)
+  (unless (zerop offset-records)
+    (send device :write-array pattern 1 (* offset-records 1024.)))
+  (condition-case()
+      (do((i 1 (1+ i)))
+	 ((and (plusp max-records) (> i max-records)))
+	(send device :write-array pattern 1 record-size)
+	(format t "."))
+    (physical-end-of-tape
+     (format t "~2%Physical end of tape encountered.")
+     (send device :space-reverse 1)
+     (send device :space-reverse 1))
+    (:no-error
+     (or (plusp max-records)
+	 (error "~%How did we get here? Should have gotten PHYSICAL-END-OF-TAPE error!"))))
+  (format t "~%Done writing test patterns.")
+  (format t "~%Writing EOF.")
+  (send format :finish-tape device)
+  t)
+
+(defun tapetest-test-patterns(&key
+			      (device *selected-device*)
+			      (format *selected-format*)
+			      (max-records -1.)
+			      &aux time-start time-end)
+  (condition-case()
+      (progn
+       (send device :rewind)
+       (setq time-start (time:get-universal-time))
+       (format t "~2%Pass 1: write zeros with small record offset ")
+       (tapetest-test-pattern *tapetest-pattern-zeros*
+			      :device device
+			      :format format
+			      :offset-records 1
+			      :max-records max-records)
+       (format t "~2%Pass 2: write ones evenly spaced ")
+       (tapetest-test-pattern *tapetest-pattern-ones*
+			      :device device
+			      :format format
+			      :max-records max-records)
+       (format t "~2%Pass 3: read/verify ")
+       (tapetest-compare-patterns *tapetest-pattern-ones*
+				  :device device
+				  :format format)
+       (setq time-end (time:get-universal-time))
+       (format t "~2%Processing time: ")
+       (time:print-interval-or-never (- time-end time-start))
+       (send device :unload))
+    (sys:abort
+     (beep)
+     (format t "~%User aborted - bad tape???")
+     (send device :rewind))
+    (:no-error
+     (format t "~%Done testing tape."))))
+
+;;;The only standard format method that is useful is COMPARE-FILE.  This
+;;;allows the tape frame user to use 'verify files' to test a tape.
+       
+(defmethod (tapetest-format :compare-file) (device &rest ignore)
+  (tapetest-test-patterns :device device
+			  :format self)
+  ;;Kludge to stop COMPARE-FILES from looping on this method:
+  (signal 'logical-end-of-tape :device-object device))
+
+;;;More unsupported/irrelevant methods:
+
+(defmethod (tapetest-format :write-file) (&rest ignore)
+  (signal 'not-supported :device-object self :operation :write-file))
+
+(defmethod (tapetest-format :write-partition) (&rest ignore)
+  (signal 'not-supported :device-object self :operation :write-partition))
+
+(defmethod (tapetest-format :write-file) (&rest ignore)
+  (signal 'not-supported :device-object self :operation :write-file))
+
+(defmethod (tapetest-format :beginning-of-file) (&rest ignore)
+  (signal 'not-supported :device-object self :operation :beginning-of-file))
+
+(defmethod (tapetest-format :next-file) (&rest ignore)
+  (signal 'not-supported :device-object self :operation :next-file))
+
+(defmethod (tapetest-format :previous-file) (&rest ignore)
+  (signal 'not-supported :device-object self :operation :previous-file))
+
+(defmethod (tapetest-format :find-file) (&rest ignore)
+  (signal 'not-supported :device-object self :operation :find-file))
+
+(defmethod (tapetest-format :find-file-reverse) (&rest ignore)
+  (signal 'not-supported :device-object self :operation :find-file-reverse))
+
+(defmethod (tapetest-format :list-files) (&rest ignore)
+  (signal 'not-supported :device-object self :operation :list-files))
+
+;;;We do use FINISH-TAPE to mark the end of tape.
+
+(defmethod (tapetest-format :finish-tape) (device)
+  (check-device device)
+  (condition-case ()
+      (send device :write-filemark)
+    (physical-end-of-tape)
+    (:no-error
+     (condition-case ()
+	 (send device :space-reverse 1)
+       (driver-error)))))
+
+(defmethod (tapetest-format :rewind) (device &optional (wait-p t))
+  (send device :rewind wait-p))
+
+(defmethod (tapetest-format :unload) (device)
+  (send device :unload))
+
+(defmethod (tapetest-format :position-to-append) (&rest ignore)
+  (signal 'not-supported :device-object self :operation :position-to-append))
+
+(define-tape-format tapetest-format "TAPETEST")
+
+(compile-flavor-methods tapetest-format)

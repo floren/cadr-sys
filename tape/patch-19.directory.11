@@ -1,0 +1,16 @@
+;;; -*- Mode:LISP; Package:USER; Base:10; Readtable:Common-Lisp; Patch-File:T -*-
+;;; Patch directory for Tape version 19
+;;; Written 18-Jan-88 14:02:59 by keith (Keith M. Corbett) at site LMI
+;;; while running on Opus from band 2
+;;; with Experimental System 123.174, Experimental Local-File 73.3, Experimental FILE-Server 22.1, Experimental Unix-Interface 11.0, Experimental KERMIT 34.3, Experimental ZMail 71.0, Experimental Lambda-Diag 15.0, Experimental Tiger 27.0, Experimental Site Data Editor 8.4, Experimental Laser1+ 2.0, Experimental Tape 19.3, microcode 1754, SDU Boot Tape 3.14, SDU ROM 8, Beta I/site/dvi/patches.
+
+(:EXPERIMENTAL
+ ((0 "Tape Loaded" "keith" NIL)
+  (1 "Fix FIND-FILE commands - was erring out, MATCH-SPEC unbound." "keith" NIL)
+  (2 "Add :silent option to tar-format :write-file method." "keith" NIL)
+  (3 "Make *default-dummy-transform-pathname* an instance variable, so
+each instantiation of tape format calculates its own.
+Also put in menu and keywords allowed for :set-options." "keith" NIL)
+  (4 "Define error 'invalid-option-value, to signal when an improper VALUE
+has been specified for a proper OPTION.  This was obviously intended." "keith" NIL)
+  ))

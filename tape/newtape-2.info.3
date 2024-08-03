@@ -1,0 +1,252 @@
+;;; -*- Mode:Info; Fonts:(HL12 HL12I HL12B CPTFONTB HL12BI HL12B HL12I ZINFONT ) -*-
+
+
+Generated on Friday the thirty-first of January, 1986; 8:55:27 pm by dg from DJ: L.TAPE; NEWTAPE.BOTEX#90 with Experimental Grunch 1.4
+
+ Node: *4Error Handling*; Next: *4NEWTAPE*; Previous: *4Tape Format Objects*; Up: *4NEWTAPE
+
+ Menu:
+*3 *4Hardware Errors
+*3 *4Driver Errors
+*3 *4Device Errors
+*3 *4Format Errors
+*3 *4User Errors
+*3 *4Higher Level Software Errors
+
+*The new implementation of the tape software has gone quite out of its way to provide an accurate
+and consistent system of error condition flavors, to allow reliable catching and handling of various
+tape errors and states.  The following set of flavors should be used in all places where they
+logically fit.  Higher level software will depend on this consistency and will be able to provide more
+`intelligence' to tape operations rather than dropping through to the error handler at every exception.
+Errors are subclassified to allow easier intuitive understanding of the condition and also to allow
+more intelligent user interfaces and automated programs to operate more reliably.  Each classification
+flavor (with the exception of *3hardware-error* and *3driver-error*) is defined as an
+*3:abstract-flavor* (see the Lisp Machine Manual [flavors]).
+
+     This is the base flavor for all tape-related errors; all other error flavors use this one.
+
+*3tape-error* *7FFFFFFFFEDc*1Flavor
+*        Abstract flavor for the classification of all tape errors, built on *3error*.  
+
+ Node: *4Hardware Errors*; Next: *4Driver Errors*; Previous: *4Error Handling*; Up: *4Error Handling
+
+*     These errors are internal hardware errors that cannot be reasonably handled by other software
+(fatal hardware errors).  Use this for building flavors internal to the drivers for specific devices.  It is
+acceptable to allow these conditions to be passed through to the error handler in the case of a fatal
+hardware error.
+
+*3hardware-error* *7FFFFFFFFCg*1Flavor
+*        *3:device-type*, *3:error-code*, and *3:error-message* are required instance variables.  The
+0        **3:device-type* should be a symbol an is primarily for the user to identify the device that has
+        errored if the debugger has been entered.  The *3:error-code* driver dependent.  The
+0        **3:error-message* should be a string which is used to report the error if the debugger is
+0        *entered.
+
+ Node: *4Driver Errors*; Next: *4Device Errors*; Previous: *4Hardware Errors*; Up: *4Error Handling
+
+*     Driver errors are internal errors in the driver software.  These should be used within the driver
+software for signalling conditions *1only* within the driver level.  All exceptions that need to be signalled
+to higher level software, should be converted into a condition of an appropriate flavor (listed below),
+rather than signalling the internal error condition.  Therefore, conventionally, if the debugger is
+entered because of a *3driver-error*, it should be considered a bug in the driver software and
+should be reported to the implementor(s) of the driver.
+
+*3driver-error* *7FFFFFFFFEa*1Flavor
+*        *3:device-type*, *3:error-code*, and *3:error-message* are required instance variables.  
+
+ Node: *4Device Errors*; Next: *4Format Errors*; Previous: *4Driver Errors*; Up: *4Error Handling
+
+*     Device errors are typical, sometimes expected, errors that the device may encounter, such as
+the physical end of the tape, device not ready, etc.  The following is the base, uninstantiable flavor
+upon which all other *3device-error* flavors depend.
+
+*3device-error* *7FFFFFFFFEa*1Flavor
+*        Abstrace flavor for classification of device errors.  
+
+     These are the currently defined device error flavors:
+
+*3device-unavailable* *7FFFFFFFECc*1Flavor
+*         This error should be signalled when the device is being used by another processor or
+0        *another process within the same processor.  *3:device-type* should be a symbol describing
+0        *the device (i.e.  'tapemaster).  *3:current-owner* should be either an integer or a cons (not a
+0        *list!).  If it is an integer, than it is the NuBus slot number of the processor currently `owning'
+0        *the device hardware interface.  If it is a list, the car of the cons is the device that is currently
+        using the device, the cdr is the process in which the device object is being accessed.  The
+0        *process may not be significant for some locking schemes, and useful in others.  The
+0        *PROCEED-TYPES defined for this condition are:  *3:steal-device-internally*,
+0        **3:steal-device-from-other-processor*, *3:wait-for-device-free*.
+
+*3wait-timeout* *7FFFFFFFFEa*1Flavor
+*         This error should be used for all unrecoverable timeout conditions.  *3:device-type*,
+0        **3:seconds-waited*, and *3:wait-string* are required instance variables for this flavor.
+0        **3:wait-string* should describe the timeout.
+
+*3bad-tape* *7FFFFFFFFFe*1Flavor
+*         This error should be signalled if there is an indication that there is a defect in the tape.
+0        **3:device-type* is the only required instance variable.
+
+*3blank-tape* *7FFFFFFFFEDc*1Flavor
+*         Should be signalled if an attempt to read the tape is made and it is detected as blank by the
+0        *device.  *3:device-type* is the only required instance variable.
+
+*3physical-end-of-tape* *7FFFFFFFDCa*1Flavor
+*         When the physical end of the tape is detected, this error should be signalled.
+0        **3:device-type* is as usual.  *3:unit* should be the unit number for the device
+0        **3:data-transferred* should be is a signaller dependent value that represents how much of
+0        *the operation (read/write/space) was carried out before the end of tape was reached.  For
+0        *more detailed information about this, see the documentation for the read and write operations
+0        *for *3basic-tape-device*.  It is important not to confuse this with *3logical-end-of-tape*
+0        *explained below.
+
+*3physical-beginning-of-tape* *7FFFFFFEc*1Flavor
+*         This is exactly like *3physical-end-of-tape* except it is for reverse direction operations
+0        *(currently only spacing operations).  This should NOT be signalled by rewind operations, since
+        the beginning of the tape is expected.  *3:device-type*, *3:unit*, and *3:data-transferred*
+0        *are as for the aforementioned flavor.
+
+*3filemark-encountered* *7FFFFFFFDCa*1Flavor
+*         This should be signalled when a hard filemark on the tape is encountered during a read
+0        *operation.  *3:device-type*, *3:unit*, and *3:data-transferred* are required instance variables.
+
+ Node: *4Format Errors*; Next: *4User Errors*; Previous: *4Device Errors*; Up: *4Error Handling
+
+*     Format errors are expected conditions (like *3logical-end-of-tape*) or errors in the format of
+information on the tape with respect to the specific format standard (a bad file headers, for
+instance).
+
+*3format-error* *7FFFFFFFFEa*1Flavor
+*         Abstract flavor for the classification of format errors.
+
+*3bad-tape-header* *7FFFFFFFFf*1Flavor
+*         This should be signalled when the tape header (as specified by the format) is invalid in some
+        way.  This is in most cases a fatal error.  *3header* is a string provided for debugging so the
+0        *user can examine it and possibly determine how corrupted the header is.
+
+*3bad-file-header* *7FFFFFFFFf*1Flavor
+*         This should be signalled when there is an indication that a file header on the tape is invalid.
+0        *This is usually fatal error, but unfortunately in some cases has to be used to determine the
+0        *logical end of tape.  *3:format-type*, and *3:header* are the required instance variables, as in
+0        **3bad-tape-header*.
+
+*3logical-end-of-tape* *7FFFFFFFEb*1Flavor
+*         This indicates the end of the tape, in file terms.  Whether there are more files on the tape is
+0        *dependent on the format.  The format software for each format should be careful to correctly
+        handle cases of repeated attempts to access any more files, if there aren't any more.
+0        **3:device-object* is the only required instance variable and should hold the device object the
+        format detected the logical end of tape on.
+
+*3end-of-tape-writing-header* *7FFFFFFEc*1Flavor
+*         This condition is used if a *3physical-end-of-tape* error was signalled by a device while
+0        *the formatting software was trying to read a file header.  This might not always be signalled,
+0        *since the user may opt to have the format handle the end of tape internally.  (See the
+0        **3:write-file* operation for tape formats for more information.) *3:plist* is the only required
+0        *instance variable and should hold the property list of the file that was being written.  *3:device*
+        is the object which signalled the physical end of tape.
+
+*3end-of-tape-reading-header* *7FFFFFFEc*1Flavor
+*         This is just like *3end-of-tape-reading-header*, but signalled during a file read (or
+0        *compare) operation.  *3:device* is the only required instance variable and should hold the
+0        *device object which signalled the end of tape.
+
+*3end-of-tape-writing-file* *7FFFFFFEDe*1Flavor
+*         This indicates that the physical end of tape was encountered while writing the file's data on
+0        *the tape.  *3:plist* and *3:device* are as in *3end-of-tape-writing-header*.
+0        **3bytes-transferred* indicates how many bytes of the file were transferred before the end
+0        *of the tape was encountered.  Note carefully that *3bytes-transferred* corresponds to the
+0        **1BYTE-SIZE* of the file, which may vary but is typically 8 or 16 bits.  
+
+*3end-of-tape-reading-file* *7FFFFFFEDe*1Flavor
+*         This is just like *3end-of-tape-writing-file* but for read or compare operations.
+0        **3:plist*, *3:device*, and *3:bytes-transferred* are the required instance variables.
+
+ Node: *4User Errors*; Next: *4Higher Level Software Errors*; Previous: *4Format Errors*; Up: *4Error Handling
+
+*     User errors are errors that the user can correct and retry, or that the user has precipitated by
+not following the conventions (not mounting the tape, for instance).
+
+*3user-error* *7FFFFFFFFEDc*1Flavor
+*         Abstract flavor for the classification of user errors.
+
+*3write-protected* *7FFFFFFFFf*1Flavor
+*         This should only be signalled by operations that wish to alter the data on the tape.  It
+0        *obviously indicates that the tape in the driver is write protected.  *3:device-type*, and *3:unit*
+0        *are required instance variables that give the appropriate information as to which drive (if there
+        are more than one) needs attention.
+
+*3tape-not-ready* *7FFFFFFFFCg*1Flavor
+*         This usually means that the tape driver is not ONLINE or the tape is not mounted.
+0        **3:device-type*, and *3:unit* are the required instance variables.
+
+*3unknown-format* *7FFFFFFFFCg*1Flavor
+*         This indicates that the tape is of a format unknown to the software.  This should is signalled
+        by higher level software that checks the tape against all the supported tape formats (using
+0        *:tape-is-your-format-p) and fails to find appropriate format support.  *3:device*, *3:unit*, are as
+        usual.  *3:header-string* is provided for debugging.
+
+*3file-stream-exists* *7FFFFFFFECc*1Flavor
+*         This indicates that a file stream already exists for this particular format object.  It should be
+0        *signalled by the *3:open-file* method for tape formats.  For a discussion of why only one
+0        *stream may be open at a time, see the documentation of the *3:open-file* method for tape
+0        *formats.  Fixing this condition, by closing the existing stream, may not always work as desired,
+        depending on the intelligence of the format software.  And since programs that use the open
+0        *file feature should use *3WITH-OPEN-STREAM*, this error condition should be considered fatal
+0        *and due to some user mistake, or an internal error in the format software.  *3:format-object*
+0        *holds the format object in which the error occurred.  *3:file-stream* is the stream that exists,
+        which is provided for closing.  (The file stream is also a `gettable' instance variable of format
+0        *object.)
+
+*3no-such-partition* *7FFFFFFFEDd*1Flavor
+*         This error is signalled when the user asks to operate on a partition that doesn't exist.  This
+0        *should be a general system error, but for not will be implemented locally here.  *3:partition*
+0        *is the name of the partition requested.  *3:disk-unit* is the drive-number of the disk.  *3:host*
+0        *is the machine whose disk we are talking about.
+
+*3invalid-option* *7FFFFFFFFCg*1Flavor
+*         This should be signalled by the *3:set-options* methods for format and device objects
+0        *(there is no need for a distinction here).  *3:option* is the invalid option that was supplied,
+0        **3value* is its corresponding value.  *3:device-object* is the object which rejected the option.
+
+*3invalid-option-value* *7FFFFFFFDCa*1Flavor
+*         This is similar to *3invalid-option*, but here it is the value that was deemed invalid.
+0        **3:option* is the option that was supplied, *3value* is its corresponding and invalid value.
+0        **3:device-object* is the object which rejected the option value.
+
+*3write-in-middle-of-tape* *7FFFFFFEDCf*1Flavor
+*         This may be signalled by the formatting software if it is generally unacceptable to start
+0        *writing data if not in the middle of the tape.  (For example:  aborting out of a *3:list-files*
+0        *operation and then using *3:write-file* without rewinding first.) This adds an extra level of
+0        *protection against lossage due to carelessness, but is by no means required by the format
+0        *software.  *3:device-object* is the only required instance variable.
+
+*3read-during-write* *7FFFFFFFEDd*1Flavor
+*         This is similar to *3write-in-middle-of-tape* but indicated that attempt was made to read
+0        *data on the tape before the end of tape was written.  Again, in some cases with some
+0        *devices, this is an acceptable thing to do, but in others might simply confuse things and
+0        *cause the user to re-write the tape.  *3:device-object* is the only required instance variable.
+
+*3not-supported* *7FFFFFFFFDh*1Flavor
+*         This can be used when support for a particular format or device is being written.  Since the
+0        *software requires that all documented operations on a device be provided before the object
+0        *can be used, one can use this to signal an error for operations that have not yet been
+0        *implemented.  Its intended use is for non-distributed or special user implemented format or
+0        *device support, where it is allowable to have unsupported operations.  *3:device-object* is
+0        *the object which errored, and *3:operation* is the operation in question.
+
+*3protocol-violation* *7FFFFFFFECc*1Flavor
+*         This indicates that an argument passed by the user or by software did not adhere to the
+0        *specifications set out by this document.  It is the type of error condition that is signalled
+0        *when you pass an *3ART-Q* array as the ARRAY argument to the *3:write-array* operation for
+0        *tape devices.  *3:format-string* is the only required instance variable.  *3:format-args* is
+0        *accepted and defaults to *3NIL*.
+
+ Node: *4Higher Level Software Errors*; Next: *4Error Handling*; Previous: *4User Errors*; Up: *4Error Handling
+
+*     For the purpose of classification without exception, the following flavor is defined.  It is expected
+that all layers between but not including the format support and user-interface levels build their error
+flavors on this flavor.  It is not clear exactly how useful this will be in the long run, but for purposes
+of extensibility it will be included.  
+
+*3higher-level-software-error* *7FFFFFFDCb*1Flavor
+*         Abstract flavor for higher level tape software to build error flavors upon.
+
+

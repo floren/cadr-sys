@@ -1,0 +1,779 @@
+;;; -*- Mode:LISP; Package:TAPE; Readtable:CL; Base:10 -*-
+;;
+;; Copyright LISP Machine, Inc. 1986
+;;   See filename "Copyright" for
+;; licensing and release information.
+;;;
+;;; User level lisp code  (Primary user interface layer.)
+;;;
+;;; -dg 10/4/85
+;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; device and format selection and defaulting
+;;;
+;;;
+
+(defvar *selected-device* nil
+  "The currently selected tape device.")
+
+(defvar *selected-format* nil
+  "The currently selected tape format.")
+
+(defvar *available-devices* nil
+  "The list of available tape device flavors.")
+
+(defvar *default-device* '(tapemaster-device)
+  "The default tape device to choose at warm boot time.")
+
+(defvar *default-format* '(lmfl-format)
+  "The default tape format to choose at warm boot time.")
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; Device parsing 
+;;;
+
+(defun parse-device-string (string)
+  "Should be only used internally by PARSE-DEVICE."
+  (declare (values host device-flavor unit))
+  (check-arg string (and (stringp string) (string-search-char #\: string))
+	     "a valid tape-device-spec")
+  (let* ((first-colon (string-search-char #\: string))
+	 (second-colon (string-search-char #\: string (add1 first-colon)))
+	 (host (when second-colon
+		 (si:parse-host (nsubstring string 0 first-colon))))
+
+	 (device-string (nsubstring string
+				    (if second-colon (add1 first-colon) 0)
+				    (or second-colon first-colon)))
+	 device-flavor
+	 unit)
+    (do* ((l *tape-device-alist* (cdr l))
+	  (spec (car l) (car l)))
+	 ((null spec) (ferror nil "Invalid device specifier: ~S" device-string))
+      (when (string-equal (first spec) device-string :end2 (length (first spec)))
+	(setq device-flavor (cadr spec)
+	      unit (read-from-string device-string nil nil :start (length (first spec))))
+	(return nil)))
+    (values host device-flavor unit)))
+
+(defun parse-device (device-spec &rest init-options)
+  "Given a DEVICE-SPEC (i.e. \"TR0:\"), a flavor-symbol or a device object,
+returns a device object initialized according to INIT-OPTIONS."
+  (declare (values device-object))
+  (check-type device-spec (or string
+			      (and symbol (not null))
+			      basic-tape-device)
+	      "a valid tape device specifier")
+  (let ((obj (typecase device-spec
+	       (basic-tape-device device-spec)
+	       (symbol
+		(if (memq device-spec *available-devices*)
+		    (make-instance device-spec)
+		  (ferror nil
+			  "Invalid device flavor specified: ~A"
+			  (list device-spec))))
+	       (string 
+		(multiple-value-bind (host flavor unit)
+		    (parse-device-string device-spec)
+		  (if (null host)
+		      (let ((ob (make-instance flavor)))
+			(send ob :set-options :unit unit)
+			ob)
+		    (ferror nil "remote tape hosts not yet supported.")))))))
+    (lexpr-send obj :initialize init-options)
+    obj))
+
+(defun parse-format (format-spec &rest init-options)
+  "Takes a format name, flavor-symbol, or format object and returns a format object
+initialized according to INIT-OPTIONS."
+  (declare (values format-object))
+  (check-type format-spec (or string symbol basic-tape-format)
+	      "a valid tape format specifier")
+  (let ((obj (typecase format-spec
+	       (basic-tape-format format-spec)
+	       (string
+		(let ((thing (ass #'string-equal format-spec *tape-format-alist*)))
+		  (if thing
+		      (make-instance (cdr thing))
+		    (ferror 'unsupported "Unsupported tape format: ~S" format-spec))))
+	       (symbol
+		(let ((thing (rass #'string-equal format-spec *tape-format-alist*)))
+		  (if thing
+		      (make-instance (cdr thing))
+		    (ferror nil "Unsupported tape format: ~S" format-spec)))))))
+    (lexpr-send obj :initialize init-options)
+    obj))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; general control
+;;;
+;;;
+
+(defun select-device (&optional device-spec &rest init-options)
+  "Selects a device to be *selected-device*.  Device spec must be a
+device flavor symbol (one of *available-devices*), or NIL in which
+case a menu of available devices will be popped up.  INIT-OPTIONS
+case be used to setup the initial options of the device."
+  (let ((thing (or device-spec
+		   (progn
+		     (tv:mouse-warp (floor (send tv:default-screen :width) 2)
+				    (floor (send tv:default-screen :height) 2))
+		     (tv:menu-choose *available-devices*
+				     '(:string "Tape Devices Available" :font fonts:tr12b)
+				     '(:mouse)
+				     (cond ((memq (car *default-device*) *available-devices*)
+					    (car *available-devices*))))))))
+    (when thing
+      (typecase thing
+	((or string symbol)
+	 (setq *selected-device* (lexpr-funcall 'parse-device thing init-options)))
+	(basic-tape-device (setq *selected-device* thing)))
+      (unless (and device-spec (not init-options))
+	(lexpr-send *selected-device* :set-options init-options))
+      *selected-device*)))
+      
+(defun set-device-options (&optional options &key (device-spec *selected-device*))
+  "Set the options of a particular device.  Options should be a list of the
+form ((:<option> <value>) ...) or NIL, in which case the user may be presented with
+a menu of options to change."
+  (using-device (device device-spec)
+    (with-device-locked device
+      (lexpr-send device :set-options options))))
+
+(defun select-format (&optional format-spec &rest init-options)
+  "Selects a format to be *selected-format*.  FORMAT-SPEC must be a
+format flavor symbol or NIL in which case a menu of available formats
+will be popped up.  INIT-OPTIONS can be used to setup the initial
+options of the format."
+  (let ((flavor (or (cdr (ass 'string-equal format-spec *tape-format-alist*))
+		    (cdr (rass 'string-equal format-spec *tape-format-alist*))
+		    (let ((alist (mapcar 'cdr *tape-format-alist*)))
+		      (tv:mouse-warp (floor (send tv:default-screen :width) 2)
+				     (floor (send tv:default-screen :height) 2))
+		      (tv:menu-choose alist
+				      '(:string "Tape Formats Supported" :font fonts:tr12b)
+				      '(:mouse)
+				      (or (cdr(rass 'string-equal (car *default-format*)
+					       *tape-format-alist*))
+					  (car alist)))))))
+    (when flavor
+      (setq *selected-format* (parse-format flavor))
+      (let((*print-base* 10.)
+	   (*read-base* 10.))
+	(if (null init-options)
+	    (send *selected-format* :set-options)
+	  (lexpr-send *selected-format* :set-options init-options)))
+      *selected-format*)))
+
+(defun set-format-options (&optional options &key (format-spec *selected-format*))
+  "Set the options of a particular format.  Options should be a list of the
+form ((:<option> <value>) ...) or NIL, in which case the user may be presented with
+a menu of options to change."
+  (using-format (format format-spec)
+    (lexpr-send format :set-options options)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; tape control 
+;;;
+;;;
+
+(defun mount-tape (&key
+		   silent
+		   (stream *standard-output*)
+		   (device-spec *selected-device*))
+  "Determines of what type format the tape on DEVICE-SPEC is, selects the
+appropriate format as the *selected-format* and returns the tape header
+property list.  If SILENT is NIL, then the tape header will be printed to
+STREAM."
+  (using-device (device device-spec)
+    (with-device-locked device
+      (let ((format-flavor (select-format-from-tape)))
+	(if (null format-flavor)
+	    (format t "~&Tape is not of a supported tape format.~%")
+	  (using-format (format format-flavor)
+	    (rewind :device-spec device)
+	    (let ((header-plist (send format :read-tape-header device)))
+	      (unless silent
+		(ZL:if (null header-plist)
+		    (format stream "~&~A tape has no header." (type-of format))
+		  (format stream "~&~A tape has the following header information:~2%"
+			  (type-of format))
+		  (do ((list (cdr header-plist) (cddr header-plist)))
+		      ((null list))
+		    (format stream "~&~S:~30T~S"
+			    (first list) (second list)))))
+	      header-plist)))))))
+
+(defun rewind (&key (wait-p t) (device-spec *selected-device*) (format-spec *selected-format*))
+  "Rewinds the tape to the physical beginning of the tape.
+If WAIT-P is NIL, then this function will return immediately, not waiting
+for the tape to be rewound."
+  (using-device (device device-spec)
+    (using-format (format format-spec)
+      (with-device-locked device
+	(send format :rewind device wait-p)))))
+
+(defun unload (&key
+	       (device-spec *selected-device*)
+	       (format-spec *selected-format*))
+  "This causes the tape to be unloaded, returning immediately."
+  (using-device (device device-spec)
+    (using-format (format format-spec)
+      (with-device-locked device
+	(send format :unload device)))))
+
+(defun reset-device (&optional (device-spec *selected-device*))
+  "This resets the tape device hardware and the internal driver
+software.  If this function does not clear up a problem with the
+device, it is likely to be a hardware fault."
+  (using-device (device device-spec)
+    (with-device-locked device
+      (send device :reset))))
+
+(defun device-status (&optional (device-spec *selected-device*))
+  "This returns the status of the specified device."
+  (using-device (device device-spec)
+    (with-device-locked device
+      (send device :status))))
+
+(defun beginning-of-file (&key
+			  (device-spec *selected-device*)
+			  (format-spec *selected-format*))
+  "Positions the tape at the beginning of the current file."
+  (using-format (format format-spec)
+    (using-device (device device-spec)
+      (with-device-locked device
+	(send format :beginning-of-file device)))))
+
+(defun next-file (&key
+		  (number-of-files 1)
+		  (device-spec *selected-device*)
+		  (format-spec *selected-format*))
+  "Moves tape position forward NUMBER-OF-FILES files from the current file."
+  (using-format (format format-spec)
+    (using-device (device device-spec)
+      (with-device-locked device
+	(send format :next-file device number-of-files)))))
+
+(defun previous-file (&key
+		      (number-of-files 1)
+		      (device-spec *selected-device*)
+		      (format-spec *selected-format*))
+  "Moves tape position backward NUMBER-OF-FILES files from the current file."
+  (using-format (format format-spec)
+    (using-device (device device-spec)
+      (with-device-locked device
+	(send format :previous-file device number-of-files)))))
+
+(defun find-file (match-spec &key
+		  (device-spec *selected-device*)
+		  (format-spec *selected-format*))
+  "Finds a file matching MATCH-SPEC (passed to TAPE-FILE-MATCH)
+and positions tape at beginning of that file."
+  (condition-case ()
+      (using-format (format format-spec)
+	(using-device (device device-spec)
+	  (with-device-locked device
+	    (send format :find-file device match-spec))))
+    (logical-end-of-tape
+     (format  t "~&No files matching \"~a\" on tape." match-spec)
+     (format t "~&** End of Tape **~%"))))
+
+(defun find-file-reverse (match-spec &key
+			  (device-spec *selected-device*)
+			  (format-spec *selected-format*))
+  "Searches backward for a file matching MATCH-SPEC (passed to TAPE-FILE-MATCH)
+and positions tape at beginning of that file."
+  (condition-case ()
+      (using-format (format format-spec)
+	(using-device (device device-spec)
+	  (with-device-locked device
+	    (send format :find-file-reverse device match-spec))))
+    (logical-end-of-tape
+     (format t "~&** Beginning of Tape **~%"))))
+
+(defun position-to-append (&key
+			   (device-spec *selected-device*)
+			   (format-spec *selected-format*))
+  "Positions the tape so that subsequent file writes will append the
+files to the end of the tape."
+  (using-format (format format-spec)
+    (using-device (device device-spec)
+      (with-device-locked device
+	(send format :position-to-append device)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; listing, comparing, reading and writing
+;;;
+;;;
+
+(defun list-files (&key
+		   (number-of-files -1)
+		   (device-spec *selected-device*)
+		   (format-spec *selected-format*)
+		   (output-to *standard-output*))
+  "Prints information about each file on tape to OUTPUT-TO (which can be
+NIL) and returns a list of property lists for the files encountered.  
+If NUMBER-OF-FILES is specified, it represents the number of files to list, 
+otherwise every file on the tape will be listed."
+  (using-device (device device-spec)
+    (using-format (format format-spec)
+      (with-open-stream (stream (typecase output-to
+				  (stream output-to)
+				  ((or string pathname)
+				   (open (fs:parse-pathname output-to) :direction :output))
+				  (null nil)))
+	(with-device-locked device
+	  (send format :list-files device
+		:stream stream
+		:number-of-files number-of-files))))))
+
+(defun compare-files (&key
+		      number-of-files
+		      transform
+		      silent
+		      (error-action :return)
+		      (device-spec *selected-device*)
+		      (format-spec *selected-format*))
+  "Compares the files on tape against files on disk.  TRANSFORM,
+as in RESTORE-FILES, can be used to determine the pathnames for the files
+on disk.  NUMBER-OF-FILES should be the number of files to compare
+or NIL, meaning all files on the tape.  If SILENT is nil, each time a file
+is compared, a message concerning the success or failure of the comparison is
+printed.  ERROR-ACTION determines what to do if the comparison is unsuccessful
+and must be either :RETURN or :ERROR.  If it is :ERROR, an error is signalled, 
+otherwise the compare-error condition is the returned value for the file.
+The return value of this function is a list each of whose elements is the
+file property list of the file (successful) or the compare-error condition
+\(unsuccessful)."
+  (check-type error-action (member :prompt :rewrite :return))
+  (using-device (device device-spec)
+    (using-format (format format-spec)
+      (with-device-locked device
+	(let ((vals))
+	  (condition-case (condition)
+	      (do* ((count 1 (add1 count))
+		    (val (send format
+			       :compare-file device
+			       :silent silent
+			       :transform transform
+			       :error-action error-action)
+			 (send format
+			       :compare-file device
+			       :silent silent
+			       :transform transform
+			       :error-action error-action)))
+		   ((and number-of-files (= count number-of-files))
+		    (push val vals)
+		    (reverse vals))
+		(when val (push val vals)))
+	    (logical-end-of-tape
+	     (format *standard-output* "~&** End of Tape **~%")
+	     (reverse vals))))))))
+
+(defun restore-files (&key
+		      (device-spec *selected-device*)
+		      (format-spec *selected-format*)
+		      transform
+		      match
+		      number-of-files
+		      query
+		      (create-directory :always)
+		      (overwrite :never)
+		      silent)
+  "Restores files (and/or partitions) from the tape to disk. 
+TRANSFORM 
+	if present determines where each file is restored.  If it is a
+	string or a pathname it is parsed with respect to the local host
+	and merged with the file properties of each file on tape to determine
+	the pathname to restore to.  It can also be a function of one argument,
+	the file property list, which must return a pathname.
+NUMBER-OF-FILES
+	determines how many files to restore (all files on tape if not specified).
+MATCH
+	is used to find specific file(s) on the tape to restore.  If it is a
+	pathname (or string) each file property list is parsed into a pathname
+	and used as the argument to the :PATHNAME-MATCH message sent to the match
+	pathname.  MATCH can also be a function of one argument, a file property 
+	list, which should return non-NIL if the file should be restored.
+QUERY
+	if non-NIL, then the user will be asked whether to restore each file.
+CREATE-DIRECTORY
+	determines whether to create a directory for a file to be restored
+	if it does not already exist.  Valid values are :ALWAYS, :NEVER or :ERROR.
+	If :NEVER is specified, the file is automatically skipped.
+OVERWRITE
+	specifies what to do when a file already exists.  :NEVER means to skip
+	the file, :ALWAYS means to overwrite it automatically, :QUERY means to
+	ask the user what to do, and :ERROR means to signal an error.
+SILENT
+	if this is NIL, the action taken for each file on tape will be printed to
+	*STANDARD-OUTPUT*."
+  (check-type query (member t nil))
+  (check-type create-directory (member :always :query :never :error))
+  (check-type number-of-files (or null (integer 1)))
+  (check-type overwrite (member :always :query :never))
+  (using-device (device device-spec)
+    (using-format (format format-spec)
+      (with-device-locked device
+	(condition-case ()
+	    (do ((count 0 (add1 count)))
+		((and number-of-files (= count number-of-files)))
+	      (when match
+		(send format :find-file device match))
+	      (send format :restore-file device
+		    :transform transform
+		    :query query
+		    :create-directory create-directory
+		    :overwrite overwrite
+		    :silent silent))
+	  (logical-end-of-tape
+	   (unless silent
+	     (format *standard-output* "~&** End of Tape **~%"))))))))
+
+(defun pathname-wild-p (pathname)
+  (or (eq (pathname-directory pathname) :wild)
+      (eq (pathname-name pathname) :wild)
+      (eq (pathname-type pathname) :wild)
+      (eq (pathname-version pathname) :wild)))
+
+
+(defun write-files (files &key
+		    (format-spec *selected-format*)
+		    (device-spec *selected-device*)
+		    (end-of-tape-action :continue)
+		    silent)
+  "Writes some files to tape from disk.  
+FILES
+	can be file spec or list of file specs.  Each file spec
+	must be a pathname (or string to be parsed into a pathname)
+	or a file property list.  (See the tape software documentation
+	for more details on using file property lists.)  Wildcards are
+	acceptable in pathnames and all disk files matching the pathname
+	will be spliced into the list where a wildcarded pathname exists.
+	AND NOW...files may be a list of wildcarded pathnames.	--saz, 5/27/88
+END-OF-TAPE-ACTION
+	This determines what to do if the end of the tape is encountered.
+	:CONTINUE specifies that the format software should continue to 
+	another tape if possible.  :ERROR will cause an error to be signalled."
+  (check-type end-of-tape-action (member :continue :error))
+  (using-device (device device-spec)
+    (using-format (format format-spec)
+      (let ((file-list (typecase files
+			 ;;handle list of wildcarded pathnames
+			 (cons (let ((file-list))	
+				 (dolist (file-designator files (reverse file-list))
+				   (if (pathname-wild-p file-designator)
+				       (setq file-list
+					     (append
+					       (mapcar #'car
+						       (full-directory-list file-designator))
+					       file-list))
+				     (push (fs:parse-pathname file-designator) file-list)))))
+			 ((or string pathname)
+			  (let ((pn (fs:parse-pathname files)))
+			    (if (pathname-wild-p pn)
+				(mapcar #'car
+					(full-directory-list (fs:parse-pathname files)))
+			      (ncons pn))))
+			 (t (ferror nil "Invalid files specifier: ~S" files)))))
+	(with-device-locked device
+	  (dolist (file file-list)
+	    (send format :write-file
+		  device
+		  file
+		  :end-of-tape-action end-of-tape-action
+		  :silent silent)))))))
+
+(defun open-file (&key
+		  (device-spec *selected-device*)
+		  (format-spec *selected-format*)
+		  match
+		  (direction :input)
+		  (characters :default)
+		  (byte-size :default)
+		  plist)
+  "Returns a file stream to the specified device in the specified format.
+MATCH is only for :DIRECTION :INPUT and is the same as for RESTORE-FILES.
+All other options are as for OPEN."
+  (using-device (device device-spec)
+    (using-format (format format-spec)
+      (send device :lock-device)
+      (when match
+	(send format :find-file match device))
+      (send format :open-file device
+	    :direction direction
+	    :byte-size byte-size
+	    :characters characters
+	    :plist plist))))
+
+(defun write-partition (partition-name &key
+			(unit 0)
+			(device-spec *selected-device*)
+			(format-spec *selected-format*)
+			silent
+			start
+			end)
+  "Writes a disk partition to tape.  START should be the
+absolute block address of the first block and defaults
+to the beginning of the partition.  END should be the absolute 
+disk block address of the last block in the partition, T
+meaning the last block in the partition,  or NIL meaning
+the last used block in the partition (in LOD band for example)."
+  (using-device (device device-spec)
+    (using-format (format format-spec)
+      (with-device-locked device
+	(send format :write-partition
+	      partition-name
+	      device
+	      unit
+	      :silent silent
+	      :start start
+	      :end end)))))
+
+(defun finish-tape (&key
+		    (device-spec *selected-device*)
+		    (format-spec *selected-format*))
+  "Finish the tape being written.  This should be done
+before unloading a tape that has just been written."
+  (using-device (device device-spec)
+    (using-format (format format-spec)
+      (with-device-locked device
+	(send format :finish-tape device)))))
+
+(defun select-format-from-tape (&optional (device-spec *selected-device*))
+  "This checks the tape and sets *selected-format* to an appropriate format
+object if the format for the tape is handled and can be determined."
+  (using-device (device device-spec)
+    (with-device-locked device
+      (rewind :device-spec device-spec)
+      (if (when *selected-format*
+	    (send *selected-format* :tape-is-your-format-p device))
+	  (type-of *selected-format*)
+	(block find-format
+	  (dolist (cons *tape-format-alist*
+			(signal 'unknown-format
+				:device-type (type-of device)
+				:unit (send device :unit)
+				:header-string
+				(using-resource (buf si:dma-buffer 64)
+				  (send device :rewind)
+				  (prog1
+				    (substring (si:dma-buffer-string buf)
+					       0
+					       (send device :read-array
+						     (si:dma-buffer-string buf)
+						     1
+						     (* 64 1024.)))
+				    (send device :rewind)))))
+	    (using-format (format (cdr cons))
+	      (rewind :device-spec device-spec)
+	      (when (send format :tape-is-your-format-p device)
+		(rewind :device-spec device-spec)
+		(setq *selected-format* (make-instance (cdr cons)))
+		(return-from find-format (cdr cons))))))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; Lisp level Filesystem backup interface
+;;;
+;;;
+
+(defun get-new-tape-name ()
+  (string-upcase
+    (prompt-and-read :string-trim "~&Please input a name for the tape >> ")))
+
+
+(defun prompt-for-tape-info (host logp)
+  (do-forever
+    (let* ((name (do ((val (get-new-tape-name) (get-new-tape-name)))
+		     ((y-or-n-p "~&Is ~S correct for the tape name? " val) val)))
+	   (log-file-default
+	     (fs:parse-pathname (format nil "~A:~A.backup-log#1" host name) host)))
+      (when logp
+	(do ((log-file (prompt-and-read `(:pathname :defaults ,log-file-default)
+					"~&Backup log pathname (default \"~A\") >> "
+					log-file-default)
+		       (prompt-and-read `(:pathname :defaults ,log-file-default)
+					"~&Backup log pathname (default \"~A\") >> "
+					log-file-default)))
+	    ((and (y-or-n-p "Is ~S correct for the log file pathname?" log-file)
+		  (if (condition-case ()
+			  (probef log-file)
+			(fs:directory-not-found
+			 (format t "~&Creating directory for ~A" log-file)
+			 (fs:create-directory log-file)
+			 nil))
+		      (not (format t "~&Log file already exists!  Starting again..."))
+		    (return-from prompt-for-tape-info (values name log-file)))))))
+      (return-from prompt-for-tape-info name))))
+
+
+(defun backup-files (file-list host &key
+		     (set-backup-bits t)
+		     (compare t)
+		     (tape-info-function 'prompt-for-tape-info)
+		     (device-spec *selected-device*)
+		     (format-spec *selected-format*))
+  "This backs up the files in FILE-LIST to tape.  Each element in
+the list must be a file property list.  The files backed up will
+be compared and/or have their backup bits set as specified by the
+arguments.  TAPE-INFO-FUNCTION takes no arguments and should return
+two values for each tape mounted: the tape name and the pathname 
+for the log.  It is called for each tape in the dump."
+  (using-device (device device-spec)
+    (using-format (format format-spec)
+      (with-device-locked device
+	(format t "~&Backing-up ~D files: ~:D total bytes"
+		(length file-list)
+		(let ((num 0))
+		  (dolist (f file-list num)
+		    (incf num (* (get f :length-in-bytes) (/ (file-byte-size f) 8))))))
+	(do ((time (time:get-universal-time))
+	     (files-to-backup file-list)
+	     failed-files)
+	    ((null files-to-backup)
+	     (when failed-files
+	       (format t "~&*** ~D files failed during access ***~%" (length failed-files)))
+	     (format t "~&~%*** Backup Finished ***~%")
+	     failed-files)
+	  (multiple-value-bind (tape-name log-file)
+	      (funcall (or tape-info-function 'prompt-for-tape-info) host t)
+	    (do* ((files files-to-backup (cdr files))
+		  (file (car files) (car files))
+		  bad-files
+		  files-to-log
+		  new-tape)
+		 ((or (null file) new-tape)
+		  (if (not new-tape)
+		      (format t "~&Last file written to tape.~%")
+		    (let ((condition (first new-tape))
+			  (file-to-retry (second new-tape)))
+		      (format t "~&End of tape encountered writing ~A.  ~%~
+                                   Fixing last file on tape - "
+			      (car file-to-retry))
+		      (push file-to-retry files) ;put this file back on list
+		      (typecase condition
+			(end-of-tape-writing-file
+			 ;;;Got physical EOT (end-of-tape).  Attempt to mark logical EOT.
+			 ;;;If we get another EOT error here, there wasn't room for logical EOT,
+			 ;;;but the tape is still good!
+			 (condition-case (condition)
+			     (progn
+			      (send format :beginning-of-file device)
+			      (send format :finish-tape device))
+			   (physical-end-of-tape
+			    (format t "~&Unable to mark logical end of tape - proceeding anyway."))))
+			(end-of-tape-writing-header))
+		      (format t "done.~%")))
+		  (send format :finish-tape device)
+		  (when compare
+		    (format t "~&Rewinding to compare ... ")
+		    (send format :rewind device)
+		    (format t "done.~2%Comparing files:~%")
+		    (do* ((vl (compare-files :format-spec format
+					     :device-spec device)
+			      (cdr vl))
+			  (val (car vl) (car vl))
+			  (count 0 (add1 count)))
+			 ((null vl))
+		      (when (errorp val)
+			(push val bad-files)
+			(delq (nth count files-to-log) files-to-log)))
+		    (if (null bad-files)
+			(format t "~&All files compared were equal.")
+		      (progn
+			(format t "~&*** Not all files were equal (bad files follow) ***")
+			;; +++ compare returns condition objects (at least in the case of "file not found" +++
+			(dolist (condition bad-files)
+			  (format t "~&~10@t~A~%" (send condition :report nil)))
+			(format t "~&Make a note of these files and dump them again.~%")
+			(y-or-n-p "Continue? "))))
+		  (setq files-to-backup files)
+		  (when files-to-log
+		    (format t "~&Logging files - ")
+		    (log-files files-to-log
+			       host log-file `(:tape ,tape-name)
+			       (type-of format) user-id time)
+		    (format t "done.~%"))
+		  (when (and set-backup-bits files-to-log)
+		    (format t "~&Setting backup bits ... ")
+		    (set-backup-bits files-to-log)
+		    (format t "done.~%"))
+		  (when files-to-backup
+		    (format t "~&Unloading tape ... ")
+		    (unload)
+		    (prompt-for-new-tape format device))
+		  t)
+	      (condition-case (condition)
+		  (send format :write-file device file :end-of-tape-action :error)
+		((end-of-tape-writing-header end-of-tape-writing-file)
+		 (setq new-tape (list condition file)))
+		(fs:file-operation-failure
+		 (format t "~&*** Failed writing file: \"~s\". ***" (car file))
+		 (push (cons (car file) condition) failed-files))
+		(:no-error (push file files-to-log))))))))))
+
+
+(defun view-tape (&key
+		  (device-spec *selected-device*)
+		  (output-to *standard-output*)
+		  ignore-padding)
+  "This prints the raw contents of the tape (in 8-bit bytes) to OUTPUT-TO.
+Filemarks on the tape are denoted as \"{*** FILEMARK ***}\".
+This is particularly useful for examining an unknown tape format."
+  (using-device (device device-spec)
+    (using-resource (block si:dma-buffer 32)
+      (with-device-locked device
+	(do-forever
+	  (let ((rsize (condition-case ()
+			   (send device :read-block block (* 32 1024))
+			 (filemark-encountered :filemark)))
+		(string (si:dma-buffer-string block)))
+	    (cond ((eq rsize :filemark)
+		   (return-from view-tape nil))
+		  (output-to
+		   (send output-to :string-out
+			 string
+			 0
+			 (or (when ignore-padding
+			       (string-search-char #\center-dot string)
+			     rsize)))))))))))
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; Automated Distribution Tape Installation
+;;;
+
+(defmacro distribution-installation-forms (&rest body)
+  `(progn . ,body))
+
+(defun install-distribution-tape (&key
+				  (device-spec *selected-device*)
+				  (format-spec *selected-format*)
+				  &aux distribution-form)
+  (using-device (device device-spec)
+    (using-format (format format-spec)
+      (with-open-stream (tape-stream (send format :open-file device))
+	(when (string-equal (send tape-stream :type) "DISTRIBUTION")
+	  (format t "~&Reading distribution header.")
+	  (let* ((*package* (pkg-find-package 'TAPE))
+		 (*read-base* 10.)
+		 (*readtable* si:common-lisp-readtable))
+	    (setq distribution-form (catch-error (read tape-stream))))))
+      (cond ((neq (car-safe distribution-form) 'distribution-installation-forms)
+	     (format t "~&The mounted tape is not a distribution tape."))
+	    ('else
+	     (format t "~&Running the product specific distribution procedure.")
+	     (eval distribution-form))))))
+
+

@@ -1,0 +1,19 @@
+;;; -*- Mode:LISP; Package:USER; Base:10; Readtable:Common-Lisp; Patch-File:T -*-
+;;; Patch directory for Tape version 22
+;;; Written 2-May-88 16:00:55 by pld at site Gigamos Cambridge
+;;; while running on Azathoth from band 3
+;;; with Experimental System 123.247, Experimental Local-File 73.4, Experimental FILE-Server 22.2, Experimental Unix-Interface 11.0, Experimental KERMIT 34.3, Experimental ZMail 71.0, Experimental Lambda-Diag 15.0, Experimental Tape 22.3, Experimental Serial-IP 1.1, Experimental Tiger 27.1, microcode 1756, SDU Boot Tape 3.14, SDU ROM 8, the old ones.
+
+(:EXPERIMENTAL
+ ((0 "Tape Loaded" "keith" NIL)
+  (1 "The si:tape-warm-initialization-list contains a (select-processor) form
+to be evaluated.  Add :falcon to eliminate warning message on warm boot." "pld" NIL)
+  (2 "Fix error-reporting problems with tape comparison functions.
+1. make sure all flavors of comparison errors can handle :source-file method.
+2. fix up error :report method messages
+3. where tape s/w was constructing error message by sending :source-file message to
+condition instance, use :report method instead" "keith" NIL)
+  (3 "TAPE:SELECT-FORMAT accepts the string name *or* flavor symbol
+of a tape format." "keith" NIL)
+  (4 NIL "pld" NIL)
+  ))
