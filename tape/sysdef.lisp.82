@@ -1,0 +1,123 @@
+;;; -*- Mode:LISP; Package:USER; Base:10; Readtable:ZL -*-
+;;
+;; Copyright LISP Machine, Inc. 1986
+;;   See filename "Copyright" for
+;; licensing and release information.
+;;;
+;;; New tape software
+;;;
+;;; -dg 9/15/85
+;;;
+
+#,(multiple-value-bind (major minor)
+      (si:get-system-version 'system)
+    (unless (or (> major 109)
+		(>= minor 80))
+      #-CADR					;BV: while porting it
+      (ferror nil
+	      "The new tape software can only be loaded in 109 systems with SYSTEM patch 109.80")))
+
+;;;DUMPIT is support for TANALYZ-FORMAT:
+
+(unless(si:find-package "DUMPIT")
+  (make-package "DUMPIT" :use '("LISP" "GLOBAL")))
+
+(DEFSYSTEM TAPE
+  (:NAME "Tape")
+  (:pathname-default "SYS:TAPE;")
+  (:warnings-pathname-default "sys:tape;tape-cwarns lisp")
+  (:patchable "SYS:TAPE;")
+  (:not-in-disk-label)
+  ;;; Support
+  (:module tape ("tape" "error"))
+  (:module backup ("backup"))
+  (:module user-interface ("user"))
+  (:module test ("test"))
+  #+CADR
+  (:module lmi-support ("lmi-disk" "string-matchp" "lmi-dma"))
+  ;;; Devices
+  ;; BV: no devices, only remote
+  #+Lambda
+  (:module device-support ("tapemaster-driver" "nupi-support"))
+  #+Lambda
+  (:module devices ("tapemaster-device" "nupi-device"))
+  #+CADR
+  (:module remote ("rtape-device" ;"remote-tape-device" - not functional?
+		   ))
+  ;;; Formats
+  (:module hexdump ("dumpit") :package "DUMPIT")
+  (:module format-support (hexdump))
+  (:module formats ("lmfl-format" "raw-format" "tanalyz-format" "tar-format"))
+
+  ;;; last stuff
+  (:module initializations ("initializations"))
+
+  (:component-systems tframe tape-compat)
+  ;;; Transformations
+  #+CADR
+  (:compile-load lmi-support)
+  (:compile-load tape #+CADR (:fasload lmi-support))
+  (:compile-load test (:fasload tape) (:fasload tape))
+  #+Lambda (:compile-load device-support (:fasload tape) (:fasload tape))
+  #+Lambda (:compile-load devices (:fasload device-support tape) (:fasload device-support tape))
+  #+CADR
+  (:compile-load remote (:fasload tape))
+  (:compile-load format-support (:fasload tape))
+  (:compile-load formats (:fasload format-support tape) (:fasload format-support tape))
+  (:compile-load backup (:fasload tape) (:fasload tape))
+  (:compile-load user-interface (:fasload backup) (:fasload backup))
+  (:compile-load initializations (:fasload user-interface
+					   backup
+					   formats
+					   #+Lambda devices
+					   #+Lambda device-support
+					   #+CADR remote
+					   test
+					   tape))
+  (:do-components (:fasload initializations
+			    user-interface
+			    backup
+			    formats
+			    #+Lambda devices
+			    #+Lambda device-support
+			    test
+			    tape)))
+
+(defpackage tframe
+  (:use global))
+
+(defsystem tframe
+  (:name "Tape Utility Frame")
+  (:short-name "TFrame")
+  (:pathname-default "sys:tape;")
+  #+CADR
+  (:module lmipatch "lmi-frame-constraint-patch")
+  (:module macros "tframe-macros")		; all macros in the system
+  (:module defs "tframe-defs")			; variable and option definitions
+  (:module process "tframe-process")		; process support
+  (:module window "tframe-window")		; TFrame Window
+  (:module coms "tframe-coms")			; TFrame commands
+
+  #+CADR
+  (:compile-load lmipatch)
+  (:compile-load macros)
+  (:compile-load defs (:fasload macros))
+  (:compile-load process (:fasload macros defs))
+  (:compile-load window (:fasload #+CADR lmipatch macros defs process))
+  (:compile-load coms (:fasload macros defs)))
+
+(DEFSYSTEM tape-compat
+  (:NAME "tape-compat")
+  (:PATHNAME-DEFAULT "SYS:TAPE;")
+  (:NOT-IN-DISK-LABEL)
+  (:MODULE DEFS ("MTDEFS"))
+  #-CADR
+  (:MODULE MAIN ("MTSTR" "COPY" "MTAUX" "ANSI" "TOPS20"))
+  #+CADR
+  (:module mtstr ("MTSTR"))
+  #+CADR
+  (:module main ("copy" "mtaux" "ansi" "tops20"))
+  (:COMPILE-LOAD DEFS)
+  #+CADR
+  (:compile-load mtstr)
+  (:COMPILE-LOAD MAIN (:FASLOAD DEFS #+CADR mtstr)))
