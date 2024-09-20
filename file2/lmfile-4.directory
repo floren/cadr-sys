@@ -1,9 +1,0 @@
-;;; -*- Mode: Lisp; Package: User; Base: 10.; Common-Lisp: NIL; Patch-File: T -*-
-;;; Patch directory for LFS version 4
-;;; Written 8/03/84 02:04:55 by RMS,
-;;; while running on Lisp Machine Eight from band 2
-;;; with System 98.67, CADR 3.8, ZMail 53.18, MIT-Specific 22.2, microcode 309, ZM MIT.
-
-(:EXPERIMENTAL
- ((0 "LFS Loaded" "RMS" NIL)
-  ))

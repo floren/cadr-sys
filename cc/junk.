@@ -1,49 +1,0 @@
-
-<L.CC>CADLD.LISP.8
-
-( 1.16) {uload}
-	    (OR FILE-NAME "SYS: UBIN; UCADR ULOAD >")))
-
-( 1.47) {uload}
-			 (T (FERROR "Bad register address in uload: ~S" ITEM))))
-
-<L.CC>CCDISK.LISP.106
-
-( 6.69) {dcfu,uload}
-    (CC-LOAD-UCODE "SYS: UBIN; DCFU ULOAD"))
-
-<L.CC>DCHECK.LISP.7
-
-( 7.2) {dcfu}
-;;; ECC Test (in DCFU) error-message printer
-
-( 7.4) {dcfu}
-;;; This frob goes with the ECC tester in DCFU
-
-<L.CC>DMON.LISP.56
-
-( 1.24) {uload}
-     (WITH-OPEN-FILE (STREAM "sys:ubin;memd uload >" ':direction ':input)
-
-( 1.58) {uload}
-	 (CC-UCODE-LOADER NIL "SYS: UBIN; MEMD ULOAD >" NIL 'mtest-ucode-stream)))
-
-<L.CC>LCADRD.LISP.95
-
-( 7.166) {uload}
-;THIS ONE IS DIFFERENT FROM EVERYTHING ELSE.  IT AGREES WITH THE ULOAD FORMAT.
-
-
-	Lines recognized = 8
-   String    Matches  Unrecognized Matches
-1) "dcfu"	3	0
-2) "uload"	6	0
-Letter case ignored ("Ab" = "aB").
-
-Files with no matches: 	<L.CC>CADREG.LISP.4	<L.CC>CC.LISP.50
-<L.CC>CCGSYL.LISP.6	<L.CC>CCWHY.LISP.12	<L.CC>CHPLOC.LISP.5
-<L.CC>DIAGS.LISP.159	<L.CC>LCADMC.LISP.31	<L.CC>LDBG.LISP.45
-<L.CC>LQFMAC.LISP.17	<L.CC>PATCH-3-10.LISP.1	<L.CC>PATCH-3-9.LISP.1
-<L.CC>QF.LISP.126	<L.CC>SALVAG.LISP.38	<L.CC>ZERO.LISP.15
-19 files searched, 14 without matches.
-

@@ -1,9 +1,0 @@
-;;; -*- Mode:LISP; Package:USER; Base:10; Readtable:T; Patch-File:T -*-
-;;; Patch directory for MIT-Specific version 23
-;;; Written 9/10/84 14:23:15 by RMS,
-;;; while running on Lisp Machine Twenty-five from band 2
-;;; with Experimental System 99.0, microcode 318, 99x3.
-
-(:RELEASED
- ((0 "MIT-Specific Loaded" "RMS" NIL)
-  ))

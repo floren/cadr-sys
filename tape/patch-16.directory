@@ -1,9 +1,0 @@
-;;; -*- Mode:LISP; Package:USER; Base:10; Readtable:Common-Lisp; Patch-File:T -*-
-;;; Patch directory for Tape version 16
-;;; Written 23-Jan-87 11:04:15 by LISPM at site LMI Cambridge
-;;; while running on Explorer One from band 1
-;;; with Experimental System 121.10, Experimental Lambda-Diag 15.0, Experimental ZMail 70.1, Experimental KERMIT 32.0, Experimental Unix-Interface 10.0, Experimental Local-File 72.0, Experimental FILE-Server 21.0, Experimental NVRAM 4.0, Experimental Tape 15.0, microcode 1739.
-
-(:EXPERIMENTAL
- ((0 "Tape Loaded" "LISPM" NIL)
-  ))

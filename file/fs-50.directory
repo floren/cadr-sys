@@ -1,9 +1,0 @@
-;;; -*- Mode:LISP; Package:USER; Base:10; Readtable:T; Patch-File:T -*-
-;;; Patch directory for Local-File version 50
-;;; Written 9/11/84 19:51:07 by RMS,
-;;; while running on Lisp Machine Twenty-five from band 5
-;;; with Experimental System 99.0, CADR 4.0, Experimental ZMail 54.0, MIT-Specific 23.0, microcode 320, MIT GC@0.
-
-(:EXPERIMENTAL
- ((0 "Local-File Loaded" "RMS" NIL)
-  ))

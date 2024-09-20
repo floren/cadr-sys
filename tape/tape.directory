@@ -1,7 +1,0 @@
-;;; -*- Mode:LISP; Package:USER; Base:10; Readtable:Common-Lisp; Patch-File:T -*-
-;;; Written 2-Mar-86 21:06:27 by dg (Dave Goodine) at site LMI Cambridge
-;;; while running on Lambda Two from band 1
-;;; with Experimental System 110.89, Experimental Local-File 66.1, Experimental FILE-Server 18.1, Experimental MagTape 4.1, Experimental ZMail 65.6, Experimental Unix-Interface 9.0, microcode 1408, SDU ROM 8.
-
-
-("Tape" 1) 
