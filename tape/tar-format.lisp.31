@@ -1,0 +1,612 @@
+;;; -*- Mode:LISP; Package:TAPE; Readtable:CL; Base:10. -*-
+;;;
+;;; Tar format support for Lambda.
+;;;
+;;; -dg 1/7/86
+;;; -kmc 1/88 bug fixes and mods:
+;;;      1) Dummy transform on pathnames to specified host/dir (e.g. for relative
+;;;         pathname handling)
+;;;      2) Use fake host "TAR-FORMAT" so user can specify to :find-file etc.
+
+(defvar *tar-default-record-size* 10240)
+
+;;; Dummy host/pathname handling
+
+(defvar *dummy-unix-host-alist* nil)
+  
+(defconst *dummy-unix-host-name* "TAR-FORMAT")
+
+(defvar *dummy-unix-host* nil)
+
+(add-initialization
+  "Define TAR-Format dummy host"
+  `(setq *dummy-unix-host*
+	 (progn
+	   (si:define-host *dummy-unix-host-name*
+			   :host-names (ncons *dummy-unix-host-name*)
+			   :machine-type :unix
+			   :system-type :unix
+			   :no-network nil)
+	   (si:parse-host *dummy-unix-host-name* t t)))
+  '(:now)
+  'si:tape-warm-initialization-list)
+
+(defvar *default-dummy-transform-pathname* nil)
+
+(defun set-default-dummy-transform-pathname()
+  (setq *default-dummy-transform-pathname*
+	(let((default-dummy-transform-pathname
+	       (make-pathname
+		 :defaults (or *default-dummy-transform-pathname*
+			       ;; Prefer root
+			       (send (fs:user-homedir) :new-directory :root))
+		 :name :wild
+		 :type :wild
+		 ;; BV: avoid touching :version please.
+		 ;; :version :highest
+		 )))
+	  (prompt-and-read `(:pathname :defaults ,default-dummy-transform-pathname
+				       ;; BV: avoid touching :version please.
+				       :version :unspecific
+				       )
+			   (string-append
+			     "~&Specify pathname to provide host/directory for relative pathnames"
+			     "~%  (default is ~a) : ")
+			   default-dummy-transform-pathname))))
+
+(defun default-dummy-transform-pathname(pathname)
+  (unless (typep *default-dummy-transform-pathname* 'pathname)
+    (set-default-dummy-transform-pathname))
+  (make-pathname
+    :defaults (fs:merge-pathname-components pathname *default-dummy-transform-pathname*)
+    :host (pathname-host *default-dummy-transform-pathname*)
+    ;; BV: avoid touching :version please. It's handled by fs:merge-pathname-components.
+    ;; :version :highest
+    ))
+
+(defun dummy-transform-plist(plist)
+  (cons
+    (or (get plist :default-dummy-transform-pathname)
+	(default-dummy-transform-pathname (car plist)))
+    (cdr plist)))
+
+(defflavor tar-format ((record-size 10240)
+		       (file-stream)
+		       (op-mode)
+		       (ascii-translate? :determine-by-type)
+		       (buffer)
+		       (buffer-ptr 0)
+		       (buffer-fill 0)
+		       (eot nil)
+		       (tape-state-check)
+		       (*default-dummy-transform-pathname* *default-dummy-transform-pathname*))
+	   (basic-tape-format)
+  :gettable-instance-variables
+  (:special-instance-variables *default-dummy-transform-pathname*))
+
+(defmethod (tar-format :get-dummy-pathname) (pathname)
+  (fs:merge-pathname-components (make-pathname :host *dummy-unix-host*) pathname))
+
+(defmethod (tar-format :get-pathname-from-plist) (plist)
+  (let*((pathname (or (car plist) (get plist :pathname))))
+    (and pathname
+	 (send self :get-dummy-pathname pathname))))
+
+(defmethod (tar-format :initialize) (&rest options)
+  (send self :set-options :record-size *tar-default-record-size*)
+  (when options (lexpr-send self :set-options options)))
+
+(defmethod (tar-format :set-options) (&rest options)
+  (if options
+      (do* ((list options (cddr list))
+	    (option (car list) (car list))
+	    (value (cadr list) (cadr list)))
+	   ((null list))
+	(case option
+	  (:record-size
+	   (if (zerop (remainder value 1024))
+	       (setq record-size value)
+	     (signal 'invalid-option-value
+		     :object self
+		     :option option
+		     :value value)))
+	  (:ascii-translate?
+	   (if (typep value '(member :determine-by-type :always :query :never))
+	       (setq ascii-translate? value)
+	     (signal 'invalid-option-value
+		     :object self
+		     :option option
+		     :value value)))
+	  (:default-dummy-transform-pathname
+	   (if (typep value 'pathname)
+	       (setq *default-dummy-transform-pathname* value)
+	     (signal 'invalid-option-value
+		     :object self
+		     :option option
+		     :value value)))
+	  (t (signal 'invalid-option
+		     :object self
+		     :option option
+		     :value value))))
+    (progn
+      (setq *default-dummy-transform-pathname*
+	    (make-pathname
+	      :defaults (or *default-dummy-transform-pathname* (fs:user-homedir))
+		:name :wild
+		:type :wild
+		;; BV: avoid touching :version please.
+		;; :version :highest
+		))
+      (tv:choose-variable-values
+	`((,(locf record-size) "Record Size" :number)
+	  (,(locf ascii-translate?) "Perform character set translation?"
+	   :choose (:determine-by-type :always :query :never))
+	  (*default-dummy-transform-pathname*
+	    "Defaults for relative host/directory"
+	    :pathname *default-dummy-transform-pathname*))
+	:label '(:string "Options for the TAR tape format" :font fonts:tr12b)))))
+
+(defmethod (tar-format :read-tape-header) (&rest ignore))
+(defmethod (tar-format :write-tape-header) (&rest ignore))
+
+(defmethod (tar-format :tape-is-your-format-p) (device)
+  (send device :rewind t)
+  (condition-case ()
+      (send self :read-file-header device)
+    ((logical-end-of-tape bad-file-header)
+     (send self :rewind device)
+     nil)
+    (:no-error t)))
+
+(defmethod (tar-format :read-chunk) (device)
+  (when eot
+    (signal 'logical-end-of-tape :device-object device))
+  (unless buffer
+    (setq buffer (allocate-resource 'si:dma-buffer
+				    (ceiling (send device :optimal-chunk-size record-size)
+					     1024))))
+  (setq buffer-ptr 0
+	buffer-fill (* (condition-case (condition)
+			   (send device :read-array
+				 (si:dma-buffer-string buffer)
+				 (ceiling (length (si:dma-buffer-string buffer)) record-size)
+				 record-size)
+			 (filemark-encountered
+			  (setq eot t)
+			  (send condition :data-transferred)))
+		       record-size)))
+
+(defmethod (tar-format :write-chunk) (device)
+  ;;; eot condition passed through
+  (send device :write-array
+	(si:dma-buffer-8b buffer)
+	(ceiling (length (si:dma-buffer-8b buffer)) record-size)
+	record-size)
+  (setq buffer-ptr 0
+	buffer-fill (string-length (si:dma-buffer-string buffer))))
+
+(defsubst read-from-string-octal (string start end)
+  (parse-integer string :radix 8 :junk-allowed 't :start start :end end))
+
+;;; NOTE: This is the ancient v7 format.
+;;; Tar file headers look like this:
+;;; <field>(total-size) := <significant-bytes>, <filler-bytes>, ... | <string index>
+;;; name(100)      := 100 bytes              | 0
+;;; mode(8)        := 6 bytes, space, null   | 100
+;;; uid(8)         := 6 bytes, space, null   | 108
+;;; gid(8)         := 6 bytes, space, null   | 116
+;;; size(12)       := 11 bytes, space        | 124
+;;; date(12)       := 11 bytes, space        | 136
+;;; checksum(8)    := 6 bytes, null,space    | 148
+;;; link-flag(1)   := 1 byte                 | 156
+;;; link-name(100) := 100 bytes              | 157
+;;; filler(255)    := 255 bytes(nulls)       | 257
+
+(defmethod (tar-format :read-file-header) (device)
+  (case op-mode
+    (nil (setq op-mode :read))
+    (:write (ferror 'read-during-write :device-object device))
+    (:read))
+  (when (or (null buffer) (= buffer-ptr buffer-fill))
+    (send self :read-chunk device))
+  (flet ((count-string (string) (do ((sum 0)
+				     (idx 0 (add1 idx)))
+				    ((= idx (string-length string)) sum)
+				  (incf sum (aref string idx)))))
+    (let* ((string (nsubstring (si:dma-buffer-string buffer) buffer-ptr (+ buffer-ptr 512)))
+	   (checksum (read-from-string-octal string 148 155))
+	   (sum (- (count-string string) (- (count-string (format nil "~6O~C " checksum #\center-dot))
+					    (* 8 32)))))
+      (unless (integerp checksum)
+	(setq eot t)
+	(signal 'logical-end-of-tape :device-object device))
+      (unless (= checksum sum)
+	(signal 'bad-file-header :format-type (type-of self) :header (substring string 0)))
+      (let* ((name (string-trim `(#\center-dot #\space) (nsubstring string 0 100)))
+	     (pathname (fs:parse-pathname name *dummy-unix-host*))
+	     (length-in-bytes (read-from-string-octal string 124 135))
+	     (creation-date (read-from-string-octal string 136 147))
+	     (link-name (when (not (memq (char string 156) `(#\center-dot #\space #\0)))
+			  (string-trim `(#\center-dot #\space) (nsubstring string 157 257))))
+	     (byte-size (determine-pathname-byte-size pathname))
+	     (characters (case ascii-translate?
+			   (:always t)
+			   (:never nil)
+			   (:query (y-or-n-p "~&Is \"~A\" a character file? "))
+			   (:determine-by-type (translatable-file-p pathname)))))
+	(if (nth-value 1 (ignore-errors (+ length-in-bytes creation-date checksum)))
+	    (and (setq eot t)
+		 (signal 'logical-end-of-tape :device-object device))
+	  (progn
+	    (incf buffer-ptr 512)
+	    (list pathname
+		  :directory (fs:pathname-directory pathname)
+		  :name (fs:pathname-name pathname)
+		  :type (fs:pathname-type pathname)
+		  :version (fs:pathname-version pathname)
+		  :byte-size byte-size
+		  :characters characters
+		  :length-in-bytes (/ length-in-bytes (/ byte-size 8))
+		  :creation-date (+ #.(time:parse-universal-time "JANUARY 1, 1970 GMT")
+				    creation-date)
+		  :link-name link-name
+		  :default-dummy-transform-pathname (default-dummy-transform-pathname pathname))))))))
+
+(defmethod (tar-format :write-data-to-stream) (device stream length byte-size characters?)
+  (let ((byte-factor (/ byte-size 8))
+	(array-to-use (ecase byte-size
+			(8 (si:dma-buffer-8b buffer))
+			(16 (si:dma-buffer-16b buffer)))))
+    (do* ((bytes-left length)
+	  (bytes-this-time (min bytes-left (/ (- buffer-fill buffer-ptr) byte-factor))
+			   (min bytes-left (/ (- buffer-fill buffer-ptr) byte-factor)))
+	  (bptr (/ buffer-ptr byte-factor) (/ buffer-ptr byte-factor)))
+	 ((zerop bytes-left)
+	  (setq buffer-ptr (* (ceiling buffer-ptr 512) 512)))
+      (when characters?
+	(translate-ascii-to-lispm array-to-use
+				  :start bptr
+				  :end (+ bptr bytes-this-time)))
+      (send stream :string-out array-to-use bptr (+ bptr bytes-this-time))
+      (when (= buffer-fill (incf buffer-ptr (* bytes-this-time byte-factor)))
+	(send self :read-chunk device))
+      (decf bytes-left bytes-this-time))))
+
+(defmethod (tar-format :read-data-from-stream) (device stream)
+  (let* ((byte-factor (/ (get stream :byte-size) 8))
+	 (array-to-use (ecase (get stream :byte-size)
+			 (8 (si:dma-buffer-8b buffer))
+			 (16 (si:dma-buffer-16b buffer)))))
+    (do* ((bytes-left (or (get stream :length-in-bytes) (get stream :length)))
+	  (bytes-this-time (min bytes-left (/ (- buffer-fill buffer-ptr) byte-factor))
+			   (min bytes-left (/ (- buffer-fill buffer-ptr) byte-factor)))
+	  (bptr (/ buffer-ptr byte-factor) (/ buffer-ptr byte-factor)))
+	 ((zerop bytes-left)
+	  (setq buffer-ptr (* (ceiling buffer-ptr 512) 512)))
+      (send stream :string-in nil array-to-use bptr (+ bptr bytes-this-time))
+      (when (get stream :characters)
+	(translate-lispm-to-ascii array-to-use
+				  :start bptr
+				  :end (+ bptr bytes-this-time)))
+      (when (= buffer-fill (incf buffer-ptr (* bytes-this-time byte-factor)))
+	(send self :write-chunk device))
+      (decf bytes-left bytes-this-time))))
+
+(defmethod (tar-format :space-to-end-of-this-file) (device plist bytes-passed)
+  (let ((bytes (- (* (ceiling (* (get plist :length-in-bytes)
+				 (/ (get plist :byte-size) 8)) 512) 512) bytes-passed)))
+    (if (<= bytes (- buffer-fill buffer-ptr))
+	(incf buffer-ptr bytes)
+      (do ((bytes-left (- bytes (- buffer-fill buffer-ptr)))
+	   (ignore (send self :read-chunk device))
+	   (buffer-length (length (si:dma-buffer-string buffer))))
+	  ((zerop bytes-left))
+	(if (< bytes-left buffer-length)
+	    (setq buffer-ptr (+ buffer-ptr bytes-left)
+		  bytes-left 0)
+	  (progn(send self :read-chunk device)
+		(decf bytes-left buffer-length)))))))
+
+(defmethod (tar-format :restore-file) (device &key transform query
+				       (overwrite :never) (create-directory :always)
+				       silent)
+  (ecase op-mode
+    (nil (setq op-mode :read))
+    (:write (ferror 'write-in-middle-of-tape :device-object device))
+    (:read))
+  (or *default-dummy-transform-pathname*
+      (set-default-dummy-transform-pathname))
+  (when (= buffer-ptr buffer-fill)
+    (send self :read-chunk device))
+  (let* ((plist (dummy-transform-plist (send self :read-file-header device))))
+    (if (null (get plist :link-name))
+	(let ((pathname (determine-restore-file-pathname
+			  plist transform overwrite query create-directory nil))
+	      (length (get plist :length-in-bytes)))
+	  (if pathname
+	      (with-open-file (stream pathname
+				      :direction :output
+				      :byte-size (get plist :byte-size)
+				      :characters (get plist :characters))
+		(send self :write-data-to-stream
+		      device stream length (get plist :byte-size) (get plist :characters))
+		t)
+	    (send self :space-to-end-of-this-file device plist 0)))
+      (progn
+	(unless silent
+	  (format *standard-output* "~&File ~A is a link.  Ignoring"))
+	(send self :space-to-end-of-this-file device plist 0)))))
+
+(defmethod (tar-format :write-file-header) (device plist)
+  (cond ((null buffer)
+	 (setq buffer (allocate-resource
+			'si:dma-buffer
+			(ceiling (ceiling (send device :optimal-chunk-size record-size) si:page-size) 4))
+	       buffer-ptr 0
+	       buffer-fill (string-length (si:dma-buffer-string buffer))))
+	((= buffer-ptr buffer-fill)
+	 (send self :write-chunk device)))
+  (flet ((set-checksum
+	   (string &aux (checksum 0))
+	   (dotimes (c (length string))
+	     (incf checksum (aref string c)))
+	   (copy-array-portion (format nil "~6o~C " checksum #\center-dot) 0 8
+			       string 148 156)
+	   string))
+    (let* ((name (send (send self :get-pathname-from-plist plist) :string-for-host))
+	   (mode #o666)
+	   (uid 0)
+	   (gid 0)
+	   (string (format nil "~100,1,0,0A~6o ~C~6o ~C~6o ~C~11o ~11o ~8@t ~355,1,0,0A"
+			   name mode #\center-dot uid #\center-dot gid #\center-dot
+			   (* (get plist :length-in-bytes) (/ (get plist :byte-size) 8))
+			   (- (get plist :creation-date)
+			      #.(time:parse-universal-time "JANUARY 1, 1970 GMT"))
+			   "")))
+      ;; Regular file marker is 0 (or '\0'), not space.
+      (setf (char string 156) #\0)
+      (copy-array-portion (set-checksum string) 0 512
+			  (si:dma-buffer-string buffer) buffer-ptr (+ buffer-ptr 512))
+      (incf buffer-ptr 512))))
+
+(defmethod (tar-format :write-file) (device file
+				     &key
+				     silent
+				     (end-of-tape-action :continue))
+  end-of-tape-action				;Tar format doesn't know about continue
+  (with-open-file (fstream file :direction :input)
+    (let* ((upn (let* ((tpn (send self :get-dummy-pathname (send fstream :truename)))
+		       (dir (fs:pathname-directory tpn)))
+		  (send tpn :new-directory
+			(cons :relative
+			      (etypecase dir
+				(list dir)
+				(string (ncons dir)))))))
+	   (plist (list upn
+			:byte-size (get fstream :byte-size)
+			:characters (get fstream :characters)
+			:length-in-bytes (or (get fstream :length-in-bytes) (get fstream :length))
+			:mode 0
+			:uid 0
+			:gid 0
+			:creation-date (get fstream :creation-date)
+			:link-flag nil
+			:link-name nil)))
+      (unless silent
+	(format *standard-output* "~&Writing file: ~A" (car plist)))
+      (send self :write-file-header device plist)
+      (send self :read-data-from-stream device fstream))))
+
+(defmethod (tar-format :write-partition) (partition-name unit device)
+  partition-name unit device
+  (ferror 'not-supported :object self :operation :write-partition))
+
+(defmethod (tar-format :compare-file) (device &key transform silent error-action)
+  (declare(ignore error-action))
+  (case op-mode
+    (nil (setq op-mode :read))
+    (:write (ferror 'read-during-write :device-object device))
+    (:read))
+  (let* ((plist (dummy-transform-plist (send self :read-file-header device)))
+	 (pathname (process-transform transform plist))
+	 (byte-factor (/ (get plist :byte-size) 8))
+	 (length (get plist :length-in-bytes)))
+    (cond ((zerop length)
+	   (unless silent
+	     (format *standard-output* "~&File \"~A\" has zero length.  Comparison assumed."
+		     pathname))
+	   (rplaca plist t))
+	  ((get plist :link-name)
+	   (unless silent
+	     (format *standard-output* "~&File \"~A\" is a link.  Comparison assumed."))
+	   (rplaca plist t))
+	  ((not (condition-case (cond)
+		    (probef pathname)
+		  ((fs:file-not-found fs:directory-not-found))))
+	   (unless silent
+	     (format *standard-output*
+		     "~&Source for dumped file \"~A\" not found. Skipping comparison."
+		     pathname))
+	   (send self :space-to-end-of-this-file device plist 0)
+	   (rplaca plist :not-compared))
+	  (t
+	   (with-open-file (f pathname
+			      :direction :input
+			      :byte-size (get plist :byte-size)
+			      :characters (get plist :characters))
+	     (unless silent
+	       (format *standard-output*
+		       "~&Comparing \"~A\" with version on disk ... " pathname))
+	     (if (/= length (or (get f :length-in-bytes) (get f :length)))
+		 (progn (unless silent
+			  (format *standard-output*
+				  "[*** Files are of unequal length (~d vs ~d) or byte-size (~d) ***]"
+				  (get f :length-in-bytes) length (get f :byte-size)))
+			(send self :space-to-end-of-this-file device plist 0)
+			(rplaca plist nil))
+	       (using-resource (compare-buffer si:dma-buffer
+					       (si:dma-buffer-size-in-pages buffer))
+		 (let ((compare-array-to-use (ecase (get plist :byte-size)
+					       (8 (si:dma-buffer-8b compare-buffer))
+					       (16 (si:dma-buffer-16b compare-buffer)))))
+		   (if (< (- buffer-fill buffer-ptr) (* (ceiling (* length byte-factor) 512) 512))
+		       (do* ((bytes-left length)
+			     (bytes-this-time (min bytes-left (/ (- buffer-fill buffer-ptr) byte-factor))
+					      (min bytes-left (/ (- buffer-fill buffer-ptr) byte-factor)))
+			     unequal)
+			    ((or (zerop bytes-left) unequal)
+			     (rplaca plist
+				     (unless unequal
+				       (unless silent (format *standard-output* "[Equal]"))
+				       (setq buffer-ptr (* (ceiling buffer-ptr 512) 512))
+				       t)))
+			 (send f :string-in nil compare-array-to-use 0 bytes-this-time)
+			 (when (get plist :characters)
+			   (translate-lispm-to-ascii compare-array-to-use :end bytes-this-time))
+			 (if (string-equal (si:dma-buffer-string compare-buffer)
+					   (si:dma-buffer-string buffer)
+					   :end1 (* bytes-this-time byte-factor)
+					   :start2 buffer-ptr
+					   :end2 (+ buffer-ptr (* bytes-this-time byte-factor)))
+			     (progn (incf buffer-ptr (* bytes-this-time byte-factor))
+				    (decf bytes-left bytes-this-time)
+				    (when (= buffer-ptr buffer-fill)
+				      (send self :read-chunk device)))
+			   (progn
+			     (unless silent
+			       (format *standard-output* "[*** Unequal ***]"))
+			     (setq unequal t)
+			     (send self :space-to-end-of-this-file
+				   device plist (* (- length bytes-left) byte-factor)))))
+		     (progn
+		       (send f :string-in nil compare-array-to-use 0 length)
+		       (when (get plist :characters)
+			 (translate-lispm-to-ascii compare-array-to-use :end length))
+		       (if (string-equal
+			     (si:dma-buffer-string compare-buffer) (si:dma-buffer-string buffer)
+			     :end1 (* length byte-factor)
+			     :start2 buffer-ptr
+			     :end2 (+ buffer-ptr (* length byte-factor)))
+			   (progn (incf buffer-ptr (* (ceiling (* length byte-factor) 512) 512))
+				  (unless silent (format *standard-output* "[Equal]"))
+				  (rplaca plist t))
+			 (progn
+			   (incf buffer-ptr (* (ceiling (* length byte-factor) 512) 512))
+			   (unless silent (format *standard-output* "[*** Unequal ***]"))
+			   (rplaca plist nil)))))))))))))
+
+
+
+
+(defmethod (tar-format :beginning-of-file) (&rest ignore)
+  (ferror nil "not yet implemented"))		; (device)
+
+(defmethod (tar-format :next-file) (&rest ignore)
+  (ferror nil "not yet implemented"))		; (device &optional (nfiles 1))
+
+(defmethod (tar-format :previous-file) (&rest ignore)
+  (ferror nil "not yet implemented"))		; (device &optional (nfiles 1))
+
+(defmethod (tar-format :find-file) (device match)
+  (check-device device)
+  (check-type match (or list compiled-function closure symbol string pathname))
+  (when (typep match '(or string pathname))
+    (setq match (pathname match))
+    (let((dir (pathname-directory match)))
+      (setq match
+	    (make-pathname
+	      :defaults match
+	      :host *dummy-unix-host*
+	      :directory
+	      (if (and (stringp dir)
+		       (string-equal dir "*"))
+		  :wild
+		dir)))))
+  (do ((plist (send self :read-file-header device)
+	      (send self :read-file-header device)))
+      ((tape-file-match
+	 match
+	 plist)
+       (decf buffer-ptr 512)
+       plist)
+    (send self :space-to-end-of-this-file device plist 0)))
+
+(defmethod (tar-format :find-file-reverse) (&rest ignore)
+  (signal 'not-supported
+	  :device-object self
+	  :operation :open-file))
+
+(defmethod (tar-format :open-file)
+	   (device &key
+	      (direction :input) 
+	        (byte-size :default)
+		  (characters :default)
+		     plist)
+  (declare(ignore device direction byte-size characters plist))
+  (ferror nil "not yet implemented"))
+
+(defmethod (tar-format :list-files) (device &key (stream *standard-output*) (number-of-files -1))
+  (case op-mode
+    (nil (setq op-mode :read))
+    (:write (ferror 'read-during-write :device-object device))
+    (:read))
+  (if eot
+      (format stream "~&*** End of tape ***~%")
+    (block tar-list-files
+      (do (return-list
+	   (times 0 (add1 times))
+	   plist)
+	  ((= times number-of-files) (nreverse return-list))
+	(condition-case ()
+	    (let ((pl (send self :read-file-header device)))
+	      (remprop pl :checksum)		;There are not externally interesting
+	      (remprop pl :link-name)
+	      (push (setq plist pl) return-list))
+	  (logical-end-of-tape
+	   (format stream "~&*** End of tape ***~%")
+	   (return-from tar-list-files (reverse return-list))))
+	(format stream "~&~A ~50TByte Size: ~D ~65T- Length in bytes: ~D"
+		(car plist)
+		(get plist :byte-size)
+		(* (get plist :length-in-bytes) (/ (get plist :byte-size) 8)))
+	(send self :space-to-end-of-this-file device plist 0)))))
+    
+(defmethod (tar-format :finish-tape) (device)
+  (let* ((buf (si:dma-buffer-8b buffer))
+	 (records (ceiling buffer-ptr record-size))
+	 (fptr (*  records record-size)))
+    (fill buf 0 :start buffer-ptr :end fptr)
+    (send device :write-array buf records record-size)
+    (send device :write-filemark)
+    (setq eot t
+	  buffer nil
+	  buffer-ptr 0
+	  buffer-fill 0
+	  tape-state-check nil
+	  op-mode nil)))
+
+(defmethod (tar-format :rewind) (device &optional (wait-p t))
+  (when buffer
+    (si:deallocate-resource 'si:dma-buffer buffer))
+  (setq buffer nil
+	buffer-ptr 0
+	buffer-fill 0
+	eot nil
+	tape-state-check nil
+	op-mode nil)
+  (send device :rewind wait-p))
+
+(defmethod (tar-format :unload) (device)
+  (when buffer
+    (si:deallocate-resource 'si:dma-buffer buffer))
+  (setq buffer nil
+	buffer-ptr 0
+	buffer-fill 0
+	eot nil
+	tape-state-check nil
+	op-mode nil)
+  (send device :unload))
+  
+(defmethod (tar-format :position-to-append) ())	; (device)
+
+(define-tape-format tar-format "TAR")

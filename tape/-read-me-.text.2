@@ -1,0 +1,39 @@
+This is a "back-port" for the CADR (System 100/300) of the "new tape" system developed at LMI for the Lambda system. The code is used under the liberal license of Bogodyne Metatechnics LLC who aquired the rights from GigaMos who aquired them from LMI. See https://www.bogodyne.com/download/download-zetalisp/.
+
+The intention is only to make it work in the usim emulator, which has no tape device, so instead it uses the RTAPE protocol to communicate with an RTAPE server (see e.g. https://github.com/Chaosnet/chaosnet-tools).
+
+The code should still work on a Lambda or emulated LambdaDelta with System 130/500. All changes are either bug fixes or under read-time conditionals such as #+Lambda or #+/-CADR.
+
+== The main changes made ==
+
+`SYSDEF.LISP`
+  - changed directory of the systems. This should be reverted to SYS:TAPE; at some point.
+  - added a module "lmi-support" with some code from System 130 which isn't in System 100.
+    - This includes a "fake" implementation of DMA buffer, which avoids wiring/unwiring of the data, since it is not used for DMA anyway.
+  - disabled the module for tapemaster and nupi-device, since they aren't available on a CADR
+  - add a module for the remote tape protocols (which only includes rtape-device, since remote-tape-device doesn't seem functional)
+  - attempts at making the Tape Utility Frame system work, adding a module with patches from System 130.
+
+Fix RTAPE status definition: a device name has max length 15. This is in accordance with the RTAPE client code in ITS DUMP, and with Symbolics RTAPE server.
+
+Where a default disk unit is needed, use 0 instead of `(si:default-disk-unit)` or non-working tframe default unit (which calls `si:default-disk-unit`).
+
+Improve usability of tape:backup-files by better arguments.
+
+Replace obsolete functions. Rearrange code so macro definitions and defconst are before their use. Handle different calling conventions.
+
+== Requirements ==
+
+You need an RTAPE server to communicate with. I recommend Lars Brinkhoff's (https://github.com/Chaosnet/chaosnet-tools), but make sure it has the fix to cmd_space_record (correct: use `--n`; wrong: use `n--`).
+
+Notably, the `RTAPE.c` code in the "unix chaosnet" archive needs to change the definition of `DLEN`: it should be 15, not 16.
+
+== TODO ==
+
+Better device parsing. Now the format is "Host:DeviceUnit:" which might make sense for numeric Units (e.g. "Host:mt0:").
+For modern RTAPE servers, which typically write tape files on disk rather than on an actual magtape device, the Unit corresponds to the tape file name.
+A more readable (and thus writable) format would then be "Host:Device:Unit" (where Unit is the tape file name).
+
+Minor things like making mount-tape work for "new" empty tapes (which return MARK rather than a tape header).
+
+Fix TFrame.
