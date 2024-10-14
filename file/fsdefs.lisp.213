@@ -1,7 +1,7 @@
 ;;; -*- Mode:LISP; Package:FILE-SYSTEM; Readtable:ZL; Base:10 -*-
 ;;;; Basic Structures
 
-(DEFVAR LOCAL-FILE-SYSTEM-AREA (MAKE-AREA :NAME 'LOCAL-FILE-SYSTEM-AREA :VOLATILITY 2)
+(DEFVAR LOCAL-FILE-SYSTEM-AREA (MAKE-AREA :NAME 'LOCAL-FILE-SYSTEM-AREA :GC :TEMPORARY :ROOM T)
   "All of the internal structures made by the file system are consed in this area.")
 
 (DEFSTRUCT (DISK-CONFIGURATION (:TYPE :NAMED-ARRAY)
