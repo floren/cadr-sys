@@ -1,0 +1,23 @@
+;;; -*- Mode:LISP; Package:USER; Base:10; Readtable:Common-Lisp; Patch-File:T -*-
+;;; Patch directory for Local-File version 75
+;;; Written 2-Aug-88 21:13:10 by keith (Keith Corbett) at site Gigamos Cambridge
+;;; while running on Breaking Glass from band 3
+;;; with Experimental System 126.7, ZWEI 125.9, ZMail 73.0, Local-File 75.1, File-Server 24.1, Unix-Interface 13.0, Tape 24.2, Lambda-Diag 17.0, microcode 1762, SDU Boot Tape 3.14, SDU ROM 103, falambka.
+
+(:RELEASED
+ ((0 "Local-File Loaded" "pld" NIL)
+  (1 "The disk space description for the root directory used to say
+  .... (xxx pages used in )
+but now it says
+  .... (xxx pages used in ~;)" "pld" NIL)
+  (2 "The (:METHOD FS:LM-DATA-STREAM-MIXIN :RENAME) didn't used to return an
+error condition, and the file-server expected it to when ERROR-P is NIL.
+So, in that case only, we return an error condition; otherwise we always
+return the file TRUENAME.
+
+This fixes the following bug: when you renamed a remote file across
+directories, instead of getting an error, the operation appeared to
+succeed; the \"truename\" returned was the old, original name.  Now,
+the file server passes the error on to the local user, who gets
+a proceedable error, and can in most environments specify a new pathname." "keith" NIL)
+  ))

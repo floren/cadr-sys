@@ -1,0 +1,42 @@
+;;; -*- Mode:Lisp; Readtable:ZL; Package:FILE-SYSTEM; Base:10; Patch-File:T -*-
+;;; Patch file for Local-File version 75.2
+;;; Reason:
+;;;  The (:METHOD FS:LM-DATA-STREAM-MIXIN :RENAME) didn't used to return an
+;;;  error condition, and the file-server expected it to when ERROR-P is NIL.
+;;;  So, in that case only, we return an error condition; otherwise we always
+;;;  return the file TRUENAME.
+;;;  
+;;;  This fixes the following bug: when you renamed a remote file across
+;;;  directories, instead of getting an error, the operation appeared to
+;;;  succeed; the "truename" returned was the old, original name.  Now,
+;;;  the file server passes the error on to the local user, who gets
+;;;  a proceedable error, and can in most environments specify a new pathname.
+;;; Written 2-Aug-88 21:09:22 by keith (Keith Corbett) at site Gigamos Cambridge
+;;; while running on Breaking Glass from band 3
+;;; with Experimental System 126.7, ZWEI 125.9, ZMail 73.0, Local-File 75.1, File-Server 24.1, Unix-Interface 13.0, Tape 24.2, Lambda-Diag 17.0, microcode 1762, SDU Boot Tape 3.14, SDU ROM 103, falambka.
+
+
+
+; From modified file DJ: L.FILE; FSSTR.LISP#115 at 2-Aug-88 21:09:23
+#10R FILE-SYSTEM#: 
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "FILE-SYSTEM")))
+  (COMPILER::PATCH-SOURCE-FILE "SYS: FILE; FSSTR  "
+
+(DEFMETHOD (LM-DATA-STREAM-MIXIN :RENAME) (NEW-NAME &OPTIONAL (ERROR-P T) &aux error)
+  (IDENTIFY-FILE-OPERATION :RENAME
+    (setq error
+	  (HANDLING-ERRORS ERROR-P
+	    (LMFS-RENAME-FILE FILE
+			      (PATHNAME-DIRECTORY NEW-NAME)
+			      (PATHNAME-NAME NEW-NAME)
+			      (PATHNAME-TYPE NEW-NAME)
+			      (PATHNAME-VERSION NEW-NAME))))
+    ;;This didn't used to ever return an error condition, and the
+    ;;file-server expected it to when ERROR-P is NIL.  So, in that case
+    ;;only, we return an error condition; otherwise we always return the
+    ;;file TRUENAME. -KmC 8/2/88
+    (if (and (null error-p) (errorp error))
+	error
+      (SETQ TRUENAME (FILE-TRUENAME FILE)))))
+
+))

@@ -1,0 +1,32 @@
+
+;System Local-File made by pld at 2-Jul-88 20:01:13  -*-Mode: Lisp; Package: User; Base: 10-*-
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: FILE; FSDEFS LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: FILE; FSSTR LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: FILE; FSGUTS LISP >"
+  '((:COMPILE NIL
+     (FS::FIND-LM-BAND NIL NIL
+      (SI::EXTRA-PROCESSORS :IMPLAUSIBLE NIL "A ~S expression failed to give alternatives for ~S" SELECT-PROCESSOR (:FALCON)))
+     (FS::LOOKUP-SUBDIRECTORY-STEP NIL NIL
+      (COMPILER:UNDEFINED-FUNCTION-USED :PROBABLE-ERROR NIL "The undefined function ~S was called" FS::GIVE-FILE-GENERATION-NUMBER))
+     (FS::LMFS-OPEN-OUTPUT-FILE NIL NIL
+      (COMPILER:UNDEFINED-FUNCTION-USED :PROBABLE-ERROR NIL "The undefined function ~S was called" FS::GIVE-FILE-GENERATION-NUMBER)))))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: FILE; FSACC LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: FILE; FSACL LISP >"
+  '((:COMPILE NIL)))

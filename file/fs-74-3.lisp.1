@@ -1,0 +1,131 @@
+;;; -*- Mode:Lisp; Readtable:ZL; Package:FILE-SYSTEM; Base:10; Patch-File:T -*-
+;;; Patch file for Local-File version 74.3
+;;; Reason:
+;;;  Ignore :super-image keyword on OPEN.
+;;; Written 23-Jun-88 18:16:34 by pld at site Gigamos Cambridge
+;;; while running on Claude Debussy from band 2
+;;; with Experimental System 124.69, Experimental Local-File 74.2, Experimental File-Server 23.1, Experimental Unix-Interface 12.0, Experimental ZMail 72.0, Experimental Tape 23.6, Experimental Lambda-Diag 16.2, microcode 1756, SDU Boot Tape 3.14, SDU ROM 102, K 124.
+
+
+
+; From modified file DJ: L.FILE; FSGUTS.LISP#444 at 23-Jun-88 18:16:47
+#10R FILE-SYSTEM#: 
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "FILE-SYSTEM")))
+  (COMPILER::PATCH-SOURCE-FILE "SYS: FILE; FSGUTS  "
+
+(DEFUN LMFS-OPEN-FILE (PATHNAME DIRECTORY NAME TYPE VERSION
+		       &KEY (ERROR T) (DIRECTION :INPUT) (CHARACTERS :default)
+		       (BYTE-SIZE :DEFAULT) DELETED PRESERVE-DATES
+		       (ELEMENT-TYPE 'STRING-CHAR ELEMENT-TYPE-P)
+		       (IF-EXISTS (IF (MEMQ (PATHNAME-VERSION PATHNAME)
+					    ;; :UNSPECIFIC here is to prevent lossage
+					    ;; writing ITS files with no version numbers.
+					    '(:NEWEST :UNSPECIFIC))
+				      :NEW-VERSION :SUPERSEDE)
+				  IF-EXISTS-P)
+		       (IF-DOES-NOT-EXIST
+			 (COND ((MEMQ DIRECTION '(:PROBE :PROBE-DIRECTORY :PROBE-LINK))
+				NIL)
+			       ((AND (MEMQ DIRECTION '(:OUTPUT :IO))
+				     (NOT (MEMQ IF-EXISTS '(:OVERWRITE :APPEND))))
+				:CREATE)
+			       ;; Note: if DIRECTION is NIL, this defaults to :ERROR
+			       ;; for compatibility with the past.
+			       ;; A Common-Lisp program would use :PROBE
+			       ;; and get NIL as the default for this.
+			       (T :ERROR)))
+		       ;;The following are ignored
+		       INHIBIT-LINKS super-image
+		       &AUX FILE INITIAL-PLIST OLD-FILE
+		       PHONY-CHARACTERS SIGN-EXTEND-BYTES)
+  "Implements the :OPEN message for local-file pathnames."
+  (declare (ignore inhibit-links))
+  (declare (ignore super-image))
+ ;  ESTIMATED-LENGTH
+  (IDENTIFY-FILE-OPERATION :OPEN
+    (HANDLING-ERRORS ERROR
+      (CASE DIRECTION
+	((:INPUT :OUTPUT :IO :PROBE-DIRECTORY))
+	((NIL :PROBE :PROBE-LINK) (SETQ DIRECTION :PROBE))
+	(T (FERROR 'UNIMPLEMENTED-OPTION "~S is not a valid DIRECTION argument" DIRECTION)))
+      (UNLESS (MEMQ IF-EXISTS '(:ERROR :NEW-VERSION :RENAME :RENAME-AND-DELETE
+				:OVERWRITE :APPEND :SUPERSEDE NIL))
+	(FERROR 'UNIMPLEMENTED-OPTION "~S is not a valid IF-EXISTS argument" IF-EXISTS))
+      (UNLESS (MEMQ IF-DOES-NOT-EXIST
+		    '(:ERROR :CREATE NIL))
+	(FERROR 'UNIMPLEMENTED-OPTION
+		"~S is not a valid IF-DOES-NOT-EXISTS argument" IF-EXISTS))
+      (WHEN ELEMENT-TYPE-P
+	(SETF (VALUES CHARACTERS BYTE-SIZE PHONY-CHARACTERS SIGN-EXTEND-BYTES)
+	      (DECODE-ELEMENT-TYPE ELEMENT-TYPE BYTE-SIZE)))
+      (IF (OR PHONY-CHARACTERS SIGN-EXTEND-BYTES)
+	  (FERROR 'UNIMPLEMENTED-OPTION "~S as element-type is not implemented."
+		  ELEMENT-TYPE))
+      (IF (NOT (MEMQ BYTE-SIZE '(16. 8 4 2 1 :DEFAULT)))
+	  (LM-SIGNAL-ERROR 'INVALID-BYTE-SIZE))
+      (SETF (VALUES FILE OLD-FILE)
+	    (LOOKUP-FILE DIRECTORY NAME TYPE VERSION
+			 (AND (NEQ DIRECTION :PROBE-DIRECTORY) IF-DOES-NOT-EXIST)
+			 (AND (MEMQ DIRECTION '(:OUTPUT :IO))
+			      IF-EXISTS)
+			 (NEQ DIRECTION :PROBE) DELETED))
+      (WHEN (IF FILE (OR (NOT (MEMQ DIRECTION '(:OUTPUT :IO))) IF-EXISTS)
+	      (OR (EQ DIRECTION :PROBE-DIRECTORY) IF-DOES-NOT-EXIST))
+	(WHEN OLD-FILE
+	  (SELECTQ IF-EXISTS
+	    (:RENAME
+	     (LMFS-RENAME-FILE OLD-FILE DIRECTORY
+			       (STRING-APPEND "_OLD_" NAME) TYPE :NEWEST))
+	    (:RENAME-AND-DELETE 
+	     (LMFS-RENAME-FILE OLD-FILE DIRECTORY
+			       (STRING-APPEND "_OLD_" NAME) TYPE :NEWEST)
+	     (LMFS-DELETE-FILE OLD-FILE NIL))))
+	;; Empty out the file, if supposed to.
+	(WHEN (EQ IF-EXISTS :TRUNCATE)
+	  (LET ((NBLOCKS (MAP-NBLOCKS (FILE-MAP FILE))))
+	    (SETF (MAP-NBLOCKS (FILE-MAP FILE)) 0)
+	    ;; Write the directory showing the file empty.
+	    (WRITE-DIRECTORY-FILES (FILE-DIRECTORY FILE))
+	    (SETF (MAP-NBLOCKS (FILE-MAP FILE)) NBLOCKS)
+	    ;; Then mark the blocks free.
+	    (USING-PUT
+	      (CHANGE-MAP-DISK-SPACE (FILE-MAP FILE)
+				     (IF (FILE-DELETED? FILE) PUT-RESERVED PUT-USED)
+				     PUT-FREE))
+	    (SETF (MAP-NBLOCKS (FILE-MAP FILE)) 0)))
+	(SELECTQ DIRECTION
+	  ((:PROBE :INPUT)
+	   (IF (EQ CHARACTERS :DEFAULT)
+	       (SETQ CHARACTERS (FILE-ATTRIBUTE FILE :CHARACTERS)))
+	   (COND ((NULL BYTE-SIZE)
+		  (SETQ BYTE-SIZE (IF CHARACTERS 8 16.)))
+		 ((EQ BYTE-SIZE :DEFAULT)
+		  (SETQ BYTE-SIZE (FILE-DEFAULT-BYTE-SIZE FILE)))))
+	  ((:OUTPUT :IO)
+	   (if (eq characters :default)
+	       (setq characters t))
+	   (IF (MEMQ BYTE-SIZE '(:DEFAULT NIL))
+	       (SETQ BYTE-SIZE (IF CHARACTERS 8 16.)))
+	   (SETF (FILE-DEFAULT-BYTE-SIZE FILE) BYTE-SIZE)
+	   (SETF (FILE-ATTRIBUTE FILE :CHARACTERS) CHARACTERS)
+	   (UNLESS PRESERVE-DATES
+	     (SETF (FILE-CREATION-DATE-INTERNAL FILE)
+		   (TIME:GET-UNIVERSAL-TIME)))
+	   (LMFS-CHANGE-FILE-PROPERTIES FILE INITIAL-PLIST)))
+	(IF (EQ DIRECTION :PROBE-DIRECTORY)
+	    (MAKE-INSTANCE 'LM-PROBE-STREAM
+			   :TRUENAME (SEND PATHNAME :NEW-PATHNAME
+					    :NAME NIL :TYPE NIL :VERSION NIL)
+			   :PATHNAME PATHNAME)
+	  (MAKE-INSTANCE
+	    (SELECTQ DIRECTION
+	      (:INPUT (IF CHARACTERS 'LM-CHARACTER-INPUT-STREAM 'LM-INPUT-STREAM))
+	      (:OUTPUT (IF CHARACTERS 'LM-CHARACTER-OUTPUT-STREAM 'LM-OUTPUT-STREAM))
+	      (:IO (IF CHARACTERS 'LM-CHARACTER-IO-STREAM 'LM-IO-STREAM))
+	      ((:PROBE :PROBE-DIRECTORY) 'LM-PROBE-STREAM))
+	    :FILE FILE
+	    :IF-EXISTS IF-EXISTS
+	    :PATHNAME PATHNAME
+	    :BYTE-SIZE BYTE-SIZE))))))
+
+))
