@@ -1,0 +1,63 @@
+;;; -*- Mode:Lisp; Readtable:ZL; Package:USER; Base:8; Patch-File:T -*-
+;;; Patch file for ZMail version 74.4
+;;; Reason:
+;;;  Provides notification of new mail in inbox via Converse or TV:Notify.
+;;;  External notification is done depending on value of new user variable,
+;;;  *NOTIFY-ON-NEW-MAIL-IN-BACKGROUND*:
+;;;  
+;;;    - If NIL (the default), no external notification is given
+;;;    - If :NOTIFY, use TV:NOTIFY
+;;;    - If :CONVERSE or T, use QSEND to send message to user at 
+;;;      local machine. This is the mode I prefer...
+;;; Reason:
+;;;  Provide notification of new mail outside ZMail window.
+;;; Written 29-Sep-88 21:40:56 by keith (Keith Corbett) at site Gigamos Cambridge
+;;; while running on Breaking Glass from band 1
+;;; with Experimental System 126.98, Experimental ZWEI 126.14, Experimental ZMail 74.3, Experimental Local-File 76.0, Experimental File-Server 25.0, Experimental Lambda-Diag 18.0, Experimental Unix-Interface 15.0, Experimental Tape 26.4, microcode 1762, SDU Boot Tape 3.14, SDU ROM 103.
+
+
+
+; From modified file DJ: L.ZMAIL; DEFS.LISP#284 at 29-Sep-88 21:41:08
+#8R ZWEI#: 
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "ZWEI")))
+  (COMPILER::PATCH-SOURCE-FILE "SYS: ZMAIL; DEFS  "
+
+(define-zmail-user-option *notify-on-new-mail-in-background* nil :assoc
+			  "Whether and how to notify user of new mail received in background"
+			  '(("Converse" . :converse) ("Notify" . :notify) ("Never" . nil)))
+))
+
+; From modified file DJ: L.ZMAIL; TOP.LISP#562 at 29-Sep-88 21:42:14
+#8R ZWEI#: 
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "ZWEI")))
+  (COMPILER::PATCH-SOURCE-FILE "SYS: ZMAIL; TOP  "
+
+(DEFSELECT ZMAIL-BACKGROUND-REQUEST
+  (NEW-MAIL (&REST ARGS)
+    (case *notify-on-new-mail-in-background*
+      (:notify (apply #'tv:notify nil args))
+      ((t :converse)
+       (qsend (format nil "~A@~A" *zmail-user* si:local-host)
+	      (apply #'format nil args)
+	      nil nil)))
+    (APPLY #'TYPEIN-LINE ARGS))
+  (FILE-LOADED (ZMAIL-BUFFER)
+    (SEND ZMAIL-BUFFER :LOADING-DONE))
+  (MSGS-LOADED (ZMAIL-BUFFER START END)
+    ZMAIL-BUFFER START END
+    (SEND *SUMMARY-WINDOW* :NEED-FULL-REDISPLAY T))
+  (FILE-SAVE-ABORTED (ZMAIL-BUFFER)
+    (SEND ZMAIL-BUFFER :SAVING-ABORTED))
+  (FILE-SAVED (ZMAIL-BUFFER)
+    (SEND ZMAIL-BUFFER :SAVING-DONE)))
+
+))
+
+; From modified file DJ: L.ZMAIL; DEFS.LISP#284 at 29-Sep-88 21:42:41
+#8R ZWEI#: 
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "ZWEI")))
+  (COMPILER::PATCH-SOURCE-FILE "SYS: ZMAIL; DEFS  "
+
+(update-zmail-profile-choice-window)
+
+))

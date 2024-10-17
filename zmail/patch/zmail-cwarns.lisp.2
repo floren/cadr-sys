@@ -1,0 +1,109 @@
+
+;System ZMail made by keith at 7-Nov-88 18:06:25  -*-Mode: Lisp; Package: User; Base: 10-*-
+
+;;; Written 7-Nov-88 18:06:25 by keith (Keith Corbett) at site Gigamos Cambridge
+;;; while running on Breaking Glass from band 3
+;;; with Experimental ZWEI 126.28, Experimental ZMail 74.14, Experimental Local-File 76.0, Experimental File-Server 25.0, Experimental Lambda-Diag 18.0, Experimental Unix-Interface 15.0, Experimental Tape 26.4, Experimental System 129.0, Microcode 1762, SDU Boot Tape 3.14, SDU ROM 103, 11/04.
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: ZMAIL; DEFS LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: ZMAIL; TOP LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: ZMAIL; MFILES LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: ZMAIL; MFHOST LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: ZMAIL; MFHOST2 LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: ZMAIL; REFER LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: ZMAIL; LMFILE LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: ZMAIL; COMNDS LISP >"
+  '((:COMPILE NIL
+     (ZWEI::GET-MOVE-ZMAIL-BUFFER NIL NIL
+      (COMPILER::OBSOLETE :OBSOLETE NIL "~S ~A." TV:EXPOSE-WINDOW-NEAR "is an obsolete form; use the :EXPOSE-NEAR operation.")))))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: ZMAIL; MAIL LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: ZMAIL; WINDOW LISP >"
+  '((:COMPILE NIL
+     ((:METHOD ZWEI::ZMAIL-MULTIPLE-MENU-MIXIN :MULTIPLE-CHOOSE) NIL NIL
+      (COMPILER::OBSOLETE :OBSOLETE NIL "~S ~A." TV:EXPOSE-WINDOW-NEAR "is an obsolete form; use the :EXPOSE-NEAR operation."))
+     (ZWEI::ZMAIL-MENU-CHOOSE NIL NIL
+      (COMPILER::OBSOLETE :OBSOLETE NIL "~S ~A." TV:EXPOSE-WINDOW-NEAR "is an obsolete form; use the :EXPOSE-NEAR operation."))
+     (ZWEI::MENU-CHOOSE-WITH-NEW NIL NIL
+      (COMPILER::OBSOLETE :OBSOLETE NIL "~S ~A." TV:EXPOSE-WINDOW-NEAR "is an obsolete form; use the :EXPOSE-NEAR operation.")))))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: ZMAIL; FILTER LISP >"
+  '((:COMPILE NIL
+     (ZWEI::MENU-GET-ZMAIL-BUFFER-FOR-SELECTION NIL NIL
+      (COMPILER::OBSOLETE :OBSOLETE NIL "~S ~A." TV:EXPOSE-WINDOW-NEAR "is an obsolete form; use the :EXPOSE-NEAR operation."))
+     (ZWEI::GET-FILTER-FUNCTION-1 NIL NIL
+      (COMPILER::OBSOLETE :OBSOLETE NIL "~S ~A." TV:EXPOSE-WINDOW-NEAR "is an obsolete form; use the :EXPOSE-NEAR operation."))
+     (ZWEI::GET-UNIVERSE-FUNCTION NIL NIL
+      (COMPILER::OBSOLETE :OBSOLETE NIL "~S ~A." TV:EXPOSE-WINDOW-NEAR "is an obsolete form; use the :EXPOSE-NEAR operation."))
+     ((:METHOD ZWEI::UNIVERSE-DEFINITION-FRAME :GET-UNIVERSE) NIL NIL
+      (COMPILER::OBSOLETE :OBSOLETE NIL "~S ~A." TV:EXPOSE-WINDOW-NEAR "is an obsolete form; use the :EXPOSE-NEAR operation.")))))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: ZMAIL; PROFIL LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: FILE; ZMAIL LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: ZMAIL; MULT LISP >"
+  '((:COMPILE NIL
+     ((:METHOD TV::MULTIPLE-MENU-CHOOSE-MENU-MIXIN :MULTIPLE-CHOOSE) NIL NIL
+      (COMPILER::OBSOLETE :OBSOLETE NIL "~S ~A." TV:EXPOSE-WINDOW-NEAR "is an obsolete form; use the :EXPOSE-NEAR operation.")))))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: ZMAIL; BUTTON LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: ZMAIL; RFC733 LISP >"
+  '((:COMPILE NIL)))
+
+;-*-Mode: Lisp; Package: User; Base: 10. -*-
+(SI:RELOAD-FILE-WARNINGS
+  '#FS::LOGICAL-PATHNAME "SYS: ZMAIL; COMETH LISP >"
+  '((:COMPILE NIL)))

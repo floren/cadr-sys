@@ -1,0 +1,85 @@
+;;; -*- Mode:Lisp; Readtable:ZL; Package:USER; Base:8; Patch-File:T -*-
+;;; Patch file for ZMail version 74.5
+;;; Reason:
+;;;  The "Message sent" message now adds time of sending, eliminating confusion
+;;;  of returning to machine in ZMail and wondering just which message is being
+;;;  referred to... Now looks like "Message sent at 02-Oct-88 12:34:56."
+;;; Written 2-Oct-88 23:52:55 by saz (David M.J. Saslav) at site Gigamos Cambridge
+;;; while running on Wolfgang Amadeus Mozart from band 1
+;;; with Experimental System 126.99, Experimental ZWEI 126.14, Experimental ZMail 74.4, Experimental Local-File 76.0, Experimental File-Server 25.0, Experimental Unix-Interface 14.0, Experimental Tape 25.1, Experimental Lambda-Diag 18.0, Experimental Window-Maker 2.4, microcode 1762, SDU Boot Tape 3.14, SDU ROM 8, Lambda/Falcon Development System.
+
+
+
+; From modified file DJ: L.ZMAIL; MAIL.LISP#325 at 2-Oct-88 23:52:56
+#8R ZWEI#: 
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "ZWEI")))
+  (COMPILER::PATCH-SOURCE-FILE "SYS: ZMAIL; MAIL  "
+
+(DEFUN SEND-IT (PLIST &AUX *QUOTE-HOSTS-FOR-XMAILR*)
+  (IF *GENERATE-MESSAGE-ID-FIELD*
+      (PUTPROP PLIST  (FORMAT () "<[~A].~\time\.~A>"
+			      SI:LOCAL-HOST (TIME:GET-UNIVERSAL-TIME) USER-ID)
+	       :MESSAGE-ID))
+  (LET ((FCC (GET PLIST :FCC))
+	(FTO (GET PLIST :FTO))
+	(BFCC (GET PLIST :BFCC)))
+    (WHEN (OR BFCC FCC FTO)
+      (LET* ((FCC-PATHNAMES (GET-FCC-PATHNAMES FCC))
+	     (FTO-PATHNAMES (GET-FCC-PATHNAMES FTO))
+	     (BFCC-PATHNAMES (GET-FCC-PATHNAMES BFCC))
+	     FCC-NAMES FTO-NAMES BFCC-NAMES)
+	;; Eliminate duplicates between lists.  FTo beats FCC, FCC beats BFCC.
+	(DOLIST (ELT FTO-PATHNAMES)
+	  (SETQ FCC-PATHNAMES (DELQ ELT FCC-PATHNAMES))
+	  (SETQ BFCC-PATHNAMES (DELQ ELT BFCC-PATHNAMES)))
+	(DOLIST (ELT FCC-PATHNAMES)
+	  (SETQ BFCC-PATHNAMES (DELQ ELT BFCC-PATHNAMES)))
+	(SETQ FCC-NAMES (MAPCAR 'STRING FCC-PATHNAMES)
+	      FTO-NAMES (MAPCAR 'STRING FTO-PATHNAMES)
+	      BFCC-NAMES (MAPCAR 'STRING BFCC-PATHNAMES))
+	;; Fill in the defaults in the pathnames before composing message to go out.
+	(PUTPROP PLIST FCC-NAMES :FCC)
+	(PUTPROP PLIST FTO-NAMES :FTO)
+	(PUTPROP PLIST BFCC-NAMES :BFCC)
+	(WHEN FTO-PATHNAMES
+	  (LOOP FOR PATHNAME IN FTO-PATHNAMES
+		WITH MSG = (CONSTRUCT-FCC-MSG PLIST *DRAFT-TEXT-INTERVAL*)
+		AS BUFFER = (GET-ZMAIL-BUFFER-FROM-PATHNAME PATHNAME T)
+		DO (SEND BUFFER :ADD-MSG MSG)
+		(IF (EQ BUFFER *ZMAIL-BUFFER*)
+		    (SEND *SUMMARY-WINDOW* :NEED-FULL-REDISPLAY))))
+	(WHEN FCC-PATHNAMES
+	  (LOOP FOR PATHNAME IN FCC-PATHNAMES
+		WITH MSG = (CONSTRUCT-FCC-MSG PLIST *DRAFT-TEXT-INTERVAL*)
+		AS BUFFER = (GET-ZMAIL-BUFFER-FROM-PATHNAME PATHNAME T)
+		DO (SEND BUFFER :ADD-MSG MSG)
+		(IF (EQ BUFFER *ZMAIL-BUFFER*)
+		    (SEND *SUMMARY-WINDOW* :NEED-FULL-REDISPLAY))))
+	(WHEN BFCC-PATHNAMES
+	  (LOOP FOR PATHNAME IN BFCC-PATHNAMES
+		WITH MSG = (CONSTRUCT-FCC-MSG PLIST *DRAFT-TEXT-INTERVAL* T)
+		AS BUFFER = (GET-ZMAIL-BUFFER-FROM-PATHNAME PATHNAME T)
+		DO (SEND BUFFER :ADD-MSG MSG)
+		(IF (EQ BUFFER *ZMAIL-BUFFER*)
+		    (SEND *SUMMARY-WINDOW* :NEED-FULL-REDISPLAY))))
+	(FORMAT QUERY-IO "~&Message moved to buffer~P "
+		(+ (LENGTH FTO-PATHNAMES)
+		   (LENGTH FCC-PATHNAMES)
+		   (LENGTH BFCC-PATHNAMES)))
+	(FORMAT:PRINT-LIST
+	  QUERY-IO "~A"
+	  (MAPCAR 'FUNCALL (APPEND FTO-PATHNAMES FCC-PATHNAMES BFCC-PATHNAMES)
+		  (CIRCULAR-LIST :STRING-FOR-EDITOR))))))
+  (CONDITION-CASE (ERROR)
+      (FUNCALL *MAIL-SENDING-MODE* PLIST *DRAFT-TEXT-INTERVAL* *DEFAULT-SEND-TEMPLATE*)
+    (MAIL-ERROR
+      (BARF ERROR)))
+  (SETF (DRAFT-MSG-SENT-P *DRAFT-MSG*) T)
+  (SETF (DRAFT-MSG-SUMMARY-STRING-TICK *DRAFT-MSG*) -1)
+  (DOLIST (MSG (DRAFT-MSG-MSGS-BEING-REPLIED-TO *DRAFT-MSG*))	;Mark if it was a reply
+    (MSG-PUT MSG T 'ANSWERED))
+  (DOLIST (MSG (DRAFT-MSG-MSGS-BEING-FORWARDED *DRAFT-MSG*))
+    (MSG-PUT MSG T 'FORWARDED))
+  (FORMAT QUERY-IO "~&Message sent at ~\time\." (time:get-universal-time)))	;Erase any aborting message
+
+))
