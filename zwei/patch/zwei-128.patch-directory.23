@@ -1,0 +1,41 @@
+;;; -*- Mode:LISP; Package:USER; Base:10; Readtable:Common-Lisp; Patch-File:T -*-
+;;; Patch directory for ZWEI version 128
+;;; Written 22-Nov-88 18:59:32 by smh (Steve Haflich) at site Gigamos Cambridge
+;;; while running on Alex from band 1
+;;; with Experimental System 130.9, Experimental ZWEI 128.7, Experimental ZMail 75.0, Experimental Local-File 77.0, Experimental File-Server 26.0, Experimental Unix-Interface 16.0, Experimental Tape 27.0, Experimental Lambda-Diag 19.0, Microcode 1762, SDU Boot Tape 3.14, SDU ROM 102, 11/18 Falcon System Loaded.
+
+(:EXPERIMENTAL
+ ((0 "ZWEI Loaded" "keith" NIL 2804015539)
+  (1 "New Meta-X UnFASL File command.  SI:UNFASL-FILE on selected .qfasl file,
+put output into buffer." "keith" NIL 2804283053)
+  (2 "Kill-Or-Save-Buffers improvements:
+
+ 1. Expanded window size (now takes up most of the screen for easier
+viewing) -saz
+
+ 2. COMPILE option offered for any LISP syntax buffer. -keith
+
+ 3. Takes numeric arg (16, or Control-U Control-U), means initially mark
+all buffers to be killed. -saz
+
+ 4. Display dots (. . .) so user can follow line from pathname to check
+boxes. -keith+saz" "keith" NIL 2804534278)
+  (3 "Zwei's Meta-X Kill Buffer now respects the work done by Meta-X Not Modified.
+
+(The user is no longer warned that the \"Buffer ~A has been modified\" and asked
+to \"save it first?\" if user found a way to make (send buffer :modified-p)
+return NIL.)" "saz" NIL 2804630221)
+  (4 "Fixed bogus max number of lines calculaton which blew up
+in windows with non-default fonts." "smh" NIL 2804796203)
+  (5 "When you SAVE-BUFFER for a file belonging to any system with the
+:CTS-CONTROLLED attribitute, and if you haven't inserted at least
+one CTS comment, ZWEI will now remind you to do so.  Enjoy!" "smh" NIL 2804799734)
+  (6 "Introducing new Zwei variable *inhibit-explanation-of-completion*,
+which, when non-nil, reduces HELP typeout from Zwei minibuffers to the
+statement that you are typing in a minibuffer, and the possible command
+completions (all mouse-sensitive) of what you have typed so far. " "saz" NIL 2804874608)
+  (7 "Cleaned CTS reminder feature in SAVE-BUFFER.
+Also added a change-logging facility which is not yet turned on and
+which therefore shouldn't bother anyone." "smh" NIL 2804901107)
+  (8 "Zwei support for cross compiling a DEFAFUN from an editor buffer." "smh" NIL 2805235079)
+  ))

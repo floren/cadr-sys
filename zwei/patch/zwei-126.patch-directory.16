@@ -1,0 +1,69 @@
+;;; -*- Mode:LISP; Package:USER; Base:10; Readtable:Common-Lisp; Patch-File:T -*-
+;;; Patch directory for ZWEI version 126
+;;; Written 1-Sep-88 15:09:25 by keith (Keith Corbett) at site Gigamos Cambridge
+;;; while running on Breaking Glass from band 3
+;;; with Experimental System 126.66, Experimental ZWEI 126.2, Experimental ZMail 74.0, Experimental Local-File 76.0, Experimental File-Server 25.0, Experimental Unix-Interface 14.0, Experimental Tape 25.1, Experimental Lambda-Diag 18.0, microcode 1762, SDU Boot Tape 3.14, SDU ROM 103, Lambda/Falcon Development System.
+
+(:EXPERIMENTAL
+ ((0 "ZWEI Loaded" "keith" NIL)
+  (1 "DIRED-PATHNAME-EQUAL doesn't blow up on arguments that aren't pathnames.
+Also, it coerces strings into pathnames." "saz" NIL)
+  (2 "DIRED.LISP modified extensively -- here are the major changes:
+
+DIRED-PATHNAME-EQUAL accepts more types of arguments;
+COM-DIRED-SUBDIRECTORY has added functionality for 
+  inserting and removing subdirectory contents from a 
+  Dired display;
+New command `>' introduced, which moves cursor to 
+  most recent version of current file;
+HELP documentation updated and reformatted 
+  so as to arrive in semantic screenfuls;
+DIRED-PROCESS-FILES now makes sure that it has
+  a file to process before doing anything.
+  
+---saz" "saz" NIL)
+  (3 "Fix logic in ED and ZWEI:EDIT-THING.  Prevents an error in cold load
+stream caused by datatype error in STRING-EQUAL.
+
+  - Keith and SAZ" "keith" NIL 2797883598)
+  (4 "Zwei now implements a new alist mechanism for remembering
+user-defined keyboard macros.  Upon completion of a keyboard
+macro at any macro level, via Meta-X End Keyboard Macro or
+its equivalent, control-x ) , the user is now asked to supply
+a name for the macro.  If they wish to leave it unnamed
+(\"temporary\"), typing a carraige return will cause Zwei to
+generate a name using (gensym).  This query includes a HELP
+keystroke which displays all previously defined macros' names
+(mouse-sensitively).  If the user clicks or spells out an
+existing name, Zwei asks if it should replace the existing
+definition.  If the user says no, then Zwei reprompts.  When
+a name has been settled upon, both it and the array
+containing the macro keystrokes are pushed onto
+ZWEI:MACRO-ALIST as a new element.
+
+Meta-X View Keyboard Macro now looks up macros in
+ZWEI:MACRO-ALIST, using the same (mouse sensitive) HELP key
+display as the query sequence which appears when finishing
+macro definitions.
+
+One of the advantages of this scheme is that through
+judicious use of init files, ZWEI:MACRO-ALIST and Meta-X
+Install Macro one can now easily use one's favorite macros
+across cold boots.
+
+Thanks to Keith for many useful suggestions and improvements." "saz" NIL 2797959749)
+  (5 "More macro fixups -- among other things, this patch corrects
+misleading macro installation and deinstallation messages. 
+
+saz" "saz" NIL 2797970514)
+  (6 "User is now informed of new macro's name, along with the sentence,
+\"Use Meta-X Install Macro to associate a macro with a key.\"
+
+saz" "saz" NIL 2797973325)
+  (7 "Meta-X View Keyboard Macro now prints out a readable message
+upon encountering embedded keyboard macros (macros within 
+macros) instead of generating an error.
+
+saz" "saz" NIL 2797974394)
+  (8 NIL "keith" NIL 2798132964)
+  ))

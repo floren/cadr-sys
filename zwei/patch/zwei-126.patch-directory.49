@@ -1,0 +1,203 @@
+;;; -*- Mode:LISP; Package:USER; Base:10; Readtable:Common-Lisp; Patch-File:T -*-
+;;; Patch directory for ZWEI version 126
+;;; Written 18-Oct-88 15:19:05 by keith (Keith Corbett) at site Gigamos Cambridge
+;;; while running on Breaking Glass from band 3
+;;; with Experimental System 126.111, Experimental ZWEI 126.20, Experimental ZMail 74.9, Experimental Local-File 76.0, Experimental File-Server 25.0, Experimental Lambda-Diag 18.0, Experimental Unix-Interface 15.0, Experimental Tape 26.4, Experimental IMicro 20.0, microcode 1762, SDU Boot Tape 3.14, SDU ROM 103.
+
+(:EXPERIMENTAL
+ ((0 "ZWEI Loaded" "keith" NIL)
+  (1 "DIRED-PATHNAME-EQUAL doesn't blow up on arguments that aren't pathnames.
+Also, it coerces strings into pathnames." "saz" NIL)
+  (2 "DIRED.LISP modified extensively -- here are the major changes:
+
+DIRED-PATHNAME-EQUAL accepts more types of arguments;
+COM-DIRED-SUBDIRECTORY has added functionality for 
+  inserting and removing subdirectory contents from a 
+  Dired display;
+New command `>' introduced, which moves cursor to 
+  most recent version of current file;
+HELP documentation updated and reformatted 
+  so as to arrive in semantic screenfuls;
+DIRED-PROCESS-FILES now makes sure that it has
+  a file to process before doing anything.
+  
+---saz" "saz" NIL)
+  (3 "Fix logic in ED and ZWEI:EDIT-THING.  Prevents an error in cold load
+stream caused by datatype error in STRING-EQUAL.
+
+  - Keith and SAZ" "keith" NIL 2797883598)
+  (4 "Zwei now implements a new alist mechanism for remembering
+user-defined keyboard macros.  Upon completion of a keyboard
+macro at any macro level, via Meta-X End Keyboard Macro or
+its equivalent, control-x ) , the user is now asked to supply
+a name for the macro.  If they wish to leave it unnamed
+(\"temporary\"), typing a carraige return will cause Zwei to
+generate a name using (gensym).  This query includes a HELP
+keystroke which displays all previously defined macros' names
+(mouse-sensitively).  If the user clicks or spells out an
+existing name, Zwei asks if it should replace the existing
+definition.  If the user says no, then Zwei reprompts.  When
+a name has been settled upon, both it and the array
+containing the macro keystrokes are pushed onto
+ZWEI:MACRO-ALIST as a new element.
+
+Meta-X View Keyboard Macro now looks up macros in
+ZWEI:MACRO-ALIST, using the same (mouse sensitive) HELP key
+display as the query sequence which appears when finishing
+macro definitions.
+
+One of the advantages of this scheme is that through
+judicious use of init files, ZWEI:MACRO-ALIST and Meta-X
+Install Macro one can now easily use one's favorite macros
+across cold boots.
+
+Thanks to Keith for many useful suggestions and improvements." "saz" NIL 2797959749)
+  (5 "More macro fixups -- among other things, this patch corrects
+misleading macro installation and deinstallation messages. 
+
+saz" "saz" NIL 2797970514)
+  (6 "User is now informed of new macro's name, along with the sentence,
+\"Use Meta-X Install Macro to associate a macro with a key.\"
+
+saz" "saz" NIL 2797973325)
+  (7 "Meta-X View Keyboard Macro now prints out a readable message
+upon encountering embedded keyboard macros (macros within 
+macros) instead of generating an error.
+
+saz" "saz" NIL 2797974394)
+  (8 "A change to SAVE-BUFFER pertaining to the handling of saving problems.
+
+When a file appears to have changed behind the user's back, ZMacs says:
+
+When you last read or wrote FOO,
+it was... 
+but now it is... 
+Save it anyway?
+
+Well, sometimes we can get into a situation where the problem occurs
+every time we go to save a particular buffer.  So, now we allow the user
+to answer Y, N, or P for \"proceed\", which means, \"stop bothering me
+about this buffer\"." "keith" NIL 2798132964)
+  (9 "ZMacs' READ-BUFFER-NAME is supposed to support creation of a new buffer;
+but that feature didn't have a prayer of working, as implemented.  Now
+that works.  Also, improve logic and user messages generally." "keith" NIL 2798758754)
+  (10 "Refinement to READ-BUFFER-NAME: If DEFAULT arg is not a ZMacs buffer,
+set current pathname defaults from current buffer.  This is better than
+an arbitrary set of defaults, e.g. from previous buffer.  Does not
+affect any existing ZMacs commands -- just some that I'm building." "keith" NIL 2798861516)
+  (11 "Removes current buffer from completing-reader choice list of selectable
+buffers while a zwei:kill-buffer is done.  If user is killing off last
+buffer in existence, the mini-buffer \"Killing the current buffer, select
+which other buffer?\" prompt will have no (existing) default, and typing
+<Help> will provide no buffer names for mousing or typing. In this case,
+the user types <Return> and lets Zwei create a new buffer, which is then
+selected as the current buffer.
+
+Thanks to Keith for crucial assistance." "saz" NIL 2799952187)
+  (12 "To find out if given character was found in a list of delimeters,
+COMPLETE-STRING was getting around \"character lossage\" by doing 2 MEMQs,
+one on the character, and then on the INT-CHAR of the character.  Using
+(LISP:MEMBER char list :TEST 'CHAR-EQUAL) is simpler and slightly faster." "keith" NIL 2800304322)
+  (13 "Eliminate gratuitous use of ART-Q-LIST in ZMacs.  Change *FONT-STACK*
+within an interval stream to be an ART-16B (number) array.  Do FIND instead
+of MEMQing down ART-Q-LIST.
+
+I've tested this by opening editor streams on font-ified files with
+HACK-FONTS=T, and all looks well." "keith" NIL 2800371658)
+  (14 "Improved MAIL function to check type of the USER argument.  USER must be
+a string containing <known user>@<known host>, or else gives an
+informative error.  Averts the incomprehensible error message
+encountered as a result of passing in non-strings for USER." "saz" NIL 2800474417)
+  (15 "Use new SOURCE-COMPARE escape character handling to avoid extreme
+lossage caused by font changes in Meta-X Source Compare and Source
+Compare Changes.  (Making the same change to Source Compare Merge might
+break it even worse.)" "keith" NIL 2801256018)
+  (16 "Restore (mail t) capability for continuing bug messages; this \"feature\"
+was removed by a previous patch to ZWEI:MAIL..." "saz" NIL 2801505804)
+  (17 "\"(ed) or (ed nil) simply enters the editor, leaving you in the same state
+as the last time you were in the editor.\"   ---CLtL, p. 442.  
+
+Previously, both invocations read in the system file TYPES.LISP and moved
+*point* to the deftype for NIL, in that file." "saz" NIL 2801514518)
+  (18 "With a numeric argument, ZWEI:COM-SOURCE-COMPARE-CHANGES now
+performs a source compare on the current buffer with the
+latest version of its associated file found on disk, without query." "SAZ" NIL 2801766051)
+  (19 "Another optional arg to ZWEI:COMPILE-DEFUN-INTERNAL
+An explicit COMPILATION-ENVIRONMENT may be passed in.
+This is used when called to cross compile for the Falcon." "smh" NIL 2801850834)
+  (20 "Introducing new Zwei REFIND FILE commands:
+
+Control-Meta-X Refind File
+
+  Updates a buffer to contain current file contents, based
+  on modification, filename specification, and disk status
+  information.  Queries the user in most cases, unless nu-
+  meric argument is specified, in which case no querying
+  takes place; each buffer is updated w.r.t. disk if needed.
+  For Dired buffers, update the display to represent current
+  status of the Dired buffer's file specification.
+  (see Specification for more details).
+
+Control-Meta-X Refind All Files
+
+  Updates all buffers as above; with numeric argument, omits
+  queries.
+
+Control-Meta-X Refind Files In System
+
+  Updates all buffers in a specified system.
+
+Control-Meta-X Refind Tag Table Files
+
+  Update all buffers in a specified tag table.
+
+Control-Meta-X Refind Files For Modified Buffers
+
+  Update every buffer which has been modified.
+
+Control-Meta-X Refind Files For Unmodified Buffers
+
+  Update every buffer which has not been modified.
+
+Control-Meta-X Refind Specified Files
+
+  Update all buffers selected by user from a pop-up
+  choice menu containing all file-associated buffers.
+
+Control-Meta-X Revert All Buffers
+
+  Sends a :revert message to all active buffers.
+
+Control-Meta-X Revert Buffer If Needed
+
+  Sends a :revert message to the current buffer if
+  it has been modified.
+
+Control-Meta-X Revert All Buffers If Needed
+
+  Sends :revert messages to all modified, active
+  buffers.
+
+
+
+Also, this patch contains numerous modularizations 
+and corrections to the Source Compare commands'
+interface, along with some new functions, used
+in implementing the Refind commands:
+
+  WITH-VERSION-AND-MODIFICATION-INFO
+  FQUERY-UNLESS-ARG
+  REPLACE-CURRENT-BUFFER-WITH-FILE
+
+(See file itself for more details on these.)
+
+---saz
+
+ps: The new Refind commands have been extensively tested,
+but will no doubt be called upon to operate in all sorts
+of anomalous disk/machine/user environments.  Please re-
+port carefully all pertinent details of any incorrect or
+undesirable behavior witnessed as a result of using these 
+commands to BUG-LISPM in the usual fashion.	      -ds" "saz" NIL 2802054445)
+  (21 NIL "keith" NIL 2802194344)
+  ))

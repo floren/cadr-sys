@@ -1,0 +1,828 @@
+;;; -*- Mode:LISP; Package:(SPELL USE GLOBAL); Lowercase:T; Base:8; Readtable:ZL -*-
+
+;;; Copyright LISP Machine, Inc. 1985
+;;;   See filename "Copyright.Text" for
+;;; licensing and release information.
+
+;;; Pace wrote this lisp code using his C coded version as a guide, which was in turn
+;;; inspired by, and with huerstics lifted from, the PDP-10 ITS version written in
+;;; MIDAS. My only change was to take the I from ISPELL. 1/17/85 14:34:00 -gjc
+
+
+(defun SPELL-word (word &optional (start 0) (end (string-length word)))
+  "Main interface to dictionary.
+The return value can be:
+ The input word:	The word was found either in the system dictionary or
+			your private dictionary.
+ Another string:	This string, derived by stripping suffixes from the original
+			word, was found in the system dictionary.
+ A list of strings:	These strings are words that are /"close/" to the original
+			word.  They are already capitalized like the original word.
+ NIL:			Neither the original or any near misses could be found."
+  (cond ((word-ok-p word start end))
+	(t (make-possibilities (substring word start end)))))
+
+(deff zwei:spell-word 'spell-word)
+
+(defconst *dictionary-source-file* "sys:zwei;spell-dictionary.text")
+
+;there are about 15,000 words in the dictionary
+(defconst *rough-size* 20000.)
+
+;George says the built in hash tables are no good, so I'll do it myself
+
+;the dictionary is an art-q array.  each entry is 3 Qs.
+;   0 flags ... fixnum
+;   1 word ... string-pointer
+;   2 next
+
+(defvar *dictionary* nil)
+
+(defconst *qs-per-entry* 3)
+
+(defmacro de-word (n)
+  `(aref *dictionary* (1+ ,n)))
+
+(defmacro de-next (n)
+  `(aref *dictionary* (+ ,n 2)))
+
+(defmacro de-flags (n)
+  `(aref *dictionary* ,n))
+
+
+(defun describe-dictionary ()
+  (do ((total-words 0 (1+ total-words))
+       (total-word-size 0 (+ total-word-size (string-length word)))
+       (word)
+       (j 0 (1+ j))
+       (n (// (array-dimension *dictionary* 0) *qs-per-entry*)))
+      ((or (= j n) (null (setq word (de-word (* j *qs-per-entry*)))))
+       (format t "~&~S has ~D words total, ~D bytes, ~D bytes per word"
+	       *dictionary*
+	       total-words total-word-size  (// total-word-size total-words))
+       word)))
+
+
+(eval-when (eval compile load)
+
+(defconst *all-flags* '(#/V #/N #/X #/H #/Y #/G #/J #/D #/T #/R #/Z #/S #/P #/M))
+
+)
+
+(defmacro make-flag-accessors ()
+  `(progn 'compile
+	  ,@(loop for x in *all-flags*
+		  for i from 0 by 1
+		  collect `(defmacro ,(intern (string-append "DE-" x "-FLAG")) (n)
+			     `(ldb (byte 1 ,,i) (aref *dictionary* ,n))))))
+
+(make-flag-accessors)
+
+(defmacro de-used (n)
+  `(ldb (byte 1 ,(length *all-flags*)) (aref *dictionary* ,n)))
+
+(defun set-flag (n flag &optional (value 1))
+  (setq flag (int-char flag))
+  (let ((pos (find-position-in-list flag *all-flags*)))
+    (if (null pos)
+	(ferror nil "bad flag ~s" flag))
+    (setf (de-flags n) (dpb value (byte 1 pos) (de-flags n)))))
+
+(defun decode-flags (flags)
+  (when flags
+    (dotimes (i (length *all-flags*))
+      (if (ldb-test (byte 1 i) flags)
+	  (format t "~a " (nth i *all-flags*))))
+    (if (ldb-test (byte 1 (length *all-flags*)) flags)
+	(format t "USED "))))
+
+
+
+
+(defvar SPELL-area)
+
+(defvar *word-list* nil)
+(defvar *number-of-words* 0)
+
+(defun set-spell-area-size (words)
+  (setf (si:%area-region-size spell-area) words))
+
+;this uses 212K
+(defun make-word-list ()
+  (if (not (boundp 'SPELL-area))
+      (setq SPELL-area (make-area :name 'SPELL-area
+				   :region-size #o40000
+				   :room t
+				   ;; swap recommendations are high to
+				   ;; improve searching for misspelled
+				   ;; words.
+				   :swap-recommendations 15.)))
+  (setq *word-list* nil)
+  (setq *number-of-words* 0)
+  (with-open-file (in *dictionary-source-file*)
+    (let ((default-cons-area SPELL-area))
+      (do ((word (send in :line-in) (send in :line-in))
+	   (val nil nil)
+	   first-flag)
+	  ((or (null word) (= (string-length word) 0)))
+	(cond ((= #/; (aref word 0)))
+	      ('else
+	       (incf *number-of-words*)
+	       (when (setq first-flag (string-search #// word))
+		 (do ((i first-flag (+ i 2))
+		      (end (string-length word)))
+		     ((>= i end))
+		   (push (int-char (aref word (1+ i))) val)))
+	       (push (substring word 0 first-flag SPELL-area) val)
+	       (push val *word-list*)))))))
+
+(defvar *rehash-list* nil)
+
+(defun make-dictionary (&aux dict-size)
+  (setq *rehash-list* nil)
+  (setq dict-size (* *number-of-words* *qs-per-entry*))
+  (if (null *dictionary*)
+      (setq *dictionary* (make-array dict-size
+				     :area SPELL-area)))
+  (fillarray *dictionary* nil)
+  (dolist (w *word-list*)
+    (let ((word-number (* *qs-per-entry* (SPELL-hash (car w)))))
+      (cond ((null (de-word word-number))
+	     (install-word word-number w))
+	    (t
+	     (push w *rehash-list*)))))
+  (dolist (w *rehash-list*)
+    (let ((word-number (* *qs-per-entry* (SPELL-hash (car w))))
+	  hole-number)
+      ;find the last word in the chain
+      (do ()
+	  ((= (de-next word-number) -1))
+	(setq word-number (de-next word-number)))
+      ;find a hole
+      (setq hole-number word-number)
+      (do ()
+	  ((null (de-word hole-number)))
+	(incf hole-number *qs-per-entry*)
+	(if (>= hole-number dict-size)
+	    (setq hole-number 0)))
+      (install-word hole-number w)
+      (setf (de-next word-number) hole-number))))
+	   
+(defun install-word (word-number word-info)
+  (setf (de-word word-number) (car word-info))
+  (setf (de-flags word-number) 0)
+  (dolist (f (cdr word-info))
+    (set-flag word-number f))
+  (setf (de-used word-number) 1)
+  (setf (de-next word-number) -1))
+
+(defun spell-hash (s &optional (start 0) (end (string-length s)))
+  (cond ((and (not (zerop start))
+	      (<= %microcode-version-number 1661.))
+	 (mod (sxhash (substring s start end)) *number-of-words*))
+	(t
+	 (mod (si:%sxhash-substring s #o337 start end) *number-of-words*))))
+
+(defun print-dictionary ()
+  (dotimes (x *number-of-words*)
+    (let ((word-number (* x 3)))
+      (format t "~&~20a " (de-word word-number))
+      (format t "~a " (de-next word-number))
+      (decode-flags (de-flags word-number)))))
+
+(defun look-up-all-words ()
+  (with-open-file (in *dictionary-source-file*)
+    (do ((word (send in :line-in) (send in :line-in)))
+	((or (null word) (zerop (string-length word))))
+      
+      (cond ((= #/; (aref word 0)))
+	    ((word-in-dictionary-p (substring word 0 (string-search #// word))))
+	    ('else
+	     (ferror nil "can't find ~s" word))))))
+
+
+(defun load-dictionary (&optional (no-query-p t))
+  (cond ((or no-query-p
+	     (y-or-n-p "Load the dictionary? "))
+	 (make-word-list)
+	 (make-dictionary)
+	 )))
+
+(add-initialization "Load dictionary"
+		    '(load-dictionary si:*in-cold-load-p*)	;Don't bother asking if in cold load
+		    '(once))
+
+
+(defun word-in-dictionary-p (s &optional (start 0) (end (string-length s)))
+  (do ((word-number (* *qs-per-entry* (SPELL-hash s start end)) (de-next word-number)))
+      ((= word-number -1) nil)
+;    (if (string-equal s (de-word word-number) :start1 start :end1 end)
+;	 (return word-number))
+    (let ((len (- end start)))
+      (cond ((and (= len (string-length (de-word word-number)))
+		  (%string-equal s start (de-word word-number) 0 len))
+	     (return word-number))))
+    ))
+
+(defvar saved-word-array nil)
+
+(defun get-word-array (&optional (saved-place 'saved-word-array))
+  (let ((word (symbol-value saved-place)))
+    (cond ((or (null word) (null (%store-conditional (locf (symbol-value saved-place)) word nil)))
+	   (make-array 50.
+		       :type :art-string
+		       :leader-list '(0)
+		       ))
+	  (t
+	   (store-array-leader 0 word 0)
+	   word))))
+
+(defun free-word-array (word &optional (saved-place 'saved-word-array))
+  (setf (symbol-value saved-place) word))
+
+;returns NIL if not found
+;the word if it is in the dictionary
+;the root word if that was found by removing suffixes
+(defun word-ok-p (word &optional (start 0) (end (string-length word)) &aux root)
+  (cond ((word-in-dictionary-p word start end)
+	 word)
+	(t
+	 (let ((word-length (- (or end (string-length word)) start)))
+	   (cond ((<= word-length 1)
+		  word)
+		 ((< word-length 4)
+		  nil				;later look up in user's list here
+		  )
+		 (t
+		  (let ((new-word (get-word-array)))
+		    (copy-array-portion word start end new-word 0 word-length)
+		    (store-array-leader word-length new-word 0)
+		    (let ((l (aref new-word (1- word-length))))
+		      (setq root
+			    (cond ((char-equal #/D l) (SPELL-d-ending new-word word-length))
+				  ((char-equal #/T l) (SPELL-t-ending new-word word-length))
+				  ((char-equal #/R l) (SPELL-r-ending new-word word-length))
+				  ((char-equal #/G l) (SPELL-g-ending new-word word-length))
+				  ((char-equal #/H l) (SPELL-h-ending new-word word-length))
+				  ((char-equal #/S l) (SPELL-s-ending new-word word-length))
+				  ((char-equal #/N l) (SPELL-n-ending new-word word-length))
+				  ((char-equal #/E l) (SPELL-e-ending new-word word-length))
+				  ((char-equal #/Y l) (SPELL-y-ending new-word word-length))
+				  (t nil))))
+		    (free-word-array new-word)
+		    (cond ((null root)
+			   nil			;look up in user's list
+			   )
+			  (t
+			   root)))
+		  ))))))
+
+(defun SPELL-g-ending (word word-length)
+  (block nil
+    ;;word must end in ING
+    (if (not (char-equal (aref word (- word-length 3)) #/I)) (return nil))
+    (if (not (char-equal (aref word (- word-length 2)) #/N)) (return nil))
+    ;;we already know the last letter is G
+	
+    ;;try to change the I to E, like CREATING
+    (aset #/E word (- word-length 3))
+    (store-array-leader (- word-length 2) word 0)
+	
+    (if (< (string-length word) 2)
+	(return nil))
+	
+    (let ((word-number (word-in-dictionary-p word)))
+      (when word-number
+	(return (and (not (zerop (de-g-flag word-number))) (de-word word-number)))))
+	
+    (store-array-leader (- word-length 3) word 0)
+	
+    (if (< (string-length word) 2)
+	(return nil))
+	
+    ;; this stops CREATEING
+    (if (char-equal (aref word (- word-length 4)) #/E)
+	(return nil))
+	
+    (let ((word-number (word-in-dictionary-p word)))
+      (when word-number
+	(return (and (not (zerop (de-g-flag word-number))) (de-word word-number)))))
+
+    nil))
+
+(defun SPELL-d-ending (word word-length)
+  (block nil
+    ;;word must end in ED
+    (if (not (char-equal (aref word (- word-length 2)) #/E)) (return nil))
+    ;;we already know the last letter is D
+
+    ;;kill the D
+    (store-array-leader (- word-length 1) word 0)
+
+    ;;like CREATED
+    (let ((word-number (word-in-dictionary-p word)))
+      (when word-number
+	(return (and (not (zerop (de-d-flag word-number))) (de-word word-number)))))
+
+    (if (< (string-length word) 3)
+	(return nil))
+
+    ;;kill ED
+    (store-array-leader (- word-length 2) word 0)
+
+    (cond ((and (char-equal (aref word (- word-length 3)) #/I)
+		(not (vowelp (aref word (- word-length 4)))))
+	   (aset #/Y word (- word-length 3))
+	   (let ((word-number (word-in-dictionary-p word)))
+	     (when word-number
+	       (return (and (not (zerop (de-d-flag word-number))) (de-word word-number)))))))
+
+    (cond ((or (and (not (char-equal (aref word (- word-length 3)) #/E))
+		    (not (char-equal (aref word (- word-length 3)) #/Y)))
+	       (and (char-equal (aref word (- word-length 3)) #/Y)
+		    (vowelp (aref word (- word-length 4)))))
+	   (let ((word-number (word-in-dictionary-p word)))
+	     (when word-number
+	       (return (and (not (zerop (de-d-flag word-number))) (de-word word-number)))))))
+
+    nil))
+
+(defun SPELL-t-ending (word word-length)
+  (block nil
+    ;;word must end in EST
+    (if (not (char-equal (aref word (- word-length 3)) #/E)) (return nil))
+    (if (not (char-equal (aref word (- word-length 2)) #/S)) (return nil))
+    ;;we already know the last letter is T
+
+    ;;cut off ST
+    (store-array-leader (- word-length 2) word 0)
+
+    (let ((word-number (word-in-dictionary-p word)))
+      (when word-number
+	(return (and (not (zerop (de-t-flag word-number))) (de-word word-number)))))
+
+    (if (< (string-length word) 3)
+	(return nil))
+
+    ;;cut off EST
+    (store-array-leader (- word-length 3) word 0)
+
+    (cond ((and (char-equal (aref word (- word-length 4)) #/I)
+		(not (vowelp (aref word (- word-length 5)))))
+	   (aset #/Y word (- word-length 4))
+	   (let ((word-number (word-in-dictionary-p word)))
+	     (when word-number
+	       (return (and (not (zerop (de-t-flag word-number))) (de-word word-number)))))))
+
+    (cond ((or (and (not (char-equal (aref word (- word-length 4)) #/E))
+		    (not (char-equal (aref word (- word-length 4)) #/Y)))
+	       (and (char-equal (aref word (- word-length 4)) #/Y)
+		    (vowelp (aref word (- word-length 5)))))
+	   (let ((word-number (word-in-dictionary-p word)))
+	     (when word-number
+	       (return (and (not (zerop (de-t-flag word-number))) (de-word word-number)))))))
+
+    nil))
+
+(defun SPELL-r-ending (word word-length)
+  (block nil
+    ;;must end in ER
+    (if (not (char-equal (aref word (- word-length 2)) #/E)) (return nil))
+    ;;we already know the last letter is R
+
+    ;;kill R
+    (store-array-leader (- word-length 1) word 0)
+
+    (let ((word-number (word-in-dictionary-p word)))
+      (when word-number
+	(return (and (not (zerop (de-r-flag word-number))) (de-word word-number)))))
+
+    (if (< (string-length word) 3)
+	(return nil))
+
+    ;;kill ER
+    (store-array-leader (- word-length 2) word 0)
+
+    (cond ((and (char-equal (aref word (- word-length 3)) #/I)
+		(not (vowelp (aref word (- word-length 4)))))
+	   (aset #/Y word (- word-length 3))
+	   (let ((word-number (word-in-dictionary-p word)))
+	     (when word-number
+	       (return (and (not (zerop (de-r-flag word-number))) (de-word word-number)))))))
+
+    (cond ((or (and (not (char-equal (aref word (- word-length 3)) #/E))
+		    (not (char-equal (aref word (- word-length 3)) #/Y)))
+	       (and (char-equal (aref word (- word-length 3)) #/Y)
+		    (vowelp (aref word (- word-length 4)))))
+	   (let ((word-number (word-in-dictionary-p word)))
+	     (when word-number
+	       (return (and (not (zerop (de-r-flag word-number))) (de-word word-number)))))))
+
+    nil))
+
+
+(defun SPELL-h-ending (word word-length)
+  (block nil
+    ;;must end in TH
+    (if (not (char-equal (aref word (- word-length 2)) #/T)) (return nil))
+
+    ;;kill TH
+    (store-array-leader (- word-length 2) word 0)
+
+    (cond ((and (char-equal (aref word (- word-length 4)) #/I)
+		(char-equal (aref word (- word-length 3)) #/E))
+	   (aset #/Y word (- word-length 4))
+	   (store-array-leader (- word-length 3) word 0)))
+
+    (let ((word-number (word-in-dictionary-p word)))
+      (when word-number
+	(return (and (not (zerop (de-h-flag word-number))) (de-word word-number)))))
+
+    nil))
+
+
+;
+; check for flags: X, J, Z, S, P, M
+;
+; X	-ions or -ications or -ens
+; J	-ings
+; Z	-ers or -iers
+; S	-ies or -es or -s
+; P	-iness or -ness
+; M	-'S
+;
+
+(defun SPELL-s-ending (word word-length)
+  (block nil
+    (store-array-leader (- word-length 1) word 0)
+
+    (cond ((or (not (string-search (aref word (- word-length 2)) "SXZHY"))
+	       (and (> word-length 2)
+		    (char-equal (aref word (- word-length 2)) #/Y)
+		    (vowelp (aref word (- word-length 3)))))
+	   (let ((word-number (word-in-dictionary-p word)))
+	     (when word-number
+	       (return (and (not (zerop (de-s-flag word-number))) (de-word word-number)))))))
+
+    (let ((l (aref word (- word-length 2))))
+      (cond ((char-equal l #/N)		;for X flag
+	     (cond ((and (>= word-length 4)
+			 (char-equal (aref word (- word-length 4)) #/I)
+			 (char-equal (aref word (- word-length 3)) #/O))
+		    ;;word ended in xxxIONS ... replace with xxxE
+		    (aset #/E word (- word-length 4))
+		    (store-array-leader (- word-length 3) word 0)
+		    (let ((word-number (word-in-dictionary-p word)))
+		      (when word-number
+			(return (and (not (zerop (de-x-flag word-number)))
+				     (de-word word-number)))))))
+
+	     (cond ((and (>= word-length 8)
+			 (char-equal (aref word (- word-length 8)) #/I)
+			 (char-equal (aref word (- word-length 7)) #/C)
+			 (char-equal (aref word (- word-length 6)) #/A)
+			 (char-equal (aref word (- word-length 5)) #/T)
+			 (char-equal (aref word (- word-length 4)) #/E))
+		    (aset #/Y word (- word-length 8))
+		    (store-array-leader (- word-length 7) word 0)
+		    
+		    (let ((word-number (word-in-dictionary-p word)))
+		      (if (and word-number (not (zerop (de-x-flag word-number))))
+			  (return (de-word word-number))
+			(return nil)))))
+	     
+	     (cond ((and (>= word-length 4)
+			 (char-equal (aref word (- word-length 3)) #/E)
+			 (not (char-equal (aref word (- word-length 4)) #/E))
+			 (not (char-equal (aref word (- word-length 4)) #/Y)))
+		    (store-array-leader (- word-length 3) word 0)
+		    (let ((word-number (word-in-dictionary-p word)))
+		      (if (and word-number (not (zerop (de-x-flag word-number))))
+			  (return (de-word word-number))
+			(return nil)))))
+
+	     (return nil))
+
+	    ((and (>= word-length 4)
+		  (char-equal l #/G))		;J flag
+	     (if (not (char-equal (aref word (- word-length 4)) #/I)) (return nil))
+	     (if (not (char-equal (aref word (- word-length 3)) #/N)) (return nil))
+	     ;;word ended in INGS ... remove INGS, put on E
+	     (aset #/E word (- word-length 4))
+	     (store-array-leader (- word-length 3) word 0)
+	     (let ((word-number (word-in-dictionary-p word)))
+	       (when word-number
+		 (return (and (not (zerop (de-j-flag word-number))) (de-word word-number)))))
+
+	     ;;now remove the E
+	     (store-array-leader (- word-length 4) word 0)
+	     (if (and (>= word-length 5)
+		      (char-equal (aref word (- word-length 5)) #/E))
+		 (return nil))
+
+	     (let ((word-number (word-in-dictionary-p word)))
+	       (when word-number
+		 (return (and (not (zerop (de-j-flag word-number))) (de-word word-number)))))
+
+	     (return nil))
+
+	    ((char-equal l #/R)		;Z flag
+	     ;;must end in ERS
+	     (if (not (char-equal (aref word (- word-length 3)) #/E)) (return nil))
+
+	     ;;remove RS
+	     (store-array-leader (- word-length 2) word 0)
+
+	     (let ((word-number (word-in-dictionary-p word)))
+	       (when word-number
+		 (return (and (not (zerop (de-z-flag word-number))) (de-word word-number)))))
+
+	     (cond ((and (>= word-length 4)
+			 (char-equal (aref word (- word-length 4)) #/I))
+		    ;;word ended in IERS ... remove and add Y
+		    (aset #/Y word (- word-length 4))
+		    (store-array-leader (- word-length 3) word 0)
+		    (let ((word-number (word-in-dictionary-p word)))
+		      (when word-number
+			(return (and (not (zerop (de-z-flag word-number)))
+				     (de-word word-number)))))
+		    (return nil)))
+
+	     ;;now chop at E from ...ERS
+	     (store-array-leader (- word-length 3) word 0)
+
+	     (let ((word-number (word-in-dictionary-p word)))
+	       (when word-number
+		 (return (and (not (zerop (de-z-flag word-number))) (de-word word-number)))))
+
+	     (return nil))
+
+	    ((char-equal l #/E)		;S flag (except simple adding of S
+	     ;;word ends in ES ... remove it
+	     (store-array-leader (- word-length 2) word 0)
+	     (let ((word-number (word-in-dictionary-p word)))
+	       (when word-number
+		 (return (and (not (zerop (de-s-flag word-number))) (de-word word-number)))))
+
+	     (cond ((char-equal (aref word (- word-length 3)) #/I)
+		    ;;ok, we had IES ... remove, add Y
+		    (aset #/Y word (- word-length 3))
+		    (let ((word-number (word-in-dictionary-p word)))
+		      (when word-number
+			(return (and (not (zerop (de-s-flag word-number)))
+				     (de-word word-number)))))))
+
+	     (return nil))
+
+	    ((char-equal l #/S)		;P flag
+	     (if (not (char-equal (aref word (- word-length 4)) #/N)) (return nil))
+	     (if (not (char-equal (aref word (- word-length 3)) #/E)) (return nil))
+	     ;;ok, we had NESS ... kill it
+	     (store-array-leader (- word-length 4) word 0)
+	     (cond ((or (not (char-equal (aref word (- word-length 5)) #/Y))
+			(vowelp (aref word (- word-length 6))))
+		    (let ((word-number (word-in-dictionary-p word)))
+		      (when word-number
+			(return (and (not (zerop (de-p-flag word-number)))
+				     (de-word word-number)))))))
+	     (cond ((char-equal (aref word (- word-length 5)) #/I)
+		    (aset #/Y word (- word-length 5))
+		    (let ((word-number (word-in-dictionary-p word)))
+		      (when word-number
+			(return (and (not (zerop (de-p-flag word-number)))
+				     (de-word word-number)))))))
+
+	     (return nil))
+
+	    ((char-equal l #/')		;M flag ***
+	     (store-array-leader (- word-length 2) word 0)
+	     (return word))
+
+	    (t
+	     (return nil))))))
+
+
+(defun SPELL-n-ending (word word-length)
+  (block nil
+    (cond ((char-equal (aref word (- word-length 2)) #/E)
+	   ;;ended in EN
+	   (if (or (char-equal (aref word (- word-length 3)) #/E)
+		   (char-equal (aref word (- word-length 3)) #/Y))
+	       (return nil))
+	   (store-array-leader (- word-length 2) word 0)
+	   (let ((word-number (word-in-dictionary-p word)))
+	     (when word-number
+	       (return (and (not (zerop (de-n-flag word-number))) (de-word word-number)))))
+	   (return nil)))
+
+    (if (not (char-equal (aref word (- word-length 3)) #/I)) (return nil))
+    (if (not (char-equal (aref word (- word-length 2)) #/O)) (return nil))
+    ;;word ended in ION, replace with E
+    (aset #/E word (- word-length 3))
+    (store-array-leader (- word-length 2) word 0)
+
+    (let ((word-number (word-in-dictionary-p word)))
+      (when word-number
+	(return (and (not (zerop (de-n-flag word-number))) (de-word word-number)))))
+
+    (if (<= word-length 7) (return nil))
+    (if (not (char-equal (aref word (- word-length 7)) #/I)) (return nil))
+    (if (not (char-equal (aref word (- word-length 6)) #/C)) (return nil))
+    (if (not (char-equal (aref word (- word-length 5)) #/A)) (return nil))
+    (if (not (char-equal (aref word (- word-length 4)) #/T)) (return nil))
+    (if (not (char-equal (aref word (- word-length 3)) #/E)) (return nil))
+
+    ;;original word would have been ...ICATION
+
+    (aset #/Y word (- word-length 7))
+    (store-array-leader (- word-length 6) word 0)
+
+    (let ((word-number (word-in-dictionary-p word)))
+      (when word-number
+	(return (and (not (zerop (de-n-flag word-number))) (de-word word-number)))))
+
+    (return nil)))
+
+
+(defun SPELL-e-ending (word word-length)
+  (block nil
+    (if (not (char-equal (aref word (- word-length 3)) #/I)) (return nil))
+    (if (not (char-equal (aref word (- word-length 2)) #/V)) (return nil))
+    ;;ended in IVE ... change to E
+    (aset #/E word (- word-length 3))
+    (store-array-leader (- word-length 2) word 0)
+    (let ((word-number (word-in-dictionary-p word)))
+      (when word-number
+	(return (and (not (zerop (de-v-flag word-number))) (de-word word-number)))))
+
+    (if (char-equal (aref word (- word-length 4)) #/E) (return nil))
+
+    (store-array-leader (- word-length 3) word 0)
+
+    (let ((word-number (word-in-dictionary-p word)))
+      (when word-number
+	(return (and (not (zerop (de-v-flag word-number))) (de-word word-number)))))
+
+    (return nil)))
+
+
+(defun SPELL-y-ending (word word-length)
+  (block nil
+    (if (not (char-equal (aref word (- word-length 2)) #/L)) (return nil))
+    ;ends in LY, remove
+    (store-array-leader (- word-length 2) word 0)
+    (let ((word-number (word-in-dictionary-p word)))
+      (when word-number
+	(return (and (not (zerop (de-y-flag word-number))) (de-word word-number)))))
+
+    (return nil)))
+
+
+(defun vowelp (c)
+  (or (char-equal c #/A)
+      (char-equal c #/E)
+      (char-equal c #/I)
+      (char-equal c #/O)
+      (char-equal c #/U)))
+
+
+
+
+(defconst test-list '(("CREATE" "CREATIVE")
+		      ("PREVENT" "PREVENTIVE")
+		      ("CREATE" "CREATION")
+		      ("MULTIPLY" "MULTIPLICATION")
+		      ("FALL" "FALLEN")
+		      ("CREATE" "CREATIONS")
+		      ("MULTIPLY" "MULTIPLICATIONS")
+		      ("WEAKEN" "WEAKENS")
+		      ("TWENTY" "TWENTIETH")
+		      ("HUNDRED" "HUNDREDTH")
+		      ("QUICK" "QUICKLY")
+		      ("FILE" "FILING")
+		      ("CROSS" "CROSSING")
+		      ("FILE" "FILINGS")
+		      ("CROSS" "CROSSINGS")
+		      ("CREATE" "CREATED")
+		      ("IMPLY" "IMPLIED")
+		      ("CROSS" "CROSSED")
+		      ("CONVEY" "CONVEYED")
+		      ("LATE" "LATEST")
+		      ("DIRTY" "DIRTIEST")
+		      ("SMALL" "SMALLEST")
+		      ("GRAY" "GRAYEST")
+		      ("SKATE" "SKATER")
+		      ("MULTIPLY" "MULTIPLIER")
+		      ("BUILD" "BUILDER")
+		      ("CONVEY" "CONVEYER")
+		      ("SKATE" "SKATERS")
+		      ("MULTIPLY" "MULTIPLIERS")
+		      ("BUILD" "BUILDERS")
+		      ("SLAY" "SLAYERS")
+		      ("IMPLY" "IMPLIES")
+		      ("FIX" "FIXES")
+		      ("BAT" "BATS")
+		      ("CONVEY" "CONVEYS")
+		      ("CLOUDY" "CLOUDINESS")
+		      ("LATE" "LATENESS")
+		      ("GRAY" "GRAYNESS")
+		      ("DOG" "DOG'S")
+		      ))
+
+(defun run-tests ()
+  (dolist (x test-list)
+    (cond ((not (string-equal (car x) (word-ok-p (cadr x))))
+	   (format t "~&failed match ~s ~s" x (word-ok-p (cadr x)))))))
+
+(defvar *possibilities*)
+
+(defvar saved-word-for-possibilities nil)
+
+(defun make-possibilities (word)
+  (setq *possibilities* nil)
+  (let ((new-word (get-word-array 'saved-word-for-possibilities)))
+    (*catch 'enough
+      (wrong-letter word new-word)
+      (extra-letter word new-word)
+      (missing-letter word new-word)
+      (transposed-letter word new-word))
+    (free-word-array new-word 'saved-word-for-possibilities))
+  (uniq-word *possibilities*))			;bobp 11/21/86 - supress duplicates
+
+(defun uniq-word (word-list)
+  (loop for w in (sort (copylist word-list) 'string-lessp)
+	and for last = nil then w
+	unless (string-equal w last)
+	collect w))
+
+(defun insert (word)
+  (push word *possibilities*)
+  (if (> (length *possibilities*) 10.)
+      (*throw 'enough nil)))
+
+(defun wrong-letter (word new-word)
+  (store-array-leader 0 new-word 0)
+  (string-nconc new-word word)
+  (dotimes (char-number (string-length word))
+    (do ((letter (char-int #/A) (1+ letter)))
+	((> letter (char-int #/Z)))
+      (aset letter new-word char-number)
+      (if (word-ok-p new-word)
+	  (insert (SPELL-string-copy word new-word))))
+    (aset (aref word char-number) new-word char-number)))
+
+(defun extra-letter (word new-word)
+  (dotimes (char-number (string-length word))
+    (store-array-leader 0 new-word 0)
+    (do ((from 0 (1+ from)))
+	((= from (string-length word)))
+      (cond ((not (= from char-number))
+	     (string-nconc new-word (aref word from)))))
+    (if (word-ok-p new-word)
+	(insert (SPELL-string-copy word new-word)))))
+
+(defun missing-letter (word new-word)
+  (dotimes (char-number (1+ (string-length word)))
+    (store-array-leader 0 new-word 0)
+    (dotimes (x char-number)
+      (string-nconc new-word (aref word x)))
+    (string-nconc new-word 0)
+    (do ((x char-number (1+ x)))
+	((= x (string-length word)))
+      (string-nconc new-word (aref word x)))
+    (do ((letter (char-int #/A) (1+ letter)))
+	((> letter (char-int #/Z)))
+      (aset letter new-word char-number)
+      (if (word-ok-p new-word)
+	  (insert (SPELL-string-copy word new-word))))))
+
+(defun transposed-letter (word new-word)
+  (dotimes (char-number (1- (string-length word)))
+    (store-array-leader 0 new-word 0)
+    (string-nconc new-word word)
+    (let ((temp (aref new-word char-number)))
+      (aset (aref new-word (1+ char-number)) new-word char-number)
+      (aset temp new-word (1+ char-number)))
+    (if (word-ok-p new-word)
+	(insert (SPELL-string-copy word new-word)))))
+
+
+(defun SPELL-string-copy (original-word new-word)
+  (cond ((< (string-length original-word) 2)
+	 (cond ((zerop (string-length original-word))
+		new-word)
+	       ((upper-case-p (aref original-word 0))
+		(string-upcase new-word))
+	       (t
+		(string-downcase new-word))))
+	((upper-case-p (aref original-word 0))
+	 (cond ((upper-case-p (aref original-word 1))
+		(string-upcase new-word))
+	       (t
+		(let ((copy (string-downcase new-word)))
+		  (aset (char-upcase (aref new-word 0)) copy 0)
+		  copy))))
+	(t
+	 (string-downcase new-word))))
+
+

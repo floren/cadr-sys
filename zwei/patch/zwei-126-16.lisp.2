@@ -1,0 +1,39 @@
+;;; -*- Mode:Lisp; Readtable:ZL; Package:USER; Base:8; Patch-File:T -*-
+;;; Patch file for ZWEI version 126.16
+;;; Reason:
+;;;  Restore (mail t) capability for continuing bug messages; this "feature"
+;;;  was removed by a previous patch to ZWEI:MAIL...
+;;; Reason:
+;;;  Restore (mail t) capability for continuing bug messages; this "feature"
+;;;  was removed by a previous patch to ZWEI:MAIL...
+;;; Written 10-Oct-88 14:46:02 by saz at site Gigamos Cambridge
+;;; while running on Wolfgang Amadeus Mozart from band 2
+;;; with Experimental System 126.102, Experimental ZWEI 126.14, Experimental ZMail 74.9, Experimental Local-File 76.0, Experimental File-Server 25.0, Experimental Lambda-Diag 18.0, Experimental Unix-Interface 15.0, Experimental Tape 26.4, microcode 1762, SDU Boot Tape 3.14, SDU ROM 8, 126.100 104.
+
+
+
+; From modified file DJ: L.ZWEI; DIRED.LISP#341 at 10-Oct-88 14:46:03
+#8R ZWEI#: 
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "ZWEI")))
+  (COMPILER::PATCH-SOURCE-FILE "SYS: ZWEI; DIRED  "
+
+;;; Top level functions for mailing
+(DEFUN MAIL (&OPTIONAL USER TEXT CALL-EDITOR-ANYWAY)
+  "Mail the string TEXT to the user USER.  USER must be a string containing
+ the username and//or hostname, e.g. /"TOM@HOST1/".  
+If TEXT is omitted, or CALL-EDITOR-ANYWAY is T, an editor window is used.
+CALL-EDITOR-ANYWAY can be a number; the cursor is initially positioned
+ that many characters from the beginning of the string TEXT.
+With no arguments, you specify everything with the editor window."
+  (or
+    ;; Special hook for returning to a previous mail session from outside Zwei
+    (eq user t)
+    ;; Otherwise must be a known user...
+    (check-type user string "a string specifying a known username or T"))
+  (COND ((AND TEXT (NOT CALL-EDITOR-ANYWAY))
+	 (SEND-MESSAGE-STRING USER TEXT))
+	(T
+	 (ED `(MAIL ,USER ,TEXT
+		    ,(IF (NUMBERP CALL-EDITOR-ANYWAY) CALL-EDITOR-ANYWAY))))))
+
+))

@@ -1,0 +1,28 @@
+;;; -*- Mode:Lisp; Readtable:ZL; Package:USER; Base:8; Patch-File:T -*-
+;;; Patch file for ZWEI version 125.12
+;;; Reason:
+;;;  If the *mini-buffer-default-string* wasn't coercable into a string, Yank
+;;;  Default String would get an error.  Now, FORMAT it into a string.
+;;; Written 8-Aug-88 15:23:15 by keith (Keith Corbett) at site Gigamos Cambridge
+;;; while running on Breaking Glass from band 2
+;;; with Experimental System 126.14, ZWEI 125.11, ZMail 73.2, Local-File 75.2, File-Server 24.1, Unix-Interface 13.0, Tape 24.2, Lambda-Diag 17.0, microcode 1762, SDU Boot Tape 3.14, SDU ROM 103.
+
+
+
+; From modified file DJ: L.ZWEI; COMD.LISP#177 at 8-Aug-88 15:23:16
+#8R ZWEI#: 
+(COMPILER-LET ((*PACKAGE* (PKG-FIND-PACKAGE "ZWEI")))
+  (COMPILER::PATCH-SOURCE-FILE "SYS: ZWEI; COMD  "
+
+(DEFCOM COM-YANK-DEFAULT-STRING "Insert the default string into the mini buffer." ()
+  (IF (NULL *MINI-BUFFER-DEFAULT-STRING*)
+      (BARF "There is no default in this context.")
+    (INSERT-MOVING (POINT)
+		   (typecase *MINI-BUFFER-DEFAULT-STRING*
+		     ((or character string) *mini-buffer-default-string*)
+		     (symbol (string *mini-buffer-default-string*))
+		     (list (format nil "~S" *mini-buffer-default-string*))
+		     (t (format nil "~A" *mini-buffer-default-string*)))))
+  DIS-TEXT)
+
+))
