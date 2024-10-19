@@ -25,16 +25,17 @@
 		      TV
 		      PEEK
 		      SUPDUP
-		      ZWEI
-		      FED
-		      COLOR
+;;;                   ZWEI              ;not-optional, but we want it to be separately patchable
+;;;                   FED               ;optional -- loadable by user
+;;;                   COLOR
 		      EH
-		      PRESS
-		      MATH
-		      HACKS
+;;;                   PRESS             ;moved to mit-specific
+                      MATH              ;anybody using this lately?
+;;;                   HACKS             ;Optional -- loadable by user
 		      METER
 		      SRCCOM
-		      CONVERSE
+;;;                   CONVERSE          ;Needs Zwei, load on top of system
+;;;                   ISPELL            ;optional -- loadable by user
 		      )
   (:COMPILE-LOAD ALLDEFS)
   (:DO-COMPONENTS (:FASLOAD ALLDEFS)))
@@ -357,6 +358,11 @@
 (DEFSYSTEM CONVERSE
   (:PACKAGE ZWEI)
   (:COMPILE-LOAD ("SYS: IO1; CONVER")))
+
+(defsystem ispell
+  (:warnings-pathname-default "SYS: ZWEI; ISPELL-CWARNS.LISP")
+  (:module main ("sys:zwei;spell-check"))
+  (:compile-load main))
 
 ;;; Systems not initially loaded, but done right afterwards
 ;;; MIT-Specific definition moved to SYS: SITE; MIT-SPECIFIC SYSTEM
