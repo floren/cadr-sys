@@ -424,3 +424,7 @@ the user has not answered in (// TIMEOUT 60.) seconds."
 
 
 ))
+
+(EVAL-WHEN (LOAD COMPILE EVAL)
+  (GLOBALIZE "YES-OR-NO-P-WITH-TIMEOUT")
+  (GLOBALIZE "Y-OR-N-P-WITH-TIMEOUT"))
