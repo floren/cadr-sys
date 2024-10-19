@@ -1561,7 +1561,7 @@ may be derived from it."
     (OR (SETQ FL (GET FLAVOR 'SI:FLAVOR))
 	(IF ERROR (BARF "~S not DEFFLAVOR'ed" FLAVOR)
 	  (RETURN NIL)))
-    (OR (SI:FLAVOR-METHOD-HASH-ARRAY FL)
+    (OR (SI:FLAVOR-METHOD-HASH-TABLE FL)
 	(IF (FQUERY NIL "~S's combined methods are not composed.  Compose them? "
 		    FLAVOR)
 	    (SI:RECOMPILE-FLAVOR FLAVOR NIL T NIL)
