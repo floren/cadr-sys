@@ -1,0 +1,16 @@
+;;; -*- Mode:LISP; Package:USER; Base:10; Readtable:T; Patch-File:T -*-
+;;; Patch directory for System version 300
+;;; Written 20-Oct-24 10:17:24 by AMS,
+;;; while running on Lisp Machine One from band 3
+;;; with Experimental System 300.2, microcode 323.
+
+(:EXPERIMENTAL
+ ((0 "System Loaded" "ams" NIL)
+  (1 "Don't trap to debugger when trying to LOGIN if home directory doesn't exist." "ams" NIL)
+  (2 "MAKE-ARRAY: Properly error out for array ranks strictly larger or equal than 8." "ams" NIL)
+  (3 "MAKE-AREA: Allow modifying the existing area instead of erroring out." "AMS" NIL)
+  (4 "FQUERY: Version #61; adds :DEFAULT-VALUE and :TIMEOUT options and variants Y-OR-N-P // YES-OR-NO-P with timeout." "AMS" NIL)
+  (5 "Fix issue with unix-versions and make-system" "eswenson" T)
+  (6 "PRINT-DATE-ONLY: New function." "AMS" NIL)
+  (7 "LOAD-PATCHES: Support a :COMPILE option to compile patch files if no QFASL exist." "eswenson" T)
+  ))
