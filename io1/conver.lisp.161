@@ -1348,15 +1348,24 @@ Returns NIL if successful, or an error object."
 	    (if (not (memq (send host :system-type) *systems-dont-upcase-for*))
 		(setq person (string-upcase person))))  ; other hosts want it in uppercase
 	   (t (setq host (SI:PARSE-HOST destination))))))
-  (NET:SEND-TERMINAL-MESSAGE HOST PERSON
-			     #'(LAMBDA (STREAM)
-				 (format stream "~A@~A ~\DATIME\~%" user-id si:local-host)
-				 (send stream :string-out message))))
+  (WITH-OPEN-STREAM (STREAM (CHAOS:OPEN-STREAM HOST (STRING-APPEND "SEND " PERSON)
+					       :ERROR NIL :DIRECTION :OUTPUT))
+    (COND ((NOT (ERRORP STREAM))
+	   (FORMAT STREAM "~A@~A ~\DATIME\~%" USER-ID SI:LOCAL-HOST)
+           (SEND STREAM :STRING-OUT MESSAGE)
+	   (SEND STREAM :CLOSE)
+	   NIL)
+	  (T STREAM)))
+;;;>>>  (NET:SEND-TERMINAL-MESSAGE HOST PERSON
+;;;>>>			     #'(LAMBDA (STREAM)
+;;;>>>				 (format stream "~A@~A ~\DATIME\~%" user-id si:local-host)
+;;;>>>				 (send stream :string-out message)))
+  )
 
 
 (defun chaos-receive-converse-message (&AUX CONN FLINE TO SENDER TEM (MSG ""))
   (setq conn (chaos:listen "SEND"))
-  (IF (SYMBOLICS-CONNECTION-P CONN) ;;;>>> (CHAOS:UNWANTED-CONNECTION-REJECTED-P CONN)
+  (IF (CHAOS:SYMBOLICS-CONNECTION-P CONN) ;;;>>> (CHAOS:UNWANTED-CONNECTION-REJECTED-P CONN)
       (RETURN-FROM chaos-receive-converse-message NIL))
   (if *converse-gagged*
       (chaos:reject conn
